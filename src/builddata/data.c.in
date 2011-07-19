@@ -1,0 +1,39 @@
+/*
+ * builddata.c
+ *
+ *  Created on: May 10, 2011
+ *      Author: rogge
+ */
+
+#include "builddata/data.h"
+
+static const char olsrd_version[] = "${OLSRD_VERSION}";
+static const char olsrd_git[] = "${OLSRD_SRC_GIT}";
+static const char olsrd_change[] = "${OLSRD_SRC_CHANGE}";
+static const char build_date[] = __DATE__" "__TIME__;
+static const char build_host[] = "${OLSRD_SYSTEM}";
+
+const char *
+get_olsrd_version(void) {
+  return olsrd_version;
+}
+
+const char *
+get_olsrd_git_commit(void) {
+  return olsrd_git;
+}
+
+const char *
+get_olsrd_git_change(void) {
+  return olsrd_change;
+}
+
+const char *
+get_olsrd_builddate(void) {
+  return build_date;
+}
+
+const char *
+get_olsrd_buildsystem(void) {
+  return build_host;
+}
