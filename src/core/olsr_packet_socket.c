@@ -54,14 +54,14 @@
 static struct list_entity packet_sockets = { NULL, NULL };
 static char input_buffer[65536];
 
-/* refcounter */
-OLSR_SUBSYSTEM_STATE(olsr_packet_refcount);
+/* remember if initialized or not */
+OLSR_SUBSYSTEM_STATE(olsr_packet_state);
 
 static void olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags);
 
 void
 olsr_packet_init(void) {
-  if (olsr_subsystem_init(&olsr_packet_refcount))
+  if (olsr_subsystem_init(&olsr_packet_state))
     return;
 
   list_init_head(&packet_sockets);
@@ -71,7 +71,7 @@ void
 olsr_packet_cleanup(void) {
   struct olsr_packet_socket *skt;
 
-  if (olsr_subsystem_cleanup(&olsr_packet_refcount))
+  if (olsr_subsystem_cleanup(&olsr_packet_state))
     return;
 
   while (!list_is_empty(&packet_sockets)) {
@@ -182,12 +182,12 @@ olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
 
   if ((flags & OLSR_SOCKET_READ) != 0) {
     result = os_recvfrom(fd, pktsocket->input_buffer, pktsocket->input_buffer_length-1, &sock);
-    if (result > 0 && pktsocket->parse_data != NULL) {
+    if (result > 0 && pktsocket->receive_data != NULL) {
       /* null terminate it */
       pktsocket->input_buffer[pktsocket->input_buffer_length-1] = 0;
 
       /* received valid packet */
-      pktsocket->parse_data(pktsocket, pktsocket->input_buffer, result);
+      pktsocket->receive_data(pktsocket, pktsocket->input_buffer, result);
     }
     else if (result < 0 && (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
       OLSR_WARN(LOG_SOCKET_PACKET, "Cannot read packet from socket %s: %s (%d)",

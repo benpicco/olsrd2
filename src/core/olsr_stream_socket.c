@@ -430,9 +430,9 @@ olsr_stream_parse_connection(int fd, void *data,
     }
   }
 
-  if (session->state == COMPORT_SESSION_ACTIVE && comport->parse_data != NULL
+  if (session->state == COMPORT_SESSION_ACTIVE && comport->receive_data != NULL
       && (session->in.len > 0 || session->send_first)) {
-    session->state = comport->parse_data(session);
+    session->state = comport->receive_data(session);
     session->send_first = false;
   }
 

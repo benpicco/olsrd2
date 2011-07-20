@@ -58,7 +58,7 @@ struct olsr_packet_socket {
   size_t input_buffer_length;
 
   struct olsr_socket_entry *scheduler_entry;
-  void (*parse_data)(struct olsr_packet_socket *, void *data, size_t length);
+  void (*receive_data)(struct olsr_packet_socket *, void *data, size_t length);
 };
 
 void olsr_packet_init(void);

@@ -110,7 +110,7 @@ struct olsr_stream_socket {
   void (*cleanup)(struct olsr_stream_session *);
 
   void (*create_error)(struct olsr_stream_session *, enum olsr_stream_errors);
-  enum olsr_stream_session_state (*parse_data)(struct olsr_stream_session *);
+  enum olsr_stream_session_state (*receive_data)(struct olsr_stream_session *);
 };
 
 int olsr_stream_init(void) __attribute__((warn_unused_result));
