@@ -214,7 +214,7 @@ EXPORT int cfg_schema_add_entry(struct cfg_schema_section *, struct cfg_schema_e
 EXPORT void cfg_schema_remove_entries(struct cfg_schema_section *, struct cfg_schema_entry *entries, size_t e_cnt);
 
 EXPORT int cfg_schema_validate(struct cfg_db *db,
-    bool failFast, bool cleanup, struct autobuf *out);
+    bool failFast, bool cleanup, bool ignore_unknown_sections, struct autobuf *out);
 
 EXPORT int cfg_schema_tobin(void *target, struct cfg_named_section *named,
     struct cfg_schema_entry *entries, size_t count);

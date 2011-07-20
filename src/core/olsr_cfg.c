@@ -49,6 +49,7 @@
 #include "config/parser/cfg_parser_compact.h"
 
 #include "olsr_logging.h"
+#include "olsr_plugins.h"
 #include "olsr_cfg.h"
 #include "olsr.h"
 
@@ -65,6 +66,7 @@ static struct cfg_schema_section global_section = {
 
 static struct cfg_schema_entry global_entries[] = {
   CFG_VALIDATE_BOOL(CFG_GLOBAL_FORK, "no"),
+  CFG_VALIDATE_STRING(CFG_GLOBAL_PLUGIN, "", .t_list = true),
 };
 
 /**
@@ -115,9 +117,19 @@ olsr_cfg_cleanup(void) {
 int
 olsr_cfg_apply(void) {
   struct cfg_named_section *named;
+  struct cfg_entry *entry;
+  char *ptr;
 
   /* read global section */
   named = cfg_db_find_namedsection(olsr_db, CFG_SECTION_GLOBAL, NULL);
+
+  /* load plugins */
+  entry = cfg_db_get_entry(named, CFG_GLOBAL_PLUGIN);
+  if (entry) {
+    OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+      olsr_plugins_load(ptr);
+    }
+  }
 
   /*
   if (cfg_schema_tobin(&olsr_config, named, global_entries, ARRAYSIZE(global_entries))) {

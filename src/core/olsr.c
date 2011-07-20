@@ -403,7 +403,7 @@ parse_commandline(int argc, char **argv, const char *def_config) {
 
   if (return_code == -1) {
     /* validate configuration */
-    if (cfg_schema_validate(olsr_cfg_get_db(), false, false, &log)) {
+    if (cfg_schema_validate(olsr_cfg_get_db(), false, false, true, &log)) {
       return_code = 1;
     }
   }

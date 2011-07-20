@@ -51,6 +51,7 @@
 /* section types for configuration */
 #define CFG_SECTION_GLOBAL   "global"
 #define CFG_GLOBAL_FORK      "fork"
+#define CFG_GLOBAL_PLUGIN    "plugin"
 
 int olsr_cfg_init(void) __attribute__((warn_unused_result));
 void olsr_cfg_cleanup(void);

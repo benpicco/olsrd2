@@ -1,0 +1,9 @@
+[global]
+	fork	no
+	plugin	test1
+	plugin	test2
+	plugin	test3
+
+[txtinfo]
+	port	1
+

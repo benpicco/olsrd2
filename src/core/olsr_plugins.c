@@ -381,7 +381,7 @@ _open_plugin(const char *filename) {
     result = dlopen(abuf.buf, RTLD_NOW);
   }
   if (result == NULL) {
-    OLSR_WARN(LOG_PLUGINLOADER, "dynamic library loading failed.\n");
+    OLSR_WARN(LOG_PLUGINLOADER, "Loading of plugin %s failed.\n", filename);
   }
   else {
     OLSR_INFO(LOG_PLUGINLOADER, "Loading plugin %s from %s\n", filename, abuf.buf);
