@@ -86,11 +86,11 @@ static struct log_handler_entry *syslog_handler = NULL;
 static struct log_handler_entry *file_handler = NULL;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_logcfg_refcount);
+OLSR_SUBSYSTEM_STATE(olsr_logcfg_state);
 
 void
 olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t count) {
-  if (olsr_subsystem_init(&olsr_logcfg_refcount))
+  if (olsr_subsystem_init(&olsr_logcfg_state))
     return;
 
   debug_lvl_1 = debug_lvl_1_ptr;
@@ -105,7 +105,7 @@ olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t count) {
 
 void
 olsr_logcfg_cleanup(void) {
-  if (olsr_subsystem_cleanup(&olsr_logcfg_refcount))
+  if (olsr_subsystem_cleanup(&olsr_logcfg_state))
     return;
 
   /* clean up former handlers */

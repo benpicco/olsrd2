@@ -259,7 +259,6 @@ hup_signal_handler(int signo __attribute__ ((unused))) {
   reload_config = true;
 }
 
-
 /**
  * Mainloop of olsrd
  * @return exit code for olsrd
@@ -281,7 +280,7 @@ mainloop(void) {
       exit_code = 1;
       break;
     }
-    next_interval = olsr_clock_getAbsolute(50);
+    next_interval = olsr_clock_get_absolute(50);
 
     /* Process timers */
     olsr_timer_walk();

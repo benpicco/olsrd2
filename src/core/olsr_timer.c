@@ -62,7 +62,7 @@ static struct olsr_memcookie_info *timer_mem_cookie = NULL;
 static struct olsr_memcookie_info *timerinfo_cookie = NULL;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_timer_refcount);
+OLSR_SUBSYSTEM_STATE(olsr_timer_state);
 
 /* Prototypes */
 static uint32_t calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val);
@@ -75,7 +75,7 @@ olsr_timer_init(void)
 {
   int idx;
 
-  if (olsr_subsystem_init(&olsr_timer_refcount))
+  if (olsr_subsystem_init(&olsr_timer_state))
     return 0;
 
   OLSR_INFO(LOG_SOCKET, "Initializing scheduler.\n");
@@ -94,7 +94,7 @@ olsr_timer_init(void)
   timer_mem_cookie = olsr_memcookie_add("timer_entry", sizeof(struct olsr_timer_entry));
   if (timer_mem_cookie == NULL) {
     OLSR_WARN_OOM(LOG_SOCKET);
-    olsr_timer_refcount--;
+    olsr_timer_state--;
     return -1;
   }
 
@@ -102,7 +102,7 @@ olsr_timer_init(void)
   timerinfo_cookie = olsr_memcookie_add("timerinfo", sizeof(struct olsr_timer_info));
   if (timerinfo_cookie == NULL) {
     olsr_memcookie_remove(timer_mem_cookie);
-    olsr_timer_refcount--;
+    olsr_timer_state--;
     return -1;
   }
 
@@ -119,7 +119,7 @@ olsr_timer_cleanup(void)
   struct list_entity *timer_head_node;
   unsigned int wheel_slot = 0;
 
-  if (olsr_subsystem_cleanup(&olsr_timer_refcount))
+  if (olsr_subsystem_cleanup(&olsr_timer_state))
     return;
 
   for (wheel_slot = 0; wheel_slot < TIMER_WHEEL_SLOTS; wheel_slot++) {
@@ -369,7 +369,7 @@ calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val)
    * Also protect against overflows resulting from > 25 bit timers.
    */
   if (jitter_pct == 0 || jitter_pct > 99 || rel_time > (1 << 24)) {
-    return olsr_clock_getAbsolute(rel_time);
+    return olsr_clock_get_absolute(rel_time);
   }
 
   /*
@@ -380,7 +380,7 @@ calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val)
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %ums to %ums\n", jitter_pct, rel_time, rel_time - jitter_time);
 
-  return olsr_clock_getAbsolute(rel_time - jitter_time);
+  return olsr_clock_get_absolute(rel_time - jitter_time);
 }
 
 /**

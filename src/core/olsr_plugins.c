@@ -79,11 +79,11 @@ static const char *dlopen_patterns[] = {
   "%LIB%",
 };
 
-
 static int olsr_internal_unload_plugin(struct olsr_plugin *plugin, bool cleanup);
 static void *_open_plugin(const char *filename);
 
-OLSR_SUBSYSTEM_STATE(pluginsystem_state);
+/* remember if initialized or not */
+OLSR_SUBSYSTEM_STATE(olsr_plugins_state);
 
 /**
  * This function is called by the constructor of a plugin.
@@ -93,7 +93,7 @@ OLSR_SUBSYSTEM_STATE(pluginsystem_state);
  * @param pl_def pointer to plugin definition
  */
 void
-olsr_hookup_plugin(struct olsr_plugin *pl_def) {
+olsr_plugins_hook(struct olsr_plugin *pl_def) {
   assert (pl_def->name);
 
   /* make sure plugin system is initialized */
@@ -114,7 +114,7 @@ olsr_hookup_plugin(struct olsr_plugin *pl_def) {
  */
 int
 olsr_plugins_init(void) {
-  if (olsr_subsystem_init(&pluginsystem_state))
+  if (olsr_subsystem_init(&olsr_plugins_state))
     return 0;
 
   avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
@@ -135,7 +135,7 @@ void
 olsr_plugins_cleanup(void) {
   struct olsr_plugin *plugin, *iterator;
 
-  if (olsr_subsystem_cleanup(&pluginsystem_state))
+  if (olsr_subsystem_cleanup(&olsr_plugins_state))
     return;
 
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) {

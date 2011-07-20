@@ -59,7 +59,7 @@ static struct cfg_schema olsr_schema;
 static struct cfg_delta olsr_delta;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_cfg_refcount);
+OLSR_SUBSYSTEM_STATE(olsr_cfg_state);
 
 /* define global configuration template */
 static struct cfg_schema_section global_section = {
@@ -77,7 +77,7 @@ static struct cfg_schema_entry global_entries[] = {
  */
 int
 olsr_cfg_init(void) {
-  if (olsr_subsystem_init(&olsr_cfg_refcount))
+  if (olsr_subsystem_init(&olsr_cfg_state))
     return 0;
 
   /* initialize schema */
@@ -88,7 +88,7 @@ olsr_cfg_init(void) {
   /* initialize database */
   if ((olsr_raw_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
-    olsr_cfg_refcount--;
+    olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
   }
 
@@ -96,7 +96,7 @@ olsr_cfg_init(void) {
   if ((olsr_work_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
     cfg_db_remove(olsr_raw_db);
-    olsr_cfg_refcount--;
+    olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
   }
 
@@ -117,7 +117,7 @@ olsr_cfg_init(void) {
  */
 void
 olsr_cfg_cleanup(void) {
-  if (olsr_subsystem_cleanup(&olsr_cfg_refcount))
+  if (olsr_subsystem_cleanup(&olsr_cfg_state))
     return;
 
   cfg_delta_remove(&olsr_delta);
@@ -136,7 +136,7 @@ olsr_cfg_cleanup(void) {
 int
 olsr_cfg_apply(void) {
   struct olsr_plugin *plugin, *plugin_it;
-  struct cfg_db *new_db;
+  struct cfg_db *new_db, *old_db;
   struct cfg_named_section *named;
   struct cfg_entry *entry;
   struct autobuf log;
@@ -151,7 +151,7 @@ olsr_cfg_apply(void) {
 
   /*** phase 1: activate all plugins ***/
   result = -1;
-  new_db = NULL;
+  old_db = NULL;
 
   /* read global section */
   named = cfg_db_find_namedsection(olsr_raw_db, CFG_SECTION_GLOBAL, NULL);
@@ -197,13 +197,6 @@ olsr_cfg_apply(void) {
     goto apply_failed;
   }
 
-  /* enable all plugins */
-  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-    if (!plugin->int_enabled && olsr_plugins_enable(plugin) != 0 && failfast) {
-      goto apply_failed;
-    }
-  }
-
   /* create new configuration database with correct values */
   new_db = cfg_db_duplicate(olsr_raw_db);
   if (new_db == NULL) {
@@ -211,16 +204,22 @@ olsr_cfg_apply(void) {
     goto apply_failed;
   }
 
+  /* switch databases */
+  old_db = olsr_work_db;
+  olsr_work_db = new_db;
+
+  /* enable all plugins */
+  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
+    if (!plugin->int_enabled && olsr_plugins_enable(plugin) != 0 && failfast) {
+      goto apply_failed;
+    }
+  }
+
   /* remove everything not valid */
   cfg_schema_validate(new_db, false, true, false, NULL);
 
   /* calculate delta and call handlers */
-  cfg_delta_calculate(&olsr_delta, olsr_work_db, new_db);
-
-  /* switch databases */
-  cfg_db_remove(olsr_work_db);
-  olsr_work_db = new_db;
-  new_db = NULL;
+  cfg_delta_calculate(&olsr_delta, old_db, olsr_work_db);
 
   /* success */
   result = 0;
@@ -233,8 +232,8 @@ apply_failed:
     }
   }
 
-  if (new_db) {
-    cfg_db_remove(new_db);
+  if (old_db) {
+    cfg_db_remove(old_db);
   }
   abuf_free(&log);
   return result;

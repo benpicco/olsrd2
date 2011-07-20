@@ -82,7 +82,7 @@ EXPORT const char *olsr_clock_getWallclockString(struct timeval_buf *);
  * @return absolute time when event will happen
  */
 static inline uint32_t
-olsr_clock_getAbsolute(uint32_t relative)
+olsr_clock_get_absolute(uint32_t relative)
 {
   return olsr_clock_getNow() + relative;
 }

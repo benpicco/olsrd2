@@ -56,7 +56,7 @@ static struct timeval first_tv;        /* timevalue during startup */
 static struct timeval last_tv;         /* timevalue used for last olsr_times() calculation */
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_clock_refcount);
+OLSR_SUBSYSTEM_STATE(olsr_clock_state);
 
 static int olsr_get_timezone(void);
 
@@ -65,7 +65,7 @@ static int olsr_get_timezone(void);
  */
 int
 olsr_clock_init(void) {
-  if (olsr_subsystem_init(&olsr_clock_refcount))
+  if (olsr_subsystem_init(&olsr_clock_state))
     return 0;
 
   /* Grab initial timestamp */
@@ -87,7 +87,7 @@ olsr_clock_init(void) {
  */
 void
 olsr_clock_cleanup(void) {
-  olsr_subsystem_cleanup(&olsr_clock_refcount);
+  olsr_subsystem_cleanup(&olsr_clock_state);
 }
 
 /**

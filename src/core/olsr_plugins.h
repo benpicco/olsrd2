@@ -49,21 +49,21 @@
 /*
  * declare a plugin
  *
- * OLSR_PLUGIN7() {
+ * OLSR_PLUGIN7 {
  *   .descr = "<description of the plugin",
  *   .author = "<author of the plugin",
  *   .init = <pointer_to_plugin_initialization_callback>,
  *   .....
  * };
  */
-#define OLSR_PLUGIN7(param) _OLSR_PLUGIN7_DEF(PLUGIN_FULLNAME)
+#define OLSR_PLUGIN7 _OLSR_PLUGIN7_DEF(PLUGIN_FULLNAME)
 
 #define _OLSR_PLUGIN7_DEF(param) _OLSR_PLUGIN7_DEF2(param)
 #define _OLSR_PLUGIN7_DEF2(plg_name) static struct olsr_plugin olsr_internal_plugin_definition; \
 extern void hookup_plugin_ ## plg_name (void) __attribute__ ((constructor)); \
 void hookup_plugin_ ## plg_name (void) { \
   olsr_internal_plugin_definition.name = #plg_name; \
-  olsr_hookup_plugin(&olsr_internal_plugin_definition); \
+  olsr_plugins_hook(&olsr_internal_plugin_definition); \
   fprintf(stderr, "Hookup %s\n", #plg_name); \
 } \
 static struct olsr_plugin olsr_internal_plugin_definition =
@@ -97,8 +97,7 @@ struct olsr_plugin {
 
 #define OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) avl_for_each_element_safe(&plugin_tree, plugin, p_node, iterator)
 
-EXPORT void olsr_hookup_plugin(struct olsr_plugin *plugin);
-EXPORT void olsr_unhookup_plugin(struct olsr_plugin *plugin);
+EXPORT void olsr_plugins_hook(struct olsr_plugin *plugin);
 
 int olsr_plugins_init(void);
 void olsr_plugins_cleanup(void);

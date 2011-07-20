@@ -65,7 +65,7 @@ static struct olsr_memcookie_info *connection_cookie;
 static struct olsr_timer_info *connection_timeout;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_stream_refcount);
+OLSR_SUBSYSTEM_STATE(olsr_stream_state);
 
 static void olsr_stream_parse_request(int fd, void *data, unsigned int flags);
 static struct olsr_stream_session *olsr_stream_create_session(
@@ -78,14 +78,14 @@ static void olsr_stream_timeout_handler(void *);
 
 int
 olsr_stream_init(void) {
-  if (olsr_subsystem_init(&olsr_stream_refcount))
+  if (olsr_subsystem_init(&olsr_stream_state))
     return 0;
 
   connection_cookie = olsr_memcookie_add("stream socket connections",
       sizeof(struct olsr_stream_session));
   if (connection_cookie == NULL) {
     OLSR_WARN_OOM(LOG_SOCKET_STREAM);
-    olsr_stream_refcount--;
+    olsr_stream_state--;
     return -1;
   }
 
@@ -94,7 +94,7 @@ olsr_stream_init(void) {
   if (connection_timeout == NULL) {
     OLSR_WARN_OOM(LOG_SOCKET_STREAM);
     olsr_memcookie_remove(connection_cookie);
-    olsr_stream_refcount--;
+    olsr_stream_state--;
     return -1;
   }
 
@@ -106,7 +106,7 @@ void
 olsr_stream_cleanup(void) {
   struct olsr_stream_socket *comport;
 
-  if (olsr_subsystem_cleanup(&olsr_stream_refcount))
+  if (olsr_subsystem_cleanup(&olsr_stream_state))
     return;
 
   while (!list_is_empty(&olsr_stream_head)) {

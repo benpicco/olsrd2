@@ -60,7 +60,7 @@ struct list_entity socket_head;
 static struct olsr_memcookie_info *socket_memcookie;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_socket_refcount);
+OLSR_SUBSYSTEM_STATE(olsr_socket_state);
 
 /* helper function to free socket entry */
 static inline void
@@ -74,7 +74,7 @@ olsr_socket_intfree(struct olsr_socket_entry *sock) {
  */
 int
 olsr_socket_init(void) {
-  if (olsr_subsystem_init(&olsr_socket_refcount))
+  if (olsr_subsystem_init(&olsr_socket_state))
     return 0;
 
   list_init_head(&socket_head);
@@ -82,7 +82,7 @@ olsr_socket_init(void) {
   socket_memcookie = olsr_memcookie_add("socket entry", sizeof(struct olsr_socket_entry));
   if (socket_memcookie == NULL) {
     OLSR_WARN_OOM(LOG_SOCKET);
-    olsr_socket_refcount--;
+    olsr_socket_state--;
     return -1;
   }
   return 0;
@@ -97,7 +97,7 @@ olsr_socket_cleanup(void)
 {
   struct olsr_socket_entry *entry, *iterator;
 
-  if (olsr_subsystem_cleanup(&olsr_socket_refcount))
+  if (olsr_subsystem_cleanup(&olsr_socket_state))
     return;
 
   OLSR_FOR_ALL_SOCKETS(entry, iterator) {

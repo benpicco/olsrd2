@@ -73,7 +73,7 @@ static int _parse_line(struct cfg_db *db, char *line,
     char *name, size_t name_size,
     struct autobuf *log);
 
-OLSR_PLUGIN7() {
+OLSR_PLUGIN7 {
   .descr = "OLSRD compact configuration format plugin",
   .author = "Henning Rogge",
   .load = _plugin_load,

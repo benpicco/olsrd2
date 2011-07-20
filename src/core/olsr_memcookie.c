@@ -54,7 +54,7 @@
 struct avl_tree olsr_cookie_tree;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_memcookie_refcount);
+OLSR_SUBSYSTEM_STATE(olsr_memcookie_state);
 
 /**
  * Align a byte size correctly to "two size_t" units
@@ -100,7 +100,7 @@ olsr_memcookie_init(void) {
   assert (sizeof(struct olsr_memory_prefix)
       == calc_aligned_size(sizeof(struct olsr_memory_prefix)));
 
-  if (olsr_subsystem_init(&olsr_memcookie_refcount))
+  if (olsr_subsystem_init(&olsr_memcookie_state))
     return;
 
   avl_init(&olsr_cookie_tree, &avl_comp_strcasecmp, false, NULL);
@@ -114,7 +114,7 @@ olsr_memcookie_cleanup(void)
 {
   struct olsr_memcookie_info *info, *iterator;
 
-  if (olsr_subsystem_cleanup(&olsr_memcookie_refcount))
+  if (olsr_subsystem_cleanup(&olsr_memcookie_state))
     return;
 
   /*
