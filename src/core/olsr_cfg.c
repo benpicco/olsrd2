@@ -53,8 +53,10 @@
 #include "olsr_cfg.h"
 #include "olsr.h"
 
-static struct cfg_db *olsr_db = NULL;
+static struct cfg_db *olsr_raw_db = NULL;
+static struct cfg_db *olsr_work_db = NULL;
 static struct cfg_schema olsr_schema;
+static struct cfg_delta olsr_delta;
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_cfg_refcount);
@@ -66,6 +68,7 @@ static struct cfg_schema_section global_section = {
 
 static struct cfg_schema_entry global_entries[] = {
   CFG_VALIDATE_BOOL(CFG_GLOBAL_FORK, "no"),
+  CFG_VALIDATE_BOOL(CFG_GLOBAL_FAILFAST, "no"),
   CFG_VALIDATE_STRING(CFG_GLOBAL_PLUGIN, "", .t_list = true),
 };
 
@@ -83,16 +86,28 @@ olsr_cfg_init(void) {
   cfg_schema_add_entries(&global_section, global_entries, ARRAYSIZE(global_entries));
 
   /* initialize database */
-  if ((olsr_db = cfg_db_add()) == NULL) {
+  if ((olsr_raw_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
     olsr_cfg_refcount--;
     return -1;
   }
 
-  cfg_db_link_schema(olsr_db, &olsr_schema);
+  /* initialize database */
+  if ((olsr_work_db = cfg_db_add()) == NULL) {
+    OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
+    cfg_db_remove(olsr_raw_db);
+    olsr_cfg_refcount--;
+    return -1;
+  }
 
-  /* initialize config format handler */
+  cfg_db_link_schema(olsr_raw_db, &olsr_schema);
+
+  /* initialize delta */
+  cfg_delta_add(&olsr_delta);
+
+  /* initialize config file-io handler */
   cfg_io_add(&cfg_io_file);
+
   // cfg_parser_add(&cfg_parser_compact);
   return 0;
 }
@@ -105,40 +120,124 @@ olsr_cfg_cleanup(void) {
   if (olsr_subsystem_cleanup(&olsr_cfg_refcount))
     return;
 
-  cfg_db_remove(olsr_db);
+  cfg_delta_remove(&olsr_delta);
+
+  cfg_db_remove(olsr_raw_db);
+  cfg_db_remove(olsr_work_db);
+
   cfg_schema_remove(&olsr_schema);
 }
 
 /**
- * Converts the content of the configuration database into the internal
- * storage structs
- * @return 0 if successful, false otherwise
+ * Applies to content of the raw configuration database into the
+ * work database and triggers the change calculation.
+ * @return 0 if successful, -1 otherwise
  */
 int
 olsr_cfg_apply(void) {
+  struct olsr_plugin *plugin, *plugin_it;
+  struct cfg_db *new_db;
   struct cfg_named_section *named;
   struct cfg_entry *entry;
-  char *ptr;
+  struct autobuf log;
+  bool failfast, found;
+  int result;
+  const char *ptr;
+
+  if (abuf_init(&log, 0)) {
+    OLSR_WARN_OOM(LOG_CONFIG);
+    return -1;
+  }
+
+  /*** phase 1: activate all plugins ***/
+  result = -1;
+  new_db = NULL;
 
   /* read global section */
-  named = cfg_db_find_namedsection(olsr_db, CFG_SECTION_GLOBAL, NULL);
+  named = cfg_db_find_namedsection(olsr_raw_db, CFG_SECTION_GLOBAL, NULL);
+
+  /* read failfast state */
+  ptr = cfg_db_get_entry_value(olsr_raw_db, CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FAILFAST);
+  failfast = cfg_get_bool(ptr);
 
   /* load plugins */
   entry = cfg_db_get_entry(named, CFG_GLOBAL_PLUGIN);
   if (entry) {
     OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
-      olsr_plugins_load(ptr);
+      if (olsr_plugins_load(ptr) == NULL && failfast) {
+        goto apply_failed;
+      }
     }
   }
 
-  /*
-  if (cfg_schema_tobin(&olsr_config, named, global_entries, ARRAYSIZE(global_entries))) {
-    OLSR_ERROR(LOG_MAIN, "Error during conversion of global section into internal struct\n");
-    return 1;
-  }
-  */
+  /* unload all plugins that are not in use anymore */
+  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
+    found = false;
 
-  return 0;
+    /* search if plugin should still be active */
+    if (entry) {
+      OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+        if (olsr_plugins_get(ptr) == plugin) {
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (!found) {
+      /* if not, unload it */
+      olsr_plugins_unload(plugin);
+    }
+  }
+
+  /*** phase 2: check configuration and apply it ***/
+  /* re-validate configuration data */
+  if (cfg_schema_validate(olsr_raw_db, failfast, false, true, &log)) {
+    OLSR_WARN(LOG_CONFIG, "%s", log.buf);
+    goto apply_failed;
+  }
+
+  /* enable all plugins */
+  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
+    if (!plugin->int_enabled && olsr_plugins_enable(plugin) != 0 && failfast) {
+      goto apply_failed;
+    }
+  }
+
+  /* create new configuration database with correct values */
+  new_db = cfg_db_duplicate(olsr_raw_db);
+  if (new_db == NULL) {
+    OLSR_WARN_OOM(LOG_CONFIG);
+    goto apply_failed;
+  }
+
+  /* remove everything not valid */
+  cfg_schema_validate(new_db, false, true, false, NULL);
+
+  /* calculate delta and call handlers */
+  cfg_delta_calculate(&olsr_delta, olsr_work_db, new_db);
+
+  /* switch databases */
+  cfg_db_remove(olsr_work_db);
+  olsr_work_db = new_db;
+  new_db = NULL;
+
+  /* success */
+  result = 0;
+
+apply_failed:
+  /* look for loaded but not enabled plugins and unload them */
+  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
+    if (plugin->int_loaded && !plugin->int_enabled) {
+      olsr_plugins_unload(plugin);
+    }
+  }
+
+  if (new_db) {
+    cfg_db_remove(new_db);
+  }
+  abuf_free(&log);
+  return result;
 }
 
 /**
@@ -146,7 +245,15 @@ olsr_cfg_apply(void) {
  */
 struct cfg_db *
 olsr_cfg_get_db(void) {
-  return olsr_db;
+  return olsr_work_db;
+}
+
+/**
+ * @return pointer to olsr raw configuration database
+ */
+struct cfg_db *
+olsr_cfg_get_rawdb(void) {
+  return olsr_raw_db;
 }
 
 /**
@@ -155,4 +262,12 @@ olsr_cfg_get_db(void) {
 struct cfg_schema *
 olsr_cfg_get_schema(void) {
   return &olsr_schema;
+}
+
+/**
+ * @return pointer to olsr configuration delta management
+ */
+struct cfg_delta *
+olsr_cfg_get_delta(void) {
+  return &olsr_delta;
 }

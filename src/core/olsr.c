@@ -66,7 +66,7 @@
 #include "olsr_cfg.h"
 #include "olsr.h"
 
-static bool running;
+static bool running, reload_config;
 
 enum olsr_option_short {
   olsr_option_schema = 256
@@ -117,7 +117,8 @@ static enum log_source level_1_sources[] = {
 static const char *DEFAULT_CONFIGFILE = OLSRD_GLOBAL_CONF_FILE;
 
 /* prototype for local statics */
-static void signal_handler(int);
+static void quit_signal_handler(int);
+static void hup_signal_handler(int);
 static void setup_signalhandler(void);
 static int mainloop(void);
 static int parse_commandline(int argc, char **argv, const char *);
@@ -133,6 +134,7 @@ main(int argc, char **argv) {
 
   /* setup signal handler */
   running = true;
+  reload_config = false;
   setup_signalhandler();
 
   /* initialize logger */
@@ -169,7 +171,7 @@ main(int argc, char **argv) {
   }
 
   /* see if we need to fork */
-  fork_str = cfg_db_get_entry_value(olsr_cfg_get_db(), CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FORK);
+  fork_str = cfg_db_get_entry_value(olsr_cfg_get_rawdb(), CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FORK);
   if (cfg_get_bool(fork_str)) {
     /* fork into background */
     fork_pipe = daemonize_prepare();
@@ -180,7 +182,7 @@ main(int argc, char **argv) {
   }
 
   /* configure logger */
-  if (olsr_logcfg_apply(olsr_cfg_get_db())) {
+  if (olsr_logcfg_apply(olsr_cfg_get_rawdb())) {
     goto olsrd_cleanup;
   }
 
@@ -215,6 +217,9 @@ main(int argc, char **argv) {
   return_code = mainloop();
 
 olsrd_cleanup:
+  /* free plugins */
+  olsr_plugins_cleanup();
+
   /* free framework resources */
   olsr_stream_cleanup();
   olsr_packet_cleanup();
@@ -241,9 +246,19 @@ olsrd_cleanup:
  * @param signo
  */
 static void
-signal_handler(int signo __attribute__ ((unused))) {
+quit_signal_handler(int signo __attribute__ ((unused))) {
   running = false;
 }
+
+/**
+ * Handle incoming SIGHUP signal
+ * @param signo
+ */
+static void
+hup_signal_handler(int signo __attribute__ ((unused))) {
+  reload_config = true;
+}
+
 
 /**
  * Mainloop of olsrd
@@ -276,6 +291,12 @@ mainloop(void) {
       exit_code = 1;
       break;
     }
+
+    /* reload configuration if triggered */
+    if (reload_config) {
+      olsr_cfg_apply();
+      reload_config = false;
+    }
   }
 
   OLSR_INFO(LOG_MAIN, "Ending olsr routing daemon");
@@ -295,7 +316,7 @@ setup_signalhandler(void) {
   sigemptyset(&act.sa_mask);
   act.sa_flags = 0;
 
-  act.sa_handler = signal_handler;
+  act.sa_handler = quit_signal_handler;
   sigaction(SIGINT, &act, NULL);
   sigaction(SIGQUIT, &act, NULL);
   sigaction(SIGILL, &act, NULL);
@@ -303,10 +324,12 @@ setup_signalhandler(void) {
   sigaction(SIGTERM, &act, NULL);
 
   act.sa_handler = SIG_IGN;
-  sigaction(SIGHUP, &act, NULL);
   sigaction(SIGPIPE, &act, NULL);
   sigaction(SIGUSR1, &act, NULL);
   sigaction(SIGUSR2, &act, NULL);
+
+  act.sa_handler = hup_signal_handler;
+  sigaction(SIGHUP, &act, NULL);
 }
 
 /**
@@ -320,11 +343,15 @@ setup_signalhandler(void) {
  */
 static int
 parse_commandline(int argc, char **argv, const char *def_config) {
-  int opt, opt_idx;
-  struct autobuf log;
   struct cfg_cmd_state state;
-  int return_code = -1;
-  bool loaded_file = false;
+  struct autobuf log;
+  struct cfg_db *db;
+  int opt, opt_idx, return_code;
+  bool loaded_file;
+
+  return_code = -1;
+  loaded_file = false;
+  db = olsr_cfg_get_rawdb();
 
   abuf_init(&log, 1024);
   cfg_cmd_add(&state);
@@ -341,7 +368,7 @@ parse_commandline(int argc, char **argv, const char *def_config) {
         break;
 
       case olsr_option_schema:
-        if (cfg_cmd_handle_schema(olsr_cfg_get_db(), &state, optarg, &log)) {
+        if (cfg_cmd_handle_schema(db, &state, optarg, &log)) {
           return_code = 1;
         }
         else {
@@ -349,28 +376,28 @@ parse_commandline(int argc, char **argv, const char *def_config) {
         }
         break;
       case 'l':
-        if (cfg_cmd_handle_load(olsr_cfg_get_db(), &state, optarg, &log)) {
+        if (cfg_cmd_handle_load(db, &state, optarg, &log)) {
           return_code = 1;
         }
         loaded_file = true;
         break;
       case 'S':
-        if (cfg_cmd_handle_save(olsr_cfg_get_db(), &state, optarg, &log)) {
+        if (cfg_cmd_handle_save(db, &state, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 's':
-        if (cfg_cmd_handle_set(olsr_cfg_get_db(), &state, optarg, &log)) {
+        if (cfg_cmd_handle_set(db, &state, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 'r':
-        if (cfg_cmd_handle_remove(olsr_cfg_get_db(), &state, optarg, &log)) {
+        if (cfg_cmd_handle_remove(db, &state, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 'g':
-        if (cfg_cmd_handle_get(olsr_cfg_get_db(), &state, optarg, &log)) {
+        if (cfg_cmd_handle_get(db, &state, optarg, &log)) {
           return_code = 1;
         }
         else {
@@ -378,7 +405,7 @@ parse_commandline(int argc, char **argv, const char *def_config) {
         }
         break;
       case 'f':
-        if (cfg_cmd_handle_format(olsr_cfg_get_db(), &state, optarg, &log)) {
+        if (cfg_cmd_handle_format(db, &state, optarg, &log)) {
           return_code = 1;
         }
         break;
@@ -396,14 +423,14 @@ parse_commandline(int argc, char **argv, const char *def_config) {
 
   if (return_code == -1 && !loaded_file) {
     /* load default config file if no other loaded */
-    if (cfg_cmd_handle_load(olsr_cfg_get_db(), &state, def_config, &log)) {
+    if (cfg_cmd_handle_load(db, &state, def_config, &log)) {
       return_code = 1;
     }
   }
 
   if (return_code == -1) {
     /* validate configuration */
-    if (cfg_schema_validate(olsr_cfg_get_db(), false, false, true, &log)) {
+    if (cfg_schema_validate(db, false, false, true, &log)) {
       return_code = 1;
     }
   }

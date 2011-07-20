@@ -108,7 +108,7 @@ EXPORT int olsr_plugins_unload(struct olsr_plugin *);
 EXPORT int olsr_plugins_enable(struct olsr_plugin *);
 EXPORT int olsr_plugins_disable(struct olsr_plugin *);
 
-EXPORT struct olsr_plugin *olsr_get_plugin(const char *libname);
+EXPORT struct olsr_plugin *olsr_plugins_get(const char *libname);
 
 EXPORT extern struct avl_tree plugin_tree;
 

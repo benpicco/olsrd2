@@ -150,7 +150,7 @@ olsr_plugins_cleanup(void) {
  * @return pointer to plugin db entry, NULL if not found
  */
 struct olsr_plugin *
-olsr_get_plugin(const char *libname) {
+olsr_plugins_get(const char *libname) {
   struct olsr_plugin *plugin;
   char *ptr, memorize;
 
@@ -190,7 +190,7 @@ olsr_plugins_load(const char *libname)
   struct olsr_plugin *plugin;
 
   /* see if the plugin is there */
-  if ((plugin = olsr_get_plugin(libname)) == NULL) {
+  if ((plugin = olsr_plugins_get(libname)) == NULL) {
     /* attempt to load the plugin */
 #if 0
     if (olsr_cnf->dlPath) {
@@ -207,7 +207,7 @@ olsr_plugins_load(const char *libname)
     }
 
     /* plugin should be in the tree now */
-    if ((plugin = olsr_get_plugin(libname)) == NULL) {
+    if ((plugin = olsr_plugins_get(libname)) == NULL) {
       OLSR_WARN(LOG_PLUGINLOADER, "dynamic library loading failed: \"%s\"!\n", dlerror());
       return NULL;
     }

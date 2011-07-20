@@ -51,13 +51,16 @@
 /* section types for configuration */
 #define CFG_SECTION_GLOBAL   "global"
 #define CFG_GLOBAL_FORK      "fork"
+#define CFG_GLOBAL_FAILFAST  "failfast"
 #define CFG_GLOBAL_PLUGIN    "plugin"
 
 int olsr_cfg_init(void) __attribute__((warn_unused_result));
 void olsr_cfg_cleanup(void);
 int olsr_cfg_apply(void);
 
-struct cfg_db *olsr_cfg_get_db(void);
-struct cfg_schema *olsr_cfg_get_schema(void);
+EXPORT struct cfg_db *olsr_cfg_get_db(void);
+EXPORT struct cfg_db *olsr_cfg_get_rawdb(void);
+EXPORT struct cfg_schema *olsr_cfg_get_schema(void);
+EXPORT struct cfg_delta *olsr_cfg_get_delta(void);
 
 #endif /* OLSR_CFG_H_ */
