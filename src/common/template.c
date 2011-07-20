@@ -79,7 +79,7 @@ abuf_template_init (const char **keys, size_t tmplLength, const char *format,
         continue;
       }
       if (pos - start > 1) {
-        if (indexCount + 3 > indexLength) {
+        if (indexCount+1 > indexLength) {
           return -1;
         }
 
@@ -120,7 +120,7 @@ abuf_template_init (const char **keys, size_t tmplLength, const char *format,
  */
 int
 abuf_templatef (struct autobuf *autobuf, const char *format,
-    char **values, struct abuf_template_storage *indexTable, size_t indexCount) {
+    const char **values, struct abuf_template_storage *indexTable, size_t indexCount) {
   size_t i, last = 0;
 
   if (autobuf == NULL) return 0;

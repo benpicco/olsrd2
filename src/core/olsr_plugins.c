@@ -45,9 +45,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common/autobuf.h"
 #include "common/list.h"
 #include "common/avl.h"
 #include "common/avl_comp.h"
+#include "common/template.h"
+#include "builddata/data.h"
 #include "olsr_logging.h"
 #include "olsr_memcookie.h"
 #include "olsr_plugins.h"
@@ -57,7 +60,28 @@
 struct avl_tree plugin_tree;
 static bool plugin_tree_initialized = false;
 
+/* library loading patterns */
+static const char *dlopen_values[5];
+static const char *dlopen_keys[5] = {
+  "LIB",
+  "PATH",
+  "PRE",
+  "POST",
+  "VER",
+};
+
+static const char *dlopen_patterns[] = {
+  "%PATH%/%PRE%%LIB%%POST%.%VER%",
+  "%PATH%/%PRE%%LIB%%POST%",
+  "%PATH%/%LIB%",
+  "%PRE%%LIB%%POST%.%VER%",
+  "%PRE%%LIB%%POST%",
+  "%LIB%",
+};
+
+
 static int olsr_internal_unload_plugin(struct olsr_plugin *plugin, bool cleanup);
+static void *_open_plugin(const char *filename);
 
 OLSR_SUBSYSTEM_STATE(pluginsystem_state);
 
@@ -71,13 +95,18 @@ OLSR_SUBSYSTEM_STATE(pluginsystem_state);
 void
 olsr_hookup_plugin(struct olsr_plugin *pl_def) {
   assert (pl_def->name);
-  OLSR_INFO(LOG_PLUGINLOADER, "Hookup %s\n", pl_def->name);
-  if (!plugin_tree_initialized) {
-    avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
-    plugin_tree_initialized = true;
-  }
+
+  /* make sure plugin system is initialized */
+  olsr_plugins_init();
+
+  /* hook static plugin into avl tree */
   pl_def->p_node.key = pl_def->name;
   avl_insert(&plugin_tree, &pl_def->p_node);
+
+  /* initialize the plugin */
+  if (olsr_plugins_load(pl_def->name) == NULL) {
+    OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin %s", pl_def->name);
+  }
 }
 
 /**
@@ -85,24 +114,17 @@ olsr_hookup_plugin(struct olsr_plugin *pl_def) {
  */
 int
 olsr_plugins_init(void) {
-  struct olsr_plugin *plugin, *iterator;
-
   if (olsr_subsystem_init(&pluginsystem_state))
     return 0;
 
-  /* could already be initialized */
-  if (!plugin_tree_initialized) {
-    avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
-    plugin_tree_initialized = true;
-  }
+  avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
+  plugin_tree_initialized = true;
 
-  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) {
-    if (olsr_plugins_load(plugin->name) == NULL) {
-      return -1;
-    }
-  }
-
-  OLSR_INFO(LOG_PLUGINLOADER, "All static plugins loaded.\n");
+  /* load predefined values for dlopen templates */
+  dlopen_values[1] = ".";
+  dlopen_values[2] = get_olsrd_sharedlibrary_prefix();
+  dlopen_values[3] = get_olsrd_sharedlibrary_suffix();
+  dlopen_values[4] = get_olsrd_version();
   return 0;
 }
 
@@ -178,11 +200,9 @@ olsr_plugins_load(const char *libname)
       strcat(path, libname);
     }
 #endif
-    OLSR_INFO(LOG_PLUGINLOADER, "Loading plugin %s\n", libname);
-    dlhandle = dlopen(libname, RTLD_NOW);
+    dlhandle = _open_plugin(libname);
 
     if (dlhandle == NULL) {
-      OLSR_WARN(LOG_PLUGINLOADER, "dynamic library loading failed: \"%s\"!\n", dlerror());
       return NULL;
     }
 
@@ -329,6 +349,47 @@ olsr_internal_unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
   return false;
 }
 
+
+static void *
+_open_plugin(const char *filename) {
+  struct abuf_template_storage table[5];
+  struct autobuf abuf;
+  void *result;
+  size_t i;
+  int indexCount;
+
+  if (abuf_init(&abuf, strlen(filename))) {
+    OLSR_WARN_OOM(LOG_PLUGINLOADER);
+    return NULL;
+  }
+
+  result = NULL;
+  dlopen_values[0] = filename;
+
+  for (i=0; result == NULL && i<ARRAYSIZE(dlopen_patterns); i++) {
+    if ((indexCount = abuf_template_init(dlopen_keys, ARRAYSIZE(dlopen_keys),
+        dlopen_patterns[i], table, ARRAYSIZE(table))) == -1) {
+      OLSR_WARN(LOG_PLUGINLOADER, "Could not parse pattern %s for dlopen",
+          dlopen_patterns[i]);
+      continue;
+    }
+
+    abuf_clear(&abuf);
+    abuf_templatef(&abuf, dlopen_patterns[i], dlopen_values, table, indexCount);
+
+    OLSR_DEBUG(LOG_PLUGINLOADER, "Trying to load library: %s", abuf.buf);
+    result = dlopen(abuf.buf, RTLD_NOW);
+  }
+  if (result == NULL) {
+    OLSR_WARN(LOG_PLUGINLOADER, "dynamic library loading failed.\n");
+  }
+  else {
+    OLSR_INFO(LOG_PLUGINLOADER, "Loading plugin %s from %s\n", filename, abuf.buf);
+  }
+
+  abuf_free(&abuf);
+  return result;
+}
 
 /*
  * Local Variables:

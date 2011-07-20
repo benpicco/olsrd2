@@ -49,17 +49,17 @@
 /*
  * declare a plugin
  *
- * OLSR_PLUGIN6() {
+ * OLSR_PLUGIN7() {
  *   .descr = "<description of the plugin",
  *   .author = "<author of the plugin",
  *   .init = <pointer_to_plugin_initialization_callback>,
  *   .....
  * };
  */
-#define OLSR_PLUGIN6(param) _OLSR_PLUGIN6_DEF(PLUGIN_FULLNAME)
+#define OLSR_PLUGIN7(param) _OLSR_PLUGIN7_DEF(PLUGIN_FULLNAME)
 
-#define _OLSR_PLUGIN6_DEF(name) _OLSR_PLUGIN6_DEF2(name)
-#define _OLSR_PLUGIN6_DEF2(plg_name) static struct olsr_plugin olsr_internal_plugin_definition; \
+#define _OLSR_PLUGIN7_DEF(param) _OLSR_PLUGIN7_DEF2(param)
+#define _OLSR_PLUGIN7_DEF2(plg_name) static struct olsr_plugin olsr_internal_plugin_definition; \
 extern void hookup_plugin_ ## plg_name (void) __attribute__ ((constructor)); \
 void hookup_plugin_ ## plg_name (void) { \
   olsr_internal_plugin_definition.name = #plg_name; \

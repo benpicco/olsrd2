@@ -11,7 +11,9 @@ static const char olsrd_version[] = "${OLSRD_VERSION}";
 static const char olsrd_git[] = "${OLSRD_SRC_GIT}";
 static const char olsrd_change[] = "${OLSRD_SRC_CHANGE}";
 static const char build_date[] = __DATE__" "__TIME__;
-static const char build_host[] = "${OLSRD_SYSTEM}";
+static const char build_host[] = "${CMAKE_SYSTEM}";
+static const char shared_prefix[] = "${CMAKE_SHARED_LIBRARY_PREFIX}";
+static const char shared_suffix[] = "${CMAKE_SHARED_LIBRARY_SUFFIX}";
 
 const char *
 get_olsrd_version(void) {
@@ -36,4 +38,14 @@ get_olsrd_builddate(void) {
 const char *
 get_olsrd_buildsystem(void) {
   return build_host;
+}
+
+const char *
+get_olsrd_sharedlibrary_prefix(void) {
+  return shared_prefix;
+}
+
+const char *
+get_olsrd_sharedlibrary_suffix(void) {
+  return shared_suffix;
 }

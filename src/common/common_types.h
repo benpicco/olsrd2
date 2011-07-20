@@ -47,6 +47,11 @@
 #  define EXPORT __attribute__((visibility ("default")))
 #endif
 
+/* give everyone an arraysize implementation */
+#ifndef ARRAYSIZE
+#define ARRAYSIZE(a)  (sizeof(a) / sizeof(*(a)))
+#endif
+
 /*
  * This force gcc to always inline, which prevents errors
  * with option -Os

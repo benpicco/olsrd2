@@ -15,5 +15,7 @@ EXPORT const char *get_olsrd_git_commit(void);
 EXPORT const char *get_olsrd_git_change(void);
 EXPORT const char *get_olsrd_builddate(void);
 EXPORT const char *get_olsrd_buildsystem(void);
+EXPORT const char *get_olsrd_sharedlibrary_prefix(void);
+EXPORT const char *get_olsrd_sharedlibrary_suffix(void);
 
 #endif /* BUILDDATA_H_ */
