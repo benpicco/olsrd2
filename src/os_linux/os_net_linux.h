@@ -39,39 +39,22 @@
  *
  */
 
-#include <fcntl.h>
-#include <net/if.h>
+#ifndef OS_NET_BSD_H_
+#define OS_NET_BSD_H_
 
-#include "common/common_types.h"
-#include "common/string.h"
-#include "os_net.h"
+#ifndef OS_NET_SPECIFIC_INCLUDE
+#error "DO not include this file directly, always use 'os_net.h'"
+#endif
 
-int
-os_net_set_nonblocking(int sock) {
-  int state;
+/* define the split between common, os-specific and inline code */
+#define OS_NET_GETSOCKET    OS_GENERIC
+#define OS_NET_CONFIGSOCKET OS_GENERIC
+#define OS_NET_JOINMCAST    OS_GENERIC
+#define OS_NET_SETNONBLOCK  OS_GENERIC
+#define OS_NET_BINDTOIF     OS_GENERIC
+#define OS_NET_CLOSE        OS_GENERIC
+#define OS_NET_SELECT       OS_GENERIC
+#define OS_NET_RECVFROM     OS_GENERIC
+#define OS_NET_SENDTO       OS_GENERIC
 
-  /* put socket into non-blocking mode */
-  if ((state = fcntl(sock, F_GETFL)) == -1) {
-    return -1;
-  }
-
-  if (fcntl(sock, F_SETFL, state | O_NONBLOCK) < 0) {
-    return -1;
-  }
-  return 0;
-}
-
-int
-os_net_bind_to_interface(int sock, const char *if_name) {
-  char if_buf[IF_NAMESIZE];
-  char *ptr;
-
-  strscpy(if_buf, if_name, sizeof(if_buf));
-  ptr = strchr(if_buf, ':');
-  if (ptr) {
-    *ptr = 0;
-  }
-
-  /* bind to device using the SO_BINDTODEVICE flag */
-  return setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, if_buf, strlen(if_buf) + 1);
-}
+#endif /* OS_NET_BSD_H_ */

@@ -9,22 +9,17 @@ set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
 
 # add os_specific source files
 IF(WIN32)
-    FILE(GLOB SRCS "win32/*.c")    
+    FILE(GLOB SRCS "os_win32/*.c")    
     set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
 ENDIF(WIN32)
 
-IF(UNIX)
-    FILE(GLOB SRCS "unix/*.c")    
-    set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
-ENDIF(UNIX)
-
 IF(LINUX)
-    FILE(GLOB SRCS "linux/*.c")    
+    FILE(GLOB SRCS "os_linux/*.c")    
     set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
 ENDIF(LINUX)
 
 IF(BSD)
-    FILE(GLOB SRCS "bsd/*.c")    
+    FILE(GLOB SRCS "os_bsd/*.c")    
     set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
 ENDIF(BSD)
 

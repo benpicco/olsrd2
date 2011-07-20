@@ -79,26 +79,18 @@
 #define OS_NET_SPECIFIC_INCLUDE
 
 #ifdef OS_LINUX
-#include "linux/os_net_linux.h"
+#include "os_linux/os_net_linux.h"
 #endif
 
 #ifdef OS_BSD
-#include "bsd/os_net_bsd.h"
+#include "os_bsd/os_net_bsd.h"
 #endif
 
 #ifdef OS_WIN32
-#include "win32/os_net_win32.h"
+#include "os_win32/os_net_win32.h"
 #endif
 
 #undef OS_NET_SPECIFIC_INCLUDE
-
-/* consistency check */
-#if OS_NET_SETNONBLOCK == OS_GENERIC
-#error "There is no OS generic versions of os_net_setnonblock"
-#endif
-#if OS_NET_BINDTOIF == OS_GENERIC
-#error "There is no OS generic version of os_net_bindtoif"
-#endif
 
 /* binary flags for os_net_getsocket */
 enum olsr_socket_opt {

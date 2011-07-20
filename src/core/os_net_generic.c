@@ -44,6 +44,7 @@
 
 #include "common/common_types.h"
 #include "common/netaddr.h"
+#include "common/string.h"
 #include "olsr_logging.h"
 #include "os_net.h"
 
@@ -222,5 +223,39 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
     }
   }
   return 0;
+}
+#endif
+
+#if OS_NET_SETNONBLOCK == OS_GENERIC
+int
+os_net_set_nonblocking(int sock) {
+  int state;
+
+  /* put socket into non-blocking mode */
+  if ((state = fcntl(sock, F_GETFL)) == -1) {
+    return -1;
+  }
+
+  if (fcntl(sock, F_SETFL, state | O_NONBLOCK) < 0) {
+    return -1;
+  }
+  return 0;
+}
+#endif
+
+#if OS_NET_BINDTOIF == OS_GENERIC
+int
+os_net_bind_to_interface(int sock, const char *if_name) {
+  char if_buf[IF_NAMESIZE];
+  char *ptr;
+
+  strscpy(if_buf, if_name, sizeof(if_buf));
+  ptr = strchr(if_buf, ':');
+  if (ptr) {
+    *ptr = 0;
+  }
+
+  /* bind to device using the SO_BINDTODEVICE flag */
+  return setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, if_buf, strlen(if_buf) + 1);
 }
 #endif
