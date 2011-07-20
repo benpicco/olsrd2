@@ -44,9 +44,10 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
-#include <net/if.h>
 #include <sys/types.h>
+#include <strings.h>
+#include <sys/socket.h>
+#include <net/if.h>
 
 #include "common/daemonize.h"
 #include "common/list.h"
