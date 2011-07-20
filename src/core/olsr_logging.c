@@ -211,11 +211,11 @@ olsr_log_updatemask(void)
 }
 
 /**
- * This function should not be called directly, use the macros OLSR_{DEBUG,INFO,WARN,ERROR} !
+ * This function should not be called directly, use the macros OLSR_{DEBUG,INFO,WARN} !
  *
  * Generates a logfile entry and calls all log handler to store/output it.
  *
- * @param severity severity of the log event (LOG_DEBUG to LOG_ERROR)
+ * @param severity severity of the log event (SEVERITY_DEBUG to SEVERITY_WARN)
  * @param source source of the log event (LOG_LOGGING, ... )
  * @param file filename where the logging macro have been called
  * @param line line number where the logging macro have been called
@@ -276,7 +276,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header, con
 }
 
 /**
- * This function should not be called directly, use the macro OLSR_OOM_ERROR
+ * This function should not be called directly, use the macro OLSR_OOM_WARN
  *
  * Generates a logfile entry and calls all log handler to store/output it.
  *
