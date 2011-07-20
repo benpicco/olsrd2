@@ -106,7 +106,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
 
   abuf_init(&pktsocket->out, 2048);
   list_add_tail(&packet_sockets, &pktsocket->node);
-  memcpy(&pktsocket->local_socket, local, sizeof(*local));
+  memcpy(&pktsocket->local_socket, local, sizeof(pktsocket->local_socket));
 
   pktsocket->input_buffer = input_buffer;
   pktsocket->input_buffer_length = sizeof(input_buffer);

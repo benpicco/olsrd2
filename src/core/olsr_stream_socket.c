@@ -154,7 +154,7 @@ olsr_stream_add(struct olsr_stream_socket *comport,
           netaddr_socket_to_string(&buf, local));
       goto add_stream_error;
     }
-    memcpy(&comport->local_socket, local, sizeof(*local));
+    memcpy(&comport->local_socket, local, sizeof(comport->local_socket));
   }
   comport->memcookie = connection_cookie;
   comport->allowes_sessions = 10;
@@ -295,7 +295,7 @@ olsr_stream_create_session(struct olsr_stream_socket *comport,
 
   session->send_first = comport->send_first;
   session->comport = comport;
-  memcpy(&session->peer_addr, &remote_addr, sizeof(remote_addr));
+  memcpy(&session->peer_addr, &remote_addr, sizeof(session->peer_addr));
 
   if (comport->allowes_sessions-- > 0) {
     /* create active session */

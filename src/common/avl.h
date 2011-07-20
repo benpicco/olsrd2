@@ -189,7 +189,7 @@ avl_is_empty(struct avl_tree *tree) {
  * @param tree pointer to tree
  * @param node pointer to node
  */
-static INLINE void __attribute__((deprecated("Use avl_remove instead of avl_delete")))
+static INLINE void __attribute__((deprecated))
 avl_delete(struct avl_tree *tree, struct avl_node *node) {
   avl_remove(tree, node);
 }
