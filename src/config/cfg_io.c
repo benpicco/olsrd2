@@ -127,7 +127,7 @@ cfg_io_load_parser(const char *url, const char *parser, struct autobuf *log) {
 
   io = _find_io(url, &io_param, log);
   if (io == NULL) {
-    cfg_append_printable_line(log, "Error, unknown config io '%s'.", io->name);
+    cfg_append_printable_line(log, "Error, unknown config io '%s'.", url);
     return NULL;
   }
 
@@ -184,8 +184,8 @@ _find_io(const char *url, const char **io_param, struct autobuf *log) {
   char *buffer;
   const char *ptr1;
 
-  if (!_io_initialized) {
-    cfg_append_printable_line(log, "IO-handler empty!");
+  if (!_io_initialized || avl_is_empty(&cfg_io_tree)) {
+    cfg_append_printable_line(log, "IO-handler list empty!");
     return NULL;
   }
 

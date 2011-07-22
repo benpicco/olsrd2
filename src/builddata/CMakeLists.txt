@@ -27,5 +27,7 @@ ADD_CUSTOM_COMMAND (
 )
 
 # create static library with the generated data
-ADD_LIBRARY(OlsrdBuildData STATIC ${GEN_DATA_C} ${GEN_PLUGIN_STATIC_C})
-ADD_DEPENDENCIES(OlsrdBuildData OlsrdCleanData)
+ADD_LIBRARY(static_builddata STATIC ${GEN_DATA_C})
+ADD_LIBRARY(static_pluginloader STATIC ${GEN_PLUGIN_STATIC_C})
+ADD_DEPENDENCIES(static_builddata OlsrdCleanData)
+ADD_DEPENDENCIES(static_pluginloader OlsrdCleanData)

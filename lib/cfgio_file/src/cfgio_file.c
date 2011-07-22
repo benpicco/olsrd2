@@ -1,7 +1,7 @@
 
 /*
  * The olsr.org Optimized Link-State Routing daemon(olsrd)
- * Copyright (c) 2004-2011, the olsr.org team - see HISTORY file
+ * Copyright (c) 2004-2009, the olsr.org team - see HISTORY file
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,6 +39,10 @@
  *
  */
 
+/*
+ * Dynamic linked library for the olsr.org olsr daemon
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -50,12 +54,51 @@
 #include "config/cfg_io.h"
 #include "config/cfg_parser.h"
 #include "config/cfg.h"
-#include "config/io/cfg_io_file.h"
+#include "olsr_plugins.h"
+
+#include <stdio.h>
+
+static int _plugin_load(void);
+static int _plugin_unload(void);
 
 static struct cfg_db *_file_load(
     const char *param, const char *parser, struct autobuf *log);
 static int _file_save(
     const char *param, const char *parser, struct cfg_db *src, struct autobuf *log);
+
+OLSR_PLUGIN7 {
+  .descr = "OLSRD file io handler for configuration system",
+  .author = "Henning Rogge",
+  .load = _plugin_load,
+  .unload = _plugin_unload,
+};
+
+struct cfg_io cfg_io_file = {
+  .name = "file",
+  .load = _file_load,
+  .save = _file_save,
+  .def = true,
+};
+
+/**
+ * Constructor of plugin, called before parameters are initialized
+ */
+static int
+_plugin_load(void)
+{
+  cfg_io_add(&cfg_io_file);
+  return 0;
+}
+
+/**
+ * Destructor of plugin
+ */
+static int
+_plugin_unload(void)
+{
+  cfg_io_remove(&cfg_io_file);
+  return 0;
+}
 
 /*
  * Definition of the file-io handler.
@@ -65,13 +108,6 @@ static int _file_save(
  *
  * The parameter of this parser has to be a filename
  */
-const char *CFG_IO_FILE = "file";
-struct cfg_io cfg_io_file = {
-  .name = "file",
-  .load = _file_load,
-  .save = _file_save,
-  .def = true,
-};
 
 /**
  * Reads a file from a filesystem, parse it with the help of a

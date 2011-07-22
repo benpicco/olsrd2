@@ -45,8 +45,6 @@
 #include "common/common_types.h"
 #include "config/cfg_schema.h"
 #include "config/cfg_delta.h"
-#include "config/io/cfg_io_file.h"
-#include "config/parser/cfg_parser_compact.h"
 
 #include "olsr_logging.h"
 #include "olsr_plugins.h"
@@ -104,9 +102,6 @@ olsr_cfg_init(void) {
 
   /* initialize delta */
   cfg_delta_add(&olsr_delta);
-
-  /* initialize config file-io handler */
-  cfg_io_add(&cfg_io_file);
 
   // cfg_parser_add(&cfg_parser_compact);
   return 0;

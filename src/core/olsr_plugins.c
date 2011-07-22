@@ -99,6 +99,11 @@ olsr_plugins_hook(struct olsr_plugin *pl_def) {
   /* make sure plugin system is initialized */
   olsr_plugins_init();
 
+  /* check if plugin is already in tree */
+  if (olsr_plugins_get(pl_def->name)) {
+    return;
+  }
+
   /* hook static plugin into avl tree */
   pl_def->p_node.key = pl_def->name;
   avl_insert(&plugin_tree, &pl_def->p_node);
@@ -106,16 +111,19 @@ olsr_plugins_hook(struct olsr_plugin *pl_def) {
   /* initialize the plugin */
   if (olsr_plugins_load(pl_def->name) == NULL) {
     OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin %s", pl_def->name);
+    return;
   }
+
+  OLSR_INFO(LOG_PLUGINLOADER, "Loaded plugin %s", pl_def->name);
 }
 
 /**
  * Initialize the plugin loader system
  */
-int
+void
 olsr_plugins_init(void) {
   if (olsr_subsystem_init(&olsr_plugins_state))
-    return 0;
+    return;
 
   avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
   plugin_tree_initialized = true;
@@ -125,7 +133,6 @@ olsr_plugins_init(void) {
   dlopen_values[2] = get_olsrd_sharedlibrary_prefix();
   dlopen_values[3] = get_olsrd_sharedlibrary_suffix();
   dlopen_values[4] = get_olsrd_version();
-  return 0;
 }
 
 /**

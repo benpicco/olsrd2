@@ -52,7 +52,6 @@
  * OLSR_PLUGIN7 {
  *   .descr = "<description of the plugin",
  *   .author = "<author of the plugin",
- *   .init = <pointer_to_plugin_initialization_callback>,
  *   .....
  * };
  */
@@ -60,11 +59,10 @@
 
 #define _OLSR_PLUGIN7_DEF(param) _OLSR_PLUGIN7_DEF2(param)
 #define _OLSR_PLUGIN7_DEF2(plg_name) static struct olsr_plugin olsr_internal_plugin_definition; \
-extern void hookup_plugin_ ## plg_name (void) __attribute__ ((constructor)); \
+EXPORT void hookup_plugin_ ## plg_name (void) __attribute__ ((constructor)); \
 void hookup_plugin_ ## plg_name (void) { \
   olsr_internal_plugin_definition.name = #plg_name; \
   olsr_plugins_hook(&olsr_internal_plugin_definition); \
-  fprintf(stderr, "Hookup %s\n", #plg_name); \
 } \
 static struct olsr_plugin olsr_internal_plugin_definition =
 
@@ -99,7 +97,7 @@ struct olsr_plugin {
 
 EXPORT void olsr_plugins_hook(struct olsr_plugin *plugin);
 
-int olsr_plugins_init(void);
+void olsr_plugins_init(void);
 void olsr_plugins_cleanup(void);
 
 EXPORT struct olsr_plugin *olsr_plugins_load(const char *);

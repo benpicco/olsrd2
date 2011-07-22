@@ -80,7 +80,6 @@ OLSR_PLUGIN7 {
   .unload = _plugin_unload,
 };
 
-const char *CFG_PARSER_COMPACT = "compact";
 struct cfg_parser cfg_parser_compact = {
   .name = "compact",
   .parse = _compact_parse,

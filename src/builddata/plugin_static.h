@@ -41,7 +41,9 @@
 #ifndef PLUGIN_STATIC_H_
 #define PLUGIN_STATIC_H_
 
+#include "common/common_types.h"
+
 /* Prototype for automatically generated function */
-void olsr_plugins_load_static(void);
+EXPORT void olsr_plugins_load_static(void);
 
 #endif /* PLUGIN_STATIC_H_ */

@@ -1,0 +1,12 @@
+   PLUGIN CONFIGURATION
+==========================
+
+The plugin needs no configuration at all.
+
+   PLUGIN USAGE
+==================
+
+The plugin supports loading and storing configuration data from
+and to files.
+
+- Henning Rogge

@@ -231,8 +231,10 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header, con
   struct timeval timeval;
 
   /* test if event is consumed by any log handler */
-  if (!log_global_mask.mask[severity][source])
-    return;                     /* no log handler is interested in this event, so drop it */
+  if (!log_global_mask.mask[severity][source]) {
+    /* no log handler is interested in this event, so drop it */
+    return;
+  }
 
   va_start(ap, format);
 

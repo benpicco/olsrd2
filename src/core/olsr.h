@@ -86,4 +86,13 @@ olsr_subsystem_cleanup(bool *ptr) {
   return true;
 }
 
+/**
+ * Subsystem marker API for 'being initialized' state.
+ * @param ptr pointer to initialized state variable of subsystem
+ * @return true if the subsystem is initialized
+ */
+static INLINE bool
+olsr_subsystem_is_initialized(bool *ptr) {
+  return *ptr;
+}
 #endif /* OLSR_H_ */

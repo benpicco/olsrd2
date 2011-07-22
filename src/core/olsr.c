@@ -55,6 +55,7 @@
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
 #include "builddata/plugin_static.h"
+#include "builddata/data.h"
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"
 #include "olsr_memcookie.h"
@@ -139,7 +140,7 @@ main(int argc, char **argv) {
   setup_signalhandler();
 
   /* initialize logger */
-  if (olsr_log_init(SEVERITY_DEBUG)) {
+  if (olsr_log_init(SEVERITY_WARN)) {
     return -1;
   }
 
@@ -153,7 +154,7 @@ main(int argc, char **argv) {
   olsr_logcfg_addschema(olsr_cfg_get_schema());
 
   /* load static plugins */
-  olsr_plugins_init();
+  olsr_plugins_load_static();
 
   /* parse command line and read configuration files */
   return_code = parse_commandline(argc, argv, DEFAULT_CONFIGFILE);
@@ -202,6 +203,7 @@ main(int argc, char **argv) {
   if (olsr_stream_init()) {
     goto olsrd_cleanup;
   }
+  olsr_plugins_init();
 
   /* apply olsr configuration */
   if (olsr_cfg_apply()) {
@@ -343,6 +345,7 @@ setup_signalhandler(void) {
  */
 static int
 parse_commandline(int argc, char **argv, const char *def_config) {
+  struct olsr_plugin *plugin, *plugin_it;
   struct cfg_cmd_state state;
   struct autobuf log;
   struct cfg_db *db;
@@ -357,13 +360,29 @@ parse_commandline(int argc, char **argv, const char *def_config) {
   cfg_cmd_add(&state);
 
   while (return_code == -1
-      && 0 <= (opt = getopt_long(argc, argv, "hl:S:s:r:g::p:", olsr_options, &opt_idx))) {
+      && 0 <= (opt = getopt_long(argc, argv, "hvl:S:s:r:g::p:", olsr_options, &opt_idx))) {
     log.len = 0;
     log.buf[0] = 0;
 
     switch (opt) {
       case 'h':
         abuf_appendf(&log, "Usage: %s [OPTION]...\n%s", argv[0], help_text);
+        return_code = 0;
+        break;
+
+      case 'v':
+        abuf_appendf(&log," Olsrd version %s (%s)\n"
+                  " Built on %s\n"
+                  " Git: %s\n"
+                  "      %s\n"
+                  " Visit http://www.olsr.org\n",
+                  get_olsrd_version(), get_olsrd_builddate(),
+                  get_olsrd_buildsystem(),
+                  get_olsrd_git_commit(),
+                  get_olsrd_git_change());
+        OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
+          abuf_appendf(&log, " Static plugin: %s\n", plugin->name);
+        }
         return_code = 0;
         break;
 

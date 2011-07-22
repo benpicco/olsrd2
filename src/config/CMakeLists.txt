@@ -1,6 +1,4 @@
-SET(OLSRD_CONFIG_SRCS io/cfg_io_file.c
-#                      parser/cfg_parser_compact.c
-                      cfg_cmd.c
+SET(OLSRD_CONFIG_SRCS cfg_cmd.c
                       cfg_db.c
                       cfg_delta.c
                       cfg_io.c
@@ -9,7 +7,7 @@ SET(OLSRD_CONFIG_SRCS io/cfg_io_file.c
                       cfg_schema.c
                       cfg.c)
 
-ADD_LIBRARY(OlsrdConfig STATIC ${OLSRD_CONFIG_SRCS})
+ADD_LIBRARY(static_config STATIC ${OLSRD_CONFIG_SRCS})
 IF(WIN32)
-    TARGET_LINK_LIBRARIES(OlsrdConfig ws2_32 iphlpapi)
+    TARGET_LINK_LIBRARIES(static_config ws2_32 iphlpapi)
 ENDIF(WIN32)

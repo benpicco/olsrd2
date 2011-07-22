@@ -6,7 +6,7 @@ SET(OLSRD_COMMON_SRCS autobuf.c
                       string.c
                       template.c)
 
-ADD_LIBRARY(OlsrdCommon ${OLSRD_COMMON_SRCS})
+ADD_LIBRARY(static_common ${OLSRD_COMMON_SRCS})
 IF(WIN32)
-    TARGET_LINK_LIBRARIES(OlsrdCommon ws2_32 iphlpapi)
+    TARGET_LINK_LIBRARIES(static_common ws2_32 iphlpapi)
 ENDIF(WIN32)
