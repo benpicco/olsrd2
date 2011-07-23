@@ -1,7 +1,7 @@
 
 /*
  * The olsr.org Optimized Link-State Routing daemon(olsrd)
- * Copyright (c) 2004-2009, the olsr.org team - see HISTORY file
+ * Copyright (c) 2004-2011, the olsr.org team - see HISTORY file
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,10 +37,6 @@
  * to the project. For more information see the website or contact
  * the copyright holders.
  *
- */
-
-/*
- * Dynamic linked library for the olsr.org olsr daemon
  */
 
 #include <errno.h>

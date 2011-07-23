@@ -39,10 +39,6 @@
  *
  */
 
-/*
- * Dynamic linked library for the olsr.org olsr daemon
- */
-
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
