@@ -268,7 +268,7 @@ olsr_stream_create_session(struct olsr_stream_socket *comport,
   if (os_net_set_nonblocking(sock)) {
     OLSR_WARN(LOG_SOCKET_STREAM, "Cannot read comport socket status: %s (%d)",
         strerror(errno), errno);
-    goto parse_request_error;
+    return NULL;
   }
 
   session = olsr_memcookie_malloc(comport->memcookie);

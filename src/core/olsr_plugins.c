@@ -159,7 +159,7 @@ olsr_plugins_cleanup(void) {
 struct olsr_plugin *
 olsr_plugins_get(const char *libname) {
   struct olsr_plugin *plugin;
-  char *ptr, memorize;
+  char *ptr, memorize = 0;
 
   /* SOT: Hacked away the funny plugin check which fails if pathname is included */
   if ((ptr = strrchr(libname, '/')) != NULL) {
