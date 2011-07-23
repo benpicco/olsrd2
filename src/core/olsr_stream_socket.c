@@ -201,7 +201,7 @@ olsr_stream_connect_to(struct olsr_stream_socket *comport,
   struct olsr_stream_session *session;
   bool wait_for_connect = false;
   int s;
-#if !defined REMOVE_LOG_DEBUG
+#if !defined REMOVE_LOG_WARN
   struct netaddr_str buf;
 #endif
 
