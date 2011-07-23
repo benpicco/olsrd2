@@ -27,7 +27,9 @@ ADD_CUSTOM_COMMAND (
 )
 
 # create static library with the generated data
-ADD_LIBRARY(static_builddata STATIC ${GEN_DATA_C})
+ADD_LIBRARY(static_builddata STATIC ${GEN_DATA_C} ${CMAKE_CURRENT_SOURCE_DIR}/version.c)
 ADD_LIBRARY(static_pluginloader STATIC ${GEN_PLUGIN_STATIC_C})
 ADD_DEPENDENCIES(static_builddata OlsrdCleanData)
 ADD_DEPENDENCIES(static_pluginloader OlsrdCleanData)
+
+message("Compiler: ${CMAKE_C_COMPILER_ID}")

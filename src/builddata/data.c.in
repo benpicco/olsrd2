@@ -16,36 +16,36 @@ static const char shared_prefix[] = "${CMAKE_SHARED_LIBRARY_PREFIX}";
 static const char shared_suffix[] = "${CMAKE_SHARED_LIBRARY_SUFFIX}";
 
 const char *
-get_olsrd_version(void) {
+olsr_builddata_get_version(void) {
   return olsrd_version;
 }
 
 const char *
-get_olsrd_git_commit(void) {
+olsr_builddata_get_git_commit(void) {
   return olsrd_git;
 }
 
 const char *
-get_olsrd_git_change(void) {
+olsr_builddata_get_git_change(void) {
   return olsrd_change;
 }
 
 const char *
-get_olsrd_builddate(void) {
+olsr_builddata_get_builddate(void) {
   return build_date;
 }
 
 const char *
-get_olsrd_buildsystem(void) {
+olsr_builddata_get_buildsystem(void) {
   return build_host;
 }
 
 const char *
-get_olsrd_sharedlibrary_prefix(void) {
+olsr_builddata_get_sharedlibrary_prefix(void) {
   return shared_prefix;
 }
 
 const char *
-get_olsrd_sharedlibrary_suffix(void) {
+olsr_builddata_get_sharedlibrary_suffix(void) {
   return shared_suffix;
 }

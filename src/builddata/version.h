@@ -39,12 +39,11 @@
  *
  */
 
-#ifndef PLUGIN_STATIC_H_
-#define PLUGIN_STATIC_H_
+#ifndef VERSION_H_
+#define VERSION_H_
 
-#include "common/common_types.h"
+#include "common/autobuf.h"
 
-/* Prototype for automatically generated function */
-EXPORT void olsr_plugins_load_static(void);
+EXPORT void olsr_builddata_printversion(struct autobuf *);
 
-#endif /* PLUGIN_STATIC_H_ */
+#endif /* VERSION_H_ */

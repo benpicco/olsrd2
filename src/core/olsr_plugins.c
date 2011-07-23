@@ -130,9 +130,9 @@ olsr_plugins_init(void) {
 
   /* load predefined values for dlopen templates */
   dlopen_values[1] = ".";
-  dlopen_values[2] = get_olsrd_sharedlibrary_prefix();
-  dlopen_values[3] = get_olsrd_sharedlibrary_suffix();
-  dlopen_values[4] = get_olsrd_version();
+  dlopen_values[2] = olsr_builddata_get_sharedlibrary_prefix();
+  dlopen_values[3] = olsr_builddata_get_sharedlibrary_suffix();
+  dlopen_values[4] = olsr_builddata_get_version();
 }
 
 /**

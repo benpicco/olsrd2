@@ -55,6 +55,7 @@
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
 #include "builddata/plugin_static.h"
+#include "builddata/version.h"
 #include "builddata/data.h"
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"
@@ -374,15 +375,7 @@ parse_commandline(int argc, char **argv, const char *def_config) {
         break;
 
       case 'v':
-        abuf_appendf(&log," Olsrd version %s (%s)\n"
-                  " Built on %s\n"
-                  " Git: %s\n"
-                  "      %s\n"
-                  " Visit http://www.olsr.org\n",
-                  get_olsrd_version(), get_olsrd_builddate(),
-                  get_olsrd_buildsystem(),
-                  get_olsrd_git_commit(),
-                  get_olsrd_git_change());
+        olsr_builddata_printversion(&log);
         OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
           abuf_appendf(&log, " Static plugin: %s\n", plugin->name);
         }

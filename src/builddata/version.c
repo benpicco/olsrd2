@@ -39,12 +39,21 @@
  *
  */
 
-#ifndef PLUGIN_STATIC_H_
-#define PLUGIN_STATIC_H_
-
 #include "common/common_types.h"
+#include "common/autobuf.h"
 
-/* Prototype for automatically generated function */
-EXPORT void olsr_plugins_load_static(void);
+#include "builddata/data.h"
+#include "builddata/version.h"
 
-#endif /* PLUGIN_STATIC_H_ */
+void
+olsr_builddata_printversion(struct autobuf *abuf) {
+  abuf_appendf(abuf," Olsrd version %s (%s)\n"
+            " Built on %s\n"
+            " Git: %s\n"
+            "      %s\n"
+            " Visit http://www.olsr.org\n",
+            olsr_builddata_get_version(), olsr_builddata_get_builddate(),
+            olsr_builddata_get_buildsystem(),
+            olsr_builddata_get_git_commit(),
+            olsr_builddata_get_git_change());
+}
