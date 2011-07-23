@@ -76,6 +76,8 @@ enum olsr_option_short {
 
 static struct option olsr_options[] = {
   { "help",         no_argument,       0, 'h' },
+  { "version",      no_argument,       0, 'v' },
+  { "plugin",       required_argument, 0, 'p' },
   { "load",         required_argument, 0, 'l' },
   { "save",         required_argument, 0, 'S' },
   { "set",          required_argument, 0, 's' },
@@ -83,7 +85,6 @@ static struct option olsr_options[] = {
   { "get",          optional_argument, 0, 'g' },
   { "format",       required_argument, 0, 'f' },
   { "schema",       optional_argument, 0, olsr_option_schema },
-  { "plugin",       required_argument, 0, 'p' },
   { NULL, 0,0,0 }
 };
 
@@ -91,6 +92,8 @@ static const char *help_text =
     "Starts the OLSR routing agent\n"
     "Mandatory arguments to long options are mandatory for short options too.\n"
     "  -h, --help                             Display this help file\n"
+    "  -v, --version                          Display the version string and the included static plugins\n"
+    "  -p, --plugin=shared-library            Load a shared library as an OLSRd plugin\n"
     "  --schema                               Display all allowed section types of configuration\n"
     "          =section_type                  Display all allowed entries of one configuration section\n"
     "          =section_type.key              Display help text for configuration entry\n"
@@ -110,7 +113,7 @@ static const char *help_text =
     "           =section_type[name].key       Show the value(s) of a key in a named section\n"
     "  -f, --format=FORMAT                    Set the format for loading/saving data\n"
     "                                         (use 'AUTO' for automatic detection of format)\n"
-    "  -p, --plugin=shared-library            Load a shared library as an OLSRd plugin\n";
+;
 
 static enum log_source level_1_sources[] = {
   LOG_MAIN
