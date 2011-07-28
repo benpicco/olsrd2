@@ -346,7 +346,7 @@ olsr_internal_unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
   }
 
   /* remove first from tree */
-  avl_remove(&plugin_tree, &plugin->p_node);
+  avl_delete(&plugin_tree, &plugin->p_node);
 
   /* cleanup */
   if (plugin->int_dlhandle) {

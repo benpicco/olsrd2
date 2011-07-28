@@ -61,6 +61,7 @@ int olsr_cfg_apply(void);
 EXPORT struct cfg_db *olsr_cfg_get_db(void);
 EXPORT struct cfg_db *olsr_cfg_get_rawdb(void);
 EXPORT struct cfg_schema *olsr_cfg_get_schema(void);
+EXPORT struct cfg_schema_section *olsr_cfg_get_schema_section_global(void);
 EXPORT struct cfg_delta *olsr_cfg_get_delta(void);
 
 #endif /* OLSR_CFG_H_ */

@@ -102,8 +102,6 @@ olsr_cfg_init(void) {
 
   /* initialize delta */
   cfg_delta_add(&olsr_delta);
-
-  // cfg_parser_add(&cfg_parser_compact);
   return 0;
 }
 
@@ -126,6 +124,7 @@ olsr_cfg_cleanup(void) {
 /**
  * Applies to content of the raw configuration database into the
  * work database and triggers the change calculation.
+ * @param check_only true if only prepare plugins and validate configuration
  * @return 0 if successful, -1 otherwise
  */
 int
@@ -188,7 +187,8 @@ olsr_cfg_apply(void) {
   /*** phase 2: check configuration and apply it ***/
   /* re-validate configuration data */
   if (cfg_schema_validate(olsr_raw_db, failfast, false, true, &log)) {
-    OLSR_WARN(LOG_CONFIG, "%s", log.buf);
+    OLSR_WARN(LOG_CONFIG, "Configuration validation failed");
+    OLSR_WARN_NH(LOG_CONFIG, "%s", log.buf);
     goto apply_failed;
   }
 
@@ -257,6 +257,15 @@ struct cfg_schema *
 olsr_cfg_get_schema(void) {
   return &olsr_schema;
 }
+
+/**
+ * @return pointer to olsr configuration schema
+ */
+struct cfg_schema_section *
+olsr_cfg_get_schema_section_global(void) {
+  return &global_section;
+}
+
 
 /**
  * @return pointer to olsr configuration delta management

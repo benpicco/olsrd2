@@ -69,10 +69,11 @@
 #include "olsr_cfg.h"
 #include "olsr.h"
 
-static bool running, reload_config;
+static bool running, reload_config, exit_called;
 
 enum olsr_option_short {
-  olsr_option_schema = 256
+  olsr_option_quit   = 256,
+  olsr_option_schema,
 };
 
 static struct option olsr_options[] = {
@@ -85,19 +86,21 @@ static struct option olsr_options[] = {
   { "remove",       required_argument, 0, 'r' },
   { "get",          optional_argument, 0, 'g' },
   { "format",       required_argument, 0, 'f' },
+  { "quit",         no_argument,       0, olsr_option_quit },
   { "schema",       optional_argument, 0, olsr_option_schema },
   { NULL, 0,0,0 }
 };
 
 static const char *help_text =
-    "Starts the OLSR routing agent\n"
+    "Activates OLSR.org routing daemon\n"
     "Mandatory arguments to long options are mandatory for short options too.\n"
     "  -h, --help                             Display this help file\n"
     "  -v, --version                          Display the version string and the included static plugins\n"
-    "  -p, --plugin=shared-library            Load a shared library as an OLSRd plugin\n"
-    "  --schema                               Display all allowed section types of configuration\n"
-    "          =section_type                  Display all allowed entries of one configuration section\n"
-    "          =section_type.key              Display help text for configuration entry\n"
+    "  -p, --plugin=shared-library            Load a shared library as a plugin\n"
+    "      --quit                             Load plugins and validate configuration, then end\n"
+    "      --schema                           Display all allowed section types of configuration\n"
+    "              =section_type              Display all allowed entries of one configuration section\n"
+    "              =section_type.key          Display help text for configuration entry\n"
     "  -l, --load=SOURCE                      Load configuration from a SOURCE\n"
     "  -S, --save=TARGET                      Save configuration to a TARGET\n"
     "  -s, --set=section_type.                Add an unnamed section to the configuration\n"
@@ -117,7 +120,7 @@ static const char *help_text =
 ;
 
 static enum log_source level_1_sources[] = {
-  LOG_MAIN
+    LOG_MAIN,
 };
 
 static const char *DEFAULT_CONFIGFILE = OLSRD_GLOBAL_CONF_FILE;
@@ -134,23 +137,28 @@ static int parse_commandline(int argc, char **argv, const char *);
  */
 int
 main(int argc, char **argv) {
-  int return_code = 0;
-  int fork_pipe = -1;
+  int return_code;
+  int fork_pipe;
   const char *fork_str;
+
+  /* early initialization */
+  return_code = 1;
+  fork_pipe = -1;
 
   /* setup signal handler */
   running = true;
   reload_config = false;
+  exit_called = false;
   setup_signalhandler();
 
   /* initialize logger */
   if (olsr_log_init(SEVERITY_WARN)) {
-    return -1;
+    goto olsrd_cleanup;
   }
 
   /* add configuration definition */
   if (olsr_cfg_init()) {
-    return 1;
+    goto olsrd_cleanup;
   }
 
   /* initialize logging to config interface */
@@ -207,10 +215,21 @@ main(int argc, char **argv) {
   if (olsr_stream_init()) {
     goto olsrd_cleanup;
   }
+
+  /* activate plugins */
   olsr_plugins_init();
 
   /* apply olsr configuration */
   if (olsr_cfg_apply()) {
+    goto olsrd_cleanup;
+  }
+
+  if (!running) {
+    /*
+     * mayor error during late initialization
+     * or maybe the user decided otherwise and pressed CTRL-C
+     */
+    return_code = exit_called ? 1 : 0;
     goto olsrd_cleanup;
   }
 
@@ -242,10 +261,18 @@ olsrd_cleanup:
   olsr_log_cleanup();
 
   if (fork_pipe != -1) {
+    fprintf(stderr, "Errorcode: %d\n", return_code);
     /* tell main process that we had a problem */
     daemonize_finish(fork_pipe, return_code);
   }
+
   return return_code;
+}
+
+void
+olsr_exit(void) {
+  running = false;
+  exit_called = true;
 }
 
 /**
@@ -364,7 +391,7 @@ parse_commandline(int argc, char **argv, const char *def_config) {
   cfg_cmd_add(&state);
 
   while (return_code == -1
-      && 0 <= (opt = getopt_long(argc, argv, "hvl:S:s:r:g::p:", olsr_options, &opt_idx))) {
+      && 0 <= (opt = getopt_long(argc, argv, "hvp:ql:S:s:r:g::", olsr_options, &opt_idx))) {
     log.len = 0;
     log.buf[0] = 0;
 
@@ -380,6 +407,14 @@ parse_commandline(int argc, char **argv, const char *def_config) {
           abuf_appendf(&log, " Static plugin: %s\n", plugin->name);
         }
         return_code = 0;
+        break;
+      case 'p':
+        if (olsr_plugins_load(optarg) == NULL) {
+          return_code = 1;
+        }
+        break;
+      case olsr_option_quit:
+        running = false;
         break;
 
       case olsr_option_schema:
@@ -421,11 +456,6 @@ parse_commandline(int argc, char **argv, const char *def_config) {
         break;
       case 'f':
         if (cfg_cmd_handle_format(db, &state, optarg, &log)) {
-          return_code = 1;
-        }
-        break;
-      case 'p':
-        if (olsr_plugins_load(optarg) == NULL) {
           return_code = 1;
         }
         break;

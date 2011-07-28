@@ -56,6 +56,8 @@
 /* variable for subsystem state */
 #define OLSR_SUBSYSTEM_STATE(var_name) static bool var_name = false
 
+EXPORT void olsr_exit(void);
+
 /**
  * Subsystem marker API for 'being initialized' state.
  * Call this function at the beginning of the initialization.

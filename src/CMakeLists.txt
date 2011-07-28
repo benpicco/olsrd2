@@ -23,6 +23,9 @@ IF(BSD)
     set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
 ENDIF(BSD)
 
+# add main program
+set(OLSRD_SRCS ${OLSRD_SRCS} olsr.c)
+
 # activate symbol export for win32
 IF(WIN32)
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--export-all-symbols")
