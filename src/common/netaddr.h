@@ -43,7 +43,7 @@
 #define NETADDR_H_
 
 
-#ifndef OS_WIN32
+#ifndef WIN32
 #include <arpa/inet.h>
 #include <netinet/if_ether.h>
 #include <netinet/ip.h>

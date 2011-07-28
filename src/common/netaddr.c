@@ -48,8 +48,6 @@
 #include "common/string.h"
 #include "common/netaddr.h"
 
-static const uint32_t _zero_addr[4] = { 0,0,0,0 };
-
 static char *_mac_to_string(char *dst, const void *bin, size_t dst_size,
     size_t bin_size, char separator);
 static int _mac_from_string(void *bin, size_t bin_size,

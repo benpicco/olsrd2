@@ -54,6 +54,8 @@ static void _handle_namedsection(struct cfg_delta *delta, const char *type,
     struct cfg_named_section *pre_change, struct cfg_named_section *post_change);
 static bool _setup_filterresults(struct cfg_delta_handler *handler,
     struct cfg_named_section *pre_change, struct cfg_named_section *post_change);
+static int _cmp_section_types(struct cfg_section_type *, struct cfg_section_type *);
+static int _cmp_named_section(struct cfg_named_section *, struct cfg_named_section *);
 
 /**
  * Initialize the root of a delta handler list
@@ -61,8 +63,7 @@ static bool _setup_filterresults(struct cfg_delta_handler *handler,
  */
 void
 cfg_delta_add(struct cfg_delta *delta) {
-  list_init_head(&delta->handler);
-  list_init_head(&delta->all_types_handler);
+  avl_init(&delta->handler, avl_comp_uint32, true, NULL);
 }
 
 /**
@@ -74,11 +75,8 @@ void
 cfg_delta_remove(struct cfg_delta *delta) {
   struct cfg_delta_handler *handler, *iterator;
 
-  list_for_each_element_safe(&delta->handler, handler, node, iterator) {
-    cfg_delta_remove_handler(handler);
-  }
-  list_for_each_element_safe(&delta->all_types_handler, handler, node, iterator) {
-    cfg_delta_remove_handler(handler);
+  avl_for_each_element_safe(&delta->handler, handler, node, iterator) {
+    cfg_delta_remove_handler(delta, handler);
   }
 }
 
@@ -93,28 +91,25 @@ cfg_delta_remove(struct cfg_delta *delta) {
 void
 cfg_delta_add_handler(struct cfg_delta *delta, struct cfg_delta_handler *handler) {
   assert(handler->callback);
-
-  if (handler->s_type) {
-    list_add_tail(&delta->handler, &handler->node);
-  }
-  else {
-    list_add_tail(&delta->all_types_handler, &handler->node);
-  }
+  handler->node.key = &handler->priority;
+  avl_insert(&delta->handler, &handler->node);
 }
 
 /**
  * Removes a handler from a cfg_delta list
+ * @param delta pointer to delta manager
  * @param handler pointer to delta handler
  */
 void
-cfg_delta_remove_handler(struct cfg_delta_handler *handler) {
-  list_remove(&handler->node);
+cfg_delta_remove_handler(struct cfg_delta *delta, struct cfg_delta_handler *handler) {
+  avl_remove(&delta->handler, &handler->node);
 }
 
 /**
  * Adds a delta handler by copying a schema section and entries
  * @param delta base pointer for delta calculation
  * @param callback callback for delta handling
+ * @param priority defines the order of delta callbacks
  * @param d_handler pointer to uninitialized cfg_delta_handler
  * @param d_filter pointer to uninitialized array of cfg_delta_filter
  * @param s_section pointer to initialized schema_section
@@ -123,7 +118,7 @@ cfg_delta_remove_handler(struct cfg_delta_handler *handler) {
  */
 void
 cfg_delta_add_handler_by_schema(
-    struct cfg_delta *delta, cfg_delta_callback *callback,
+    struct cfg_delta *delta, cfg_delta_callback *callback, uint32_t priority,
     struct cfg_delta_handler *d_handler, struct cfg_delta_filter *d_filter,
     struct cfg_schema_section *s_section, struct cfg_schema_entry *s_entries,
     size_t count) {
@@ -132,6 +127,7 @@ cfg_delta_add_handler_by_schema(
   d_handler->s_type = s_section->t_type;
   d_handler->callback = callback;
   d_handler->filter = d_filter;
+  d_handler->priority = priority;
 
   for (i=0; i < count; i++) {
     memset(&d_filter[i], 0, sizeof(struct cfg_delta_filter));
@@ -153,9 +149,17 @@ void
 cfg_delta_calculate(struct cfg_delta *delta,
     struct cfg_db *pre_change, struct cfg_db *post_change) {
   struct cfg_section_type *section_pre = NULL, *section_post = NULL;
-
   struct cfg_named_section *named, *named_it;
+  struct cfg_delta_handler *handler;
 
+  /* cleanup delta handler flags */
+  avl_for_each_element(&delta->handler, handler, node) {
+    handler->_trigger_callback = false;
+    handler->pre_delta = NULL;
+    handler->post_delta = NULL;
+  }
+
+  /* iterate over section types */
   section_pre = avl_first_element_safe(&pre_change->sectiontypes, section_pre, node);
   section_post = avl_first_element_safe(&post_change->sectiontypes, section_post, node);
 
@@ -163,7 +167,7 @@ cfg_delta_calculate(struct cfg_delta *delta,
     int cmp_sections;
 
     /* compare pre and post */
-    cmp_sections = cfg_cmp_keys(section_pre->type, section_post->type);
+    cmp_sections = _cmp_section_types(section_pre, section_post);
 
     if (cmp_sections < 0) {
       /* handle pre-section */
@@ -189,6 +193,37 @@ cfg_delta_calculate(struct cfg_delta *delta,
       section_post = avl_next_element_safe(&post_change->sectiontypes, section_post, node);
     }
   }
+
+  /* cleanup delta handler flags */
+  avl_for_each_element(&delta->handler, handler, node) {
+    if (handler->_trigger_callback && handler->s_type != NULL) {
+      handler->callback();
+    }
+  }
+}
+
+static int
+_cmp_section_types(struct cfg_section_type *ptr1, struct cfg_section_type *ptr2) {
+  if (ptr1 == NULL) {
+    return ptr2 == NULL ? 0 : 1;
+  }
+  if (ptr2 == NULL) {
+    return -1;
+  }
+
+  return strcasecmp(ptr1->type, ptr2->type);
+}
+
+static int
+_cmp_named_section(struct cfg_named_section *ptr1, struct cfg_named_section *ptr2) {
+  if (ptr1 == NULL) {
+    return ptr2 == NULL ? 0 : 1;
+  }
+  if (ptr2 == NULL) {
+    return -1;
+  }
+
+  return strcasecmp(ptr1->name, ptr2->name);
 }
 
 /**
@@ -209,7 +244,7 @@ _delta_section(struct cfg_delta *delta,
     int cmp_sections;
 
     /* compare pre and post */
-    cmp_sections = cfg_cmp_keys(named_pre->name, named_post->name);
+    cmp_sections = _cmp_named_section(named_pre, named_post);
 
     if (cmp_sections < 0) {
       /* handle pre-named */
@@ -246,18 +281,19 @@ _handle_namedsection(struct cfg_delta *delta, const char *type,
     struct cfg_named_section *pre_change, struct cfg_named_section *post_change) {
   struct cfg_delta_handler *handler;
 
-  list_for_each_element(&delta->handler, handler, node) {
-    if (cfg_cmp_keys(handler->s_type, type) != 0) {
+  avl_for_each_element(&delta->handler, handler, node) {
+    if (handler->s_type != NULL && cfg_cmp_keys(handler->s_type, type) != 0) {
       continue;
     }
 
-    if (_setup_filterresults(handler, pre_change, post_change)) {
-      handler->callback(handler, pre_change, post_change);
-    }
-  }
-  list_for_each_element(&delta->all_types_handler, handler, node) {
-    if (_setup_filterresults(handler, pre_change, post_change)) {
-      handler->callback(handler, pre_change, post_change);
+    if ((handler->_trigger_callback =
+        _setup_filterresults(handler, pre_change, post_change))) {
+      handler->pre_delta = pre_change;
+      handler->post_delta = post_change;
+
+      if (handler->s_type == NULL) {
+        handler->callback();
+      }
     }
   }
 }

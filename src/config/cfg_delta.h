@@ -54,16 +54,12 @@ struct cfg_delta_filter;
  * Root of a series of delta handlers
  */
 struct cfg_delta {
-  /* list of handlers that apply to a specific section type */
-  struct list_entity handler;
-
-  /* list of handlers that apply to all section types */
-  struct list_entity all_types_handler;
+  /* tree of handlers */
+  struct avl_tree handler;
 };
 
 /* callback for delta management */
-typedef void cfg_delta_callback(struct cfg_delta_handler *,
-    struct cfg_named_section *, struct cfg_named_section *);
+typedef void cfg_delta_callback(void);
 
 /**
  * A single handler definition for configuration delta
@@ -71,10 +67,13 @@ typedef void cfg_delta_callback(struct cfg_delta_handler *,
  */
 struct cfg_delta_handler {
   /*
-   * Node that holds the handler list together,
+   * Node that holds the handler tree together,
    * will be initialized by cfg_delta_add_handler
    */
-  struct list_entity node;
+  struct avl_node node;
+
+  /* priority for callbacks */
+  uint32_t priority;
 
   /* section type for this handler, NULL for all types */
   const char *s_type;
@@ -94,6 +93,17 @@ struct cfg_delta_handler {
   /* custom pointer for callback usage */
   void *custom;
 
+  /*
+   * internal variable for triggering callbacks,
+   * will always be true when callback is triggered.
+   */
+  bool _trigger_callback;
+
+  /*
+   * internal variables to store parameters for
+   * triggered callback
+   */
+  struct cfg_named_section *pre_delta, *post_delta;
 };
 
 /* type of change that happened for a filter */
@@ -130,10 +140,10 @@ EXPORT void cfg_delta_add(struct cfg_delta *);
 EXPORT void cfg_delta_remove(struct cfg_delta *);
 
 EXPORT void cfg_delta_add_handler(struct cfg_delta *, struct cfg_delta_handler *);
-EXPORT void cfg_delta_remove_handler(struct cfg_delta_handler *);
+EXPORT void cfg_delta_remove_handler(struct cfg_delta *, struct cfg_delta_handler *);
 
 EXPORT void cfg_delta_add_handler_by_schema(
-    struct cfg_delta *delta, cfg_delta_callback *callback,
+    struct cfg_delta *delta, cfg_delta_callback *callback, uint32_t priority,
     struct cfg_delta_handler *d_handler, struct cfg_delta_filter *d_filter,
     struct cfg_schema_section *s_section, struct cfg_schema_entry *s_entries,
     size_t count);

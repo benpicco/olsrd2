@@ -396,7 +396,7 @@ cfg_schema_validate_strlen(struct cfg_schema_entry *entry,
     const char *section_name, char *value, struct autobuf *out) {
   if (value == NULL) {
     if (entry->t_validate_params.p_i1 < INT32_MAX) {
-      cfg_append_printable_line(out, "    Parameter must have a maximum length of %d characters\n",
+      cfg_append_printable_line(out, "    Parameter must have a maximum length of %d characters",
           entry->t_validate_params.p_i1);
     }
     return 0;
@@ -428,7 +428,7 @@ cfg_schema_validate_printable(struct cfg_schema_entry *entry,
     return 1;
   }
   if (value == NULL) {
-    cfg_append_printable_line(out, "    Parameter must only contain printable characters.\n");
+    cfg_append_printable_line(out, "    Parameter must only contain printable characters.");
     return 0;
   }
   if (!cfg_is_printable(value)) {
@@ -496,7 +496,7 @@ cfg_schema_validate_int(struct cfg_schema_entry *entry,
   char *endptr = NULL;
 
   if (value == NULL) {
-    cfg_append_printable_line(out, "    Parameter must be an integer between %d and %d\n",
+    cfg_append_printable_line(out, "    Parameter must be an integer between %d and %d",
         entry->t_validate_params.p_i1, entry->t_validate_params.p_i2);
     return 0;
   }
@@ -558,24 +558,24 @@ cfg_schema_validate_netaddr(struct cfg_schema_entry *entry,
 
     switch (p1) {
       case AF_INET:
-        cfg_append_printable_line(out, "    Parameter must be an IPv4%s address%s\n",
+        cfg_append_printable_line(out, "    Parameter must be an IPv4%s address%s",
             p2 == AF_INET6 ? " or IPv6" : "", p_string);
         break;
       case AF_INET6:
-        cfg_append_printable_line(out, "    Parameter must be an IPv6 address%s\n",
+        cfg_append_printable_line(out, "    Parameter must be an IPv6 address%s",
             p_string);
         break;
       case AF_MAC48:
-        cfg_append_printable_line(out, "    Parameter must be an MAC-48%s address%s\n",
+        cfg_append_printable_line(out, "    Parameter must be an MAC-48%s address%s",
             p2 == AF_EUI64 ? " or EUI64" : "", p_string);
         break;
       case AF_EUI64:
-        cfg_append_printable_line(out, "    Parameter must be an EUI-64 address%s\n",
+        cfg_append_printable_line(out, "    Parameter must be an EUI-64 address%s",
             p_string);
         break;
       default:
         cfg_append_printable_line(out, "    Parameter must be an IPv4, "
-            "IPv6, MAC-48 or EUI-64 address%s\n", p_string);
+            "IPv6, MAC-48 or EUI-64 address%s", p_string);
         break;
     }
     return 0;
