@@ -39,8 +39,8 @@
  *
  */
 
-#ifndef OS_NET_LINUX_H_
-#define OS_NET_LINUX_H_
+#ifndef OS_NET_BSD_H_
+#define OS_NET_BSD_H_
 
 #ifndef OS_NET_SPECIFIC_INCLUDE
 #error "DO not include this file directly, always use 'os_net.h'"
@@ -57,4 +57,4 @@
 #define OS_NET_RECVFROM     OS_GENERIC
 #define OS_NET_SENDTO       OS_GENERIC
 
-#endif /* OS_NET_LINUX_H_ */
+#endif /* OS_NET_BSD_H_ */
