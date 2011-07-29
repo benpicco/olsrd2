@@ -149,17 +149,18 @@ olsr_cfg_apply(void) {
 
   /* read global section */
   named = cfg_db_find_namedsection(olsr_raw_db, CFG_SECTION_GLOBAL, NULL);
+  if (named != NULL) {
+    /* read failfast state */
+    ptr = cfg_db_get_entry_value(olsr_raw_db, CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FAILFAST);
+    failfast = cfg_get_bool(ptr);
 
-  /* read failfast state */
-  ptr = cfg_db_get_entry_value(olsr_raw_db, CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FAILFAST);
-  failfast = cfg_get_bool(ptr);
-
-  /* load plugins */
-  entry = cfg_db_get_entry(named, CFG_GLOBAL_PLUGIN);
-  if (entry) {
-    OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
-      if (olsr_plugins_load(ptr) == NULL && failfast) {
-        goto apply_failed;
+    /* load plugins */
+    entry = cfg_db_get_entry(named, CFG_GLOBAL_PLUGIN);
+    if (entry) {
+      OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+        if (olsr_plugins_load(ptr) == NULL && failfast) {
+          goto apply_failed;
+        }
       }
     }
   }
