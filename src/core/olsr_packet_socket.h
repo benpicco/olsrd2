@@ -58,7 +58,8 @@ struct olsr_packet_socket {
   size_t input_buffer_length;
 
   struct olsr_socket_entry *scheduler_entry;
-  void (*receive_data)(struct olsr_packet_socket *, void *data, size_t length);
+  void (*receive_data)(struct olsr_packet_socket *,
+      union netaddr_socket *from, size_t length);
 };
 
 void olsr_packet_init(void);
@@ -69,6 +70,6 @@ int olsr_packet_add(struct olsr_packet_socket *,
 void olsr_packet_remove(struct olsr_packet_socket *);
 
 int olsr_packet_send(struct olsr_packet_socket *, union netaddr_socket *remove,
-    void *data, size_t length);
+    const void *data, size_t length);
 
 #endif /* OLSR_PACKET_SOCKET_H_ */

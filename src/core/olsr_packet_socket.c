@@ -129,12 +129,14 @@ olsr_packet_remove(struct olsr_packet_socket *pktsocket) {
     os_close(pktsocket->scheduler_entry->fd);
     olsr_socket_remove(pktsocket->scheduler_entry);
     list_remove(&pktsocket->node);
+
+    abuf_free(&pktsocket->out);
   }
 }
 
 int
 olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *remote,
-    void *data, size_t length) {
+    const void *data, size_t length) {
   int result;
 #if !defined(REMOVE_LOG_WARN)
   struct netaddr_str buf;
@@ -187,7 +189,7 @@ olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
       pktsocket->input_buffer[pktsocket->input_buffer_length-1] = 0;
 
       /* received valid packet */
-      pktsocket->receive_data(pktsocket, pktsocket->input_buffer, result);
+      pktsocket->receive_data(pktsocket, &sock, result);
     }
     else if (result < 0 && (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
       OLSR_WARN(LOG_SOCKET_PACKET, "Cannot read packet from socket %s: %s (%d)",

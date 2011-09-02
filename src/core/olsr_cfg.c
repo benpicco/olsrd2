@@ -146,15 +146,15 @@ olsr_cfg_apply(void) {
   /*** phase 1: activate all plugins ***/
   result = -1;
   old_db = NULL;
+  entry = NULL;
 
-  /* read global section */
+  /* read failfast state */
+  ptr = cfg_db_get_entry_value(olsr_raw_db, CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FAILFAST);
+  failfast = cfg_get_bool(ptr);
+
+  /* load plugins */
   named = cfg_db_find_namedsection(olsr_raw_db, CFG_SECTION_GLOBAL, NULL);
-  if (named != NULL) {
-    /* read failfast state */
-    ptr = cfg_db_get_entry_value(olsr_raw_db, CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FAILFAST);
-    failfast = cfg_get_bool(ptr);
-
-    /* load plugins */
+  if (named) {
     entry = cfg_db_get_entry(named, CFG_GLOBAL_PLUGIN);
     if (entry) {
       OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
@@ -166,22 +166,22 @@ olsr_cfg_apply(void) {
   }
 
   /* unload all plugins that are not in use anymore */
-  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-    found = false;
+  if (entry) {
+    OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
+      found = false;
 
-    /* search if plugin should still be active */
-    if (entry) {
+      /* search if plugin should still be active */
       OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
         if (olsr_plugins_get(ptr) == plugin) {
           found = true;
           break;
         }
       }
-    }
 
-    if (!found) {
-      /* if not, unload it */
-      olsr_plugins_unload(plugin);
+      if (!found) {
+        /* if not, unload it */
+        olsr_plugins_unload(plugin);
+      }
     }
   }
 
@@ -203,6 +203,9 @@ olsr_cfg_apply(void) {
   /* switch databases */
   old_db = olsr_work_db;
   olsr_work_db = new_db;
+
+  /* bind schema */
+  cfg_db_link_schema(olsr_work_db, &olsr_schema);
 
   /* enable all plugins */
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {

@@ -154,10 +154,10 @@ os_recvfrom(int fd, void *buf, size_t length, union netaddr_socket *source) {
 #endif
 
 #if OS_NET_SENDTO == OS_SPECIFIC
-EXPORT int os_sendto(int fd, void *buf, size_t length, union netaddr_socket *dst);
+EXPORT int os_sendto(int fd, const void *buf, size_t length, union netaddr_socket *dst);
 #elif OS_NET_SENDTO == OS_GENERIC
 static INLINE int
-os_sendto(int fd, void *buf, size_t length, union netaddr_socket *dst) {
+os_sendto(int fd, const void *buf, size_t length, union netaddr_socket *dst) {
   return sendto(fd, buf, length, 0, &dst->std, sizeof(*dst));
 }
 #endif
