@@ -453,6 +453,8 @@ static struct cfg_section_type *
 _alloc_section(struct cfg_db *db, const char *type) {
   struct cfg_section_type *section;
 
+  assert(type);
+
   section = cfg_memory_alloc(&db->memory, sizeof(*section));
   section->type = cfg_memory_strdup(&db->memory, type);
 

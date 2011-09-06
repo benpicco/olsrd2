@@ -94,6 +94,7 @@ struct olsr_plugin {
 };
 
 #define OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) avl_for_each_element_safe(&plugin_tree, plugin, p_node, iterator)
+EXPORT extern struct avl_tree plugin_tree;
 
 EXPORT void olsr_plugins_hook(struct olsr_plugin *plugin);
 
@@ -107,7 +108,14 @@ EXPORT int olsr_plugins_disable(struct olsr_plugin *);
 
 EXPORT struct olsr_plugin *olsr_plugins_get(const char *libname);
 
-EXPORT extern struct avl_tree plugin_tree;
+/**
+ * @param p pointer to plugin
+ * @return true if its a static plugin, false otherwise
+ */
+static inline bool
+olsr_plugins_is_static(struct olsr_plugin *p) {
+  return p->int_dlhandle == NULL;
+}
 
 #endif
 

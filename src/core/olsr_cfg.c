@@ -181,8 +181,8 @@ olsr_cfg_apply(void) {
         }
       }
 
-      if (!found) {
-        /* if not, unload it */
+      if (!found && !olsr_plugins_is_static(plugin)) {
+        /* if not, unload it (if not static) */
         olsr_plugins_unload(plugin);
       }
     }
@@ -239,6 +239,26 @@ apply_failed:
   }
   abuf_free(&log);
   return result;
+}
+
+/**
+ * This function will clear the raw configuration database
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+olsr_cfg_create_new_rawdb(void) {
+  /* free old db */
+  cfg_db_remove(olsr_raw_db);
+
+  /* initialize database */
+  if ((olsr_raw_db = cfg_db_add()) == NULL) {
+    OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
+    olsr_exit();
+    return -1;
+  }
+
+  cfg_db_link_schema(olsr_raw_db, &olsr_schema);
+  return 0;
 }
 
 /**

@@ -58,6 +58,8 @@ int olsr_cfg_init(void) __attribute__((warn_unused_result));
 void olsr_cfg_cleanup(void);
 int olsr_cfg_apply(void);
 
+int olsr_cfg_create_new_rawdb(void);
+
 EXPORT struct cfg_db *olsr_cfg_get_db(void);
 EXPORT struct cfg_db *olsr_cfg_get_rawdb(void);
 EXPORT struct cfg_schema *olsr_cfg_get_schema(void);

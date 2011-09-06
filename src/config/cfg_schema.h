@@ -183,8 +183,8 @@ struct cfg_schema_entry {
   bool t_list;
 
   /* callback for checking value of entry */
-  int (*t_validate)(struct cfg_schema_entry *entry,
-      const char *section_name, char *value, struct autobuf *out);
+  int (*t_validate)(const struct cfg_schema_entry *entry,
+      const char *section_name, const char *value, struct autobuf *out);
 
   /* parameters for check functions */
   struct validate_params {
@@ -193,7 +193,7 @@ struct cfg_schema_entry {
   } t_validate_params;
 
   /* callback for converting string into binary */
-  int (*t_to_binary)(struct cfg_schema_entry *s_entry,
+  int (*t_to_binary)(const struct cfg_schema_entry *s_entry,
       const char *value, void *ptr);
 
   /* offset of current binary data compared to reference pointer */
@@ -217,30 +217,30 @@ EXPORT int cfg_schema_validate(struct cfg_db *db,
     bool failFast, bool cleanup, bool ignore_unknown_sections, struct autobuf *out);
 
 EXPORT int cfg_schema_tobin(void *target, struct cfg_named_section *named,
-    struct cfg_schema_entry *entries, size_t count);
+    const struct cfg_schema_entry *entries, size_t count);
 
-EXPORT int cfg_schema_validate_printable(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out);
-EXPORT int cfg_schema_validate_strlen(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out);
-EXPORT int cfg_schema_validate_choice(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out);
-EXPORT int cfg_schema_validate_int(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out);
-EXPORT int cfg_schema_validate_netaddr(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out);
+EXPORT int cfg_schema_validate_printable(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
+EXPORT int cfg_schema_validate_strlen(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
+EXPORT int cfg_schema_validate_choice(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
+EXPORT int cfg_schema_validate_int(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
+EXPORT int cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
 
-EXPORT int cfg_schema_tobin_strptr(struct cfg_schema_entry *s_entry,
+EXPORT int cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference);
-EXPORT int cfg_schema_tobin_strarray(struct cfg_schema_entry *s_entry,
+EXPORT int cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference);
-EXPORT int cfg_schema_tobin_choice(struct cfg_schema_entry *s_entry,
+EXPORT int cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference);
-EXPORT int cfg_schema_tobin_int(struct cfg_schema_entry *s_entry,
+EXPORT int cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference);
-EXPORT int cfg_schema_tobin_netaddr(struct cfg_schema_entry *s_entry,
+EXPORT int cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference);
-EXPORT int cfg_schema_tobin_bool(struct cfg_schema_entry *s_entry,
+EXPORT int cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference);
 
 /**

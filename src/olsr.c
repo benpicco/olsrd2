@@ -129,9 +129,8 @@ static const char *DEFAULT_CONFIGFILE = OLSRD_GLOBAL_CONF_FILE;
 static void quit_signal_handler(int);
 static void hup_signal_handler(int);
 static void setup_signalhandler(void);
-static int mainloop(void);
-static int parse_commandline(int argc, char **argv, const char *);
-
+static int mainloop(int argc, char **argv);
+static int parse_commandline(int argc, char **argv, bool reload_only);
 /**
  * Main program
  */
@@ -169,7 +168,7 @@ main(int argc, char **argv) {
   olsr_plugins_load_static();
 
   /* parse command line and read configuration files */
-  return_code = parse_commandline(argc, argv, DEFAULT_CONFIGFILE);
+  return_code = parse_commandline(argc, argv, false);
   if (return_code != -1) {
     /* end OLSRd now */
     goto olsrd_cleanup;
@@ -179,7 +178,7 @@ main(int argc, char **argv) {
   return_code = 1;
 
   /* become root */
-  if (geteuid()) {
+  if (0 && geteuid()) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run olsrd!\n");
     goto olsrd_cleanup;
   }
@@ -240,7 +239,7 @@ main(int argc, char **argv) {
   }
 
   /* activate mainloop */
-  return_code = mainloop();
+  return_code = mainloop(argc, argv);
 
 olsrd_cleanup:
   /* free plugins */
@@ -252,12 +251,12 @@ olsrd_cleanup:
   olsr_socket_cleanup();
   olsr_timer_cleanup();
   olsr_memcookie_cleanup();
+  olsr_logcfg_cleanup();
 
   /* free configuration resources */
   olsr_cfg_cleanup();
 
   /* free logger resources */
-  olsr_logcfg_cleanup();
   olsr_log_cleanup();
 
   if (fork_pipe != -1) {
@@ -298,11 +297,11 @@ hup_signal_handler(int signo __attribute__ ((unused))) {
  * @return exit code for olsrd
  */
 static int
-mainloop(void) {
+mainloop(int argc, char **argv) {
   uint32_t next_interval;
   int exit_code = 0;
 
-  OLSR_INFO(LOG_MAIN, "Starting olsr routing daemon");
+  OLSR_INFO(LOG_MAIN, "Starting olsr.org adapter daemon");
 
   /* enter main loop */
   while (running) {
@@ -327,12 +326,24 @@ mainloop(void) {
 
     /* reload configuration if triggered */
     if (reload_config) {
-      olsr_cfg_apply();
+      if (olsr_cfg_create_new_rawdb()) {
+        running = false;
+      }
+      else if (parse_commandline(argc, argv, true) == -1) {
+        olsr_cfg_apply();
+      }
       reload_config = false;
     }
   }
 
-  OLSR_INFO(LOG_MAIN, "Ending olsr routing daemon");
+  /* wait for 500 milliseconds and process socket events */
+  next_interval = olsr_clock_get_absolute(500);
+  olsr_timer_walk();
+  if (olsr_socket_handle(next_interval)) {
+    exit_code = 1;
+  }
+
+  OLSR_INFO(LOG_MAIN, "Ending olsr.org daemon");
   return exit_code;
 }
 
@@ -375,7 +386,8 @@ setup_signalhandler(void) {
  *   with the returned number
  */
 static int
-parse_commandline(int argc, char **argv, const char *def_config) {
+parse_commandline(int argc, char **argv, bool reload_only) {
+  const char *parameters;
   struct olsr_plugin *plugin, *plugin_it;
   struct cfg_cmd_state state;
   struct autobuf log;
@@ -387,14 +399,22 @@ parse_commandline(int argc, char **argv, const char *def_config) {
   loaded_file = false;
   db = olsr_cfg_get_rawdb();
 
+  /* reset getopt_long */
+  opt_idx = -1;
+  optind = 1;
+
   abuf_init(&log, 1024);
   cfg_cmd_add(&state);
 
+  if (reload_only) {
+    /* only parameters that load and change configuration data */
+    parameters = "l:s:r:f:";
+  }
+  else {
+    parameters = "hvp:ql:S:s:r:g::f:";
+  }
   while (return_code == -1
-      && 0 <= (opt = getopt_long(argc, argv, "hvp:ql:S:s:r:g::", olsr_options, &opt_idx))) {
-    log.len = 0;
-    log.buf[0] = 0;
-
+      && 0 <= (opt = getopt_long(argc, argv, parameters, olsr_options, &opt_idx))) {
     switch (opt) {
       case 'h':
         abuf_appendf(&log, "Usage: %s [OPTION]...\n%s", argv[0], help_text);
@@ -461,14 +481,16 @@ parse_commandline(int argc, char **argv, const char *def_config) {
         break;
 
       default:
-        return_code = 1;
+        if (!reload_only) {
+          return_code = 1;
+        }
         break;
     }
   }
 
   if (return_code == -1 && !loaded_file) {
     /* load default config file if no other loaded */
-    if (cfg_cmd_handle_load(db, &state, def_config, &log)) {
+    if (cfg_cmd_handle_load(db, &state, DEFAULT_CONFIGFILE, &log)) {
       return_code = 1;
     }
   }
@@ -481,7 +503,12 @@ parse_commandline(int argc, char **argv, const char *def_config) {
   }
 
   if (log.len > 0) {
-    fputs(log.buf, stderr);
+    if (reload_only) {
+      OLSR_WARN(LOG_MAIN, "Cannot reload configuration.\n%s", log.buf);
+    }
+    else {
+      fputs(log.buf, stderr);
+    }
   }
 
   abuf_free(&log);

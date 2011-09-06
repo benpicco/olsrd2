@@ -47,9 +47,11 @@
 #include "common/common_types.h"
 #include "config/cfg_schema.h"
 #include "config/cfg_db.h"
+#include "config/cfg_delta.h"
 
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"
+#include "olsr_cfg.h"
 #include "olsr.h"
 
 #define LOG_SECTION     "log"
@@ -60,6 +62,9 @@
 #define LOG_STDERR_ENTRY "stderr"
 #define LOG_SYSLOG_ENTRY "syslog"
 #define LOG_FILE_ENTRY   "file"
+
+/* prototype for configuration change handler */
+static void _olsr_logcfg_apply(void);
 
 /* define logging configuration template */
 static struct cfg_schema_section logging_section = {
@@ -74,6 +79,11 @@ static struct cfg_schema_entry logging_entries[] = {
   CFG_VALIDATE_BOOL(LOG_STDERR_ENTRY, "false"),
   CFG_VALIDATE_BOOL(LOG_SYSLOG_ENTRY, "false"),
   CFG_VALIDATE_STRING(LOG_FILE_ENTRY, ""),
+};
+
+static struct cfg_delta_handler logcfg_delta_handler = {
+//  .s_type = LOG_SECTION,
+  .callback = _olsr_logcfg_apply,
 };
 
 static enum log_source *debug_lvl_1 = NULL;
@@ -101,12 +111,18 @@ olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t count) {
   file_handler = NULL;
 
   memset(&logging_cfg, 0, sizeof(logging_cfg));
+
+  /* setup delta handler */
+  cfg_delta_add_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
 }
 
 void
 olsr_logcfg_cleanup(void) {
   if (olsr_subsystem_cleanup(&olsr_logcfg_state))
     return;
+
+  /* cleanup delta handler */
+  cfg_delta_remove_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
 
   /* clean up former handlers */
   if (stderr_handler) {
@@ -148,15 +164,20 @@ apply_log_setting(struct cfg_named_section *named,
   }
 }
 
-int
-olsr_logcfg_apply(struct cfg_db *db) {
+static void
+_olsr_logcfg_apply(void) {
+  if (olsr_logcfg_apply(olsr_cfg_get_db())) {
+    /* TODO: really exit OLSR when logging file cannot be opened ? */
+    olsr_exit();
+  }
+}
+
+int olsr_logcfg_apply(struct cfg_db *db) {
   struct cfg_named_section *named;
   const char *ptr, *file_name;
   size_t i;
   int file_errno = 0;
-
-  /* remove active handlers */
-  olsr_logcfg_cleanup();
+  bool activate_syslog, activate_file, activate_stderr;
 
   /* clean up logging mask */
   memset(&logging_cfg, 0, sizeof(logging_cfg));
@@ -198,17 +219,24 @@ olsr_logcfg_apply(struct cfg_db *db) {
     apply_log_setting(named, LOG_DEBUG_ENTRY, SEVERITY_DEBUG);
   }
 
-  /* and finally re-add logging handlers */
+  /* and finally modify the logging handlers */
 
   /* log.syslog */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_SYSLOG_ENTRY);
-  if (cfg_get_bool(ptr)) {
+  activate_syslog = cfg_get_bool(ptr);
+  if (activate_syslog && syslog_handler == NULL) {
     syslog_handler = olsr_log_addhandler(olsr_log_syslog, &logging_cfg);
+  }
+  else if (!activate_syslog && syslog_handler != NULL) {
+    olsr_log_removehandler(syslog_handler);
+    syslog_handler = NULL;
   }
 
   /* log.file */
   file_name = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_FILE_ENTRY);
-  if (file_name != NULL && *file_name != 0) {
+  activate_file = file_name != NULL && *file_name != 0;
+
+  if (activate_file && file_handler == NULL) {
     FILE *f;
 
     f = fopen(file_name, "w");
@@ -220,17 +248,32 @@ olsr_logcfg_apply(struct cfg_db *db) {
       file_errno = errno;
     }
   }
+  else if (!activate_file && file_handler != NULL) {
+    olsr_log_removehandler(file_handler);
+    file_handler = NULL;
+  }
 
   /* log.stderr (activate if syslog and file ar offline) */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_STDERR_ENTRY);
-  if (cfg_get_bool(ptr) || (syslog_handler == NULL && file_handler == NULL)) {
+  activate_stderr = cfg_get_bool(ptr)
+      || (syslog_handler == NULL && file_handler == NULL);
+
+  if (activate_stderr && stderr_handler == NULL) {
     stderr_handler = olsr_log_addhandler(olsr_log_stderr, &logging_cfg);
   }
+  else if (!activate_stderr && stderr_handler != NULL) {
+    olsr_log_removehandler(stderr_handler);
+    stderr_handler = NULL;
+  }
+
+  /* reload logging mask */
+  olsr_log_updatemask();
 
   if (file_errno) {
     OLSR_WARN(LOG_MAIN, "Cannot open file '%s' for logging: %s (%d)",
         file_name, strerror(file_errno), file_errno);
     return 1;
   }
+
   return 0;
 }

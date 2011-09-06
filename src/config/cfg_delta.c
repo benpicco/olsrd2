@@ -120,7 +120,7 @@ void
 cfg_delta_add_handler_by_schema(
     struct cfg_delta *delta, cfg_delta_callback *callback, uint32_t priority,
     struct cfg_delta_handler *d_handler, struct cfg_delta_filter *d_filter,
-    struct cfg_schema_section *s_section, struct cfg_schema_entry *s_entries,
+    const struct cfg_schema_section *s_section, const struct cfg_schema_entry *s_entries,
     size_t count) {
   size_t i;
 
@@ -133,6 +133,8 @@ cfg_delta_add_handler_by_schema(
     memset(&d_filter[i], 0, sizeof(struct cfg_delta_filter));
     d_filter[i].k = s_entries[i].t_name;
   }
+
+  /* last entry must be zero */
   memset(&d_filter[i], 0, sizeof(struct cfg_delta_filter));
 
   cfg_delta_add_handler(delta, d_handler);
@@ -155,8 +157,8 @@ cfg_delta_calculate(struct cfg_delta *delta,
   /* cleanup delta handler flags */
   avl_for_each_element(&delta->handler, handler, node) {
     handler->_trigger_callback = false;
-    handler->pre_delta = NULL;
-    handler->post_delta = NULL;
+    handler->pre = NULL;
+    handler->post = NULL;
   }
 
   /* iterate over section types */
@@ -204,10 +206,10 @@ cfg_delta_calculate(struct cfg_delta *delta,
 
 static int
 _cmp_section_types(struct cfg_section_type *ptr1, struct cfg_section_type *ptr2) {
-  if (ptr1 == NULL) {
-    return ptr2 == NULL ? 0 : 1;
+  if (ptr1 == NULL || ptr1->type == NULL) {
+    return (ptr2 == NULL || ptr2->type == NULL) ? 0 : 1;
   }
-  if (ptr2 == NULL) {
+  if (ptr2 == NULL || ptr2->type == NULL) {
     return -1;
   }
 
@@ -216,10 +218,10 @@ _cmp_section_types(struct cfg_section_type *ptr1, struct cfg_section_type *ptr2)
 
 static int
 _cmp_named_section(struct cfg_named_section *ptr1, struct cfg_named_section *ptr2) {
-  if (ptr1 == NULL) {
-    return ptr2 == NULL ? 0 : 1;
+  if (ptr1 == NULL || ptr1->name == NULL) {
+    return (ptr2 == NULL || ptr2->name == NULL) ? 0 : 1;
   }
-  if (ptr2 == NULL) {
+  if (ptr2 == NULL || ptr2->name == NULL) {
     return -1;
   }
 
@@ -288,8 +290,8 @@ _handle_namedsection(struct cfg_delta *delta, const char *type,
 
     if ((handler->_trigger_callback =
         _setup_filterresults(handler, pre_change, post_change))) {
-      handler->pre_delta = pre_change;
-      handler->post_delta = post_change;
+      handler->pre = pre_change;
+      handler->post = post_change;
 
       if (handler->s_type == NULL) {
         handler->callback();

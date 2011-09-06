@@ -351,7 +351,7 @@ cfg_schema_validate(struct cfg_db *db,
 
 int
 cfg_schema_tobin(void *target, struct cfg_named_section *named,
-    struct cfg_schema_entry *entries, size_t count) {
+    const struct cfg_schema_entry *entries, size_t count) {
   struct cfg_entry *db_entry;
   const char *value;
   char *ptr;
@@ -392,8 +392,8 @@ cfg_schema_tobin(void *target, struct cfg_named_section *named,
  * @return 0 if validation found no problems, -1 otherwise
  */
 int
-cfg_schema_validate_strlen(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out) {
+cfg_schema_validate_strlen(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
   if (value == NULL) {
     if (entry->t_validate_params.p_i1 < INT32_MAX) {
       cfg_append_printable_line(out, "    Parameter must have a maximum length of %d characters",
@@ -422,8 +422,8 @@ cfg_schema_validate_strlen(struct cfg_schema_entry *entry,
  * @return 0 if validation found no problems, -1 otherwise
  */
 int
-cfg_schema_validate_printable(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out) {
+cfg_schema_validate_printable(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
   if (cfg_schema_validate_strlen(entry, section_name, value, out)) {
     return 1;
   }
@@ -453,8 +453,8 @@ cfg_schema_validate_printable(struct cfg_schema_entry *entry,
  * @return 0 if validation found no problems, -1 otherwise
  */
 int
-cfg_schema_validate_choice(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out) {
+cfg_schema_validate_choice(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
   const char **list = entry->t_validate_params.p_ptr;
   int i;
 
@@ -490,8 +490,8 @@ cfg_schema_validate_choice(struct cfg_schema_entry *entry,
  * @return 0 if validation found no problems, -1 otherwise
  */
 int
-cfg_schema_validate_int(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out) {
+cfg_schema_validate_int(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
   int32_t i;
   char *endptr = NULL;
 
@@ -528,8 +528,8 @@ cfg_schema_validate_int(struct cfg_schema_entry *entry,
  * @return 0 if validation found no problems, -1 otherwise
  */
 int
-cfg_schema_validate_netaddr(struct cfg_schema_entry *entry,
-    const char *section_name, char *value, struct autobuf *out) {
+cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
   struct netaddr addr;
   bool prefix = false;
   int p1,p2;
@@ -622,7 +622,7 @@ cfg_schema_validate_netaddr(struct cfg_schema_entry *entry,
 }
 
 int
-cfg_schema_tobin_strptr(struct cfg_schema_entry *s_entry __attribute__((unused)),
+cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     const char *value, void *reference) {
   char **ptr;
 
@@ -636,7 +636,7 @@ cfg_schema_tobin_strptr(struct cfg_schema_entry *s_entry __attribute__((unused))
 }
 
 int
-cfg_schema_tobin_strarray(struct cfg_schema_entry *s_entry,
+cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference) {
   char *ptr;
 
@@ -647,7 +647,7 @@ cfg_schema_tobin_strarray(struct cfg_schema_entry *s_entry,
 }
 
 int
-cfg_schema_tobin_choice(struct cfg_schema_entry *s_entry,
+cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
     const char *value, void *reference) {
   int *ptr;
 
@@ -659,7 +659,7 @@ cfg_schema_tobin_choice(struct cfg_schema_entry *s_entry,
 }
 
 int
-cfg_schema_tobin_int(struct cfg_schema_entry *s_entry __attribute__((unused)),
+cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     const char *value, void *reference) {
   int *ptr;
 
@@ -670,7 +670,7 @@ cfg_schema_tobin_int(struct cfg_schema_entry *s_entry __attribute__((unused)),
 }
 
 int
-cfg_schema_tobin_netaddr(struct cfg_schema_entry *s_entry __attribute__((unused)),
+cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     const char *value, void *reference) {
   struct netaddr *ptr;
 
@@ -680,7 +680,7 @@ cfg_schema_tobin_netaddr(struct cfg_schema_entry *s_entry __attribute__((unused)
 }
 
 int
-cfg_schema_tobin_bool(struct cfg_schema_entry *s_entry __attribute__((unused)),
+cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     const char *value, void *reference) {
   bool *ptr;
 
@@ -734,6 +734,8 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
   }
 
   if (cleanup) {
+    char *last_valid = entry->value;
+
     /* first remove duplicate entries */
     OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr1) {
       /* get pointer to next element */
@@ -753,8 +755,9 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
           ptr2 += size;
         }
       }
+      last_valid = ptr1;
     }
-    entry->last_value = ptr1;
+    entry->last_value = last_valid;
   }
 
   /* now validate syntax */
@@ -821,7 +824,10 @@ _check_missing_entries(struct cfg_schema_section *schema_section,
     struct cfg_named_section *named,
     bool failFast, const char *section_name, struct autobuf *out) {
   struct cfg_schema_entry *schema_entry, *schema_entry_it;
-  bool warning = false;
+  bool warning, error;
+
+  warning = false;
+  error = false;
 
   /* check for missing values */
   OLSR_FOR_ALL_CFG_SCHEMA_ENTRIES(schema_section, schema_entry, schema_entry_it) {
@@ -831,6 +837,7 @@ _check_missing_entries(struct cfg_schema_section *schema_section,
 
     /* mandatory parameter */
     warning = !cfg_db_find_entry(db, section->type, named->name, schema_entry->t_name);
+    error |= warning;
     if (warning) {
       cfg_append_printable_line(out, "Missing mandatory value for entry '%s' in section %s",
           schema_entry->t_name, section_name);
@@ -841,5 +848,5 @@ _check_missing_entries(struct cfg_schema_section *schema_section,
       }
     }
   }
-  return warning;
+  return error;
 }
