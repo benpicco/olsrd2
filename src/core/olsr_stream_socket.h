@@ -60,6 +60,7 @@ enum olsr_stream_errors {
   SERVICE_UNAVAILABLE = 503
 };
 
+/* represents a TCP stream */
 struct olsr_stream_session {
   /*
    * public part of the session data
@@ -79,48 +80,95 @@ struct olsr_stream_session {
    * internal part of the server
    */
   struct list_entity node;
+
+  /* backpointer to the stream socket */
   struct olsr_stream_socket *comport;
 
+  /* scheduler handler for the session */
   struct olsr_socket_entry *scheduler_entry;
 
+  /* timer for handling session timeout */
   struct olsr_timer_entry *timeout;
+
+  /* input buffer for session */
   struct autobuf in;
-  bool send_first, wait_for_connect;
+
+  /*
+   * true if session user want to send before receiving anything. Will trigger
+   * an empty read even as soon as session is connected
+   */
+  bool send_first;
+
+  /* true if session is still waiting for initial handshake to finish */
+  bool wait_for_connect;
 
   enum olsr_stream_session_state state;
 };
 
+/*
+ * Represents a TCP server socket or a configuration for a set of outgoing
+ * TCP streams.
+ */
 struct olsr_stream_socket {
   struct list_entity node;
 
   union netaddr_socket local_socket;
 
   struct list_entity session;
-  int allowes_sessions;
 
+  /* number of simultaneous sessions (default 10) */
+  int allowed_sessions;
+
+  /* memory cookie to allocate struct for tcp session */
   struct olsr_memcookie_info *memcookie;
+
+  /*
+   * Timeout of the socket. A session will be closed if it does not
+   * send or receive data for timeout milliseconds.
+   */
   uint32_t session_timeout;
+
+  /* maximum allowed size of input buffer (default 65536) */
   size_t maximum_input_buffer;
+
+  /*
+   * true if the socket wants to send data before it receives anything.
+   * This will trigger an size 0 read event as soon as the socket is connected
+   */
   bool send_first;
 
-  /* NULL for outgoing streams */
+  /*
+   * represents the scheduler handler for the server socket,
+   * NULL for outgoing streams
+   */
   struct olsr_socket_entry *scheduler_entry;
 
+  /* Called when a new session is created */
   void (*init)(struct olsr_stream_session *);
+
+  /* Called when a TCP session ends */
   void (*cleanup)(struct olsr_stream_session *);
 
+  /*
+   * An error happened during parsing the TCP session,
+   * the user of the session might want to create an error message
+   */
   void (*create_error)(struct olsr_stream_session *, enum olsr_stream_errors);
+
+  /*
+   * Called when new data will be available in the input buffer
+   */
   enum olsr_stream_session_state (*receive_data)(struct olsr_stream_session *);
 };
 
 int olsr_stream_init(void) __attribute__((warn_unused_result));
 void olsr_stream_cleanup(void);
 
-int olsr_stream_add(struct olsr_stream_socket *,
+EXPORT int olsr_stream_add(struct olsr_stream_socket *,
     union netaddr_socket *local);
-void olsr_stream_remove(struct olsr_stream_socket *);
-struct olsr_stream_session *olsr_stream_connect_to(
+EXPORT void olsr_stream_remove(struct olsr_stream_socket *);
+EXPORT struct olsr_stream_session *olsr_stream_connect_to(
     struct olsr_stream_socket *, union netaddr_socket *remote);
-void olsr_stream_flush(struct olsr_stream_session *con);
+EXPORT void olsr_stream_flush(struct olsr_stream_session *con);
 
 #endif /* OLSR_STREAM_SOCKET_H_ */

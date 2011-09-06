@@ -65,6 +65,8 @@
 
 /* prototype for configuration change handler */
 static void _olsr_logcfg_apply(void);
+static void _apply_log_setting(struct cfg_named_section *named,
+    const char *entry_name, enum log_severity severity);
 
 /* define logging configuration template */
 static struct cfg_schema_section logging_section = {
@@ -91,13 +93,24 @@ static size_t debug_lvl_1_count = 0;
 
 /* global logger configuration */
 static struct log_handler_mask logging_cfg;
-static struct log_handler_entry *stderr_handler = NULL;
-static struct log_handler_entry *syslog_handler = NULL;
-static struct log_handler_entry *file_handler = NULL;
+static struct log_handler_entry stderr_handler = {
+    .handler = olsr_log_stderr, .bitmask_ptr = &logging_cfg
+};
+static struct log_handler_entry syslog_handler = {
+    .handler = olsr_log_syslog, .bitmask_ptr = &logging_cfg
+};
+static struct log_handler_entry file_handler = {
+    .handler = olsr_log_file, .bitmask_ptr = &logging_cfg
+};
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_logcfg_state);
 
+/**
+ * Initialize logging configuration
+ * @param debug_lvl_1_ptr array of logging sources for debug level 1
+ * @param count number of logging sources in array
+ */
 void
 olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t count) {
   if (olsr_subsystem_init(&olsr_logcfg_state))
@@ -106,16 +119,15 @@ olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t count) {
   debug_lvl_1 = debug_lvl_1_ptr;
   debug_lvl_1_count = count;
 
-  stderr_handler = NULL;
-  syslog_handler = NULL;
-  file_handler = NULL;
-
   memset(&logging_cfg, 0, sizeof(logging_cfg));
 
   /* setup delta handler */
   cfg_delta_add_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
 }
 
+/**
+ * Cleanup all allocated resources of logging configuration
+ */
 void
 olsr_logcfg_cleanup(void) {
   if (olsr_subsystem_cleanup(&olsr_logcfg_state))
@@ -125,54 +137,40 @@ olsr_logcfg_cleanup(void) {
   cfg_delta_remove_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
 
   /* clean up former handlers */
-  if (stderr_handler) {
-    olsr_log_removehandler(stderr_handler);
+  if (list_node_added(&stderr_handler.node)) {
+    olsr_log_removehandler(&stderr_handler);
   }
-  if (syslog_handler) {
-    olsr_log_removehandler(syslog_handler);
+  if (list_node_added(&syslog_handler.node)) {
+    olsr_log_removehandler(&syslog_handler);
   }
-  if (file_handler) {
+  if (list_node_added(&file_handler.node)) {
     FILE *f;
 
-    f = file_handler->custom;
+    f = file_handler.custom;
     fflush(f);
     fclose(f);
 
-    olsr_log_removehandler(file_handler);
+    olsr_log_removehandler(&file_handler);
   }
 }
 
+/**
+ * Add logging section to global configuration schema
+ * @param schema pointer to schema
+ */
 void
 olsr_logcfg_addschema(struct cfg_schema *schema) {
   cfg_schema_add_section(schema, &logging_section);
   cfg_schema_add_entries(&logging_section, logging_entries, ARRAYSIZE(logging_entries));
 }
 
-static void
-apply_log_setting(struct cfg_named_section *named,
-    const char *entry_name, enum log_severity severity) {
-  struct cfg_entry *entry;
-  char *ptr;
-  size_t i;
-
-  entry = cfg_db_get_entry(named, entry_name);
-  if (entry) {
-    OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
-      i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, ARRAYSIZE(LOG_SOURCE_NAMES));
-      logging_cfg.mask[severity][i] = true;
-    }
-  }
-}
-
-static void
-_olsr_logcfg_apply(void) {
-  if (olsr_logcfg_apply(olsr_cfg_get_db())) {
-    /* TODO: really exit OLSR when logging file cannot be opened ? */
-    olsr_exit();
-  }
-}
-
-int olsr_logcfg_apply(struct cfg_db *db) {
+/**
+ * Apply the configuration settings of a db to the logging system
+ * @param db pointer to configuration database
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+olsr_logcfg_apply(struct cfg_db *db) {
   struct cfg_named_section *named;
   const char *ptr, *file_name;
   size_t i;
@@ -214,9 +212,9 @@ int olsr_logcfg_apply(struct cfg_db *db) {
   /* now apply specific settings */
   named = cfg_db_find_namedsection(db, LOG_SECTION, NULL);
   if (named != NULL) {
-    apply_log_setting(named, LOG_WARN_ENTRY, SEVERITY_WARN);
-    apply_log_setting(named, LOG_INFO_ENTRY, SEVERITY_INFO);
-    apply_log_setting(named, LOG_DEBUG_ENTRY, SEVERITY_DEBUG);
+    _apply_log_setting(named, LOG_WARN_ENTRY, SEVERITY_WARN);
+    _apply_log_setting(named, LOG_INFO_ENTRY, SEVERITY_INFO);
+    _apply_log_setting(named, LOG_DEBUG_ENTRY, SEVERITY_DEBUG);
   }
 
   /* and finally modify the logging handlers */
@@ -224,46 +222,47 @@ int olsr_logcfg_apply(struct cfg_db *db) {
   /* log.syslog */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_SYSLOG_ENTRY);
   activate_syslog = cfg_get_bool(ptr);
-  if (activate_syslog && syslog_handler == NULL) {
-    syslog_handler = olsr_log_addhandler(olsr_log_syslog, &logging_cfg);
+  if (activate_syslog && !list_node_added(&syslog_handler.node)) {
+    olsr_log_addhandler(&syslog_handler);
   }
-  else if (!activate_syslog && syslog_handler != NULL) {
-    olsr_log_removehandler(syslog_handler);
-    syslog_handler = NULL;
+  else if (!activate_syslog && list_node_added(&syslog_handler.node)) {
+    olsr_log_removehandler(&syslog_handler);
   }
 
   /* log.file */
   file_name = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_FILE_ENTRY);
   activate_file = file_name != NULL && *file_name != 0;
 
-  if (activate_file && file_handler == NULL) {
+  if (activate_file && !list_node_added(&file_handler.node)) {
     FILE *f;
 
     f = fopen(file_name, "w");
     if (f != NULL) {
-      file_handler = olsr_log_addhandler(olsr_log_file, &logging_cfg);
-      file_handler->custom = f;
+      olsr_log_addhandler(&file_handler);
+      file_handler.custom = f;
     }
     else {
       file_errno = errno;
     }
   }
-  else if (!activate_file && file_handler != NULL) {
-    olsr_log_removehandler(file_handler);
-    file_handler = NULL;
+  else if (!activate_file && list_node_added(&file_handler.node)) {
+    FILE *f = file_handler.custom;
+    olsr_log_removehandler(&file_handler);
+
+    fflush(f);
+    fclose(f);
   }
 
   /* log.stderr (activate if syslog and file ar offline) */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_STDERR_ENTRY);
   activate_stderr = cfg_get_bool(ptr)
-      || (syslog_handler == NULL && file_handler == NULL);
+      || (!list_node_added(&syslog_handler.node) && !list_node_added(&file_handler.node));
 
-  if (activate_stderr && stderr_handler == NULL) {
-    stderr_handler = olsr_log_addhandler(olsr_log_stderr, &logging_cfg);
+  if (activate_stderr && !list_node_added(&stderr_handler.node)) {
+    olsr_log_addhandler(&stderr_handler);
   }
-  else if (!activate_stderr && stderr_handler != NULL) {
-    olsr_log_removehandler(stderr_handler);
-    stderr_handler = NULL;
+  else if (!activate_stderr && list_node_added(&stderr_handler.node)) {
+    olsr_log_removehandler(&stderr_handler);
   }
 
   /* reload logging mask */
@@ -276,4 +275,37 @@ int olsr_logcfg_apply(struct cfg_db *db) {
   }
 
   return 0;
+}
+
+/**
+ * Apply the logging options of one severity setting to the logging mask
+ * @param named pointer to configuration section
+ * @param entry_name name of setting (debug, info, warn)
+ * @param severity severity level corresponding severity level
+ */
+static void
+_apply_log_setting(struct cfg_named_section *named,
+    const char *entry_name, enum log_severity severity) {
+  struct cfg_entry *entry;
+  char *ptr;
+  size_t i;
+
+  entry = cfg_db_get_entry(named, entry_name);
+  if (entry) {
+    OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+      i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, ARRAYSIZE(LOG_SOURCE_NAMES));
+      logging_cfg.mask[severity][i] = true;
+    }
+  }
+}
+
+/**
+ * Wrapper for configuration delta handling
+ */
+static void
+_olsr_logcfg_apply(void) {
+  if (olsr_logcfg_apply(olsr_cfg_get_db())) {
+    /* TODO: really exit OLSR when logging file cannot be opened ? */
+    olsr_exit();
+  }
 }

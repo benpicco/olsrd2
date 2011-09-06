@@ -42,8 +42,10 @@
 #ifndef OLSR_LOGGING_SOURCES_H_
 #define OLSR_LOGGING_SOURCES_H_
 
-/**
- * defines the source of a logging event
+/*
+ * Defines the source of a logging event.
+ * Keep this in the same order as the log_source and
+ * log_severity enums (see olsr_logging_sources.h).
  */
 enum log_source {
   LOG_ALL,

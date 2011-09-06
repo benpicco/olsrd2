@@ -250,7 +250,6 @@ olsr_timer_start(unsigned int rel_time,
  * Delete a timer.
  *
  * @param the olsr_timer_entry that shall be removed
- * @return nada
  */
 void
 olsr_timer_stop(struct olsr_timer_entry *timer)
@@ -349,38 +348,6 @@ olsr_timer_set(struct olsr_timer_entry **timer_ptr,
   else {
     olsr_timer_change(*timer_ptr, rel_time, jitter_pct);
   }
-}
-
-/**
- * Decrement a relative timer by a random number range.
- *
- * @param the relative timer expressed in units of milliseconds.
- * @param the jitter in percent
- * @param cached result of random() at system init.
- * @return the absolute timer
- */
-static uint32_t
-calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val)
-{
-  unsigned int jitter_time;
-
-  /*
-   * No jitter or, jitter larger than 99% does not make sense.
-   * Also protect against overflows resulting from > 25 bit timers.
-   */
-  if (jitter_pct == 0 || jitter_pct > 99 || rel_time > (1 << 24)) {
-    return olsr_clock_get_absolute(rel_time);
-  }
-
-  /*
-   * Play some tricks to avoid overflows with integer arithmetic.
-   */
-  jitter_time = (jitter_pct * rel_time) / 100;
-  jitter_time = random_val / (1 + RAND_MAX / (jitter_time + 1));
-
-  OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %ums to %ums\n", jitter_pct, rel_time, rel_time - jitter_time);
-
-  return olsr_clock_get_absolute(rel_time - jitter_time);
 }
 
 /**
@@ -491,4 +458,36 @@ olsr_timer_walk(void)
    * reset the last timer run.
    */
   timer_last_run = olsr_clock_getNow();
+}
+
+/**
+ * Decrement a relative timer by a random number range.
+ *
+ * @param the relative timer expressed in units of milliseconds.
+ * @param the jitter in percent
+ * @param cached result of random() at system init.
+ * @return the absolute timer
+ */
+static uint32_t
+calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val)
+{
+  unsigned int jitter_time;
+
+  /*
+   * No jitter or, jitter larger than 99% does not make sense.
+   * Also protect against overflows resulting from > 25 bit timers.
+   */
+  if (jitter_pct == 0 || jitter_pct > 99 || rel_time > (1 << 24)) {
+    return olsr_clock_get_absolute(rel_time);
+  }
+
+  /*
+   * Play some tricks to avoid overflows with integer arithmetic.
+   */
+  jitter_time = (jitter_pct * rel_time) / 100;
+  jitter_time = random_val / (1 + RAND_MAX / (jitter_time + 1));
+
+  OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %ums to %ums\n", jitter_pct, rel_time, rel_time - jitter_time);
+
+  return olsr_clock_get_absolute(rel_time - jitter_time);
 }

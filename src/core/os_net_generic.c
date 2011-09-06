@@ -49,6 +49,15 @@
 #include "os_net.h"
 
 #if OS_NET_CONFIGSOCKET == OS_GENERIC
+/**
+ * Configure a network socket
+ * @param sock filedescriptor
+ * @param bindto ip/port to bind the socket to
+ * @param flags type of socket (udp/tcp, blocking, multicast)
+ * @param recvbuf size of input buffer for socket
+ * @param log_src logging source for error messages
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 os_net_configsocket(int sock, union netaddr_socket *bindto,
     enum olsr_socket_opt flags, int recvbuf,
@@ -125,6 +134,14 @@ os_net_configsocket(int sock, union netaddr_socket *bindto,
 #endif
 
 #if OS_NET_GETSOCKET == OS_GENERIC
+/**
+ * Creates a new socket and configures it
+ * @param bindto address to bind the socket to
+ * @param flags type of socket (udp/tcp, blocking, multicast)
+ * @param recvbuf size of input buffer for socket
+ * @param log_src logging source for error messages
+ * @return socket filedescriptor, -1 if an error happened
+ */
 int
 os_net_getsocket(union netaddr_socket *bindto,
     enum olsr_socket_opt flags, int recvbuf,
@@ -148,6 +165,14 @@ os_net_getsocket(union netaddr_socket *bindto,
 #endif
 
 #if OS_NET_JOINMCAST == OS_GENERIC
+/**
+ * Join a socket into a multicast group
+ * @param sock filedescriptor of socket
+ * @param multicast multicast ip/port to join
+ * @param oif pointer to outgoing interface for multicast
+ * @param log_src logging source for error messages
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 net_os_join_mcast(int sock, union netaddr_socket *multicast,
     struct olsr_interface *oif,
@@ -161,6 +186,7 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
 
   if (multicast->std.sa_family == AF_INET) {
     if (!IN_MULTICAST(ntohl(multicast->v4.sin_addr.s_addr))) {
+      /* TODO: silent fail ? */
       return 0;
     }
 
@@ -227,6 +253,11 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
 #endif
 
 #if OS_NET_SETNONBLOCK == OS_GENERIC
+/**
+ * Set a socket to non-blocking mode
+ * @param sock filedescriptor of socket
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 os_net_set_nonblocking(int sock) {
   int state;
@@ -244,6 +275,12 @@ os_net_set_nonblocking(int sock) {
 #endif
 
 #if OS_NET_BINDTOIF == OS_GENERIC
+/**
+ * Bind a socket to an interface. Filters out alias part of interface name.
+ * @param sock filedescriptor of socket
+ * @param if_name name of interface
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 os_net_bind_to_interface(int sock, const char *if_name) {
   char if_buf[IF_NAMESIZE];

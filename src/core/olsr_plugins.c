@@ -79,43 +79,11 @@ static const char *dlopen_patterns[] = {
   "%LIB%",
 };
 
-static int olsr_internal_unload_plugin(struct olsr_plugin *plugin, bool cleanup);
+static int _unload_plugin(struct olsr_plugin *plugin, bool cleanup);
 static void *_open_plugin(const char *filename);
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_plugins_state);
-
-/**
- * This function is called by the constructor of a plugin.
- * because of this the first call has to initialize the list
- * head.
- *
- * @param pl_def pointer to plugin definition
- */
-void
-olsr_plugins_hook(struct olsr_plugin *pl_def) {
-  assert (pl_def->name);
-
-  /* make sure plugin system is initialized */
-  olsr_plugins_init();
-
-  /* check if plugin is already in tree */
-  if (olsr_plugins_get(pl_def->name)) {
-    return;
-  }
-
-  /* hook static plugin into avl tree */
-  pl_def->p_node.key = pl_def->name;
-  avl_insert(&plugin_tree, &pl_def->p_node);
-
-  /* initialize the plugin */
-  if (olsr_plugins_load(pl_def->name) == NULL) {
-    OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin %s", pl_def->name);
-    return;
-  }
-
-  OLSR_INFO(LOG_PLUGINLOADER, "Loaded plugin %s", pl_def->name);
-}
 
 /**
  * Initialize the plugin loader system
@@ -147,8 +115,38 @@ olsr_plugins_cleanup(void) {
 
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) {
     olsr_plugins_disable(plugin);
-    olsr_internal_unload_plugin(plugin, true);
+    _unload_plugin(plugin, true);
   }
+}
+
+/**
+ * This function is called by the constructor of a plugin.
+ *
+ * @param pl_def pointer to plugin definition
+ */
+void
+olsr_plugins_hook(struct olsr_plugin *pl_def) {
+  assert (pl_def->name);
+
+  /* make sure plugin system is initialized */
+  olsr_plugins_init();
+
+  /* check if plugin is already in tree */
+  if (olsr_plugins_get(pl_def->name)) {
+    return;
+  }
+
+  /* hook static plugin into avl tree */
+  pl_def->p_node.key = pl_def->name;
+  avl_insert(&plugin_tree, &pl_def->p_node);
+
+  /* initialize the plugin */
+  if (olsr_plugins_load(pl_def->name) == NULL) {
+    OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin %s", pl_def->name);
+    return;
+  }
+
+  OLSR_INFO(LOG_PLUGINLOADER, "Loaded plugin %s", pl_def->name);
 }
 
 /**
@@ -161,7 +159,7 @@ olsr_plugins_get(const char *libname) {
   struct olsr_plugin *plugin;
   char *ptr, memorize = 0;
 
-  /* SOT: Hacked away the funny plugin check which fails if pathname is included */
+  /* extract only the filename, without path, prefix or suffix */
   if ((ptr = strrchr(libname, '/')) != NULL) {
     libname = ptr + 1;
   }
@@ -199,17 +197,10 @@ olsr_plugins_load(const char *libname)
   /* see if the plugin is there */
   if ((plugin = olsr_plugins_get(libname)) == NULL) {
     /* attempt to load the plugin */
-#if 0
-    if (olsr_cnf->dlPath) {
-      char *path;
-      path = malloc(strlen(olsr_cnf->dlPath) + strlen(libname) + 1, "Memory for absolute library path");
-      strcpy(path, olsr_cnf->dlPath);
-      strcat(path, libname);
-    }
-#endif
     dlhandle = _open_plugin(libname);
 
     if (dlhandle == NULL) {
+      /* Logging output has already been done by _open_plugin() */
       return NULL;
     }
 
@@ -314,7 +305,7 @@ olsr_plugins_disable(struct olsr_plugin *plugin) {
  */
 int
 olsr_plugins_unload(struct olsr_plugin *plugin) {
-  return olsr_internal_unload_plugin(plugin, false);
+  return _unload_plugin(plugin, false);
 }
 
 /**
@@ -325,7 +316,7 @@ olsr_plugins_unload(struct olsr_plugin *plugin) {
  * @return 0 if the plugin was removed, -1 otherwise
  */
 static int
-olsr_internal_unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
+_unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
   if (plugin->int_enabled) {
     /* deactivate first if necessary */
     olsr_plugins_disable(plugin);
@@ -356,7 +347,11 @@ olsr_internal_unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
   return false;
 }
 
-
+/**
+ * Internal helper to load plugin with different variants of the
+ * filename.
+ * @param filename pointer to filename
+ */
 static void *
 _open_plugin(const char *filename) {
   struct abuf_template_storage table[5];

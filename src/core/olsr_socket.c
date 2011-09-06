@@ -54,7 +54,7 @@
 #include "olsr_socket.h"
 #include "olsr.h"
 
-/* Head of all OLSR used sockets */
+/* List of all active sockets in scheduler */
 struct list_entity socket_head;
 
 static struct olsr_memcookie_info *socket_memcookie;
@@ -124,33 +124,33 @@ olsr_socket_add(int fd, socket_handler_func pf_imm, void *data,
 {
   struct olsr_socket_entry *new_entry;
 
-  if (fd < 0 || pf_imm == NULL) {
-    OLSR_WARN(LOG_SOCKET, "Bogus socket entry - not registering...");
-    return NULL;
-  }
+  assert (fd);
+  assert (pf_imm);
+
   OLSR_DEBUG(LOG_SOCKET, "Adding OLSR socket entry %d\n", fd);
 
   new_entry = olsr_memcookie_malloc(socket_memcookie);
+  if (new_entry) {
+    new_entry->fd = fd;
+    new_entry->process = pf_imm;
+    new_entry->data = data;
+    new_entry->flags = flags;
 
-  new_entry->fd = fd;
-  new_entry->process = pf_imm;
-  new_entry->data = data;
-  new_entry->flags = flags;
-
-  /* Queue */
-  list_add_before(&socket_head, &new_entry->node);
+    /* Queue */
+    list_add_before(&socket_head, &new_entry->node);
+  }
 
   return new_entry;
 }
 
 /**
- * Remove a socket and handler from the socket scheduler
+ * Mark a socket and handler for removal from the socket scheduler
  * @param sock pointer to socket entry
  */
 void
 olsr_socket_remove(struct olsr_socket_entry *entry)
 {
-  OLSR_DEBUG(LOG_SOCKET, "Removing OLSR socket entry %d\n", entry->fd);
+  OLSR_DEBUG(LOG_SOCKET, "Trigger removing OLSR socket entry %d\n", entry->fd);
 
   entry->process = NULL;
   entry->flags = 0;
@@ -158,7 +158,7 @@ olsr_socket_remove(struct olsr_socket_entry *entry)
 
 /**
  * Handle all incoming socket events until a certain time
- * @param next_interval
+ * @param until_time timestamp when the function should return
  * @return -1 if an error happened, 0 otherwise
  */
 int

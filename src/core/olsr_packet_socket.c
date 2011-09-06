@@ -59,6 +59,9 @@ OLSR_SUBSYSTEM_STATE(olsr_packet_state);
 
 static void olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags);
 
+/**
+ * Initialize packet socket handler
+ */
 void
 olsr_packet_init(void) {
   if (olsr_subsystem_init(&olsr_packet_state))
@@ -67,6 +70,9 @@ olsr_packet_init(void) {
   list_init_head(&packet_sockets);
 }
 
+/**
+ * Cleanup all resources allocated by packet socket handler
+ */
 void
 olsr_packet_cleanup(void) {
   struct olsr_packet_socket *skt;
@@ -81,6 +87,12 @@ olsr_packet_cleanup(void) {
   }
 }
 
+/**
+ * Add a new packet socket handler
+ * @param pktsocket pointer to uninitialized packet socket struct
+ * @param local pointer local IP address of packet socket
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_packet_add(struct olsr_packet_socket *pktsocket,
     union netaddr_socket *local) {
@@ -123,6 +135,10 @@ open_comport_error:
   return -1;
 }
 
+/**
+ * Remove a packet socket from the global scheduler
+ * @param pktsocket pointer to packet socket
+ */
 void
 olsr_packet_remove(struct olsr_packet_socket *pktsocket) {
   if (list_node_added(&pktsocket->node)) {
@@ -134,6 +150,15 @@ olsr_packet_remove(struct olsr_packet_socket *pktsocket) {
   }
 }
 
+/**
+ * Send a data packet through a packet socket. The transmission might not
+ * be happen synchronously if the socket would block.
+ * @param pktsocket pointer to packet socket
+ * @param remote ip/address to send packet to
+ * @param data pointer to data to be sent
+ * @param length length of data
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *remote,
     const void *data, size_t length) {
@@ -171,6 +196,12 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
   return 0;
 }
 
+/**
+ * Callback to handle data from the olsr socket scheduler
+ * @param fd filedescriptor to read data from
+ * @param data custom data pointer
+ * @param flags socket handler flags about event (read and/or write)
+ */
 static void
 olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
   struct olsr_packet_socket *pktsocket = data;
@@ -183,6 +214,7 @@ olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
 #endif
 
   if ((flags & OLSR_SOCKET_READ) != 0) {
+    /* handle incoming data */
     result = os_recvfrom(fd, pktsocket->input_buffer, pktsocket->input_buffer_length-1, &sock);
     if (result > 0 && pktsocket->receive_data != NULL) {
       /* null terminate it */
@@ -198,6 +230,8 @@ olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
   }
 
   if ((flags & OLSR_SOCKET_WRITE) != 0 && pktsocket->out.len == 0) {
+    /* handle outgoing data */
+
     /* pointer to remote socket */
     skt = data;
 
@@ -226,6 +260,7 @@ olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
   }
 
   if (pktsocket->out.len == 0) {
+    /* nothing left to send, disable outgoing events */
     olsr_socket_disable(pktsocket->scheduler_entry, OLSR_SOCKET_WRITE);
   }
 }

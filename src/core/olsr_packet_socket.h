@@ -65,11 +65,11 @@ struct olsr_packet_socket {
 void olsr_packet_init(void);
 void olsr_packet_cleanup(void);
 
-int olsr_packet_add(struct olsr_packet_socket *,
+EXPORT int olsr_packet_add(struct olsr_packet_socket *,
     union netaddr_socket *local);
-void olsr_packet_remove(struct olsr_packet_socket *);
+EXPORT void olsr_packet_remove(struct olsr_packet_socket *);
 
-int olsr_packet_send(struct olsr_packet_socket *, union netaddr_socket *remove,
+EXPORT int olsr_packet_send(struct olsr_packet_socket *, union netaddr_socket *remove,
     const void *data, size_t length);
 
 #endif /* OLSR_PACKET_SOCKET_H_ */

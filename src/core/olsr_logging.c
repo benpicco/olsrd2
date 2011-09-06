@@ -73,7 +73,7 @@ const char OUT_OF_MEMORY_ERROR[] = "Out of memory error!";
 OLSR_SUBSYSTEM_STATE(olsr_logging_state);
 
 /**
- * Called by main method just after configuration options have been parsed
+ * Initialize logging system
  */
 int
 olsr_log_init(enum log_severity def_severity)
@@ -102,7 +102,7 @@ olsr_log_init(enum log_severity def_severity)
 }
 
 /**
- * Called just before olsr_shutdown finishes
+ * Cleanup all resources allocated by logging system
  */
 void
 olsr_log_cleanup(void)
@@ -121,33 +121,19 @@ olsr_log_cleanup(void)
 }
 
 /**
- * Registers a custom logevent handler
- * @param handler pointer to handler function
- * @param mask pointer to custom event filter or NULL if handler use filter
- *   from olsr_cnf
+ * Registers a custom logevent handler. Handler and bitmask_ptr have to
+ * be initialized.
+ * @param h pointer to log event handler struct
  */
-struct log_handler_entry *
-olsr_log_addhandler(log_handler_cb *handler, struct log_handler_mask *mask)
+void
+olsr_log_addhandler(struct log_handler_entry *h)
 {
-  struct log_handler_entry *h;
-
-  /*
-   * The logging system is used in the memory cookie manager, so the logging
-   * system has to allocate its memory directly. Do not try to use
-   * olsr_memcookie_malloc() here.
-   */
-  h = calloc(sizeof(*h), 1);
-  h->handler = handler;
-  h->bitmask_ptr = mask;
-
   list_add_tail(&log_handler_list, &h->node);
   olsr_log_updatemask();
-
-  return h;
 }
 
 /**
- * Call this function to remove a logevent handler
+ * Unregister a logevent handler
  * @param handler pointer to handler function
  */
 void
@@ -155,14 +141,12 @@ olsr_log_removehandler(struct log_handler_entry *h)
 {
   list_remove(&h->node);
   olsr_log_updatemask();
-
-  free(h);
 }
 
 /**
  * Recalculate the combination of the olsr_cnf log event mask and all (if any)
  * custom masks of logfile handlers. Must be called every times a event mask
- * changes.
+ * changes without a logevent handler being added or removed.
  */
 void
 olsr_log_updatemask(void)
@@ -333,6 +317,18 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
   }
 }
 
+/**
+ * Logger for stderr output
+ * @param entry
+ * @param severity
+ * @param source
+ * @param no_header
+ * @param file
+ * @param line
+ * @param buffer
+ * @param timeLength
+ * @param prefixLength
+ */
 void
 olsr_log_stderr(struct log_handler_entry *entry __attribute__ ((unused)),
     enum log_severity severity __attribute__ ((unused)),
@@ -347,6 +343,18 @@ olsr_log_stderr(struct log_handler_entry *entry __attribute__ ((unused)),
   fputc('\n', stderr);
 }
 
+/**
+ * Logger for file output
+ * @param entry
+ * @param severity
+ * @param source
+ * @param no_header
+ * @param file
+ * @param line
+ * @param buffer
+ * @param timeLength
+ * @param prefixLength
+ */
 void
 olsr_log_file(struct log_handler_entry *entry,
     enum log_severity severity __attribute__ ((unused)),
@@ -364,6 +372,18 @@ olsr_log_file(struct log_handler_entry *entry,
   fputc('\n', f);
 }
 
+/**
+ * Logger for syslog output
+ * @param entry
+ * @param severity
+ * @param source
+ * @param no_header
+ * @param file
+ * @param line
+ * @param buffer
+ * @param timeLength
+ * @param prefixLength
+ */
 void
 olsr_log_syslog(struct log_handler_entry *entry __attribute__ ((unused)),
     enum log_severity severity __attribute__ ((unused)),

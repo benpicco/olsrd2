@@ -74,7 +74,7 @@ calc_aligned_size(size_t size) {
  * @param ci pointer to memcookie info
  */
 static inline void
-olsr_cookie_usage_incr(struct olsr_memcookie_info *ci)
+_usage_incr(struct olsr_memcookie_info *ci)
 {
   ci->ci_usage++;
   ci->ci_changes++;
@@ -85,7 +85,7 @@ olsr_cookie_usage_incr(struct olsr_memcookie_info *ci)
  * @param ci pointer to memcookie info
  */
 static inline void
-olsr_cookie_usage_decr(struct olsr_memcookie_info *ci)
+_usage_decr(struct olsr_memcookie_info *ci)
 {
   ci->ci_usage--;
   ci->ci_changes++;
@@ -252,7 +252,7 @@ olsr_memcookie_malloc(struct olsr_memcookie_info *ci)
   }
 
   /* Stats keeping */
-  olsr_cookie_usage_incr(ci);
+  _usage_incr(ci);
 
   OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: alloc %s, %p, %lu bytes%s\n",
              ci->ci_name, mem + 1, (unsigned long)ci->ci_size, reuse ? ", reuse" : "");
@@ -303,7 +303,7 @@ olsr_memcookie_free(struct olsr_memcookie_info *ci, void *ptr)
   }
 
   /* Stats keeping */
-  olsr_cookie_usage_decr(ci);
+  _usage_decr(ci);
 
   OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: free %s, %p, %lu bytes%s\n",
              ci->ci_name, ptr, (unsigned long)ci->ci_total_size, reuse ? ", reuse" : "");

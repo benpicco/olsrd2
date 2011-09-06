@@ -75,6 +75,9 @@ extern const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT];
  * from XXX.XXX.XXX.XXX".
  *
  * OLSR_WARN should be used for all error messages.
+ *
+ * OLSR_WARN_OOM should be called in an out-of-memory event to display some warning
+ * without allocating more memory.
  */
 #ifdef REMOVE_LOG_DEBUG
 #define OLSR_DEBUG(source, format, args...) do { } while(0)
@@ -126,11 +129,12 @@ struct log_handler_entry {
   void *custom;
 };
 
+EXPORT extern struct log_handler_mask log_global_mask;
+
 EXPORT int olsr_log_init(enum log_severity) __attribute__((warn_unused_result));
 EXPORT void olsr_log_cleanup(void);
 
-EXPORT struct log_handler_entry *olsr_log_addhandler(log_handler_cb *hanlder,
-    struct log_handler_mask *mask);
+EXPORT void olsr_log_addhandler(struct log_handler_entry *);
 EXPORT void olsr_log_removehandler(struct log_handler_entry *);
 EXPORT void olsr_log_updatemask(void);
 
@@ -151,7 +155,5 @@ EXPORT void olsr_log_file(struct log_handler_entry *,
     enum log_severity severity, enum log_source source,
     bool no_header, const char *file, int line, char *buffer,
     int timeLength, int prefixLength);
-
-EXPORT extern struct log_handler_mask log_global_mask;
 
 #endif /* OLSR_LOGGING_H_ */

@@ -67,15 +67,19 @@ static struct olsr_timer_info *connection_timeout;
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_stream_state);
 
-static void olsr_stream_parse_request(int fd, void *data, unsigned int flags);
-static struct olsr_stream_session *olsr_stream_create_session(
+static void _parse_request(int fd, void *data, unsigned int flags);
+static struct olsr_stream_session *_create_session(
     struct olsr_stream_socket *comport, int sock, union netaddr_socket *remote_addr);
-static void olsr_stream_parse_connection(int fd, void *data,
+static void _parse_connection(int fd, void *data,
         enum olsr_sockethandler_flags flags);
-static void olsr_stream_remove_session(struct olsr_stream_session *con);
+static void _remove_session(struct olsr_stream_session *con);
 
-static void olsr_stream_timeout_handler(void *);
+static void _timeout_handler(void *);
 
+/**
+ * Initialize the stream socket handlers
+ * @return -1 if an error happened, 0 otherwise.
+ */
 int
 olsr_stream_init(void) {
   if (olsr_subsystem_init(&olsr_stream_state))
@@ -90,7 +94,7 @@ olsr_stream_init(void) {
   }
 
   connection_timeout = olsr_timer_add("stream socket timout",
-      &olsr_stream_timeout_handler, false);
+      &_timeout_handler, false);
   if (connection_timeout == NULL) {
     OLSR_WARN_OOM(LOG_SOCKET_STREAM);
     olsr_memcookie_remove(connection_cookie);
@@ -102,6 +106,9 @@ olsr_stream_init(void) {
   return 0;
 }
 
+/**
+ * Cleanup all resources allocated be stream socket handlers
+ */
 void
 olsr_stream_cleanup(void) {
   struct olsr_stream_socket *comport;
@@ -119,11 +126,21 @@ olsr_stream_cleanup(void) {
   olsr_timer_remove(connection_timeout);
 }
 
+/**
+ * Flush all data in outgoing buffer of a stream socket
+ * @param con pointer to stream socket
+ */
 void
 olsr_stream_flush(struct olsr_stream_session *con) {
   olsr_socket_enable(con->scheduler_entry, OLSR_SOCKET_WRITE);
 }
 
+/**
+ * Add a new stream socket to the scheduler
+ * @param comport pointer to uninitialized stream socket struct
+ * @param local pointer to local ip/port of socket
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_stream_add(struct olsr_stream_socket *comport,
     union netaddr_socket *local) {
@@ -134,30 +151,29 @@ olsr_stream_add(struct olsr_stream_socket *comport,
 
   memset(comport, 0, sizeof(*comport));
 
-  if (local) {
-    /* Init socket */
-    s = os_net_getsocket(local, OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
-    if (s < 0) {
-      goto add_stream_error;
-    }
-
-    /* show that we are willing to listen */
-    if (listen(s, 1) == -1) {
-      OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket listen failed for %s: %s (%d)\n",
-          netaddr_socket_to_string(&buf, local), strerror(errno), errno);
-      goto add_stream_error;
-    }
-
-    if ((comport->scheduler_entry = olsr_socket_add(s,
-        olsr_stream_parse_request, comport, OLSR_SOCKET_READ)) == NULL) {
-      OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket hookup to scheduler failed for %s\n",
-          netaddr_socket_to_string(&buf, local));
-      goto add_stream_error;
-    }
-    memcpy(&comport->local_socket, local, sizeof(comport->local_socket));
+  /* Init socket */
+  s = os_net_getsocket(local, OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
+  if (s < 0) {
+    goto add_stream_error;
   }
+
+  /* show that we are willing to listen */
+  if (listen(s, 1) == -1) {
+    OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket listen failed for %s: %s (%d)\n",
+        netaddr_socket_to_string(&buf, local), strerror(errno), errno);
+    goto add_stream_error;
+  }
+
+  if ((comport->scheduler_entry = olsr_socket_add(s,
+      _parse_request, comport, OLSR_SOCKET_READ)) == NULL) {
+    OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket hookup to scheduler failed for %s\n",
+        netaddr_socket_to_string(&buf, local));
+    goto add_stream_error;
+  }
+  memcpy(&comport->local_socket, local, sizeof(comport->local_socket));
+
   comport->memcookie = connection_cookie;
-  comport->allowes_sessions = 10;
+  comport->allowed_sessions = 10;
   comport->maximum_input_buffer = 65536;
 
   list_init_head(&comport->session);
@@ -183,7 +199,7 @@ olsr_stream_remove(struct olsr_stream_socket *comport) {
     comport = list_first_element(&olsr_stream_head, comport, node);
     while (!list_is_empty(&comport->session)) {
       session = list_first_element(&comport->session, session, node);
-      olsr_stream_remove_session(session);
+      _remove_session(session);
     }
 
     list_remove(&comport->node);
@@ -219,7 +235,7 @@ olsr_stream_connect_to(struct olsr_stream_socket *comport,
     wait_for_connect = true;
   }
 
-  session = olsr_stream_create_session(comport, s, remote);
+  session = _create_session(comport, s, remote);
   if (session) {
     session->wait_for_connect = wait_for_connect;
     return session;
@@ -234,7 +250,7 @@ connect_to_error:
 }
 
 static void
-olsr_stream_parse_request(int fd, void *data, unsigned int flags) {
+_parse_request(int fd, void *data, unsigned int flags) {
   struct olsr_stream_socket *comport;
   union netaddr_socket remote_addr;
   socklen_t addrlen;
@@ -253,11 +269,11 @@ olsr_stream_parse_request(int fd, void *data, unsigned int flags) {
     return;
   }
 
-  olsr_stream_create_session(comport, sock, &remote_addr);
+  _create_session(comport, sock, &remote_addr);
 }
 
 static struct olsr_stream_session *
-olsr_stream_create_session(struct olsr_stream_socket *comport,
+_create_session(struct olsr_stream_socket *comport,
     int sock, union netaddr_socket *remote_addr) {
   struct olsr_stream_session *session;
 #if !defined REMOVE_LOG_DEBUG
@@ -287,7 +303,7 @@ olsr_stream_create_session(struct olsr_stream_socket *comport,
   }
 
   if ((session->scheduler_entry = olsr_socket_add(sock,
-      &olsr_stream_parse_connection, session,
+      &_parse_connection, session,
       OLSR_SOCKET_READ | OLSR_SOCKET_WRITE)) == NULL) {
     OLSR_WARN(LOG_SOCKET_STREAM, "Cannot hook incoming session into scheduler");
     goto parse_request_error;
@@ -297,7 +313,7 @@ olsr_stream_create_session(struct olsr_stream_socket *comport,
   session->comport = comport;
   memcpy(&session->peer_addr, &remote_addr, sizeof(session->peer_addr));
 
-  if (comport->allowes_sessions-- > 0) {
+  if (comport->allowed_sessions-- > 0) {
     /* create active session */
     session->state = COMPORT_SESSION_ACTIVE;
   } else {
@@ -332,12 +348,12 @@ parse_request_error:
 }
 
 static void
-olsr_stream_remove_session(struct olsr_stream_session *session) {
+_remove_session(struct olsr_stream_session *session) {
   if (session->comport->cleanup) {
     session->comport->cleanup(session);
   }
 
-  session->comport->allowes_sessions++;
+  session->comport->allowed_sessions++;
   list_remove(&session->node);
 
   os_close(session->scheduler_entry->fd);
@@ -350,13 +366,13 @@ olsr_stream_remove_session(struct olsr_stream_session *session) {
 }
 
 static void
-olsr_stream_timeout_handler(void *data) {
+_timeout_handler(void *data) {
   struct olsr_stream_session *session = data;
-  olsr_stream_remove_session(session);
+  _remove_session(session);
 }
 
 static void
-olsr_stream_parse_connection(int fd, void *data,
+_parse_connection(int fd, void *data,
     enum olsr_sockethandler_flags flags) {
   struct olsr_stream_session *session;
   struct olsr_stream_socket *comport;
@@ -473,7 +489,7 @@ olsr_stream_parse_connection(int fd, void *data,
     /* clean up connection by calling cleanup directly */
     olsr_timer_stop(session->timeout);
     session->timeout = NULL;
-    olsr_stream_remove_session(session);
+    _remove_session(session);
   }
   return;
 }

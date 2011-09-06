@@ -48,6 +48,18 @@ IF (WIN32)
     SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--enable-auto-import")
 ENDIF(WIN32)
 
+# add a target to generate API documentation with Doxygen
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/framework.doxyfile.in
+        ${CMAKE_CURRENT_BINARY_DIR}/framework.doxyfile @ONLY)
+    add_custom_target(doc
+        ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/framework.doxyfile
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Generating API documentation with Doxygen" VERBATIM
+    )
+endif(DOXYGEN_FOUND)
+
 # set include directories
 include_directories(src)
 include_directories(src/core)

@@ -1,9 +1,11 @@
 BUILD_DIR=build
 
-
 .ONESHELL:
 all: default_target FORCE
 	@make -s -C $(BUILD_DIR) all
+
+doc: default_target FORCE
+	@make -s -C $(BUILD_DIR) doc
 
 clean: default_target FORCE
 	@make -s -C $(BUILD_DIR) clean

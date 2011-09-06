@@ -382,8 +382,11 @@ setup_signalhandler(void) {
  * @param argv argument vector
  * @param def_config default configuration file, NULL if
  *   no default config file should be loaded
- * @return -1 if olsrd should start, otherwise olsrd should exit
- *   with the returned number
+ * @param reload_only true if only the command line arguments should
+ *   be parsed that load a configuration (--set, --remove, --load,
+ *   and --format), false for normal full parsing.
+ * @return -1 if olsrd should start normally, otherwise olsrd should
+ *   exit with the returned number
  */
 static int
 parse_commandline(int argc, char **argv, bool reload_only) {
