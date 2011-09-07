@@ -74,13 +74,19 @@ static struct cfg_schema_section logging_section = {
 };
 
 static struct cfg_schema_entry logging_entries[] = {
-  CFG_VALIDATE_INT_MINMAX(LOG_LEVEL_ENTRY, "0", -2, 3),
-  CFG_VALIDATE_CHOICE(LOG_DEBUG_ENTRY, "", LOG_SOURCE_NAMES, .t_list = true),
-  CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "", LOG_SOURCE_NAMES, .t_list = true),
-  CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "", LOG_SOURCE_NAMES, .t_list = true),
-  CFG_VALIDATE_BOOL(LOG_STDERR_ENTRY, "false"),
-  CFG_VALIDATE_BOOL(LOG_SYSLOG_ENTRY, "false"),
-  CFG_VALIDATE_STRING(LOG_FILE_ENTRY, ""),
+  CFG_VALIDATE_INT_MINMAX(LOG_LEVEL_ENTRY, "0", "Set debug level template", -2, 3),
+  CFG_VALIDATE_CHOICE(LOG_DEBUG_ENTRY, "",
+      "Set logging sources that display debug, info and warnings",
+      LOG_SOURCE_NAMES, .t_list = true),
+  CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "",
+      "Set logging sources that display info and warnings",
+      LOG_SOURCE_NAMES, .t_list = true),
+  CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "",
+      "Set logging sources that display warnings",
+      LOG_SOURCE_NAMES, .t_list = true),
+  CFG_VALIDATE_BOOL(LOG_STDERR_ENTRY, "false", "Set to true to activate logging to stderr"),
+  CFG_VALIDATE_BOOL(LOG_SYSLOG_ENTRY, "false", "Set to true to activate logging to syslog"),
+  CFG_VALIDATE_STRING(LOG_FILE_ENTRY, "", "Set a filename to log to a file"),
 };
 
 static struct cfg_delta_handler logcfg_delta_handler = {

@@ -53,3 +53,4 @@ contrib/txtinfoshell/txtinfo-sh
 !lib/quagga/patches/quagga-0.98.6.diff
 build
 
+html

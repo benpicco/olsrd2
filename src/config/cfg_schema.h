@@ -62,41 +62,47 @@ struct cfg_schema_entry;
 #include "config/cfg.h"
 #include "config/cfg_db.h"
 
-#define CFG_VALIDATE_STRING(name, def, args...)                  { .t_name = (name), .t_default = (def), ##args }
-#define CFG_VALIDATE_STRING_LEN(name, def, maxlen, args...)      { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_strlen, .t_validate_params = {.p_i1 = (maxlen) }, ##args }
-#define CFG_VALIDATE_PRINTABLE(name, def, args...)               { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_printable, .t_validate_params = {.p_i1 = INT32_MAX }, ##args }
-#define CFG_VALIDATE_PRINTABLE_LEN(name, def, maxlen, args...)   { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_printable, .t_validate_params = {.p_i1 = (maxlen) }, ##args }
-#define CFG_VALIDATE_CHOICE(name, def, list, args...)            { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_choice, .t_validate_params = {.p_ptr = (list), .p_i1 = ARRAYSIZE(list)}, ##args }
-#define CFG_VALIDATE_INT(name, def, args...)                     { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_int, .t_validate_params = {.p_i1 = INT32_MIN, .p_i2 = INT32_MAX}, ##args }
-#define CFG_VALIDATE_INT_MINMAX(name, def, min, max, args...)    { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_int, .t_validate_params = {.p_i1 = (min), .p_i2 = (max)}, ##args }
-#define CFG_VALIDATE_NETADDR(name, def, prefix, args...)         { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = 0, .p_i2 = !!(prefix) ? -1 : 0 }, ##args }
-#define CFG_VALIDATE_NETADDR_HWADDR(name, def, prefix, args...)  { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_MAC48 : AF_MAC48, .p_i2 = AF_EUI64 }, ##args }
-#define CFG_VALIDATE_NETADDR_MAC48(name, def, prefix, args...)   { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_MAC48 : AF_MAC48}, ##args }
-#define CFG_VALIDATE_NETADDR_EUI64(name, def, prefix, args...)   { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_EUI64 : AF_EUI64}, ##args }
-#define CFG_VALIDATE_NETADDR_V4(name, def, prefix, args...)      { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_INET : AF_INET }, ##args }
-#define CFG_VALIDATE_NETADDR_V6(name, def, prefix, args...)      { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_INET6 : AF_INET6 }, ##args }
-#define CFG_VALIDATE_NETADDR_V46(name, def, prefix, args...)     { .t_name = (name), .t_default = (def), .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_INET : AF_INET, .p_i2 = AF_INET6}, ##args }
+#if !defined(REMOVE_HELPTEXT)
+#define _CFG_VALIDATE(name, def, help, args...)                  { .t_name = (name), .t_default = (def), .t_help = (help), ##args }
+#else
+#define _CFG_VALIDATE(name, def, help, args...)                  { .t_name = (name), .t_default = (def), ##args }
+#endif
 
-#define CFG_VALIDATE_BOOL(name, def, args...)                   CFG_VALIDATE_CHOICE(name, def, CFGLIST_BOOL, ##args)
+#define CFG_VALIDATE_STRING(name, def, help, args...)                  _CFG_VALIDATE(name, def, help, ##args)
+#define CFG_VALIDATE_STRING_LEN(name, def, help, maxlen, args...)      _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_strlen, .t_validate_params = {.p_i1 = (maxlen) }, ##args )
+#define CFG_VALIDATE_PRINTABLE(name, def, help, args...)               _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_printable, .t_validate_params = {.p_i1 = INT32_MAX }, ##args )
+#define CFG_VALIDATE_PRINTABLE_LEN(name, def, help, maxlen, args...)   _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_printable, .t_validate_params = {.p_i1 = (maxlen) }, ##args )
+#define CFG_VALIDATE_CHOICE(name, def, help, list, args...)            _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_choice, .t_validate_params = {.p_ptr = (list), .p_i1 = ARRAYSIZE(list)}, ##args )
+#define CFG_VALIDATE_INT(name, def, help, args...)                     _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_int, .t_validate_params = {.p_i1 = INT32_MIN, .p_i2 = INT32_MAX}, ##args )
+#define CFG_VALIDATE_INT_MINMAX(name, def, help, min, max, args...)    _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_int, .t_validate_params = {.p_i1 = (min), .p_i2 = (max)}, ##args )
+#define CFG_VALIDATE_NETADDR(name, def, help, prefix, args...)         _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = 0, .p_i2 = !!(prefix) ? -1 : 0 }, ##args )
+#define CFG_VALIDATE_NETADDR_HWADDR(name, def, help, prefix, args...)  _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_MAC48 : AF_MAC48, .p_i2 = AF_EUI64 }, ##args )
+#define CFG_VALIDATE_NETADDR_MAC48(name, def, help, prefix, args...)   _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_MAC48 : AF_MAC48}, ##args )
+#define CFG_VALIDATE_NETADDR_EUI64(name, def, help, prefix, args...)   _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_EUI64 : AF_EUI64}, ##args )
+#define CFG_VALIDATE_NETADDR_V4(name, def, help, prefix, args...)      _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_INET : AF_INET }, ##args )
+#define CFG_VALIDATE_NETADDR_V6(name, def, help, prefix, args...)      _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_INET6 : AF_INET6 }, ##args )
+#define CFG_VALIDATE_NETADDR_V46(name, def, help, prefix, args...)     _CFG_VALIDATE(name, def, help, .t_validate = cfg_schema_validate_netaddr, .t_validate_params = {.p_i1 = !!(prefix) ? -AF_INET : AF_INET, .p_i2 = AF_INET6}, ##args )
 
-#define CFG_MAP_STRING(reference, name, def, args...)                  { .t_name = #name, .t_default = def, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args }
-#define CFG_MAP_STRING_LEN(reference, name, def, maxlen, args...)      CFG_VALIDATE_STRING_LEN(#name, def, maxlen, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_STRING_ARRAY(reference, name, def, maxlen, args...)    { .t_name = #name, .t_default = def, .t_validate_params = {.p_i1 = (maxlen) }, .t_to_binary = cfg_schema_tobin_strarray, .t_offset = offsetof(struct reference, name), ##args }
-#define CFG_MAP_PRINTABLE(reference, name, def, args...)               CFG_VALIDATE_PRINTABLE(#name, def, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_PRINTABLE_LEN(reference, name, def, args...)           CFG_VALIDATE_PRINTABLE_LEN(#name, def, maxlen, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_PRINTABLE_ARRAY(reference, name, def, maxlen, args...) CFG_VALIDATE_PRINTABLE_LEN(#name, def, maxlen, .t_to_binary = cfg_schema_tobin_strarray, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_CHOICE(reference, name, def, list, args...)            CFG_VALIDATE_CHOICE(#name, def, list, .t_to_binary = cfg_schema_tobin_choice, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_INT(reference, name, def, args...)                     CFG_VALIDATE_INT(#name, def, .t_to_binary = cfg_schema_tobin_int, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_INT_MINMAX(reference, name, def, min, max, args...)    CFG_VALIDATE_INT_MINMAX(#name, def, min, max, .t_to_binary = cfg_schema_tobin_int, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_NETADDR(reference, name, def, prefix, args...)         CFG_VALIDATE_NETADDR(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_NETADDR_HWADDR(reference, name, def, prefix, args...)  CFG_VALIDATE_NETADDR_HWADDR(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_NETADDR_MAC48(reference, name, def, prefix, args...)   CFG_VALIDATE_NETADDR_MAC48(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_NETADDR_EUI64(reference, name, def, prefix, args...)   CFG_VALIDATE_NETADDR_EUI64(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_NETADDR_V4(reference, name, def, prefix, args...)      CFG_VALIDATE_NETADDR_V4(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_NETADDR_V6(reference, name, def, prefix, args...)      CFG_VALIDATE_NETADDR_V6(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
-#define CFG_MAP_NETADDR_V46(reference, name, def, prefix, args...)     CFG_VALIDATE_NETADDR_V46(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_VALIDATE_BOOL(name, def, help, args...)                    CFG_VALIDATE_CHOICE(name, def, help, CFGLIST_BOOL, ##args)
 
-#define CFG_MAP_BOOL(reference, name, def, args...)                    CFG_VALIDATE_BOOL(#name, def, .t_to_binary = cfg_schema_tobin_bool, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_STRING(reference, name, def, help, args...)                  _CFG_VALIDATE(#name, def, help, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args )
+#define CFG_MAP_STRING_LEN(reference, name, def, help, maxlen, args...)      CFG_VALIDATE_STRING_LEN(#name, def, maxlen, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_STRING_ARRAY(reference, name, def, help, maxlen, args...)    _CFG_VALIDATE(#name, def, help, .t_validate_params = {.p_i1 = (maxlen) }, .t_to_binary = cfg_schema_tobin_strarray, .t_offset = offsetof(struct reference, name), ##args )
+#define CFG_MAP_PRINTABLE(reference, name, def, help, args...)               CFG_VALIDATE_PRINTABLE(#name, def, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_PRINTABLE_LEN(reference, name, def, help, args...)           CFG_VALIDATE_PRINTABLE_LEN(#name, def, maxlen, .t_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_PRINTABLE_ARRAY(reference, name, def, help, maxlen, args...) CFG_VALIDATE_PRINTABLE_LEN(#name, def, maxlen, .t_to_binary = cfg_schema_tobin_strarray, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_CHOICE(reference, name, def, help, list, args...)            CFG_VALIDATE_CHOICE(#name, def, list, .t_to_binary = cfg_schema_tobin_choice, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_INT(reference, name, def, help, args...)                     CFG_VALIDATE_INT(#name, def, .t_to_binary = cfg_schema_tobin_int, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_INT_MINMAX(reference, name, def, help, min, max, args...)    CFG_VALIDATE_INT_MINMAX(#name, def, min, max, .t_to_binary = cfg_schema_tobin_int, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_NETADDR(reference, name, def, help, prefix, args...)         CFG_VALIDATE_NETADDR(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_NETADDR_HWADDR(reference, name, def, help, prefix, args...)  CFG_VALIDATE_NETADDR_HWADDR(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_NETADDR_MAC48(reference, name, def, help, prefix, args...)   CFG_VALIDATE_NETADDR_MAC48(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_NETADDR_EUI64(reference, name, def, help, prefix, args...)   CFG_VALIDATE_NETADDR_EUI64(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_NETADDR_V4(reference, name, def, help, prefix, args...)      CFG_VALIDATE_NETADDR_V4(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_NETADDR_V6(reference, name, def, help, prefix, args...)      CFG_VALIDATE_NETADDR_V6(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_NETADDR_V46(reference, name, def, help, prefix, args...)     CFG_VALIDATE_NETADDR_V46(#name, def, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
+
+#define CFG_MAP_BOOL(reference, name, def, help, args...)                    CFG_VALIDATE_BOOL(#name, def, help, .t_to_binary = cfg_schema_tobin_bool, .t_offset = offsetof(struct reference, name), ##args)
 
 /*
  * Example of a section schema definition

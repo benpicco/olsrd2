@@ -66,11 +66,12 @@ static struct cfg_schema_section global_section = {
 
 static struct cfg_schema_entry global_entries[] = {
   CFG_VALIDATE_BOOL(CFG_GLOBAL_FORK, "no",
-      .t_help = "Set to true to fork daemon into background."),
+      "Set to true to fork daemon into background."),
   CFG_VALIDATE_BOOL(CFG_GLOBAL_FAILFAST, "no",
-      .t_help = "Set to true to stop daemon statup if at least one plugin doesn't load."),
-  CFG_VALIDATE_STRING(CFG_GLOBAL_PLUGIN, "", .t_list = true,
-      .t_help = "Set list of plugins to be loaded by daemon. Some might need configuration options."),
+      "Set to true to stop daemon statup if at least one plugin doesn't load."),
+  CFG_VALIDATE_STRING(CFG_GLOBAL_PLUGIN, "",
+      "Set list of plugins to be loaded by daemon. Some might need configuration options.",
+      .t_list = true),
 };
 
 /**

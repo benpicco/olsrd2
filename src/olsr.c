@@ -77,7 +77,9 @@ enum olsr_option_short {
 };
 
 static struct option olsr_options[] = {
+#if !defined(REMOVE_HELPTEXT)
   { "help",         no_argument,       0, 'h' },
+#endif
   { "version",      no_argument,       0, 'v' },
   { "plugin",       required_argument, 0, 'p' },
   { "load",         required_argument, 0, 'l' },
@@ -91,6 +93,7 @@ static struct option olsr_options[] = {
   { NULL, 0,0,0 }
 };
 
+#if !defined(REMOVE_HELPTEXT)
 static const char *help_text =
     "Activates OLSR.org routing daemon\n"
     "Mandatory arguments to long options are mandatory for short options too.\n"
@@ -118,6 +121,7 @@ static const char *help_text =
     "  -f, --format=FORMAT                    Set the format for loading/saving data\n"
     "                                         (use 'AUTO' for automatic detection of format)\n"
 ;
+#endif
 
 static enum log_source level_1_sources[] = {
     LOG_MAIN,
@@ -420,7 +424,9 @@ parse_commandline(int argc, char **argv, bool reload_only) {
       && 0 <= (opt = getopt_long(argc, argv, parameters, olsr_options, &opt_idx))) {
     switch (opt) {
       case 'h':
+#if !defined(REMOVE_HELPTEXT)
         abuf_appendf(&log, "Usage: %s [OPTION]...\n%s", argv[0], help_text);
+#endif
         return_code = 0;
         break;
 
