@@ -200,7 +200,7 @@ struct cfg_schema_entry {
 
   /* callback for converting string into binary */
   int (*t_to_binary)(const struct cfg_schema_entry *s_entry,
-      const char *value, void *ptr);
+      struct cfg_stringarray *value, void *ptr);
 
   /* offset of current binary data compared to reference pointer */
   size_t t_offset;
@@ -237,17 +237,17 @@ EXPORT int cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out);
 
 EXPORT int cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference);
+    struct cfg_stringarray *value, void *reference);
 EXPORT int cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference);
+    struct cfg_stringarray *value, void *reference);
 EXPORT int cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference);
+    struct cfg_stringarray *value, void *reference);
 EXPORT int cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference);
+    struct cfg_stringarray *value, void *reference);
 EXPORT int cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference);
+    struct cfg_stringarray *value, void *reference);
 EXPORT int cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference);
+    struct cfg_stringarray *value, void *reference);
 
 /**
  * Finds a section in a schema

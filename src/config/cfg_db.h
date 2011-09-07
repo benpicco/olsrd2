@@ -104,13 +104,7 @@ struct cfg_entry {
   char *name;
 
   /* value of entry, might contain multiple strings */
-  char *value;
-
-  /* pointer to last string in value */
-  char *last_value;
-
-  /* length of value in bytes including 0-bytes */
-  size_t length;
+  struct cfg_stringarray val;
 
   /* backpointer to named section */
   struct cfg_named_section *named_section;
@@ -119,8 +113,6 @@ struct cfg_entry {
 #define OLSR_FOR_ALL_CFG_SECTION_TYPES(db, s_type, iterator) avl_for_each_element_safe(&db->sectiontypes, s_type, node, iterator)
 #define OLSR_FOR_ALL_CFG_SECTION_NAMES(s_type, s_name, iterator) avl_for_each_element_safe(&s_type->names, s_name, node, iterator)
 #define OLSR_FOR_ALL_CFG_ENTRIES(s_name, entry, iterator) avl_for_each_element_safe(&s_name->entries, entry, node, iterator)
-
-#define OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, charptr) for (charptr = (entry)->value; charptr <= (entry)->last_value; charptr += strlen(charptr) + 1)
 
 EXPORT struct cfg_db *cfg_db_add(void);
 EXPORT void cfg_db_remove(struct cfg_db *);
@@ -381,7 +373,7 @@ cfg_db_add_entry(struct cfg_db *db, const char *section_type,
  */
 static INLINE bool
 cfg_db_is_multipart_entry(struct cfg_entry *entry) {
-  return entry->value != entry->last_value;
+  return entry->val.value != entry->val.last_value;
 }
 
 #endif /* CFG_DB_H_ */

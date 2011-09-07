@@ -221,7 +221,7 @@ cfg_cmd_handle_get(struct cfg_db *db,
     }
 
     cfg_append_printable_line(log, "Key '%s' has value:", arg);
-    OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+    CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
       cfg_append_printable_line(log, "%s", ptr);
     }
     return 0;

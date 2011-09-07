@@ -57,23 +57,24 @@
 #include "builddata/plugin_static.h"
 #include "builddata/version.h"
 #include "builddata/data.h"
+#include "olsr_cfg.h"
+#include "olsr_clock.h"
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"
 #include "olsr_memcookie.h"
-#include "olsr_clock.h"
-#include "olsr_timer.h"
-#include "olsr_socket.h"
 #include "olsr_packet_socket.h"
-#include "olsr_stream_socket.h"
 #include "olsr_plugins.h"
-#include "olsr_cfg.h"
+#include "olsr_socket.h"
+#include "olsr_stream_socket.h"
+#include "olsr_telnet.h"
+#include "olsr_timer.h"
 #include "olsr.h"
 
 static bool running, reload_config, exit_called;
+static char *schema_name;
 
-enum olsr_option_short {
-  olsr_option_quit   = 256,
-  olsr_option_schema,
+enum argv_short_options {
+  argv_option_schema = 256,
 };
 
 static struct option olsr_options[] = {
@@ -88,8 +89,8 @@ static struct option olsr_options[] = {
   { "remove",       required_argument, 0, 'r' },
   { "get",          optional_argument, 0, 'g' },
   { "format",       required_argument, 0, 'f' },
-  { "quit",         no_argument,       0, olsr_option_quit },
-  { "schema",       optional_argument, 0, olsr_option_schema },
+  { "quit",         no_argument,       0, 'q' },
+  { "schema",       optional_argument, 0, argv_option_schema },
   { NULL, 0,0,0 }
 };
 
@@ -123,10 +124,12 @@ static const char *help_text =
 ;
 #endif
 
+/* logging sources included in debug level 1 */
 static enum log_source level_1_sources[] = {
     LOG_MAIN,
 };
 
+/* name of default configuration file */
 static const char *DEFAULT_CONFIGFILE = OLSRD_GLOBAL_CONF_FILE;
 
 /* prototype for local statics */
@@ -135,6 +138,8 @@ static void hup_signal_handler(int);
 static void setup_signalhandler(void);
 static int mainloop(int argc, char **argv);
 static int parse_commandline(int argc, char **argv, bool reload_only);
+static int display_schema(void);
+
 /**
  * Main program
  */
@@ -147,6 +152,7 @@ main(int argc, char **argv) {
   /* early initialization */
   return_code = 1;
   fork_pipe = -1;
+  schema_name = NULL;
 
   /* setup signal handler */
   running = true;
@@ -181,7 +187,7 @@ main(int argc, char **argv) {
   /* prepare for an error during initialization */
   return_code = 1;
 
-  /* become root */
+  /* TODO: check if we are root, otherwise stop */
   if (0 && geteuid()) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run olsrd!\n");
     goto olsrd_cleanup;
@@ -218,11 +224,18 @@ main(int argc, char **argv) {
   if (olsr_stream_init()) {
     goto olsrd_cleanup;
   }
+  olsr_telnet_init();
 
   /* activate plugins */
   olsr_plugins_init();
 
-  /* apply olsr configuration */
+  /* show schema if necessary */
+  if (schema_name) {
+    return_code = display_schema();
+    goto olsrd_cleanup;
+  }
+
+  /* apply configuration */
   if (olsr_cfg_apply()) {
     goto olsrd_cleanup;
   }
@@ -250,6 +263,7 @@ olsrd_cleanup:
   olsr_plugins_cleanup();
 
   /* free framework resources */
+  olsr_telnet_cleanup();
   olsr_stream_cleanup();
   olsr_packet_cleanup();
   olsr_socket_cleanup();
@@ -442,18 +456,14 @@ parse_commandline(int argc, char **argv, bool reload_only) {
           return_code = 1;
         }
         break;
-      case olsr_option_quit:
+      case 'q':
         running = false;
         break;
 
-      case olsr_option_schema:
-        if (cfg_cmd_handle_schema(db, &state, optarg, &log)) {
-          return_code = 1;
-        }
-        else {
-          return_code = 0;
-        }
+      case argv_option_schema:
+        schema_name = optarg;
         break;
+
       case 'l':
         if (cfg_cmd_handle_load(db, &state, optarg, &log)) {
           return_code = 1;
@@ -498,10 +508,8 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   }
 
   if (return_code == -1 && !loaded_file) {
-    /* load default config file if no other loaded */
-    if (cfg_cmd_handle_load(db, &state, DEFAULT_CONFIGFILE, &log)) {
-      return_code = 1;
-    }
+    /* try to load default config file if no other loaded */
+    cfg_cmd_handle_load(db, &state, DEFAULT_CONFIGFILE, NULL);
   }
 
   if (return_code == -1) {
@@ -516,8 +524,33 @@ parse_commandline(int argc, char **argv, bool reload_only) {
       OLSR_WARN(LOG_MAIN, "Cannot reload configuration.\n%s", log.buf);
     }
     else {
-      fputs(log.buf, stderr);
+      fputs(log.buf, return_code == 0 ? stdout : stderr);
     }
+  }
+
+  abuf_free(&log);
+  cfg_cmd_remove(&state);
+
+  return return_code;
+}
+
+static int
+display_schema(void) {
+  struct cfg_cmd_state state;
+  struct autobuf log;
+  int return_code;
+
+  return_code = 0;
+
+  abuf_init(&log, 1024);
+  cfg_cmd_add(&state);
+
+  if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), &state, schema_name, &log)) {
+    return_code = 1;
+  }
+
+  if (log.len > 0) {
+    fputs(log.buf, stdout);
   }
 
   abuf_free(&log);

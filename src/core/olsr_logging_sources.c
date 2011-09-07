@@ -57,4 +57,5 @@ const char *LOG_SOURCE_NAMES[LOG_SOURCE_COUNT] = {
   "socket-stream",
   "socket-packet",
   "plugin-loader",
+  "telnet",
 };

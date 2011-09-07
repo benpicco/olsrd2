@@ -129,7 +129,7 @@ _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
           continue;
         }
 
-        OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+        CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
           cfg_db_set_entry(dst, section->type, named->name, entry->name, ptr, true);
         }
       }
@@ -266,19 +266,19 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
   }
 
   /* copy old values */
-  old = entry->value;
-  if (entry->value != NULL && append) {
-    old_size = entry->length;
+  old = entry->val.value;
+  if (entry->val.value != NULL && append) {
+    old_size = entry->val.length;
   }
 
-  entry->length = old_size + new_size;
-  entry->value = cfg_memory_alloc_string(&db->memory, entry->length);
+  entry->val.length = old_size + new_size;
+  entry->val.value = cfg_memory_alloc_string(&db->memory, entry->val.length);
 
   if (old_size) {
-    memcpy(entry->value, old, old_size);
+    memcpy(entry->val.value, old, old_size);
   }
-  memcpy(entry->value + old_size, value, new_size);
-  entry->last_value = entry->value + old_size;
+  memcpy(entry->val.value + old_size, value, new_size);
+  entry->val.last_value = entry->val.value + old_size;
 
   cfg_memory_free_string(&db->memory, old);
   return entry;
@@ -348,7 +348,7 @@ cfg_db_get_entry_value(struct cfg_db *db, const char *section_type,
 
   entry = cfg_db_find_entry(db, section_type, section_name, entry_name);
   if (entry != NULL) {
-    return entry->last_value;
+    return entry->val.last_value;
   }
 
   if (db->schema == NULL) {
@@ -389,9 +389,9 @@ cfg_db_remove_element(struct cfg_db *db, const char *section_type,
     return -1;
   }
 
-  if (entry->last_value == entry->value) {
+  if (!cfg_db_is_multipart_entry(entry)) {
     /* only a single element in list */
-    if (strcmp(value, entry->value) == 0) {
+    if (strcmp(value, entry->val.value) == 0) {
       _free_entry(entry);
       return 0;
     }
@@ -399,21 +399,21 @@ cfg_db_remove_element(struct cfg_db *db, const char *section_type,
   }
 
   last_ptr = NULL;
-  OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+  CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
     if (strcmp(ptr, value) == 0) {
       size_t value_len = strlen(value) + 1;
 
-      entry->length -= value_len;
+      entry->val.length -= value_len;
 
-      if (entry->last_value != ptr) {
+      if (entry->val.last_value != ptr) {
         /* not the last element */
-        size_t offset = (size_t)(ptr - entry->value);
-        memmove(ptr, ptr + value_len, entry->length - offset);
-        entry->last_value -= value_len;
+        size_t offset = (size_t)(ptr - entry->val.value);
+        memmove(ptr, ptr + value_len, entry->val.length - offset);
+        entry->val.last_value -= value_len;
       }
       else {
         /* last element */
-        entry->last_value = last_ptr;
+        entry->val.last_value = last_ptr;
       }
       return 0;
     }
@@ -435,7 +435,7 @@ cfg_db_entry_get_listsize(struct cfg_entry *entry) {
   char *ptr;
   size_t cnt = 1;
 
-  for (ptr = entry->value; ptr < entry->last_value; ptr++) {
+  for (ptr = entry->val.value; ptr < entry->val.last_value; ptr++) {
     if (*ptr == 0) {
       cnt++;
     }
@@ -559,6 +559,6 @@ _free_entry(struct cfg_entry *entry) {
 
   db = entry->named_section->section_type->db;
   cfg_memory_free_string(&db->memory, entry->name);
-  cfg_memory_free_string(&db->memory, entry->value);
+  cfg_memory_free_string(&db->memory, entry->val.value);
   cfg_memory_free(&db->memory, entry, sizeof(*entry));
 }

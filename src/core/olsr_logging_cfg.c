@@ -298,7 +298,7 @@ _apply_log_setting(struct cfg_named_section *named,
 
   entry = cfg_db_get_entry(named, entry_name);
   if (entry) {
-    OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+    CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
       i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, ARRAYSIZE(LOG_SOURCE_NAMES));
       logging_cfg.mask[severity][i] = true;
     }

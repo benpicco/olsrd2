@@ -176,6 +176,7 @@ _compact_serialize(struct autobuf *dst, struct cfg_db *src,
   struct cfg_section_type *section, *s_it;
   struct cfg_named_section *name, *n_it;
   struct cfg_entry *entry, *e_it;
+  char *ptr;
 
   OLSR_FOR_ALL_CFG_SECTION_TYPES(src, section, s_it) {
     OLSR_FOR_ALL_CFG_SECTION_NAMES(section, name, n_it) {
@@ -187,7 +188,9 @@ _compact_serialize(struct autobuf *dst, struct cfg_db *src,
       }
 
       OLSR_FOR_ALL_CFG_ENTRIES(name, entry, e_it) {
-        abuf_appendf(dst, "\t%s %s\n", entry->name, entry->value);
+        CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
+          abuf_appendf(dst, "\t%s %s\n", entry->name, ptr);
+        }
       }
     }
   }

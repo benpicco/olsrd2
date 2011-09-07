@@ -51,6 +51,20 @@
 #define ARRAYSIZE(a)  (sizeof(a) / sizeof(*(a)))
 #endif
 
+#define CFG_FOR_ALL_STRINGS(array, charptr) for (charptr = (array)->value; charptr <= (array)->last_value; charptr += strlen(charptr) + 1)
+
+/* Represents a string or an array of strings */
+struct cfg_stringarray {
+  /* pointer to the first string */
+  char *value;
+
+  /* pointer to the last string */
+  char *last_value;
+
+  /* total length of all strings including zero-bytes */
+  size_t length;
+};
+
 EXPORT int cfg_append_printable_line(struct autobuf *autobuf, const char *fmt, ...)
   __attribute__ ((format(printf, 2, 3)));
 EXPORT bool cfg_is_printable(const char *value);

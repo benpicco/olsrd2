@@ -353,9 +353,9 @@ int
 cfg_schema_tobin(void *target, struct cfg_named_section *named,
     const struct cfg_schema_entry *entries, size_t count) {
   struct cfg_entry *db_entry;
-  const char *value;
   char *ptr;
   size_t i;
+  struct cfg_stringarray default_array, *value;
 
   ptr = (char *)target;
 
@@ -364,15 +364,20 @@ cfg_schema_tobin(void *target, struct cfg_named_section *named,
       continue;
     }
 
-    value = entries[i].t_default;
     db_entry = avl_find_element(&named->entries, entries[i].t_name, db_entry, node);
     if (db_entry) {
-      value = db_entry->value;
+      value = &db_entry->val;
     }
-
-    if (value == NULL) {
+    else if (entries[i].t_default == NULL) {
       /* missing mandatory entry */
       return -1;
+    }
+    else {
+      memcpy(&default_array.value, &entries[i].t_default, sizeof(default_array.value));
+      default_array.last_value = default_array.value;
+      default_array.length = strlen(default_array.value);
+
+      value = &default_array;
     }
 
     if (entries[i].t_to_binary(&entries[i], value, ptr + entries[i].t_offset)) {
@@ -623,7 +628,7 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
 
 int
 cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    const char *value, void *reference) {
+    struct cfg_stringarray *value, void *reference) {
   char **ptr;
 
   ptr = (char **)reference;
@@ -631,62 +636,62 @@ cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((un
     free(ptr);
   }
 
-  *ptr = strdup(value);
+  *ptr = strdup(value->last_value);
   return *ptr == NULL ? 1 : 0;
 }
 
 int
 cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference) {
+    struct cfg_stringarray *value, void *reference) {
   char *ptr;
 
   ptr = (char *)reference;
 
-  strscpy(ptr, value, (size_t)s_entry->t_validate_params.p_i1);
+  strscpy(ptr, value->last_value, (size_t)s_entry->t_validate_params.p_i1);
   return 0;
 }
 
 int
 cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
-    const char *value, void *reference) {
+    struct cfg_stringarray *value, void *reference) {
   int *ptr;
 
   ptr = (int *)reference;
 
-  *ptr = cfg_get_choice_index(value, s_entry->t_validate_params.p_ptr,
+  *ptr = cfg_get_choice_index(value->last_value, s_entry->t_validate_params.p_ptr,
       (size_t)s_entry->t_validate_params.p_i1);
   return 0;
 }
 
 int
 cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    const char *value, void *reference) {
+    struct cfg_stringarray *value, void *reference) {
   int *ptr;
 
   ptr = (int *)reference;
 
-  *ptr = strtol(value, NULL, 10);
+  *ptr = strtol(value->last_value, NULL, 10);
   return 0;
 }
 
 int
 cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    const char *value, void *reference) {
+    struct cfg_stringarray *value, void *reference) {
   struct netaddr *ptr;
 
   ptr = (struct netaddr *)reference;
 
-  return netaddr_from_string(ptr, value);
+  return netaddr_from_string(ptr, value->last_value);
 }
 
 int
 cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    const char *value, void *reference) {
+    struct cfg_stringarray *value, void *reference) {
   bool *ptr;
 
   ptr = (bool *)reference;
 
-  *ptr = cfg_get_bool(value);
+  *ptr = cfg_get_bool(value->last_value);
   return 0;
 }
 /**
@@ -734,22 +739,22 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
   }
 
   if (cleanup) {
-    char *last_valid = entry->value;
+    char *last_valid = entry->val.value;
 
     /* first remove duplicate entries */
-    OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr1) {
+    CFG_FOR_ALL_STRINGS(&entry->val, ptr1) {
       /* get pointer to next element */
       ptr2 = ptr1 + strlen(ptr1)+1;
 
       /* compare list value to any later value */
-      while (ptr2 <= entry->last_value) {
+      while (ptr2 <= entry->val.last_value) {
         size = strlen(ptr2) + 1;
 
         if (strcmp(ptr2, ptr1) == 0) {
           /* duplicate found, remove it */
-          size_t offset = (size_t)(ptr2 - entry->value);
-          memmove (ptr2, ptr2 + size, entry->length - size - offset);
-          entry->length -= size;
+          size_t offset = (size_t)(ptr2 - entry->val.value);
+          memmove (ptr2, ptr2 + size, entry->val.length - size - offset);
+          entry->val.length -= size;
         }
         else {
           ptr2 += size;
@@ -757,13 +762,13 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
       }
       last_valid = ptr1;
     }
-    entry->last_value = last_valid;
+    entry->val.last_value = last_valid;
   }
 
   /* now validate syntax */
-  ptr1 = entry->value;
+  ptr1 = entry->val.value;
   if (schema_entry->t_validate) {
-    while (ptr1 < entry->value + entry->length) {
+    while (ptr1 < entry->val.value + entry->val.length) {
       if (schema_entry->t_validate(schema_entry, section_name, ptr1, out)) {
         /* warning is generated by the validate callback itself */
         warning = true;
@@ -777,8 +782,8 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
 
       if (warning && cleanup) {
         /* illegal entry found, remove it */
-        size_t offset = (size_t)(ptr2 - entry->value);
-        memmove(ptr1, ptr1 + size, entry->length - size - offset);
+        size_t offset = (size_t)(ptr2 - entry->val.value);
+        memmove(ptr1, ptr1 + size, entry->val.length - size - offset);
       }
       else {
         ptr1 += size;
@@ -786,7 +791,7 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
     }
   }
 
-  if (entry->length == 0) {
+  if (entry->val.length == 0) {
     /* remove empty entry */
     cfg_db_remove_entry(db, section->type, named->name, entry->name);
   }
@@ -803,17 +808,17 @@ _check_single_value(struct cfg_schema_entry *schema_entry,
 
   /* warning is generated by the validate callback itself */
   if (schema_entry->t_validate) {
-    warning = schema_entry->t_validate(schema_entry, section_name, entry->last_value, out) != 0;
+    warning = schema_entry->t_validate(schema_entry, section_name, entry->val.last_value, out) != 0;
   }
 
   if (warning && cleanup) {
     /* remove bad entry */
     cfg_db_remove_entry(db, section->type, named->name, entry->name);
   }
-  else if (cleanup && entry->last_value != entry->value) {
+  else if (cleanup && entry->val.last_value != entry->val.value) {
     /* shorten value */
-    entry->length = strlen(entry->last_value) + 1;
-    memmove(entry->value, entry->last_value, entry->length);
+    entry->val.length = strlen(entry->val.last_value) + 1;
+    memmove(entry->val.value, entry->val.last_value, entry->val.length);
   }
   return warning;
 }

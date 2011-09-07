@@ -161,7 +161,7 @@ olsr_cfg_apply(void) {
   if (named) {
     entry = cfg_db_get_entry(named, CFG_GLOBAL_PLUGIN);
     if (entry) {
-      OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+      CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
         if (olsr_plugins_load(ptr) == NULL && failfast) {
           goto apply_failed;
         }
@@ -175,7 +175,7 @@ olsr_cfg_apply(void) {
       found = false;
 
       /* search if plugin should still be active */
-      OLSR_FOR_ALL_CFG_LIST_ENTRIES(entry, ptr) {
+      CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
         if (olsr_plugins_get(ptr) == plugin) {
           found = true;
           break;
@@ -288,11 +288,11 @@ olsr_cfg_get_schema(void) {
 
 /**
  * @return pointer to olsr configuration schema
- */
 struct cfg_schema_section *
 olsr_cfg_get_schema_section_global(void) {
   return &global_section;
 }
+ */
 
 
 /**

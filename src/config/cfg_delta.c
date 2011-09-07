@@ -350,8 +350,8 @@ _setup_filterresults(struct cfg_delta_handler *handler,
       handler->filter[i].delta = CFG_DELTA_REMOVED;
       change = true;
     }
-    else if (pre->length == post->length
-        && memcmp(pre->value, post->value, pre->length) == 0) {
+    else if (pre->val.length == post->val.length
+        && memcmp(pre->val.value, post->val.value, pre->val.length) == 0) {
       handler->filter[i].delta = CFG_DELTA_NO_CHANGE;
     }
     else {

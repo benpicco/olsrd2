@@ -4,6 +4,7 @@
 	plugin	test2
 	plugin	test3
 
-[txtinfo]
-	port	1
-
+[telnet]
+	acl	+10.0.0.0/8
+	acl	default_accept
+	bindto_v4	11.0.0.1

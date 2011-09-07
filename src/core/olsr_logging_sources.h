@@ -58,6 +58,7 @@ enum log_source {
   LOG_SOCKET_STREAM,
   LOG_SOCKET_PACKET,
   LOG_PLUGINLOADER,
+  LOG_TELNET,
 
   /* this one must be the last of the enums ! */
   LOG_SOURCE_COUNT
