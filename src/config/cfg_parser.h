@@ -70,7 +70,7 @@ struct cfg_parser {
 };
 
 EXPORT extern struct avl_tree cfg_parser_tree;
-#define OLSR_FOR_ALL_CFG_PARSER(parser, iterator) avl_for_each_element_safe(&cfg_parser_tree, parser, node, iterator)
+#define CFG_FOR_ALL_PARSER(parser, iterator) avl_for_each_element_safe(&cfg_parser_tree, parser, node, iterator)
 
 EXPORT void cfg_parser_add(struct cfg_parser *);
 EXPORT void cfg_parser_remove(struct cfg_parser *);

@@ -65,7 +65,7 @@ struct cfg_io {
 };
 
 EXPORT extern struct avl_tree cfg_io_tree;
-#define OLSR_FOR_ALL_CFG_IO(io, iterator) avl_for_each_element_safe(&cfg_io_tree, io, node, iterator)
+#define CFG_FOR_ALL_IO(io, iterator) avl_for_each_element_safe(&cfg_io_tree, io, node, iterator)
 
 EXPORT void cfg_io_add(struct cfg_io *);
 EXPORT void cfg_io_remove(struct cfg_io *);

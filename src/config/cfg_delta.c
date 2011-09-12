@@ -173,13 +173,13 @@ cfg_delta_calculate(struct cfg_delta *delta,
 
     if (cmp_sections < 0) {
       /* handle pre-section */
-      OLSR_FOR_ALL_CFG_SECTION_NAMES(section_pre, named, named_it) {
+      CFG_FOR_ALL_SECTION_NAMES(section_pre, named, named_it) {
         _handle_namedsection(delta, section_pre->type, named, NULL);
       }
     }
     else if (cmp_sections > 0) {
       /* handle post-section */
-      OLSR_FOR_ALL_CFG_SECTION_NAMES(section_post, named, named_it) {
+      CFG_FOR_ALL_SECTION_NAMES(section_post, named, named_it) {
         _handle_namedsection(delta, section_post->type, NULL, named);
       }
     }

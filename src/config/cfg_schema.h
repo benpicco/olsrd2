@@ -160,6 +160,13 @@ struct cfg_schema_section {
   /* true if at least one section of this type must exist */
   bool t_mandatory;
 
+  /*
+   * set to true to mark section as stateful, so it must be
+   * acknowledged before being written over by configuration
+   * changes
+   */
+  bool t_confirm;
+
   /* help text for section */
   const char *t_help;
 
@@ -188,6 +195,13 @@ struct cfg_schema_entry {
   /* value is a list of parameters instead of a single one */
   bool t_list;
 
+  /*
+   * set to true to mark entry as stateful, so it must be
+   * acknowledged before being written over by configuration
+   * changes
+   */
+  bool t_confirm;
+
   /* callback for checking value of entry */
   int (*t_validate)(const struct cfg_schema_entry *entry,
       const char *section_name, const char *value, struct autobuf *out);
@@ -206,8 +220,8 @@ struct cfg_schema_entry {
   size_t t_offset;
 };
 
-#define OLSR_FOR_ALL_CFG_SCHEMA_SECTIONS(tmpl, section, iterator) avl_for_each_element_safe(&(tmpl->sections), section, node, iterator)
-#define OLSR_FOR_ALL_CFG_SCHEMA_ENTRIES(section, entry, iterator) avl_for_each_element_safe(&section->entries, entry, node, iterator)
+#define CFG_FOR_ALL_SCHEMA_SECTIONS(tmpl, section, iterator) avl_for_each_element_safe(&(tmpl->sections), section, node, iterator)
+#define CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, iterator) avl_for_each_element_safe(&section->entries, entry, node, iterator)
 
 EXPORT void cfg_schema_add(struct cfg_schema *schema);
 EXPORT void cfg_schema_remove(struct cfg_schema *schema);

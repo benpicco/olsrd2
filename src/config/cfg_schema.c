@@ -93,7 +93,7 @@ cfg_schema_remove(struct cfg_schema *schema) {
   struct cfg_schema_section *t_section, *tsec_it;
 
   /* kill sections of schema */
-  OLSR_FOR_ALL_CFG_SCHEMA_SECTIONS(schema, t_section, tsec_it) {
+  CFG_FOR_ALL_SCHEMA_SECTIONS(schema, t_section, tsec_it) {
     cfg_schema_remove_section(schema, t_section);
   }
 }
@@ -130,7 +130,7 @@ cfg_schema_remove_section(struct cfg_schema *schema, struct cfg_schema_section *
   schema = _handle_default_schema(schema);
 
   /* kill entries of section_schema */
-  OLSR_FOR_ALL_CFG_SCHEMA_ENTRIES(section, entry, ent_it) {
+  CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, ent_it) {
     cfg_schema_remove_entry(section, entry);
   }
 
@@ -221,7 +221,7 @@ cfg_schema_validate(struct cfg_db *db,
     return 1;
   }
 
-  OLSR_FOR_ALL_CFG_SECTION_TYPES(db, section, section_it) {
+  CFG_FOR_ALL_SECTION_TYPES(db, section, section_it) {
     /* check for missing schema sections */
     schema_section = cfg_schema_find_section(db->schema, section->type);
     if (schema_section == NULL) {
@@ -245,7 +245,7 @@ cfg_schema_validate(struct cfg_db *db,
     }
 
     /* check data of named sections in db */
-    OLSR_FOR_ALL_CFG_SECTION_NAMES(section, named, named_it) {
+    CFG_FOR_ALL_SECTION_NAMES(section, named, named_it) {
       warning = false;
       hasName = cfg_db_is_named_section(named);
 
@@ -290,7 +290,7 @@ cfg_schema_validate(struct cfg_db *db,
           section->type, hasName ? "=" : "", hasName ? named->name : "");
 
       /* check for bad values */
-      OLSR_FOR_ALL_CFG_ENTRIES(named, entry, entry_it) {
+      CFG_FOR_ALL_ENTRIES(named, entry, entry_it) {
         warning = _validate_cfg_entry(schema_section,
             db, section, named, entry, section_name,
             cleanup, failFast, out);
@@ -329,7 +329,7 @@ cfg_schema_validate(struct cfg_db *db,
   }
 
   /* search for missing mandatory sections */
-  OLSR_FOR_ALL_CFG_SCHEMA_SECTIONS(db->schema, schema_section, schema_section_it) {
+  CFG_FOR_ALL_SCHEMA_SECTIONS(db->schema, schema_section, schema_section_it) {
     if (!schema_section->t_mandatory) {
       continue;
     }
@@ -835,7 +835,7 @@ _check_missing_entries(struct cfg_schema_section *schema_section,
   error = false;
 
   /* check for missing values */
-  OLSR_FOR_ALL_CFG_SCHEMA_ENTRIES(schema_section, schema_entry, schema_entry_it) {
+  CFG_FOR_ALL_SCHEMA_ENTRIES(schema_section, schema_entry, schema_entry_it) {
     if (schema_entry->t_default != NULL) {
       continue;
     }

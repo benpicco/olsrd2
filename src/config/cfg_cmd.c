@@ -196,7 +196,7 @@ cfg_cmd_handle_get(struct cfg_db *db,
   if (arg == NULL || *arg == 0) {
     cfg_append_printable_line(log, "Section types in database:");
 
-    OLSR_FOR_ALL_CFG_SECTION_TYPES(db, type, type_it) {
+    CFG_FOR_ALL_SECTION_TYPES(db, type, type_it) {
       cfg_append_printable_line(log, "%s", type->type);
     }
     return 0;
@@ -237,7 +237,7 @@ cfg_cmd_handle_get(struct cfg_db *db,
     named = avl_first_element(&type->names, named, node);
     if (cfg_db_is_named_section(named)) {
       cfg_append_printable_line(log, "Named sections in section type: %s", pa.type);
-      OLSR_FOR_ALL_CFG_SECTION_NAMES(type, named, named_it) {
+      CFG_FOR_ALL_SECTION_NAMES(type, named, named_it) {
         cfg_append_printable_line(log, "%s", named->name);
       }
       return 0;
@@ -251,7 +251,7 @@ cfg_cmd_handle_get(struct cfg_db *db,
   }
 
   cfg_append_printable_line(log, "Entry keys for section '%s':", arg);
-  OLSR_FOR_ALL_CFG_ENTRIES(named, entry, entry_it) {
+  CFG_FOR_ALL_ENTRIES(named, entry, entry_it) {
     cfg_append_printable_line(log, "%s", entry->name);
   }
   return 0;
@@ -340,7 +340,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
     abuf_puts(log, "List of section types:\n"
         "(use this command with the types as parameter for more information)\n");
 
-    OLSR_FOR_ALL_CFG_SCHEMA_SECTIONS(db->schema, s_section, s_section_it) {
+    CFG_FOR_ALL_SCHEMA_SECTIONS(db->schema, s_section, s_section_it) {
       cfg_append_printable_line(log, "    %s%s%s%s%s",
           s_section->t_type,
           s_section->t_named ? " (named)" : "",
@@ -369,7 +369,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   if (ptr == NULL) {
     cfg_append_printable_line(log, "List of entries in section type '%s':", copy);
     abuf_puts(log, "(use this command with 'type.name' as parameter for more information)\n");
-    OLSR_FOR_ALL_CFG_SCHEMA_ENTRIES(s_section, s_entry, s_entry_it) {
+    CFG_FOR_ALL_SCHEMA_ENTRIES(s_section, s_entry, s_entry_it) {
       cfg_append_printable_line(log, "    %s%s%s%s%s",
           s_entry->t_name,
           s_entry->t_default == NULL ? " (mandatory)" : "",

@@ -47,10 +47,6 @@
 #include "common/autobuf.h"
 #include "common/common_types.h"
 
-#ifndef ARRAYSIZE
-#define ARRAYSIZE(a)  (sizeof(a) / sizeof(*(a)))
-#endif
-
 #define CFG_FOR_ALL_STRINGS(array, charptr) for (charptr = (array)->value; charptr <= (array)->last_value; charptr += strlen(charptr) + 1)
 
 /* Represents a string or an array of strings */

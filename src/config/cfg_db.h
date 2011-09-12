@@ -110,9 +110,9 @@ struct cfg_entry {
   struct cfg_named_section *named_section;
 };
 
-#define OLSR_FOR_ALL_CFG_SECTION_TYPES(db, s_type, iterator) avl_for_each_element_safe(&db->sectiontypes, s_type, node, iterator)
-#define OLSR_FOR_ALL_CFG_SECTION_NAMES(s_type, s_name, iterator) avl_for_each_element_safe(&s_type->names, s_name, node, iterator)
-#define OLSR_FOR_ALL_CFG_ENTRIES(s_name, entry, iterator) avl_for_each_element_safe(&s_name->entries, entry, node, iterator)
+#define CFG_FOR_ALL_SECTION_TYPES(db, s_type, iterator) avl_for_each_element_safe(&db->sectiontypes, s_type, node, iterator)
+#define CFG_FOR_ALL_SECTION_NAMES(s_type, s_name, iterator) avl_for_each_element_safe(&s_type->names, s_name, node, iterator)
+#define CFG_FOR_ALL_ENTRIES(s_name, entry, iterator) avl_for_each_element_safe(&s_name->entries, entry, node, iterator)
 
 EXPORT struct cfg_db *cfg_db_add(void);
 EXPORT void cfg_db_remove(struct cfg_db *);

@@ -88,7 +88,7 @@ void
 cfg_db_remove(struct cfg_db *db) {
   struct cfg_section_type *section, *section_it;
 
-  OLSR_FOR_ALL_CFG_SECTION_TYPES(db, section, section_it) {
+  CFG_FOR_ALL_SECTION_TYPES(db, section, section_it) {
     _free_sectiontype(section);
   }
 
@@ -112,19 +112,19 @@ _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
   struct cfg_entry *entry, *entry_it;
   char *ptr;
 
-  OLSR_FOR_ALL_CFG_SECTION_TYPES(src, section, section_it) {
+  CFG_FOR_ALL_SECTION_TYPES(src, section, section_it) {
     if (section_type != NULL && cfg_cmp_keys(section->type, section_type) != 0) {
       continue;
     }
 
-    OLSR_FOR_ALL_CFG_SECTION_NAMES(section, named, named_it) {
+    CFG_FOR_ALL_SECTION_NAMES(section, named, named_it) {
       if (section_name != NULL && cfg_cmp_keys(named->name, section_name) != 0) {
         continue;
       }
 
       _cfg_db_add_section(dst, section->type, named->name);
 
-      OLSR_FOR_ALL_CFG_ENTRIES(named, entry, entry_it) {
+      CFG_FOR_ALL_ENTRIES(named, entry, entry_it) {
         if (entry_name != NULL && cfg_cmp_keys(entry->name, entry_name) != 0) {
           continue;
         }
@@ -477,7 +477,7 @@ _free_sectiontype(struct cfg_section_type *section) {
   struct cfg_named_section *named, *named_it;
 
   /* remove all named sections */
-  OLSR_FOR_ALL_CFG_SECTION_NAMES(section, named, named_it) {
+  CFG_FOR_ALL_SECTION_NAMES(section, named, named_it) {
     _free_namedsection(named);
   }
 
@@ -517,7 +517,7 @@ _free_namedsection(struct cfg_named_section *named) {
   struct cfg_entry *entry, *entry_it;
 
   /* remove all entries first */
-  OLSR_FOR_ALL_CFG_ENTRIES(named, entry, entry_it) {
+  CFG_FOR_ALL_ENTRIES(named, entry, entry_it) {
     _free_entry(entry);
   }
 
