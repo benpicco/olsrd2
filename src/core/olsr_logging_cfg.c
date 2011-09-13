@@ -115,15 +115,18 @@ OLSR_SUBSYSTEM_STATE(olsr_logcfg_state);
 /**
  * Initialize logging configuration
  * @param debug_lvl_1_ptr array of logging sources for debug level 1
- * @param count number of logging sources in array
  */
 void
-olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t count) {
+olsr_logcfg_init(enum log_source *debug_lvl_1_ptr) {
+  size_t i;
   if (olsr_subsystem_init(&olsr_logcfg_state))
     return;
 
   debug_lvl_1 = debug_lvl_1_ptr;
-  debug_lvl_1_count = count;
+
+  for (i=0; debug_lvl_1_ptr[i] > 0; i++);
+
+  debug_lvl_1_count = i;
 
   memset(&logging_cfg, 0, sizeof(logging_cfg));
 

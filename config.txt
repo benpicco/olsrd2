@@ -5,6 +5,7 @@
 	plugin	test3
 
 [telnet]
-	acl	+10.0.0.0/8
-	acl	default_accept
-	bindto_v4	11.0.0.1
+#	acl	127.0.0.1/8
+#	acl	default_reject
+#	bindto_v4	11.0.0.1
+#	port	2006

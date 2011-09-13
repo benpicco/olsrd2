@@ -58,4 +58,6 @@ const char *LOG_SOURCE_NAMES[LOG_SOURCE_COUNT] = {
   "socket-packet",
   "plugin-loader",
   "telnet",
+
+  /* add you custom logging sources here */
 };

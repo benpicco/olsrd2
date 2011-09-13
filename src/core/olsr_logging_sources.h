@@ -60,6 +60,8 @@ enum log_source {
   LOG_PLUGINLOADER,
   LOG_TELNET,
 
+  /* add you custom logging sources here */
+
   /* this one must be the last of the enums ! */
   LOG_SOURCE_COUNT
 };

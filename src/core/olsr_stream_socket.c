@@ -249,6 +249,11 @@ connect_to_error:
   return NULL;
 }
 
+void
+olsr_stream_set_timeout(struct olsr_stream_session *con, uint32_t timeout) {
+  olsr_timer_set(&con->timeout, timeout, 0, con, connection_timeout);
+}
+
 static void
 _parse_request(int fd, void *data, unsigned int flags) {
   struct olsr_stream_socket *comport;
@@ -311,17 +316,17 @@ _create_session(struct olsr_stream_socket *comport,
 
   session->send_first = comport->send_first;
   session->comport = comport;
-  memcpy(&session->peer_addr, &remote_addr, sizeof(session->peer_addr));
+  session->peer_addr = *remote_addr;
 
   if (comport->allowed_sessions-- > 0) {
     /* create active session */
-    session->state = COMPORT_SESSION_ACTIVE;
+    session->state = STREAM_SESSION_ACTIVE;
   } else {
     /* too many sessions */
     if (comport->create_error) {
-      comport->create_error(session, SERVICE_UNAVAILABLE);
+      comport->create_error(session, STREAM_SERVICE_UNAVAILABLE);
     }
-    session->state = COMPORT_SESSION_SEND_AND_QUIT;
+    session->state = STREAM_SESSION_SEND_AND_QUIT;
   }
 
   if (comport->session_timeout) {
@@ -397,12 +402,12 @@ _parse_connection(int fd, void *data,
       if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &value, &value_len)) {
         OLSR_WARN(LOG_SOCKET_STREAM, "getsockopt failed: %s (%d)",
             strerror(errno), errno);
-        session->state = COMPORT_SESSION_CLEANUP;
+        session->state = STREAM_SESSION_CLEANUP;
       }
       else if (value != 0) {
         OLSR_WARN(LOG_SOCKET_STREAM, "Connection to %s failed: %s (%d)",
             netaddr_socket_to_string(&buf, &session->peer_addr), strerror(value), value);
-        session->state = COMPORT_SESSION_CLEANUP;
+        session->state = STREAM_SESSION_CLEANUP;
       }
       else {
         session->wait_for_connect = false;
@@ -415,7 +420,7 @@ _parse_connection(int fd, void *data,
   }
 
   /* read data if necessary */
-  if (session->state == COMPORT_SESSION_ACTIVE && (flags & OLSR_SOCKET_READ)
+  if (session->state == STREAM_SESSION_ACTIVE && (flags & OLSR_SOCKET_READ)
       != 0) {
     len = recv(fd, buffer, sizeof(buffer), 0);
     if (len > 0) {
@@ -423,13 +428,13 @@ _parse_connection(int fd, void *data,
       if (abuf_memcpy(&session->in, buffer, len)) {
         /* out of memory */
         OLSR_WARN(LOG_SOCKET_STREAM, "Out of memory for comport session input buffer");
-        session->state = COMPORT_SESSION_CLEANUP;
+        session->state = STREAM_SESSION_CLEANUP;
       } else if (session->in.len > comport->maximum_input_buffer) {
         /* input buffer overflow */
         if (comport->create_error) {
-          comport->create_error(session, REQUEST_TOO_LARGE);
+          comport->create_error(session, STREAM_REQUEST_TOO_LARGE);
         }
-        session->state = COMPORT_SESSION_SEND_AND_QUIT;
+        session->state = STREAM_SESSION_SEND_AND_QUIT;
       } else {
         /* got new input block, reset timeout */
         olsr_timer_change(session->timeout, comport->session_timeout, 0);
@@ -439,21 +444,21 @@ _parse_connection(int fd, void *data,
       /* error during read */
       OLSR_WARN(LOG_SOCKET_STREAM, "Error while reading from communication stream with %s: %s (%d)\n",
           netaddr_socket_to_string(&buf, &session->peer_addr), strerror(errno), errno);
-      session->state = COMPORT_SESSION_CLEANUP;
+      session->state = STREAM_SESSION_CLEANUP;
     } else if (len == 0) {
       /* external socket closed */
-      session->state = COMPORT_SESSION_SEND_AND_QUIT;
+      session->state = STREAM_SESSION_SEND_AND_QUIT;
     }
   }
 
-  if (session->state == COMPORT_SESSION_ACTIVE && comport->receive_data != NULL
+  if (session->state == STREAM_SESSION_ACTIVE && comport->receive_data != NULL
       && (session->in.len > 0 || session->send_first)) {
     session->state = comport->receive_data(session);
     session->send_first = false;
   }
 
   /* send data if necessary */
-  if (session->state != COMPORT_SESSION_CLEANUP && session->out.len > 0) {
+  if (session->state != STREAM_SESSION_CLEANUP && session->out.len > 0) {
     if (flags & OLSR_SOCKET_WRITE) {
       len = send(fd, session->out.buf, session->out.len, 0);
 
@@ -465,7 +470,7 @@ _parse_connection(int fd, void *data,
           != EWOULDBLOCK) {
         OLSR_WARN(LOG_SOCKET_STREAM, "Error while writing to communication stream with %s: %s (%d)\n",
             netaddr_socket_to_string(&buf, &session->peer_addr), strerror(errno), errno);
-        session->state = COMPORT_SESSION_CLEANUP;
+        session->state = STREAM_SESSION_CLEANUP;
       }
     } else {
       OLSR_DEBUG(LOG_SOCKET_STREAM, "  activating output in scheduler\n");
@@ -477,13 +482,13 @@ _parse_connection(int fd, void *data,
     /* nothing to send anymore */
     OLSR_DEBUG(LOG_SOCKET_STREAM, "  deactivating output in scheduler\n");
     olsr_socket_disable(session->scheduler_entry, OLSR_SOCKET_WRITE);
-    if (session->state == COMPORT_SESSION_SEND_AND_QUIT) {
-      session->state = COMPORT_SESSION_CLEANUP;
+    if (session->state == STREAM_SESSION_SEND_AND_QUIT) {
+      session->state = STREAM_SESSION_CLEANUP;
     }
   }
 
   /* end of connection ? */
-  if (session->state == COMPORT_SESSION_CLEANUP) {
+  if (session->state == STREAM_SESSION_CLEANUP) {
     OLSR_DEBUG(LOG_SOCKET_STREAM, "  cleanup\n");
 
     /* clean up connection by calling cleanup directly */

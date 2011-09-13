@@ -49,11 +49,14 @@
 #include "config/cfg_delta.h"
 
 static void _delta_section(struct cfg_delta *delta,
-    struct cfg_section_type *pre_change, struct cfg_section_type *post_change);
+    struct cfg_section_type *pre_change, struct cfg_section_type *post_change,
+    struct cfg_schema_section *schema);
 static void _handle_namedsection(struct cfg_delta *delta, const char *type,
-    struct cfg_named_section *pre_change, struct cfg_named_section *post_change);
+    struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
+    struct cfg_schema_section *schema_section);
 static bool _setup_filterresults(struct cfg_delta_handler *handler,
-    struct cfg_named_section *pre_change, struct cfg_named_section *post_change);
+    struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
+    struct cfg_schema_section *schema);
 static int _cmp_section_types(struct cfg_section_type *, struct cfg_section_type *);
 static int _cmp_named_section(struct cfg_named_section *, struct cfg_named_section *);
 
@@ -153,12 +156,21 @@ cfg_delta_calculate(struct cfg_delta *delta,
   struct cfg_section_type *section_pre = NULL, *section_post = NULL;
   struct cfg_named_section *named, *named_it;
   struct cfg_delta_handler *handler;
+  struct cfg_schema *schema;
+  struct cfg_schema_section *schema_section;
 
   /* cleanup delta handler flags */
   avl_for_each_element(&delta->handler, handler, node) {
     handler->_trigger_callback = false;
     handler->pre = NULL;
     handler->post = NULL;
+  }
+
+  /* initialize section handling */
+  schema = NULL;
+  schema_section = NULL;
+  if (pre_change->schema == post_change->schema) {
+    schema = pre_change->schema;
   }
 
   /* iterate over section types */
@@ -173,19 +185,28 @@ cfg_delta_calculate(struct cfg_delta *delta,
 
     if (cmp_sections < 0) {
       /* handle pre-section */
+      if (schema) {
+        schema_section = cfg_schema_find_section(schema, section_pre->type);
+      }
       CFG_FOR_ALL_SECTION_NAMES(section_pre, named, named_it) {
-        _handle_namedsection(delta, section_pre->type, named, NULL);
+        _handle_namedsection(delta, section_pre->type, named, NULL, schema_section);
       }
     }
     else if (cmp_sections > 0) {
       /* handle post-section */
+      if (schema) {
+        schema_section = cfg_schema_find_section(schema, section_post->type);
+      }
       CFG_FOR_ALL_SECTION_NAMES(section_post, named, named_it) {
-        _handle_namedsection(delta, section_post->type, NULL, named);
+        _handle_namedsection(delta, section_post->type, NULL, named, schema_section);
       }
     }
     else {
       /* type is available in both db's, this might be an change event */
-      _delta_section(delta, section_pre, section_post);
+      if (schema) {
+        schema_section = cfg_schema_find_section(schema, section_pre->type);
+      }
+      _delta_section(delta, section_pre, section_post, schema_section);
     }
 
     if (cmp_sections <= 0) {
@@ -236,7 +257,8 @@ _cmp_named_section(struct cfg_named_section *ptr1, struct cfg_named_section *ptr
  */
 static void
 _delta_section(struct cfg_delta *delta,
-    struct cfg_section_type *pre_change, struct cfg_section_type *post_change) {
+    struct cfg_section_type *pre_change, struct cfg_section_type *post_change,
+    struct cfg_schema_section *schema) {
   struct cfg_named_section *named_pre = NULL, *named_post = NULL;
 
   named_pre = avl_first_element_safe(&pre_change->names, named_pre, node);
@@ -250,15 +272,15 @@ _delta_section(struct cfg_delta *delta,
 
     if (cmp_sections < 0) {
       /* handle pre-named */
-      _handle_namedsection(delta, pre_change->type, named_pre, NULL);
+      _handle_namedsection(delta, pre_change->type, named_pre, NULL, schema);
     }
     else if (cmp_sections > 0) {
       /* handle post-section */
-      _handle_namedsection(delta, post_change->type, NULL, named_post);
+      _handle_namedsection(delta, post_change->type, NULL, named_post, schema);
     }
     else {
       /* named section is available in both db's, we have section change */
-      _handle_namedsection(delta, pre_change->type, named_pre, named_post);
+      _handle_namedsection(delta, pre_change->type, named_pre, named_post, schema);
     }
 
     if (cmp_sections <= 0) {
@@ -280,7 +302,8 @@ _delta_section(struct cfg_delta *delta,
  */
 static void
 _handle_namedsection(struct cfg_delta *delta, const char *type,
-    struct cfg_named_section *pre_change, struct cfg_named_section *post_change) {
+    struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
+    struct cfg_schema_section *schema_section) {
   struct cfg_delta_handler *handler;
 
   avl_for_each_element(&delta->handler, handler, node) {
@@ -289,7 +312,7 @@ _handle_namedsection(struct cfg_delta *delta, const char *type,
     }
 
     if ((handler->_trigger_callback =
-        _setup_filterresults(handler, pre_change, post_change))) {
+        _setup_filterresults(handler, pre_change, post_change, schema_section))) {
       handler->pre = pre_change;
       handler->post = post_change;
 
@@ -315,8 +338,13 @@ _handle_namedsection(struct cfg_delta *delta, const char *type,
  */
 static bool
 _setup_filterresults(struct cfg_delta_handler *handler,
-    struct cfg_named_section *pre_change, struct cfg_named_section *post_change) {
+    struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
+    struct cfg_schema_section *schema) {
+  const char *_EMPTY = "";
   struct cfg_entry *pre, *post;
+  struct cfg_schema_entry *schema_entry;
+  const char *pre_value, *post_value;
+  size_t pre_len, post_len;
   bool change;
   size_t i;
 
@@ -340,24 +368,46 @@ _setup_filterresults(struct cfg_delta_handler *handler,
     handler->filter[i].post = post;
 
     if (pre == NULL && post == NULL) {
-      handler->filter[i].delta = CFG_DELTA_NO_CHANGE;
+      handler->filter[i].changed = false;
+      continue;
     }
-    else if (pre == NULL) {
-      handler->filter[i].delta = CFG_DELTA_ADDED;
-      change = true;
+
+    pre_value = _EMPTY;
+    pre_len = 0;
+    post_value = _EMPTY;
+    post_len = 0;
+
+    if (pre) {
+      /* get value */
+      pre_value = pre->val.value;
+      pre_len = pre->val.length;
     }
-    else if (post == NULL) {
-      handler->filter[i].delta = CFG_DELTA_REMOVED;
-      change = true;
+    else if(schema) {
+      /* look for default value */
+      schema_entry = cfg_schema_find_entry(schema, post->name);
+      if (schema_entry) {
+        pre_value = schema_entry->t_default;
+        pre_len = strlen(pre_value) + 1;
+      }
     }
-    else if (pre->val.length == post->val.length
-        && memcmp(pre->val.value, post->val.value, pre->val.length) == 0) {
-      handler->filter[i].delta = CFG_DELTA_NO_CHANGE;
+
+    if (post) {
+      /* get value */
+      post_value = post->val.value;
+      post_len = post->val.length;
     }
-    else {
-      handler->filter[i].delta = CFG_DELTA_CHANGED;
-      change = true;
+    else if(schema) {
+      /* look for default value */
+      schema_entry = cfg_schema_find_entry(schema, pre->name);
+      if (schema_entry) {
+        post_value = schema_entry->t_default;
+        post_len = strlen(post_value) + 1;
+      }
     }
+
+    handler->filter[i].changed = (pre_len != post_len)
+        || (memcmp(pre_value, post_value, pre_len) != 0);
+    change |= handler->filter[i].changed;
   }
   return change;
 }

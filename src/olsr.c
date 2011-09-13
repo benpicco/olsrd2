@@ -68,6 +68,7 @@
 #include "olsr_stream_socket.h"
 #include "olsr_telnet.h"
 #include "olsr_timer.h"
+#include "olsr_setup.h"
 #include "olsr.h"
 
 static bool running, reload_config, exit_called;
@@ -96,7 +97,7 @@ static struct option olsr_options[] = {
 
 #if !defined(REMOVE_HELPTEXT)
 static const char *help_text =
-    "Activates OLSR.org routing daemon\n"
+    OLSR_SETUP_HELP_HEADLINE
     "Mandatory arguments to long options are mandatory for short options too.\n"
     "  -h, --help                             Display this help file\n"
     "  -v, --version                          Display the version string and the included static plugins\n"
@@ -123,11 +124,6 @@ static const char *help_text =
     "                                         (use 'AUTO' for automatic detection of format)\n"
 ;
 #endif
-
-/* logging sources included in debug level 1 */
-static enum log_source level_1_sources[] = {
-    LOG_MAIN,
-};
 
 /* name of default configuration file */
 static const char *DEFAULT_CONFIGFILE = OLSRD_GLOBAL_CONF_FILE;
@@ -170,8 +166,13 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
+  /* add custom configuration definitions */
+  if (olsr_setup_cfginit()) {
+    goto olsrd_cleanup;
+  }
+
   /* initialize logging to config interface */
-  olsr_logcfg_init(level_1_sources, ARRAYSIZE(level_1_sources));
+  olsr_logcfg_init(olsr_setup_debuglevel1);
   olsr_logcfg_addschema(olsr_cfg_get_schema());
 
   /* load static plugins */
@@ -189,7 +190,7 @@ main(int argc, char **argv) {
 
   /* TODO: check if we are root, otherwise stop */
   if (0 && geteuid()) {
-    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run olsrd!\n");
+    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run "OLSR_SETUP_PROGRAM"!\n");
     goto olsrd_cleanup;
   }
 
@@ -224,7 +225,14 @@ main(int argc, char **argv) {
   if (olsr_stream_init()) {
     goto olsrd_cleanup;
   }
-  olsr_telnet_init();
+  if (olsr_telnet_init()) {
+    goto olsrd_cleanup;
+  }
+
+  /* activate custom additions to framework */
+  if (olsr_setup_init()) {
+    goto olsrd_cleanup;
+  }
 
   /* activate plugins */
   olsr_plugins_init();
@@ -262,6 +270,9 @@ olsrd_cleanup:
   /* free plugins */
   olsr_plugins_cleanup();
 
+  /* free custom framework additions */
+  olsr_setup_cleanup();
+
   /* free framework resources */
   olsr_telnet_cleanup();
   olsr_stream_cleanup();
@@ -272,13 +283,13 @@ olsrd_cleanup:
   olsr_logcfg_cleanup();
 
   /* free configuration resources */
+  olsr_setup_cfgcleanup();
   olsr_cfg_cleanup();
 
   /* free logger resources */
   olsr_log_cleanup();
 
   if (fork_pipe != -1) {
-    fprintf(stderr, "Errorcode: %d\n", return_code);
     /* tell main process that we had a problem */
     daemonize_finish(fork_pipe, return_code);
   }
@@ -319,7 +330,7 @@ mainloop(int argc, char **argv) {
   uint32_t next_interval;
   int exit_code = 0;
 
-  OLSR_INFO(LOG_MAIN, "Starting olsr.org adapter daemon");
+  OLSR_INFO(LOG_MAIN, "Starting "OLSR_SETUP_PROGRAM".");
 
   /* enter main loop */
   while (running) {
@@ -344,6 +355,7 @@ mainloop(int argc, char **argv) {
 
     /* reload configuration if triggered */
     if (reload_config) {
+      OLSR_INFO(LOG_MAIN, "Reloading configuration");
       if (olsr_cfg_create_new_rawdb()) {
         running = false;
       }
@@ -361,7 +373,7 @@ mainloop(int argc, char **argv) {
     exit_code = 1;
   }
 
-  OLSR_INFO(LOG_MAIN, "Ending olsr.org daemon");
+  OLSR_INFO(LOG_MAIN, "Ending "OLSR_SETUP_PROGRAM".");
   return exit_code;
 }
 

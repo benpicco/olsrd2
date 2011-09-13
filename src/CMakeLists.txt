@@ -24,7 +24,7 @@ IF(BSD)
 ENDIF(BSD)
 
 # add main program
-set(OLSRD_SRCS ${OLSRD_SRCS} olsr.c)
+set(OLSRD_SRCS ${OLSRD_SRCS} olsr.c olsr_setup.c)
 
 # activate symbol export for win32
 IF(WIN32)

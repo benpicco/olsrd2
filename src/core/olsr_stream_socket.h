@@ -50,14 +50,14 @@
 #include "olsr_memcookie.h"
 
 enum olsr_stream_session_state {
-  COMPORT_SESSION_ACTIVE,
-  COMPORT_SESSION_SEND_AND_QUIT,
-  COMPORT_SESSION_CLEANUP
+  STREAM_SESSION_ACTIVE,
+  STREAM_SESSION_SEND_AND_QUIT,
+  STREAM_SESSION_CLEANUP
 };
 
 enum olsr_stream_errors {
-  REQUEST_TOO_LARGE = 413,
-  SERVICE_UNAVAILABLE = 503
+  STREAM_REQUEST_TOO_LARGE = 413,
+  STREAM_SERVICE_UNAVAILABLE = 503
 };
 
 /* represents a TCP stream */
@@ -170,5 +170,8 @@ EXPORT void olsr_stream_remove(struct olsr_stream_socket *);
 EXPORT struct olsr_stream_session *olsr_stream_connect_to(
     struct olsr_stream_socket *, union netaddr_socket *remote);
 EXPORT void olsr_stream_flush(struct olsr_stream_session *con);
+
+EXPORT void olsr_stream_set_timeout(
+    struct olsr_stream_session *con, uint32_t timeout);
 
 #endif /* OLSR_STREAM_SOCKET_H_ */

@@ -108,14 +108,6 @@ struct cfg_delta_handler {
   struct cfg_named_section *pre, *post;
 };
 
-/* type of change that happened for a filter */
-enum cfg_delta_event {
-  CFG_DELTA_NO_CHANGE = 0,
-  CFG_DELTA_ADDED     = 1,
-  CFG_DELTA_CHANGED   = 2,
-  CFG_DELTA_REMOVED   = 3,
-};
-
 /**
  * One filter entry for a delta handler filter.
  * Only "k" must be filled by the user.
@@ -124,11 +116,8 @@ struct cfg_delta_filter {
   /* key of the entry this filter matches */
   const char *k;
 
-  /*
-   * defines the change happened for the filters entry,
-   * set by cfg_delta_calculate()
-   */
-  enum cfg_delta_event delta;
+  /* true if parameter was changed */
+  bool changed;
 
   /*
    * Pointer to entry before and after the change.

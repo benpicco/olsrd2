@@ -352,7 +352,6 @@ cfg_schema_validate(struct cfg_db *db,
 int
 cfg_schema_tobin(void *target, struct cfg_named_section *named,
     const struct cfg_schema_entry *entries, size_t count) {
-  struct cfg_entry *db_entry;
   char *ptr;
   size_t i;
   struct cfg_stringarray default_array, *value;
@@ -364,15 +363,22 @@ cfg_schema_tobin(void *target, struct cfg_named_section *named,
       continue;
     }
 
-    db_entry = avl_find_element(&named->entries, entries[i].t_name, db_entry, node);
-    if (db_entry) {
-      value = &db_entry->val;
+    /* cleanup pointer */
+    value = NULL;
+
+    if (named) {
+      struct cfg_entry *db_entry;
+      db_entry = avl_find_element(&named->entries, entries[i].t_name, db_entry, node);
+      if (db_entry) {
+        value = &db_entry->val;
+      }
     }
-    else if (entries[i].t_default == NULL) {
-      /* missing mandatory entry */
-      return -1;
-    }
-    else {
+
+    if (value == NULL) {
+      if (entries[i].t_default == NULL) {
+        /* missing mandatory entry */
+        return -1;
+      }
       memcpy(&default_array.value, &entries[i].t_default, sizeof(default_array.value));
       default_array.last_value = default_array.value;
       default_array.length = strlen(default_array.value);
