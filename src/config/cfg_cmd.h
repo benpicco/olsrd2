@@ -70,9 +70,8 @@ EXPORT int cfg_cmd_handle_load(struct cfg_db *db,
     struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
 EXPORT int cfg_cmd_handle_save(struct cfg_db *db,
     struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
-EXPORT int cfg_cmd_handle_format(struct cfg_db *db,
-    struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
+EXPORT int cfg_cmd_handle_format(struct cfg_cmd_state *state, const char *arg);
 EXPORT int cfg_cmd_handle_schema(struct cfg_db *db,
-    struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
+    const char *arg, struct autobuf *log);
 
 #endif /* CFG_CMD_H_ */

@@ -67,7 +67,6 @@ static bool _io_initialized = false;
 /**
  * Add a new io-handler to the global registry
  * @param io pointer to io handler object
- * @param name name of IO handler
  */
 void
 cfg_io_add(struct cfg_io *io) {
@@ -112,7 +111,7 @@ cfg_io_remove(struct cfg_io *io) {
 /**
  * Load a configuration database from an external source
  * @param url URL specifying the external source
- *   might contain io-handler specification with <iohandler>://
+ *   might contain io-handler specification with {iohandler}://
  *   syntax.
  * @param parser name of parser to be used by io-handler (if necessary),
  *   NULL if parser autodetection should be used
@@ -141,7 +140,7 @@ cfg_io_load_parser(const char *url, const char *parser, struct autobuf *log) {
 /**
  * Store a configuration database into an external destination.
  * @param url URL specifying the external source
- *   might contain io-handler specification with <iohandler>://
+ *   might contain io-handler specification with {iohandler}://
  *   syntax.
  * @param parser name of parser to be used by io-handler (if necessary),
  *   NULL if parser autodetection should be used

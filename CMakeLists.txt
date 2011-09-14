@@ -34,15 +34,6 @@ endif(DOXYGEN_FOUND)
 include_directories(src)
 include_directories(src/core)
 
-# TODO: get rid of this
-IF(WIN32)
-    include_directories(src/win32)
-ENDIF(WIN32)
-
-IF(ANDROID)
-    include_directories(src/android)
-ENDIF(ANDROID)
-
 # start compiling core and plugins
 add_subdirectory(src)
 add_subdirectory(lib)

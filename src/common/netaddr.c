@@ -467,10 +467,11 @@ netaddr_socket_to_string(struct netaddr_str *dst, union netaddr_socket *src) {
  * prototype.
  * @param k1 address 1
  * @param k2 address 2
+ * @param unused not used in this comparator
  * @return >0 if k1>k2, <0 if k1<k2, 0 otherwise
  */
 int
-netaddr_avlcmp(const void *k1, const void *k2, void *ptr __attribute__((unused))) {
+netaddr_avlcmp(const void *k1, const void *k2, void *unused __attribute__((unused))) {
   return netaddr_cmp(k1, k2);
 }
 
@@ -538,10 +539,10 @@ netaddr_isequal_binary(const struct netaddr *addr,
 
 /**
  * Checks if a binary address is part of a netaddr prefix.
- * @param addr netaddr prefix
+ * @param subnet netaddr prefix
  * @param bin pointer to binary address
  * @param len length of binary address
- * @param af address family of binary address
+ * @param af_family address family of binary address
  * @return true if part of the prefix, false otherwise
  */
 bool
@@ -574,7 +575,7 @@ netaddr_is_in_subnet(const struct netaddr *subnet,
 
 /**
  * Calculates the maximum prefix length of an address type
- * @param af_type address family type
+ * @param addr netaddr object
  * @return prefix length, 0 if unknown address family
  */
 uint8_t

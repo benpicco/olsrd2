@@ -163,7 +163,7 @@ abuf_vappendf(struct autobuf *autobuf,
  * printf()-style function that appends the output to an autobuffer.
  * The function accepts a variable number of arguments based on the format string.
  * @param autobuf pointer to autobuf object
- * @param format printf format string
+ * @param fmt printf format string
  * @return -1 if an out-of-memory error happened, 0 otherwise
  */
 int

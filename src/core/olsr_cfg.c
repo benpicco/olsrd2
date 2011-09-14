@@ -51,6 +51,13 @@
 #include "olsr_cfg.h"
 #include "olsr.h"
 
+/* static prototypes */
+static int _validate_global(struct cfg_schema_section *, const char *section_name,
+    struct cfg_named_section *, struct autobuf *);
+
+/* global config */
+struct olsr_config_global config_global;
+
 static struct cfg_db *olsr_raw_db = NULL;
 static struct cfg_db *olsr_work_db = NULL;
 static struct cfg_schema olsr_schema;
@@ -62,16 +69,21 @@ OLSR_SUBSYSTEM_STATE(olsr_cfg_state);
 /* define global configuration template */
 static struct cfg_schema_section global_section = {
   .t_type = CFG_SECTION_GLOBAL,
+  .t_validate = _validate_global,
 };
 
 static struct cfg_schema_entry global_entries[] = {
-  CFG_VALIDATE_BOOL(CFG_GLOBAL_FORK, "no",
+  CFG_MAP_BOOL(olsr_config_global, fork, "no",
       "Set to true to fork daemon into background."),
-  CFG_VALIDATE_BOOL(CFG_GLOBAL_FAILFAST, "no",
+  CFG_MAP_BOOL(olsr_config_global, failfast, "no",
       "Set to true to stop daemon statup if at least one plugin doesn't load."),
-  CFG_VALIDATE_STRING(CFG_GLOBAL_PLUGIN, "",
-      "Set list of plugins to be loaded by daemon. Some might need configuration options.",
-      .t_list = true),
+  CFG_MAP_BOOL(olsr_config_global, ipv4, "yes",
+      "Set to true to enable ipv4 support in program."),
+  CFG_MAP_BOOL(olsr_config_global, ipv6, "yes",
+      "Set to true to enable ipv6 support in program."),
+
+  CFG_MAP_STRINGLIST(olsr_config_global, plugin, "",
+      "Set list of plugins to be loaded by daemon. Some might need configuration options."),
 };
 
 /**
@@ -106,6 +118,9 @@ olsr_cfg_init(void) {
 
   /* initialize delta */
   cfg_delta_add(&olsr_delta);
+
+  /* initialize global config */
+  memset(&config_global, 0, sizeof(config_global));
   return 0;
 }
 
@@ -117,6 +132,7 @@ olsr_cfg_cleanup(void) {
   if (olsr_subsystem_cleanup(&olsr_cfg_state))
     return;
 
+  free(config_global.plugin.value);
   cfg_delta_remove(&olsr_delta);
 
   cfg_db_remove(olsr_raw_db);
@@ -128,17 +144,15 @@ olsr_cfg_cleanup(void) {
 /**
  * Applies to content of the raw configuration database into the
  * work database and triggers the change calculation.
- * @param check_only true if only prepare plugins and validate configuration
  * @return 0 if successful, -1 otherwise
  */
 int
 olsr_cfg_apply(void) {
   struct olsr_plugin *plugin, *plugin_it;
   struct cfg_db *new_db, *old_db;
-  struct cfg_named_section *named;
   struct cfg_entry *entry;
   struct autobuf log;
-  bool failfast, found;
+  bool found;
   int result;
   const char *ptr;
 
@@ -152,46 +166,34 @@ olsr_cfg_apply(void) {
   old_db = NULL;
   entry = NULL;
 
-  /* read failfast state */
-  ptr = cfg_db_get_entry_value(olsr_raw_db, CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FAILFAST);
-  failfast = cfg_get_bool(ptr);
-
   /* load plugins */
-  named = cfg_db_find_namedsection(olsr_raw_db, CFG_SECTION_GLOBAL, NULL);
-  if (named) {
-    entry = cfg_db_get_entry(named, CFG_GLOBAL_PLUGIN);
-    if (entry) {
-      CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
-        if (olsr_plugins_load(ptr) == NULL && failfast) {
-          goto apply_failed;
-        }
-      }
+  CFG_FOR_ALL_STRINGS(&config_global.plugin, ptr) {
+    if (olsr_plugins_load(ptr) == NULL && config_global.failfast) {
+      goto apply_failed;
     }
   }
 
   /* unload all plugins that are not in use anymore */
-  if (entry) {
-    OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-      found = false;
+  OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
+    found = false;
 
-      /* search if plugin should still be active */
-      CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
-        if (olsr_plugins_get(ptr) == plugin) {
-          found = true;
-          break;
-        }
+    /* search if plugin should still be active */
+    CFG_FOR_ALL_STRINGS(&config_global.plugin, ptr) {
+      if (olsr_plugins_get(ptr) == plugin) {
+        found = true;
+        break;
       }
+    }
 
-      if (!found && !olsr_plugins_is_static(plugin)) {
-        /* if not, unload it (if not static) */
-        olsr_plugins_unload(plugin);
-      }
+    if (!found && !olsr_plugins_is_static(plugin)) {
+      /* if not, unload it (if not static) */
+      olsr_plugins_unload(plugin);
     }
   }
 
   /*** phase 2: check configuration and apply it ***/
   /* re-validate configuration data */
-  if (cfg_schema_validate(olsr_raw_db, failfast, false, true, &log)) {
+  if (cfg_schema_validate(olsr_raw_db, config_global.failfast, false, true, &log)) {
     OLSR_WARN(LOG_CONFIG, "Configuration validation failed");
     OLSR_WARN_NH(LOG_CONFIG, "%s", log.buf);
     goto apply_failed;
@@ -213,13 +215,16 @@ olsr_cfg_apply(void) {
 
   /* enable all plugins */
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-    if (!plugin->int_enabled && olsr_plugins_enable(plugin) != 0 && failfast) {
+    if (!plugin->int_enabled && olsr_plugins_enable(plugin) != 0
+        && config_global.failfast) {
       goto apply_failed;
     }
   }
 
   /* remove everything not valid */
   cfg_schema_validate(new_db, false, true, false, NULL);
+
+  olsr_cfg_update_globalcfg(false);
 
   /* calculate delta and call handlers */
   cfg_delta_calculate(&olsr_delta, old_db, olsr_work_db);
@@ -240,6 +245,17 @@ apply_failed:
   }
   abuf_free(&log);
   return result;
+}
+
+int
+olsr_cfg_update_globalcfg(bool raw) {
+  struct cfg_named_section *named;
+
+  named = cfg_db_find_namedsection(
+      raw ? olsr_raw_db : olsr_work_db, CFG_SECTION_GLOBAL, NULL);
+
+  return cfg_schema_tobin(&config_global,
+      named, global_entries, ARRAYSIZE(global_entries));
 }
 
 /**
@@ -287,18 +303,41 @@ olsr_cfg_get_schema(void) {
 }
 
 /**
- * @return pointer to olsr configuration schema
-struct cfg_schema_section *
-olsr_cfg_get_schema_section_global(void) {
-  return &global_section;
-}
- */
-
-
-/**
  * @return pointer to olsr configuration delta management
  */
 struct cfg_delta *
 olsr_cfg_get_delta(void) {
   return &olsr_delta;
+}
+
+/**
+ * Validates if the settings of the global section are
+ * consistent.
+ * @param schema pointer to section schema
+ * @param section_name name of section
+ * @param section pointer to named section of database
+ * @param log pointer to logging output buffer
+ * @return -1 if section is not valid, 0 otherwise
+ */
+static int
+_validate_global(struct cfg_schema_section *schema __attribute__((unused)),
+    const char *section_name __attribute__((unused)),
+    struct cfg_named_section *section, struct autobuf *log) {
+  struct olsr_config_global config;
+
+  memset(&config, 0, sizeof(config));
+
+  if (cfg_schema_tobin(&config,
+        section, global_entries, ARRAYSIZE(global_entries))) {
+    cfg_append_printable_line(log, "Could not generate binary template of global section");
+    return -1;
+  }
+
+  if (!config.ipv4 && !config.ipv6) {
+    cfg_append_printable_line(log, "You have to activate either ipv4 or ipv6 (or both)");
+    return -1;
+  }
+
+  free(config.plugin.value);
+  return 0;
 }

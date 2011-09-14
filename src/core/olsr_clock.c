@@ -348,7 +348,8 @@ olsr_clock_getWallclockString(struct timeval_buf *buf)
  * Format an relative non-wallclock system time string.
  * Displays millisecond resolution.
  *
- * @param absolute timestamp
+ * @param buf string buffer for creating output
+ * @param clk absolute timestamp
  * @return buffer to a formatted system time string.
  */
 const char *

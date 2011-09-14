@@ -47,7 +47,7 @@
 #include "common/autobuf.h"
 #include "common/common_types.h"
 
-#define CFG_FOR_ALL_STRINGS(array, charptr) for (charptr = (array)->value; charptr <= (array)->last_value; charptr += strlen(charptr) + 1)
+#define CFG_FOR_ALL_STRINGS(array, charptr) for (charptr = (array)->value; charptr != NULL && charptr <= (array)->last_value; charptr += strlen(charptr) + 1)
 
 /* Represents a string or an array of strings */
 struct cfg_stringarray {

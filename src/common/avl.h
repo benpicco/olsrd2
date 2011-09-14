@@ -301,6 +301,7 @@ avl_delete(struct avl_tree *tree, struct avl_node *node) {
   container_of((&(element)->node_member.list)->next, typeof(*(element)), node_member)
 
 /**
+ * @param tree pointer to avl-tree
  * @param element pointer to a node of the tree
  * @param node_member name of the avl_node element inside the
  *    larger struct
@@ -326,6 +327,7 @@ avl_delete(struct avl_tree *tree, struct avl_node *node) {
   container_of((&(element)->node_member.list)->prev, typeof(*(element)), node_member)
 
 /**
+ * @param tree pointer to avl-tree
  * @param element pointer to a node of the tree
  * @param node_member name of the avl_node element inside the
  *    larger struct

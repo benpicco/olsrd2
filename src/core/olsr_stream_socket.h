@@ -48,16 +48,18 @@
 #include "common/netaddr.h"
 
 #include "olsr_memcookie.h"
+#include "olsr_netaddr_acl.h"
 
 enum olsr_stream_session_state {
   STREAM_SESSION_ACTIVE,
   STREAM_SESSION_SEND_AND_QUIT,
-  STREAM_SESSION_CLEANUP
+  STREAM_SESSION_CLEANUP,
 };
 
 enum olsr_stream_errors {
+  STREAM_REQUEST_FORBIDDEN = 403,
   STREAM_REQUEST_TOO_LARGE = 413,
-  STREAM_SERVICE_UNAVAILABLE = 503
+  STREAM_SERVICE_UNAVAILABLE = 503,
 };
 
 /* represents a TCP stream */
@@ -70,7 +72,7 @@ struct olsr_stream_session {
    */
 
   /* ip addr of peer (R) */
-  union netaddr_socket peer_addr;
+  struct netaddr remote_address;
 
   /* output buffer, anything inside will be written to the peer as
    * soon as possible */
@@ -105,22 +107,12 @@ struct olsr_stream_session {
   enum olsr_stream_session_state state;
 };
 
-/*
- * Represents a TCP server socket or a configuration for a set of outgoing
- * TCP streams.
- */
-struct olsr_stream_socket {
-  struct list_entity node;
-
-  union netaddr_socket local_socket;
-
-  struct list_entity session;
+struct olsr_stream_config {
+  /* memory cookie to allocate struct for tcp session */
+  struct olsr_memcookie_info *memcookie;
 
   /* number of simultaneous sessions (default 10) */
   int allowed_sessions;
-
-  /* memory cookie to allocate struct for tcp session */
-  struct olsr_memcookie_info *memcookie;
 
   /*
    * Timeout of the socket. A session will be closed if it does not
@@ -137,14 +129,11 @@ struct olsr_stream_socket {
    */
   bool send_first;
 
-  /*
-   * represents the scheduler handler for the server socket,
-   * NULL for outgoing streams
-   */
-  struct olsr_socket_entry *scheduler_entry;
+  /* only clients that match the acl (if set) can connect */
+  struct olsr_netaddr_acl *acl;
 
   /* Called when a new session is created */
-  void (*init)(struct olsr_stream_session *);
+  int (*init)(struct olsr_stream_session *);
 
   /* Called when a TCP session ends */
   void (*cleanup)(struct olsr_stream_session *);
@@ -160,6 +149,40 @@ struct olsr_stream_socket {
    */
   enum olsr_stream_session_state (*receive_data)(struct olsr_stream_session *);
 };
+/*
+ * Represents a TCP server socket or a configuration for a set of outgoing
+ * TCP streams.
+ */
+struct olsr_stream_socket {
+  struct list_entity node;
+
+  union netaddr_socket local_socket;
+
+  struct list_entity session;
+
+  /*
+   * represents the scheduler handler for the server socket,
+   * NULL for outgoing streams
+   */
+  struct olsr_socket_entry *scheduler_entry;
+
+  struct olsr_stream_config config;
+};
+
+struct olsr_stream_managed {
+  struct olsr_stream_socket socket_v4;
+  struct olsr_stream_socket socket_v6;
+  struct olsr_netaddr_acl acl;
+
+  struct olsr_stream_config config;
+};
+
+struct olsr_stream_managed_config {
+  struct olsr_netaddr_acl acl;
+  struct netaddr bindto_v4;
+  struct netaddr bindto_v6;
+  uint16_t port;
+};
 
 int olsr_stream_init(void) __attribute__((warn_unused_result));
 void olsr_stream_cleanup(void);
@@ -173,5 +196,10 @@ EXPORT void olsr_stream_flush(struct olsr_stream_session *con);
 
 EXPORT void olsr_stream_set_timeout(
     struct olsr_stream_session *con, uint32_t timeout);
+
+EXPORT void olsr_stream_add_managed(struct olsr_stream_managed *);
+EXPORT int olsr_stream_apply_managed(struct olsr_stream_managed *,
+    struct olsr_stream_managed_config *);
+EXPORT void olsr_stream_remove_managed(struct olsr_stream_managed *);
 
 #endif /* OLSR_STREAM_SOCKET_H_ */

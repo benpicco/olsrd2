@@ -700,6 +700,32 @@ cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry __attribute__((unus
   *ptr = cfg_get_bool(value->last_value);
   return 0;
 }
+
+int
+cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry __attribute__((unused)),
+    struct cfg_stringarray *value, void *reference) {
+  struct cfg_stringarray *array;
+
+  array = (struct cfg_stringarray *)reference;
+
+  /* move new value into binary target */
+  free (array->value);
+
+  if (value->value == NULL || value->length == 0) {
+    memset(array, 0, sizeof(*array));
+    return 0;
+  }
+  array->value = malloc(value->length);
+  if (array->value == NULL) {
+    return -1;
+  }
+
+  memcpy(array->value, value->value, value->length);
+  array->last_value = value->last_value - value->value + array->value;
+  array->length = value->length;
+  return 0;
+}
+
 /**
  * Converts a null pointer into the default schema pointer.
  * Initializes the default schema if necessary.

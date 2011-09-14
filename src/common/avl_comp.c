@@ -131,9 +131,9 @@ avl_comp_mem(const void *k1, const void *k2, void *ptr) {
 /**
  * AVL tree comparator for case insensitive strings.
  * Custom pointer is the length of the memory to compare.
- * @param k1 pointer to string 1
- * @param k2 pointer to string 2
- * @param ptr custom pointer for avl comparater (unused)
+ * @param txt1 pointer to string 1
+ * @param txt2 pointer to string 2
+ * @param ptr not used in this comparator
  * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
  */
 int

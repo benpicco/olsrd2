@@ -106,6 +106,29 @@ olsr_acl_remove(struct olsr_netaddr_acl *acl) {
   memset(acl, 0, sizeof(*acl));
 }
 
+int
+olsr_acl_copy(struct olsr_netaddr_acl *to, struct olsr_netaddr_acl *from) {
+  olsr_acl_remove(to);
+  memcpy(to, from, sizeof(*to));
+
+  if (to->accept_count) {
+    to->accept = calloc(to->accept_count, sizeof(struct netaddr));
+    if (to->accept == NULL) {
+      return -1;
+    }
+    memcpy(to->accept, from->accept, to->accept_count * sizeof(struct netaddr));
+  }
+
+  if (to->reject_count) {
+    to->reject = calloc(to->reject_count, sizeof(struct netaddr));
+    if (to->reject == NULL) {
+      return -1;
+    }
+    memcpy(to->reject, from->reject, to->reject_count * sizeof(struct netaddr));
+  }
+  return 0;
+}
+
 bool
 olsr_acl_check_accept(struct olsr_netaddr_acl *acl, struct netaddr *addr) {
   if (acl->reject_first) {

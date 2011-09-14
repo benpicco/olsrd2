@@ -50,13 +50,14 @@
 #include "common/autobuf.h"
 #include "common/avl.h"
 #include "common/list.h"
+#include "olsr_cfg.h"
 #include "olsr_logging.h"
-#include "olsr_timer.h"
-#include "olsr_socket.h"
 #include "olsr_memcookie.h"
+#include "olsr_socket.h"
+#include "olsr_timer.h"
 #include "os_net.h"
-#include "olsr_stream_socket.h"
 #include "olsr.h"
+#include "olsr_stream_socket.h"
 
 struct list_entity olsr_stream_head;
 
@@ -67,9 +68,11 @@ static struct olsr_timer_info *connection_timeout;
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_stream_state);
 
+static int _apply_managed_socket(struct olsr_stream_managed *managed,
+    struct olsr_stream_socket *stream, struct netaddr *bindto, uint16_t port);
 static void _parse_request(int fd, void *data, unsigned int flags);
 static struct olsr_stream_session *_create_session(
-    struct olsr_stream_socket *comport, int sock, union netaddr_socket *remote_addr);
+    struct olsr_stream_socket *comport, int sock, struct netaddr *remote_addr);
 static void _parse_connection(int fd, void *data,
         enum olsr_sockethandler_flags flags);
 static void _remove_session(struct olsr_stream_session *con);
@@ -172,9 +175,15 @@ olsr_stream_add(struct olsr_stream_socket *comport,
   }
   memcpy(&comport->local_socket, local, sizeof(comport->local_socket));
 
-  comport->memcookie = connection_cookie;
-  comport->allowed_sessions = 10;
-  comport->maximum_input_buffer = 65536;
+  if (comport->config.memcookie == NULL) {
+    comport->config.memcookie = connection_cookie;
+  }
+  if (comport->config.allowed_sessions == 0) {
+    comport->config.allowed_sessions = 10;
+  }
+  if (comport->config.maximum_input_buffer == 0) {
+    comport->config.maximum_input_buffer = 65536;
+  }
 
   list_init_head(&comport->session);
   list_add_tail(&olsr_stream_head, &comport->node);
@@ -215,6 +224,7 @@ struct olsr_stream_session *
 olsr_stream_connect_to(struct olsr_stream_socket *comport,
     union netaddr_socket *remote) {
   struct olsr_stream_session *session;
+  struct netaddr remote_addr;
   bool wait_for_connect = false;
   int s;
 #if !defined REMOVE_LOG_WARN
@@ -235,7 +245,8 @@ olsr_stream_connect_to(struct olsr_stream_socket *comport,
     wait_for_connect = true;
   }
 
-  session = _create_session(comport, s, remote);
+  netaddr_from_socket(&remote_addr, remote);
+  session = _create_session(comport, s, &remote_addr);
   if (session) {
     session->wait_for_connect = wait_for_connect;
     return session;
@@ -254,12 +265,85 @@ olsr_stream_set_timeout(struct olsr_stream_session *con, uint32_t timeout) {
   olsr_timer_set(&con->timeout, timeout, 0, con, connection_timeout);
 }
 
+void
+olsr_stream_add_managed(struct olsr_stream_managed *managed) {
+  memset(managed, 0, sizeof(*managed));
+  managed->config.allowed_sessions = 10;
+  managed->config.maximum_input_buffer = 65536;
+  managed->config.session_timeout = 120000;
+}
+
+int
+olsr_stream_apply_managed(struct olsr_stream_managed *managed,
+    struct olsr_stream_managed_config *config) {
+  olsr_acl_copy(&managed->acl, &config->acl);
+
+  if (config_global.ipv4) {
+    if (_apply_managed_socket(managed,
+        &managed->socket_v4, &config->bindto_v4, config->port)) {
+      return -1;
+    }
+  }
+  if (config_global.ipv6) {
+    if (_apply_managed_socket(managed,
+        &managed->socket_v6, &config->bindto_v6, config->port)) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+void
+olsr_stream_remove_managed(struct olsr_stream_managed *managed) {
+  olsr_stream_remove(&managed->socket_v4);
+  olsr_stream_remove(&managed->socket_v6);
+
+  olsr_acl_remove(&managed->acl);
+}
+
+static int
+_apply_managed_socket(struct olsr_stream_managed *managed,
+    struct olsr_stream_socket *stream,
+    struct netaddr *bindto, uint16_t port) {
+  union netaddr_socket sock;
+#if !defined(REMOVE_LOG_WARN)
+  struct netaddr_str buf;
+#endif
+
+  if (netaddr_socket_init(&sock, bindto, port)) {
+    OLSR_WARN(LOG_SOCKET_STREAM, "Cannot create managed socket address: %s/%u",
+        netaddr_to_string(&buf, bindto), port);
+    return -1;
+  }
+
+  if (memcmp(&sock, &stream->local_socket, sizeof(sock)) == 0) {
+    /* nothing changed */
+    return 0;
+  }
+
+  olsr_stream_remove(stream);
+  if (olsr_stream_add(stream, &sock)) {
+    return -1;
+  }
+
+  /* copy configuration */
+  memcpy(&stream->config, &managed->config, sizeof(stream->config));
+  if (stream->config.memcookie == NULL) {
+    stream->config.memcookie = connection_cookie;
+  }
+  return 0;
+}
+
 static void
 _parse_request(int fd, void *data, unsigned int flags) {
   struct olsr_stream_socket *comport;
-  union netaddr_socket remote_addr;
+  union netaddr_socket remote_socket;
+  struct netaddr remote_addr;
   socklen_t addrlen;
   int sock;
+#if !defined(REMOVE_LOG_DEBUG)
+      struct netaddr_str buf1, buf2;
+#endif
 
   if ((flags & OLSR_SOCKET_READ) == 0) {
     return;
@@ -267,19 +351,29 @@ _parse_request(int fd, void *data, unsigned int flags) {
 
   comport = data;
 
-  addrlen = sizeof(remote_addr);
-  sock = accept(fd, &remote_addr.std, &addrlen);
+  addrlen = sizeof(remote_socket);
+  sock = accept(fd, &remote_socket.std, &addrlen);
   if (sock < 0) {
     OLSR_WARN(LOG_SOCKET_STREAM, "accept() call returned error: %s (%d)", strerror(errno), errno);
     return;
   }
 
+  if (comport->config.acl) {
+    netaddr_from_socket(&remote_addr, &remote_socket);
+    if (!olsr_acl_check_accept(comport->config.acl, &remote_addr)) {
+      OLSR_DEBUG(LOG_SOCKET_STREAM, "Access from %s to socket %s blocked because of ACL",
+          netaddr_to_string(&buf1, &remote_addr),
+          netaddr_socket_to_string(&buf2, &comport->local_socket));
+      close(sock);
+      return;
+    }
+  }
   _create_session(comport, sock, &remote_addr);
 }
 
 static struct olsr_stream_session *
 _create_session(struct olsr_stream_socket *comport,
-    int sock, union netaddr_socket *remote_addr) {
+    int sock, struct netaddr *remote_addr) {
   struct olsr_stream_session *session;
 #if !defined REMOVE_LOG_DEBUG
   struct netaddr_str buf;
@@ -292,7 +386,7 @@ _create_session(struct olsr_stream_socket *comport,
     return NULL;
   }
 
-  session = olsr_memcookie_malloc(comport->memcookie);
+  session = olsr_memcookie_malloc(comport->config.memcookie);
   if (session == NULL) {
     OLSR_WARN(LOG_SOCKET_STREAM, "Cannot allocate memory for comport session");
     goto parse_request_error;
@@ -314,32 +408,35 @@ _create_session(struct olsr_stream_socket *comport,
     goto parse_request_error;
   }
 
-  session->send_first = comport->send_first;
+  session->send_first = comport->config.send_first;
   session->comport = comport;
-  session->peer_addr = *remote_addr;
 
-  if (comport->allowed_sessions-- > 0) {
+  session->remote_address = *remote_addr;
+
+  if (comport->config.allowed_sessions-- > 0) {
     /* create active session */
     session->state = STREAM_SESSION_ACTIVE;
   } else {
     /* too many sessions */
-    if (comport->create_error) {
-      comport->create_error(session, STREAM_SERVICE_UNAVAILABLE);
+    if (comport->config.create_error) {
+      comport->config.create_error(session, STREAM_SERVICE_UNAVAILABLE);
     }
     session->state = STREAM_SESSION_SEND_AND_QUIT;
   }
 
-  if (comport->session_timeout) {
-    session->timeout = olsr_timer_start(comport->session_timeout, 0, session,
-        connection_timeout);
+  if (comport->config.session_timeout) {
+    session->timeout = olsr_timer_start(
+        comport->config.session_timeout, 0, session, connection_timeout);
   }
 
-  if (comport->init) {
-    comport->init(session);
+  if (comport->config.init) {
+    if (comport->config.init(session)) {
+      goto parse_request_error;
+    }
   }
 
   OLSR_DEBUG(LOG_SOCKET_STREAM, "Got connection through socket %d with %s.\n",
-      sock, netaddr_socket_to_string(&buf, remote_addr));
+      sock, netaddr_to_string(&buf, remote_addr));
 
   list_add_tail(&comport->session, &session->node);
   return session;
@@ -347,18 +444,18 @@ _create_session(struct olsr_stream_socket *comport,
 parse_request_error:
   abuf_free(&session->in);
   abuf_free(&session->out);
-  olsr_memcookie_free(comport->memcookie, session);
+  olsr_memcookie_free(comport->config.memcookie, session);
 
   return NULL;
 }
 
 static void
 _remove_session(struct olsr_stream_session *session) {
-  if (session->comport->cleanup) {
-    session->comport->cleanup(session);
+  if (session->comport->config.cleanup) {
+    session->comport->config.cleanup(session);
   }
 
-  session->comport->allowed_sessions++;
+  session->comport->config.allowed_sessions++;
   list_remove(&session->node);
 
   os_close(session->scheduler_entry->fd);
@@ -367,7 +464,7 @@ _remove_session(struct olsr_stream_session *session) {
   abuf_free(&session->in);
   abuf_free(&session->out);
 
-  olsr_memcookie_free(session->comport->memcookie, session);
+  olsr_memcookie_free(session->comport->config.memcookie, session);
 }
 
 static void
@@ -406,7 +503,7 @@ _parse_connection(int fd, void *data,
       }
       else if (value != 0) {
         OLSR_WARN(LOG_SOCKET_STREAM, "Connection to %s failed: %s (%d)",
-            netaddr_socket_to_string(&buf, &session->peer_addr), strerror(value), value);
+            netaddr_to_string(&buf, &session->remote_address), strerror(value), value);
         session->state = STREAM_SESSION_CLEANUP;
       }
       else {
@@ -429,21 +526,21 @@ _parse_connection(int fd, void *data,
         /* out of memory */
         OLSR_WARN(LOG_SOCKET_STREAM, "Out of memory for comport session input buffer");
         session->state = STREAM_SESSION_CLEANUP;
-      } else if (session->in.len > comport->maximum_input_buffer) {
+      } else if (session->in.len > comport->config.maximum_input_buffer) {
         /* input buffer overflow */
-        if (comport->create_error) {
-          comport->create_error(session, STREAM_REQUEST_TOO_LARGE);
+        if (comport->config.create_error) {
+          comport->config.create_error(session, STREAM_REQUEST_TOO_LARGE);
         }
         session->state = STREAM_SESSION_SEND_AND_QUIT;
       } else {
         /* got new input block, reset timeout */
-        olsr_timer_change(session->timeout, comport->session_timeout, 0);
+        olsr_stream_set_timeout(session, comport->config.session_timeout);
       }
     } else if (len < 0 && errno != EINTR && errno != EAGAIN && errno
         != EWOULDBLOCK) {
       /* error during read */
       OLSR_WARN(LOG_SOCKET_STREAM, "Error while reading from communication stream with %s: %s (%d)\n",
-          netaddr_socket_to_string(&buf, &session->peer_addr), strerror(errno), errno);
+          netaddr_to_string(&buf, &session->remote_address), strerror(errno), errno);
       session->state = STREAM_SESSION_CLEANUP;
     } else if (len == 0) {
       /* external socket closed */
@@ -451,9 +548,9 @@ _parse_connection(int fd, void *data,
     }
   }
 
-  if (session->state == STREAM_SESSION_ACTIVE && comport->receive_data != NULL
+  if (session->state == STREAM_SESSION_ACTIVE && comport->config.receive_data != NULL
       && (session->in.len > 0 || session->send_first)) {
-    session->state = comport->receive_data(session);
+    session->state = comport->config.receive_data(session);
     session->send_first = false;
   }
 
@@ -465,11 +562,11 @@ _parse_connection(int fd, void *data,
       if (len > 0) {
         OLSR_DEBUG(LOG_SOCKET_STREAM, "  send returned %d\n", len);
         abuf_pull(&session->out, len);
-        olsr_timer_change(session->timeout, comport->session_timeout, 0);
+        olsr_stream_set_timeout(session, comport->config.session_timeout);
       } else if (len < 0 && errno != EINTR && errno != EAGAIN && errno
           != EWOULDBLOCK) {
         OLSR_WARN(LOG_SOCKET_STREAM, "Error while writing to communication stream with %s: %s (%d)\n",
-            netaddr_socket_to_string(&buf, &session->peer_addr), strerror(errno), errno);
+            netaddr_to_string(&buf, &session->remote_address), strerror(errno), errno);
         session->state = STREAM_SESSION_CLEANUP;
       }
     } else {

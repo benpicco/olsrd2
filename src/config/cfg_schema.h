@@ -103,6 +103,7 @@ struct cfg_schema_entry;
 #define CFG_MAP_NETADDR_V46(reference, name, def, help, prefix, args...)     CFG_VALIDATE_NETADDR_V46(#name, def, help, prefix, .t_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct reference, name), ##args)
 
 #define CFG_MAP_BOOL(reference, name, def, help, args...)                    CFG_VALIDATE_BOOL(#name, def, help, .t_to_binary = cfg_schema_tobin_bool, .t_offset = offsetof(struct reference, name), ##args)
+#define CFG_MAP_STRINGLIST(reference, name, def, help, args...)              _CFG_VALIDATE(#name, def, help, .t_to_binary = cfg_schema_tobin_stringlist, .t_offset = offsetof(struct reference, name), .t_list = true, ##args )
 
 /*
  * Example of a section schema definition
@@ -261,6 +262,8 @@ EXPORT int cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry,
 EXPORT int cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry,
     struct cfg_stringarray *value, void *reference);
 EXPORT int cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry,
+    struct cfg_stringarray *value, void *reference);
+EXPORT int cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry,
     struct cfg_stringarray *value, void *reference);
 
 /**

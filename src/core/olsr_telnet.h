@@ -13,7 +13,7 @@
 #include "olsr_netaddr_acl.h"
 #include "olsr_stream_socket.h"
 
-enum olsr_txtcommand_result {
+enum olsr_telnet_result {
   ACTIVE,
   CONTINOUS,
   QUIT,
@@ -36,8 +36,14 @@ struct olsr_telnet_session {
 
 };
 
-typedef enum olsr_txtcommand_result (*olsr_telnethandler)
+typedef enum olsr_telnet_result (*olsr_telnethandler)
     (struct olsr_telnet_session *con, const char *command, const char *parameter);
+
+#if !defined(REMOVE_HELPTEXT)
+#define TELNET_CMD(cmd, cb, helptext, args...) { .command = (cmd), .handler = (cb), .help = helptext, ##args }
+#else
+#define TELNET_CMD(cmd, cb, helptext, args...) { .command = (cmd), .handler = (cb), .help = "", ##args }
+#endif
 
 struct olsr_telnet_command {
   struct avl_node node;

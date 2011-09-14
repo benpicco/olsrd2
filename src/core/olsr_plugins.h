@@ -117,6 +117,15 @@ olsr_plugins_is_static(struct olsr_plugin *p) {
   return p->int_dlhandle == NULL;
 }
 
+/**
+ * @param p pointer to plugin
+ * @return true if its a static plugin, false otherwise
+ */
+static inline bool
+olsr_plugins_is_enabled(struct olsr_plugin *p) {
+  return p->int_enabled;
+}
+
 #endif
 
 /*

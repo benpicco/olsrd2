@@ -23,6 +23,12 @@ IF(BSD)
     set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
 ENDIF(BSD)
 
+IF(ANDROID)
+    include_directories(src/android)
+    FILE(GLOB SRCS "android/*.c")    
+    set(OLSRD_SRCS ${OLSRD_SRCS} ${SRCS})
+ENDIF(ANDROID)
+
 # add main program
 set(OLSRD_SRCS ${OLSRD_SRCS} olsr.c olsr_setup.c)
 

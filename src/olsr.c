@@ -143,7 +143,6 @@ int
 main(int argc, char **argv) {
   int return_code;
   int fork_pipe;
-  const char *fork_str;
 
   /* early initialization */
   return_code = 1;
@@ -188,6 +187,12 @@ main(int argc, char **argv) {
   /* prepare for an error during initialization */
   return_code = 1;
 
+  /* read global section early */
+  if (olsr_cfg_update_globalcfg(true)) {
+    OLSR_WARN(LOG_MAIN, "Cannot read global configuration section");
+    goto olsrd_cleanup;
+  }
+
   /* TODO: check if we are root, otherwise stop */
   if (0 && geteuid()) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run "OLSR_SETUP_PROGRAM"!\n");
@@ -195,8 +200,7 @@ main(int argc, char **argv) {
   }
 
   /* see if we need to fork */
-  fork_str = cfg_db_get_entry_value(olsr_cfg_get_rawdb(), CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_FORK);
-  if (cfg_get_bool(fork_str)) {
+  if (config_global.fork) {
     /* fork into background */
     fork_pipe = daemonize_prepare();
     if (fork_pipe == -1) {
@@ -506,7 +510,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         }
         break;
       case 'f':
-        if (cfg_cmd_handle_format(db, &state, optarg, &log)) {
+        if (cfg_cmd_handle_format(&state, optarg)) {
           return_code = 1;
         }
         break;
@@ -557,7 +561,7 @@ display_schema(void) {
   abuf_init(&log, 1024);
   cfg_cmd_add(&state);
 
-  if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), &state, schema_name, &log)) {
+  if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), schema_name, &log)) {
     return_code = 1;
   }
 

@@ -193,10 +193,10 @@ olsr_timer_remove(struct olsr_timer_info *info) {
 /**
  * Start a new timer.
  *
- * @param relative time expressed in milliseconds
- * @param jitter expressed in percent
- * @param timer callback function
+ * @param rel_time time expressed in milliseconds
+ * @param jitter_pct expressed in percent
  * @param context for the callback function
+ * @param ti pointer to timer_info object
  * @return a pointer to the created entry
  */
 struct olsr_timer_entry *
@@ -249,7 +249,7 @@ olsr_timer_start(unsigned int rel_time,
 /**
  * Delete a timer.
  *
- * @param the olsr_timer_entry that shall be removed
+ * @param timer the olsr_timer_entry that shall be removed
  */
 void
 olsr_timer_stop(struct olsr_timer_entry *timer)
@@ -282,10 +282,9 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
 /**
  * Change a olsr_timer_entry.
  *
- * @param olsr_timer_entry to be changed.
- * @param new relative time expressed in units of milliseconds.
- * @param new jitter expressed in percent.
- * @return nada
+ * @param timer olsr_timer_entry to be changed.
+ * @param rel_time new relative time expressed in units of milliseconds.
+ * @param jitter_pct new jitter expressed in percent.
  */
 void
 olsr_timer_change(struct olsr_timer_entry *timer, unsigned int rel_time, uint8_t jitter_pct)

@@ -393,8 +393,6 @@ list_merge(struct list_entity *add_to, struct list_entity *remove_from) {
  *    contain the current node of the list during the loop
  * @param list_member name of the list_entity element inside the
  *    larger struct
- * @param loop_ptr pointer to an list_entity which is used as the
- *    internal iterator
  */
 #define list_for_first_to_element_reverse(head, last, element, list_member) \
   list_for_element_range_reverse(list_first_element(head, element, list_member), last, element, list_member)

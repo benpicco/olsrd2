@@ -134,7 +134,7 @@ olsr_log_addhandler(struct log_handler_entry *h)
 
 /**
  * Unregister a logevent handler
- * @param handler pointer to handler function
+ * @param h pointer to handler entry
  */
 void
 olsr_log_removehandler(struct log_handler_entry *h)
@@ -201,12 +201,14 @@ olsr_log_updatemask(void)
  *
  * @param severity severity of the log event (SEVERITY_DEBUG to SEVERITY_WARN)
  * @param source source of the log event (LOG_LOGGING, ... )
+ * @param no_header true if time header should not be created
  * @param file filename where the logging macro have been called
  * @param line line number where the logging macro have been called
  * @param format printf format string for log output plus a variable number of arguments
  */
 void
-olsr_log(enum log_severity severity, enum log_source source, bool no_header, const char *file, int line, const char *format, ...)
+olsr_log(enum log_severity severity, enum log_source source, bool no_header,
+    const char *file, int line, const char *format, ...)
 {
   struct log_handler_entry *h, *iterator;
   va_list ap;
@@ -266,10 +268,10 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header, con
  *
  * Generates a logfile entry and calls all log handler to store/output it.
  *
+ * @param severity severity of the logging event
  * @param source source of the log event (LOG_LOGGING, ... )
  * @param file filename where the logging macro have been called
  * @param line line number where the logging macro have been called
- * @param text Error text
  */
 void
 olsr_log_oom(enum log_severity severity, enum log_source source,

@@ -48,23 +48,31 @@
 #include "config/cfg_schema.h"
 #include "config/cfg_delta.h"
 
+struct olsr_config_global {
+  struct cfg_stringarray plugin;
+
+  bool fork;
+  bool failfast;
+  bool ipv4;
+  bool ipv6;
+};
+
 /* section types for configuration */
 #define CFG_SECTION_GLOBAL   "global"
-#define CFG_GLOBAL_FORK      "fork"
-#define CFG_GLOBAL_FAILFAST  "failfast"
-#define CFG_GLOBAL_PLUGIN    "plugin"
+
+EXPORT extern struct olsr_config_global config_global;
 
 int olsr_cfg_init(void) __attribute__((warn_unused_result));
 void olsr_cfg_cleanup(void);
 int olsr_cfg_apply(void);
 
 /* do not export this to plugins */
+int olsr_cfg_update_globalcfg(bool);
 int olsr_cfg_create_new_rawdb(void);
 
 EXPORT struct cfg_db *olsr_cfg_get_db(void);
 EXPORT struct cfg_db *olsr_cfg_get_rawdb(void);
 EXPORT struct cfg_schema *olsr_cfg_get_schema(void);
-// EXPORT struct cfg_schema_section *olsr_cfg_get_schema_section_global(void);
 EXPORT struct cfg_delta *olsr_cfg_get_delta(void);
 
 #endif /* OLSR_CFG_H_ */

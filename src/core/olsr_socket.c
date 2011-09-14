@@ -145,7 +145,7 @@ olsr_socket_add(int fd, socket_handler_func pf_imm, void *data,
 
 /**
  * Mark a socket and handler for removal from the socket scheduler
- * @param sock pointer to socket entry
+ * @param entry pointer to socket entry
  */
 void
 olsr_socket_remove(struct olsr_socket_entry *entry)

@@ -53,7 +53,7 @@ const char *CFGLIST_BOOL[] = { "true", "1", "on", "yes", "false", "0", "off", "n
  * The function replaces all non-printable characters with '.'
  * and will append a newline at the end
  * @param autobuf pointer to autobuf object
- * @param format printf format string
+ * @param fmt printf format string
  * @return -1 if an out-of-memory error happened, 0 otherwise
  */
 int
@@ -133,6 +133,7 @@ cfg_is_allowed_key(const char *key) {
  * NULL is considered a string greater than all normal strings.
  * @param p1 pointer to key 1
  * @param p2 pointer to key 2
+ * @param unused not used in this comparator
  * @return similar to strcmp()
  */
 int

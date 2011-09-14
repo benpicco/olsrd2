@@ -294,16 +294,12 @@ cfg_cmd_handle_save(struct cfg_db *db,
 
 /**
  * Implements the 'format' command for the command line
- * @param db pointer to cfg_db to be modified
  * @param state pointer to parser state
  * @param arg argument of command
- * @param log pointer for logging
  * @return 0 if succeeded, -1 otherwise
  */
 int
-cfg_cmd_handle_format(struct cfg_db *db __attribute((unused)),
-    struct cfg_cmd_state *state, const char *arg,
-    struct autobuf *log __attribute((unused))) {
+cfg_cmd_handle_format(struct cfg_cmd_state *state, const char *arg) {
   free (state->format);
 
   if (strcasecmp(arg, "auto") == 0) {
@@ -318,14 +314,12 @@ cfg_cmd_handle_format(struct cfg_db *db __attribute((unused)),
 /**
  * Implements the 'schema' command for the configuration system
  * @param db pointer to cfg_db to be modified
- * @param state pointer to parser state
  * @param arg argument of command
  * @param log pointer for logging
  * @return 0 if succeeded, -1 otherwise
  */
 int
 cfg_cmd_handle_schema(struct cfg_db *db,
-    struct cfg_cmd_state *state __attribute((unused)),
     const char *arg, struct autobuf *log) {
   struct cfg_schema_section *s_section, *s_section_it;
   struct cfg_schema_entry *s_entry, *s_entry_it;

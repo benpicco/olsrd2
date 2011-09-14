@@ -59,7 +59,6 @@ static struct cfg_parser *_find_parser(const char *name, struct autobuf *log);
 /**
  * Adds a parser to the global registry.
  * @param parser pointer to parser description
- * @param name name of parser
  */
 void
 cfg_parser_add(struct cfg_parser *parser) {
