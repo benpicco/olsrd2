@@ -101,14 +101,14 @@ olsr_cfg_init(void) {
 
   /* initialize database */
   if ((olsr_raw_db = cfg_db_add()) == NULL) {
-    OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
+    OLSR_WARN(LOG_CONFIG, "Cannot create raw configuration database.");
     olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
   }
 
   /* initialize database */
   if ((olsr_work_db = cfg_db_add()) == NULL) {
-    OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
+    OLSR_WARN(LOG_CONFIG, "Cannot create configuration database.");
     cfg_db_remove(olsr_raw_db);
     olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
@@ -269,7 +269,7 @@ olsr_cfg_create_new_rawdb(void) {
 
   /* initialize database */
   if ((olsr_raw_db = cfg_db_add()) == NULL) {
-    OLSR_WARN(LOG_CONFIG, "Cannot create configuration database for OLSR.");
+    OLSR_WARN(LOG_CONFIG, "Cannot create raw configuration database.");
     olsr_exit();
     return -1;
   }

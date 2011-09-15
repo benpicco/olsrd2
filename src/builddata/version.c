@@ -45,13 +45,15 @@
 #include "builddata/data.h"
 #include "builddata/version.h"
 
+#include "olsr_setup.h"
+
 void
 olsr_builddata_printversion(struct autobuf *abuf) {
-  abuf_appendf(abuf," Olsrd version %s (%s)\n"
+  abuf_appendf(abuf," "OLSR_SETUP_PROGRAM" version %s (%s)\n"
             " Built on %s\n"
             " Git: %s\n"
             "      %s\n"
-            " Visit http://www.olsr.org\n",
+            OLSR_SETUP_VERSION_TRAILER,
             olsr_builddata_get_version(), olsr_builddata_get_builddate(),
             olsr_builddata_get_buildsystem(),
             olsr_builddata_get_git_commit(),

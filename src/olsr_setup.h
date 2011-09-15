@@ -11,11 +11,20 @@
 #include "common/common_types.h"
 #include "olsr_logging.h"
 
-/* define the first line of the command line help */
-#define OLSR_SETUP_HELP_HEADLINE  "Activates OLSR.org routing daemon\n"
+/* define the first/last lines of the command line help */
+#define OLSR_SETUP_HELP_HEADER  "Activates OLSR.org routing daemon\n"
+#define OLSR_SETUP_HELP_TRAILER ""
 
 /* define program name */
 #define OLSR_SETUP_PROGRAM        "Olsrd"
+
+/* define trailer text to version string */
+#define OLSR_SETUP_VERSION_TRAILER "Visit http://www.olsr.org\n"
+
+/* define default configuration file, might be overwritten by cmake */
+#ifndef OLSRD_GLOBAL_CONF_FILE
+#define OLSRD_GLOBAL_CONF_FILE "/etc/olsrd.conf"
+#endif
 
 enum log_source *olsr_setup_debuglevel1;
 

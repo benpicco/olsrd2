@@ -48,11 +48,6 @@
 
 #include "common/common_types.h"
 
-/* define default configuration file, might be overwritten by cmake */
-#ifndef OLSRD_GLOBAL_CONF_FILE
-#define OLSRD_GLOBAL_CONF_FILE "/etc/olsrd.conf"
-#endif
-
 /* variable for subsystem state */
 #define OLSR_SUBSYSTEM_STATE(var_name) static bool var_name = false
 

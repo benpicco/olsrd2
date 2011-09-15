@@ -97,7 +97,7 @@ static struct option olsr_options[] = {
 
 #if !defined(REMOVE_HELPTEXT)
 static const char *help_text =
-    OLSR_SETUP_HELP_HEADLINE
+    OLSR_SETUP_HELP_HEADER
     "Mandatory arguments to long options are mandatory for short options too.\n"
     "  -h, --help                             Display this help file\n"
     "  -v, --version                          Display the version string and the included static plugins\n"
@@ -122,6 +122,7 @@ static const char *help_text =
     "           =section_type[name].key       Show the value(s) of a key in a named section\n"
     "  -f, --format=FORMAT                    Set the format for loading/saving data\n"
     "                                         (use 'AUTO' for automatic detection of format)\n"
+    OLSR_SETUP_HELP_TRAILER
 ;
 #endif
 

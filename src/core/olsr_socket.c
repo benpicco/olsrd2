@@ -127,7 +127,7 @@ olsr_socket_add(int fd, socket_handler_func pf_imm, void *data,
   assert (fd);
   assert (pf_imm);
 
-  OLSR_DEBUG(LOG_SOCKET, "Adding OLSR socket entry %d\n", fd);
+  OLSR_DEBUG(LOG_SOCKET, "Adding socket entry %d to scheduler\n", fd);
 
   new_entry = olsr_memcookie_malloc(socket_memcookie);
   if (new_entry) {
@@ -150,7 +150,7 @@ olsr_socket_add(int fd, socket_handler_func pf_imm, void *data,
 void
 olsr_socket_remove(struct olsr_socket_entry *entry)
 {
-  OLSR_DEBUG(LOG_SOCKET, "Trigger removing OLSR socket entry %d\n", entry->fd);
+  OLSR_DEBUG(LOG_SOCKET, "Trigger removing socket entry %d\n", entry->fd);
 
   entry->process = NULL;
   entry->flags = 0;

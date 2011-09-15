@@ -97,7 +97,7 @@ static struct olsr_telnet_command _builtin[] = {
       "timeout <seconds> :Sets telnet session timeout"),
   TELNET_CMD("version", _telnet_version, "Displays version of the program"),
   TELNET_CMD("plugin", _telnet_plugin,
-        "control olsr plugins dynamically, parameters are 'list',"
+        "control plugins dynamically, parameters are 'list',"
         " 'activate <plugin>', 'deactivate <plugin>', "
         "'load <plugin>' and 'unload <plugin>'"),
 };
