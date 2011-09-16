@@ -51,7 +51,7 @@ struct olsr_telnet_command {
 
   const char *help;
 
-  struct olsr_netaddr_acl acl;
+  struct olsr_netaddr_acl *acl;
 
   olsr_telnethandler handler;
   olsr_telnethandler help_handler;

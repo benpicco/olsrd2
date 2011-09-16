@@ -45,6 +45,9 @@ static enum olsr_stream_session_state _telnet_receive_data(
     struct olsr_stream_session *);
 static enum olsr_telnet_result _telnet_handle_command(
     struct olsr_telnet_session *, const char *, const char *);
+static struct olsr_telnet_command *_check_telnet_command(
+    struct olsr_telnet_session *telnet,
+    struct olsr_telnet_command *cmd, const char *command);
 
 static void _telnet_repeat_timer(void *data);
 static enum olsr_telnet_result _telnet_quit(
@@ -185,11 +188,6 @@ olsr_telnet_add(struct olsr_telnet_command *command) {
   command->node.key = command->command;
   if (avl_insert(&telnet_cmd_tree, &command->node)) {
     return -1;
-  }
-
-  /* default for empty acl should be 'accept' */
-  if (command->acl.accept_count + command->acl.reject_count == 0) {
-    command->acl.accept_default = true;
   }
   return 0;
 }
@@ -395,18 +393,9 @@ static enum olsr_telnet_result
 _telnet_handle_command(struct olsr_telnet_session *telnet,
     const char *command, const char *parameter) {
   struct olsr_telnet_command *cmd;
-#if !defined(REMOVE_LOG_DEBUG)
-  struct netaddr_str buf;
-#endif
 
-  cmd = avl_find_element(&telnet_cmd_tree, command, cmd, node);
+  cmd = _check_telnet_command(telnet, NULL, command);
   if (cmd == NULL) {
-    return UNKNOWN;
-  }
-
-  if (!olsr_acl_check_accept(&cmd->acl, &telnet->session.remote_address)) {
-    OLSR_DEBUG(LOG_TELNET, "Blocked telnet command '%s' to '%s' because of acl",
-        command, netaddr_to_string(&buf, &telnet->session.remote_address));
     return UNKNOWN;
   }
 
@@ -427,7 +416,8 @@ _check_telnet_command(struct olsr_telnet_session *telnet,
     }
   }
 
-  if (!olsr_acl_check_accept(&cmd->acl, &telnet->session.remote_address)) {
+  if (cmd->acl != NULL
+      && !olsr_acl_check_accept(cmd->acl, &telnet->session.remote_address)) {
     OLSR_DEBUG(LOG_TELNET, "Blocked telnet command '%s' to '%s' because of acl",
         command, netaddr_to_string(&buf, &telnet->session.remote_address));
     return NULL;
