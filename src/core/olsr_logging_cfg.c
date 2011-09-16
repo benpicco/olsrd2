@@ -227,22 +227,18 @@ olsr_logcfg_apply(struct cfg_db *db) {
     _apply_log_setting(named, LOG_DEBUG_ENTRY, SEVERITY_DEBUG);
   }
 
-  /* and finally modify the logging handlers */
-
-  /* log.syslog */
+  /* load settings which loggershould be activated */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_SYSLOG_ENTRY);
   activate_syslog = cfg_get_bool(ptr);
-  if (activate_syslog && !list_node_added(&syslog_handler.node)) {
-    olsr_log_addhandler(&syslog_handler);
-  }
-  else if (!activate_syslog && list_node_added(&syslog_handler.node)) {
-    olsr_log_removehandler(&syslog_handler);
-  }
 
-  /* log.file */
   file_name = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_FILE_ENTRY);
   activate_file = file_name != NULL && *file_name != 0;
 
+  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_STDERR_ENTRY);
+  activate_stderr = cfg_get_bool(ptr);
+
+  /* and finally modify the logging handlers */
+  /* log.file */
   if (activate_file && !list_node_added(&file_handler.node)) {
     FILE *f;
 
@@ -253,6 +249,7 @@ olsr_logcfg_apply(struct cfg_db *db) {
     }
     else {
       file_errno = errno;
+      activate_file = false;
     }
   }
   else if (!activate_file && list_node_added(&file_handler.node)) {
@@ -264,15 +261,27 @@ olsr_logcfg_apply(struct cfg_db *db) {
   }
 
   /* log.stderr (activate if syslog and file ar offline) */
-  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_STDERR_ENTRY);
-  activate_stderr = cfg_get_bool(ptr)
-      || (!list_node_added(&syslog_handler.node) && !list_node_added(&file_handler.node));
+  if (!config_global.fork) {
+    activate_stderr |= !(activate_syslog || activate_file);
+  }
 
   if (activate_stderr && !list_node_added(&stderr_handler.node)) {
     olsr_log_addhandler(&stderr_handler);
   }
   else if (!activate_stderr && list_node_added(&stderr_handler.node)) {
     olsr_log_removehandler(&stderr_handler);
+  }
+
+  /* log.syslog */
+  if (config_global.fork) {
+    activate_syslog |= !(activate_stderr || activate_file);
+  }
+
+  if (activate_syslog && !list_node_added(&syslog_handler.node)) {
+    olsr_log_addhandler(&syslog_handler);
+  }
+  else if (!activate_syslog && list_node_added(&syslog_handler.node)) {
+    olsr_log_removehandler(&syslog_handler);
   }
 
   /* reload logging mask */

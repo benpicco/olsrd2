@@ -512,7 +512,8 @@ _telnet_repeat_timer(void *data) {
   if (_telnet_handle_command(con, con->stop_data[1], con->stop_data[2]) != ACTIVE) {
     con->stop_handler(con);
   }
-  // TODO: olsr_com_activate_output(con);
+
+  olsr_stream_flush(&con->session);
 }
 
 static enum olsr_telnet_result
