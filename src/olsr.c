@@ -427,7 +427,6 @@ static int
 parse_commandline(int argc, char **argv, bool reload_only) {
   const char *parameters;
   struct olsr_plugin *plugin, *plugin_it;
-  struct cfg_cmd_state state;
   struct autobuf log;
   struct cfg_db *db;
   int opt, opt_idx, return_code;
@@ -442,7 +441,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   optind = 1;
 
   abuf_init(&log, 1024);
-  cfg_cmd_add(&state);
+  cfg_cmd_clear_state(olsr_cfg_get_instance());
 
   if (reload_only) {
     /* only parameters that load and change configuration data */
@@ -482,28 +481,28 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         break;
 
       case 'l':
-        if (cfg_cmd_handle_load(db, &state, optarg, &log)) {
+        if (cfg_cmd_handle_load(olsr_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         loaded_file = true;
         break;
       case 'S':
-        if (cfg_cmd_handle_save(db, &state, optarg, &log)) {
+        if (cfg_cmd_handle_save(olsr_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 's':
-        if (cfg_cmd_handle_set(db, &state, optarg, &log)) {
+        if (cfg_cmd_handle_set(olsr_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 'r':
-        if (cfg_cmd_handle_remove(db, &state, optarg, &log)) {
+        if (cfg_cmd_handle_remove(olsr_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 'g':
-        if (cfg_cmd_handle_get(db, &state, optarg, &log)) {
+        if (cfg_cmd_handle_get(olsr_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         else {
@@ -511,7 +510,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         }
         break;
       case 'f':
-        if (cfg_cmd_handle_format(&state, optarg)) {
+        if (cfg_cmd_handle_format(olsr_cfg_get_instance(), optarg)) {
           return_code = 1;
         }
         break;
@@ -526,7 +525,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
 
   if (return_code == -1 && !loaded_file) {
     /* try to load default config file if no other loaded */
-    cfg_cmd_handle_load(db, &state, DEFAULT_CONFIGFILE, NULL);
+    cfg_cmd_handle_load(olsr_cfg_get_instance(), db, DEFAULT_CONFIGFILE, NULL);
   }
 
   if (return_code == -1) {
@@ -546,21 +545,19 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   }
 
   abuf_free(&log);
-  cfg_cmd_remove(&state);
 
   return return_code;
 }
 
 static int
 display_schema(void) {
-  struct cfg_cmd_state state;
   struct autobuf log;
   int return_code;
 
   return_code = 0;
 
   abuf_init(&log, 1024);
-  cfg_cmd_add(&state);
+  cfg_cmd_clear_state(olsr_cfg_get_instance());
 
   if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), schema_name, &log)) {
     return_code = 1;
@@ -571,7 +568,6 @@ display_schema(void) {
   }
 
   abuf_free(&log);
-  cfg_cmd_remove(&state);
 
   return return_code;
 }

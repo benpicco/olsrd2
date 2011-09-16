@@ -59,8 +59,8 @@ struct cfg_schema_entry;
 #include "common/avl.h"
 #include "common/netaddr.h"
 
-#include "config/cfg.h"
 #include "config/cfg_db.h"
+#include "config/cfg_stringarray.h"
 
 #if !defined(REMOVE_HELPTEXT)
 #define _CFG_VALIDATE(name, def, help, args...)                  { .t_name = (name), .t_default = (def), .t_help = (help), ##args }
@@ -220,6 +220,9 @@ struct cfg_schema_entry {
   /* offset of current binary data compared to reference pointer */
   size_t t_offset;
 };
+
+EXPORT const char *CFGLIST_BOOL_TRUE[4];
+EXPORT const char *CFGLIST_BOOL[8];
 
 #define CFG_FOR_ALL_SCHEMA_SECTIONS(tmpl, section, iterator) avl_for_each_element_safe(&(tmpl->sections), section, node, iterator)
 #define CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, iterator) avl_for_each_element_safe(&section->entries, entry, node, iterator)

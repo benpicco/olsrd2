@@ -10,6 +10,7 @@
 
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
+#include "config/cfg.h"
 
 #include "olsr_netaddr_acl.h"
 

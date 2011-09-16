@@ -50,6 +50,7 @@
 #include "config/cfg_io.h"
 #include "config/cfg_parser.h"
 #include "config/cfg.h"
+#include "olsr_cfg.h"
 #include "olsr_plugins.h"
 
 #include <stdio.h>
@@ -57,9 +58,9 @@
 static int _plugin_load(void);
 static int _plugin_unload(void);
 
-static struct cfg_db *_file_load(
+static struct cfg_db *_file_load(struct cfg_instance *instance,
     const char *param, const char *parser, struct autobuf *log);
-static int _file_save(
+static int _file_save(struct cfg_instance *instance,
     const char *param, const char *parser, struct cfg_db *src, struct autobuf *log);
 
 OLSR_PLUGIN7 {
@@ -82,7 +83,7 @@ struct cfg_io cfg_io_file = {
 static int
 _plugin_load(void)
 {
-  cfg_io_add(&cfg_io_file);
+  cfg_io_add(olsr_cfg_get_instance(), &cfg_io_file);
   return 0;
 }
 
@@ -92,7 +93,7 @@ _plugin_load(void)
 static int
 _plugin_unload(void)
 {
-  cfg_io_remove(&cfg_io_file);
+  cfg_io_remove(olsr_cfg_get_instance(), &cfg_io_file);
   return 0;
 }
 
@@ -114,7 +115,8 @@ _plugin_unload(void)
  * @return pointer to configuration database, NULL if an error happened
  */
 static struct cfg_db *
-_file_load(const char *param, const char *parser, struct autobuf *log) {
+_file_load(struct cfg_instance *instance,
+    const char *param, const char *parser, struct autobuf *log) {
   struct autobuf dst;
   struct cfg_db *db;
   char buffer[1024];
@@ -157,10 +159,10 @@ _file_load(const char *param, const char *parser, struct autobuf *log) {
 
   if (parser == NULL) {
     /* lookup a fitting parser, we know the path as a hint */
-    parser = cfg_parser_find(&dst, param, NULL);
+    parser = cfg_parser_find(instance, &dst, param, NULL);
   }
 
-  db = cfg_parser_parse_buffer(parser, dst.buf, dst.len, log);
+  db = cfg_parser_parse_buffer(instance, parser, dst.buf, dst.len, log);
   abuf_free(&dst);
   return db;
 }
@@ -176,7 +178,8 @@ _file_load(const char *param, const char *parser, struct autobuf *log) {
  * @return 0 if database was stored sucessfully, -1 otherwise
  */
 static int
-_file_save(const char *param, const char *parser,
+_file_save(struct cfg_instance *instance,
+    const char *param, const char *parser,
     struct cfg_db *src_db, struct autobuf *log) {
   int fd = 0;
   ssize_t bytes;
@@ -190,9 +193,9 @@ _file_save(const char *param, const char *parser,
   }
 
   if (parser == NULL) {
-    parser = cfg_parser_find(NULL, param, NULL);
+    parser = cfg_parser_find(instance, NULL, param, NULL);
   }
-  if (cfg_parser_serialize_to_buffer(parser, &abuf, src_db, log)) {
+  if (cfg_parser_serialize_to_buffer(instance, parser, &abuf, src_db, log)) {
     abuf_free(&abuf);
     return -1;
   }

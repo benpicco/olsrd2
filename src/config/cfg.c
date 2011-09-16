@@ -42,11 +42,47 @@
 #include <strings.h>
 
 #include "common/autobuf.h"
+#include "common/avl.h"
+#include "common/avl_comp.h"
 #include "common/common_types.h"
+#include "config/cfg_io.h"
+#include "config/cfg_parser.h"
 #include "config/cfg.h"
 
-const char *CFGLIST_BOOL_TRUE[] = { "true", "1", "on", "yes" };
-const char *CFGLIST_BOOL[] = { "true", "1", "on", "yes", "false", "0", "off", "no" };
+/**
+ * Initialize a configuration instance
+ * @param instance pointer to cfg_instance
+ */
+void
+cfg_add(struct cfg_instance *instance) {
+  memset(instance, 0, sizeof(*instance));
+
+  avl_init(&instance->io_tree, avl_comp_strcasecmp, false, NULL);
+  avl_init(&instance->parser_tree, avl_comp_strcasecmp, false, NULL);
+}
+
+/**
+ * Cleanup a configuration instance
+ * @param instance pointer to cfg_instance
+ */
+void
+cfg_remove(struct cfg_instance *instance) {
+  struct cfg_io *io, *iit;
+  struct cfg_parser *parser, *pit;
+
+  CFG_FOR_ALL_IO(instance, io, iit) {
+    cfg_io_remove(instance, io);
+  }
+
+  CFG_FOR_ALL_PARSER(instance, parser, pit) {
+    cfg_parser_remove(instance, parser);
+  }
+
+  free(instance->cmd_state.format);
+  free(instance->cmd_state.section_name);
+  free(instance->cmd_state.section_type);
+  memset(instance, 0, sizeof(*instance));
+}
 
 /**
  * Appends a single line to an autobuffer.

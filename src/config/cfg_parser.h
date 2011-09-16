@@ -69,17 +69,17 @@ struct cfg_parser {
   int (*serialize)(struct autobuf *dst, struct cfg_db *src, struct autobuf *log);
 };
 
-EXPORT extern struct avl_tree cfg_parser_tree;
-#define CFG_FOR_ALL_PARSER(parser, iterator) avl_for_each_element_safe(&cfg_parser_tree, parser, node, iterator)
+#define CFG_FOR_ALL_PARSER(instance, parser, iterator) avl_for_each_element_safe(&instance->parser_tree, parser, node, iterator)
 
-EXPORT void cfg_parser_add(struct cfg_parser *);
-EXPORT void cfg_parser_remove(struct cfg_parser *);
+EXPORT void cfg_parser_add(struct cfg_instance *, struct cfg_parser *);
+EXPORT void cfg_parser_remove(struct cfg_instance *, struct cfg_parser *);
 
-EXPORT const char *cfg_parser_find(struct autobuf *abuf, const char *path, const char *mimetype);
+EXPORT const char *cfg_parser_find(struct cfg_instance *,
+    struct autobuf *abuf, const char *path, const char *mimetype);
 
-EXPORT struct cfg_db *cfg_parser_parse_buffer(
+EXPORT struct cfg_db *cfg_parser_parse_buffer(struct cfg_instance *,
     const char *parser, void *src, size_t len, struct autobuf *log);
-EXPORT int cfg_parser_serialize_to_buffer(const char *parser,
+EXPORT int cfg_parser_serialize_to_buffer(struct cfg_instance *, const char *parser,
     struct autobuf *dst, struct cfg_db *src, struct autobuf *log);
 
 #endif /* CFG_PARSER_H_ */

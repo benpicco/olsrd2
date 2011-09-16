@@ -48,6 +48,7 @@
 #include "config/cfg_schema.h"
 #include "config/cfg_db.h"
 #include "config/cfg_delta.h"
+#include "config/cfg.h"
 
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"

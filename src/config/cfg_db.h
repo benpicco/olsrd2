@@ -42,6 +42,7 @@
 #ifndef CFG_DB_H_
 #define CFG_DB_H_
 
+/* forward declaration */
 struct cfg_db;
 struct cfg_section_type;
 struct cfg_named_section;
@@ -49,9 +50,9 @@ struct cfg_entry;
 
 #include "common/avl.h"
 #include "common/common_types.h"
-#include "config/cfg.h"
 #include "config/cfg_memory.h"
 #include "config/cfg_schema.h"
+#include "config/cfg_stringarray.h"
 
 /* Represents a single database with configuration entries */
 struct cfg_db {

@@ -56,60 +56,52 @@
 #include "config/cfg.h"
 #include "config/cfg_io.h"
 
-static struct cfg_io *_find_io(const char *url,
-    const char **io_param, struct autobuf *log);
-
-struct avl_tree cfg_io_tree;
-struct cfg_io *cfg_io_default = NULL;
-static bool _io_initialized = false;
-
+static struct cfg_io *_find_io(struct cfg_instance *instance,
+    const char *url, const char **io_param, struct autobuf *log);
 
 /**
- * Add a new io-handler to the global registry
+ * Add a new io-handler to the registry
+ * @param instance pointer to cfg_instance
  * @param io pointer to io handler object
  */
 void
-cfg_io_add(struct cfg_io *io) {
-  if (!_io_initialized) {
-    avl_init(&cfg_io_tree, cfg_avlcmp_keys, false, NULL);
-    _io_initialized = true;
-
-    /* first io-handler, make it the default (can be overwritten later) */
-    io->def = true;
-  }
-
+cfg_io_add(struct cfg_instance *instance, struct cfg_io *io) {
   io->node.key = &io->name;
-  avl_insert(&cfg_io_tree, &io->node);
+  avl_insert(&instance->io_tree, &io->node);
 
-  if (io->def) {
-    cfg_io_default = io;
+  if (io->def || instance->io_tree.count == 1) {
+    instance->default_io = io;
   }
 }
 
 /**
  * Unregister an io-handler
+ * @param instance pointer to cfg_instance
  * @param io pointer to io handler
  */
 void
-cfg_io_remove(struct cfg_io *io) {
+cfg_io_remove(struct cfg_instance *instance, struct cfg_io *io) {
+  struct cfg_io *ioh, *iter;
   if (io->name) {
-    avl_remove(&cfg_io_tree, &io->node);
+    avl_remove(&instance->io_tree, &io->node);
     io->node.key = NULL;
     io->name = NULL;
   }
 
-  if (cfg_io_default == io) {
-    if (avl_is_empty(&cfg_io_tree)) {
-      cfg_io_default = NULL;
-    }
-    else {
-      cfg_io_default = avl_first_element(&cfg_io_tree, cfg_io_default, node);
+  if (instance->default_io == io) {
+    instance->default_io = avl_first_element_safe(&instance->io_tree, io, node);
+    CFG_FOR_ALL_IO(instance, ioh, iter) {
+      if (ioh->def) {
+        instance->default_io = ioh;
+        break;
+      }
     }
   }
 }
 
 /**
  * Load a configuration database from an external source
+ * @param instance pointer to cfg_instance
  * @param url URL specifying the external source
  *   might contain io-handler specification with {iohandler}://
  *   syntax.
@@ -120,11 +112,12 @@ cfg_io_remove(struct cfg_io *io) {
  * @return pointer to configuration database, NULL if an error happened
  */
 struct cfg_db *
-cfg_io_load_parser(const char *url, const char *parser, struct autobuf *log) {
+cfg_io_load_parser(struct cfg_instance *instance,
+    const char *url, const char *parser, struct autobuf *log) {
   struct cfg_io *io;
   const char *io_param = NULL;
 
-  io = _find_io(url, &io_param, log);
+  io = _find_io(instance, url, &io_param, log);
   if (io == NULL) {
     cfg_append_printable_line(log, "Error, unknown config io '%s'.", url);
     return NULL;
@@ -134,11 +127,12 @@ cfg_io_load_parser(const char *url, const char *parser, struct autobuf *log) {
     cfg_append_printable_line(log, "Error, config io '%s' does not support loading.", io->name);
     return NULL;
   }
-  return io->load(io_param, parser, log);
+  return io->load(instance, io_param, parser, log);
 }
 
 /**
  * Store a configuration database into an external destination.
+ * @param instance pointer to cfg_instance
  * @param url URL specifying the external source
  *   might contain io-handler specification with {iohandler}://
  *   syntax.
@@ -150,11 +144,12 @@ cfg_io_load_parser(const char *url, const char *parser, struct autobuf *log) {
  * @return 0 if data was stored, -1 if an error happened
  */
 int
-cfg_io_save_parser(const char *url, const char *parser, struct cfg_db *src, struct autobuf *log) {
+cfg_io_save_parser(struct cfg_instance *instance,
+    const char *url, const char *parser, struct cfg_db *src, struct autobuf *log) {
   struct cfg_io *io;
   const char *io_param = NULL;
 
-  io = _find_io(url, &io_param, log);
+  io = _find_io(instance, url, &io_param, log);
   if (io == NULL) {
     cfg_append_printable_line(log, "Error, unknown config io '%s'.", io->name);
     return -1;
@@ -164,11 +159,12 @@ cfg_io_save_parser(const char *url, const char *parser, struct cfg_db *src, stru
     cfg_append_printable_line(log, "Error, config io '%s' does not support saving.", io->name);
     return -1;
   }
-  return io->save(io_param, parser, src, log);
+  return io->save(instance, io_param, parser, src, log);
 }
 
 /**
  * Decode the URL string for load/storage
+ * @param instance pointer to cfg_instance
  * @param url url string
  * @param io_param pointer to a charpointer, will be used as a second
  *   return parameter for URL postfix
@@ -178,15 +174,11 @@ cfg_io_save_parser(const char *url, const char *parser, struct cfg_db *src, stru
  *   happened
  */
 static struct cfg_io *
-_find_io(const char *url, const char **io_param, struct autobuf *log) {
+_find_io(struct cfg_instance *instance,
+    const char *url, const char **io_param, struct autobuf *log) {
   struct cfg_io *io;
   char *buffer;
   const char *ptr1;
-
-  if (!_io_initialized || avl_is_empty(&cfg_io_tree)) {
-    cfg_append_printable_line(log, "IO-handler list empty!");
-    return NULL;
-  }
 
   ptr1 = strstr(url, "://");
   if (ptr1 == url) {
@@ -195,7 +187,7 @@ _find_io(const char *url, const char **io_param, struct autobuf *log) {
   }
   if (ptr1 == NULL) {
     /* get default io handler */
-    io = cfg_io_default;
+    io = instance->default_io;
     ptr1 = url;
   }
   else {
@@ -205,7 +197,7 @@ _find_io(const char *url, const char **io_param, struct autobuf *log) {
       buffer[ptr1 - url] = 0;
     }
 
-    io = avl_find_element(&cfg_io_tree, buffer, io, node);
+    io = avl_find_element(&instance->io_tree, buffer, io, node);
     ptr1 += 3;
   }
 

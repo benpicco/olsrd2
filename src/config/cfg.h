@@ -42,24 +42,32 @@
 #ifndef CFG_H_
 #define CFG_H_
 
+/* forward declaration */
+struct cfg_instance;
+struct cfg_stringarray;
+
 #include <ctype.h>
 
+#include "common/avl.h"
 #include "common/autobuf.h"
 #include "common/common_types.h"
 
-#define CFG_FOR_ALL_STRINGS(array, charptr) for (charptr = (array)->value; charptr != NULL && charptr <= (array)->last_value; charptr += strlen(charptr) + 1)
+#include "config/cfg_cmd.h"
+#include "config/cfg_io.h"
+#include "config/cfg_parser.h"
 
-/* Represents a string or an array of strings */
-struct cfg_stringarray {
-  /* pointer to the first string */
-  char *value;
+struct cfg_instance {
+  struct avl_tree io_tree;
+  struct avl_tree parser_tree;
 
-  /* pointer to the last string */
-  char *last_value;
+  struct cfg_io *default_io;
+  struct cfg_parser *default_parser;
 
-  /* total length of all strings including zero-bytes */
-  size_t length;
+  struct cfg_cmd_state cmd_state;
 };
+
+EXPORT void cfg_add(struct cfg_instance *);
+EXPORT void cfg_remove(struct cfg_instance *);
 
 EXPORT int cfg_append_printable_line(struct autobuf *autobuf, const char *fmt, ...)
   __attribute__ ((format(printf, 2, 3)));
@@ -68,9 +76,6 @@ EXPORT bool cfg_is_allowed_key(const char *key);
 EXPORT int cfg_get_choice_index(const char *value, const char **array, size_t array_size);
 
 EXPORT int cfg_avlcmp_keys(const void *p1, const void *p2, void *unused);
-
-EXPORT const char *CFGLIST_BOOL_TRUE[4];
-EXPORT const char *CFGLIST_BOOL[8];
 
 /**
  * Compares to keys/names of two section types/names or entry names.

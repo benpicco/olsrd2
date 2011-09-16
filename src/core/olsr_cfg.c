@@ -45,6 +45,7 @@
 #include "common/common_types.h"
 #include "config/cfg_schema.h"
 #include "config/cfg_delta.h"
+#include "config/cfg.h"
 
 #include "olsr_logging.h"
 #include "olsr_plugins.h"
@@ -58,10 +59,11 @@ static int _validate_global(struct cfg_schema_section *, const char *section_nam
 /* global config */
 struct olsr_config_global config_global;
 
-static struct cfg_db *olsr_raw_db = NULL;
-static struct cfg_db *olsr_work_db = NULL;
-static struct cfg_schema olsr_schema;
-static struct cfg_delta olsr_delta;
+static struct cfg_instance _olsr_cfg_instance;
+static struct cfg_db *_olsr_raw_db = NULL;
+static struct cfg_db *_olsr_work_db = NULL;
+static struct cfg_schema _olsr_schema;
+static struct cfg_delta _olsr_delta;
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_cfg_state);
@@ -94,30 +96,34 @@ olsr_cfg_init(void) {
   if (olsr_subsystem_init(&olsr_cfg_state))
     return 0;
 
+  cfg_add(&_olsr_cfg_instance);
+
   /* initialize schema */
-  cfg_schema_add(&olsr_schema);
-  cfg_schema_add_section(&olsr_schema, &global_section);
+  cfg_schema_add(&_olsr_schema);
+  cfg_schema_add_section(&_olsr_schema, &global_section);
   cfg_schema_add_entries(&global_section, global_entries, ARRAYSIZE(global_entries));
 
   /* initialize database */
-  if ((olsr_raw_db = cfg_db_add()) == NULL) {
+  if ((_olsr_raw_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create raw configuration database.");
+    cfg_remove(&_olsr_cfg_instance);
     olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
   }
 
   /* initialize database */
-  if ((olsr_work_db = cfg_db_add()) == NULL) {
+  if ((_olsr_work_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create configuration database.");
-    cfg_db_remove(olsr_raw_db);
+    cfg_db_remove(_olsr_raw_db);
+    cfg_remove(&_olsr_cfg_instance);
     olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
   }
 
-  cfg_db_link_schema(olsr_raw_db, &olsr_schema);
+  cfg_db_link_schema(_olsr_raw_db, &_olsr_schema);
 
   /* initialize delta */
-  cfg_delta_add(&olsr_delta);
+  cfg_delta_add(&_olsr_delta);
 
   /* initialize global config */
   memset(&config_global, 0, sizeof(config_global));
@@ -133,12 +139,14 @@ olsr_cfg_cleanup(void) {
     return;
 
   free(config_global.plugin.value);
-  cfg_delta_remove(&olsr_delta);
+  cfg_delta_remove(&_olsr_delta);
 
-  cfg_db_remove(olsr_raw_db);
-  cfg_db_remove(olsr_work_db);
+  cfg_db_remove(_olsr_raw_db);
+  cfg_db_remove(_olsr_work_db);
 
-  cfg_schema_remove(&olsr_schema);
+  cfg_schema_remove(&_olsr_schema);
+
+  cfg_remove(&_olsr_cfg_instance);
 }
 
 /**
@@ -193,25 +201,25 @@ olsr_cfg_apply(void) {
 
   /*** phase 2: check configuration and apply it ***/
   /* re-validate configuration data */
-  if (cfg_schema_validate(olsr_raw_db, config_global.failfast, false, true, &log)) {
+  if (cfg_schema_validate(_olsr_raw_db, config_global.failfast, false, true, &log)) {
     OLSR_WARN(LOG_CONFIG, "Configuration validation failed");
     OLSR_WARN_NH(LOG_CONFIG, "%s", log.buf);
     goto apply_failed;
   }
 
   /* create new configuration database with correct values */
-  new_db = cfg_db_duplicate(olsr_raw_db);
+  new_db = cfg_db_duplicate(_olsr_raw_db);
   if (new_db == NULL) {
     OLSR_WARN_OOM(LOG_CONFIG);
     goto apply_failed;
   }
 
   /* switch databases */
-  old_db = olsr_work_db;
-  olsr_work_db = new_db;
+  old_db = _olsr_work_db;
+  _olsr_work_db = new_db;
 
   /* bind schema */
-  cfg_db_link_schema(olsr_work_db, &olsr_schema);
+  cfg_db_link_schema(_olsr_work_db, &_olsr_schema);
 
   /* enable all plugins */
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
@@ -227,7 +235,7 @@ olsr_cfg_apply(void) {
   olsr_cfg_update_globalcfg(false);
 
   /* calculate delta and call handlers */
-  cfg_delta_calculate(&olsr_delta, old_db, olsr_work_db);
+  cfg_delta_calculate(&_olsr_delta, old_db, _olsr_work_db);
 
   /* success */
   result = 0;
@@ -252,7 +260,7 @@ olsr_cfg_update_globalcfg(bool raw) {
   struct cfg_named_section *named;
 
   named = cfg_db_find_namedsection(
-      raw ? olsr_raw_db : olsr_work_db, CFG_SECTION_GLOBAL, NULL);
+      raw ? _olsr_raw_db : _olsr_work_db, CFG_SECTION_GLOBAL, NULL);
 
   return cfg_schema_tobin(&config_global,
       named, global_entries, ARRAYSIZE(global_entries));
@@ -265,17 +273,22 @@ olsr_cfg_update_globalcfg(bool raw) {
 int
 olsr_cfg_create_new_rawdb(void) {
   /* free old db */
-  cfg_db_remove(olsr_raw_db);
+  cfg_db_remove(_olsr_raw_db);
 
   /* initialize database */
-  if ((olsr_raw_db = cfg_db_add()) == NULL) {
+  if ((_olsr_raw_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create raw configuration database.");
     olsr_exit();
     return -1;
   }
 
-  cfg_db_link_schema(olsr_raw_db, &olsr_schema);
+  cfg_db_link_schema(_olsr_raw_db, &_olsr_schema);
   return 0;
+}
+
+struct cfg_instance *
+olsr_cfg_get_instance(void) {
+  return &_olsr_cfg_instance;
 }
 
 /**
@@ -283,7 +296,7 @@ olsr_cfg_create_new_rawdb(void) {
  */
 struct cfg_db *
 olsr_cfg_get_db(void) {
-  return olsr_work_db;
+  return _olsr_work_db;
 }
 
 /**
@@ -291,7 +304,7 @@ olsr_cfg_get_db(void) {
  */
 struct cfg_db *
 olsr_cfg_get_rawdb(void) {
-  return olsr_raw_db;
+  return _olsr_raw_db;
 }
 
 /**
@@ -299,7 +312,7 @@ olsr_cfg_get_rawdb(void) {
  */
 struct cfg_schema *
 olsr_cfg_get_schema(void) {
-  return &olsr_schema;
+  return &_olsr_schema;
 }
 
 /**
@@ -307,7 +320,7 @@ olsr_cfg_get_schema(void) {
  */
 struct cfg_delta *
 olsr_cfg_get_delta(void) {
-  return &olsr_delta;
+  return &_olsr_delta;
 }
 
 /**

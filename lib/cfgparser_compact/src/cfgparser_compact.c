@@ -53,6 +53,7 @@
 #include "config/cfg_db.h"
 #include "config/cfg_parser.h"
 #include "config/cfg.h"
+#include "olsr_cfg.h"
 #include "olsr_plugins.h"
 
 #include <stdio.h>
@@ -89,7 +90,7 @@ struct cfg_parser cfg_parser_compact = {
 static int
 _plugin_load(void)
 {
-  cfg_parser_add(&cfg_parser_compact);
+  cfg_parser_add(olsr_cfg_get_instance(), &cfg_parser_compact);
   return 0;
 }
 
@@ -99,7 +100,7 @@ _plugin_load(void)
 static int
 _plugin_unload(void)
 {
-  cfg_parser_remove(&cfg_parser_compact);
+  cfg_parser_remove(olsr_cfg_get_instance(), &cfg_parser_compact);
   return 0;
 }
 

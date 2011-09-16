@@ -42,9 +42,14 @@
 #ifndef CFG_IO_H_
 #define CFG_IO_H_
 
+/* forward declaration */
+struct cfg_io;
+
 #include "common/autobuf.h"
 #include "common/avl.h"
 #include "common/common_types.h"
+
+#include "config/cfg.h"
 
 /* Represents a single IO-Handler */
 struct cfg_io {
@@ -58,20 +63,23 @@ struct cfg_io {
   bool def;
 
   /* callback to load a configuration */
-  struct cfg_db *(*load)(const char *param, const char *parser, struct autobuf *log);
+  struct cfg_db *(*load)(struct cfg_instance *,
+      const char *param, const char *parser, struct autobuf *log);
 
   /* callback to save a configuration */
-  int (*save)(const char *param, const char *parser, struct cfg_db *src, struct autobuf *log);
+  int (*save)(struct cfg_instance *,
+      const char *param, const char *parser, struct cfg_db *src, struct autobuf *log);
 };
 
-EXPORT extern struct avl_tree cfg_io_tree;
-#define CFG_FOR_ALL_IO(io, iterator) avl_for_each_element_safe(&cfg_io_tree, io, node, iterator)
+#define CFG_FOR_ALL_IO(instance, io, iterator) avl_for_each_element_safe(&(instance)->io_tree, io, node, iterator)
 
-EXPORT void cfg_io_add(struct cfg_io *);
-EXPORT void cfg_io_remove(struct cfg_io *);
+EXPORT void cfg_io_add(struct cfg_instance *, struct cfg_io *);
+EXPORT void cfg_io_remove(struct cfg_instance *, struct cfg_io *);
 
-EXPORT struct cfg_db *cfg_io_load_parser(const char *url, const char *parser, struct autobuf *log);
-EXPORT int cfg_io_save_parser(const char *url, const char *parser, struct cfg_db *src, struct autobuf *log);
+EXPORT struct cfg_db *cfg_io_load_parser(struct cfg_instance *,
+    const char *url, const char *parser, struct autobuf *log);
+EXPORT int cfg_io_save_parser(struct cfg_instance *,
+    const char *url, const char *parser, struct cfg_db *src, struct autobuf *log);
 
 /**
  * Load a configuration database from an external source.
@@ -84,8 +92,8 @@ EXPORT int cfg_io_save_parser(const char *url, const char *parser, struct cfg_db
  * @return pointer to configuration database, NULL if an error happened
  */
 static INLINE struct cfg_db *
-cfg_io_load(const char *url, struct autobuf *log) {
-  return cfg_io_load_parser(url, NULL, log);
+cfg_io_load(struct cfg_instance *instance, const char *url, struct autobuf *log) {
+  return cfg_io_load_parser(instance, url, NULL, log);
 }
 
 /**
@@ -100,8 +108,9 @@ cfg_io_load(const char *url, struct autobuf *log) {
  * @return 0 if data was stored, -1 if an error happened
  */
 static INLINE int
-cfg_io_save(const char *url, struct cfg_db *src, struct autobuf *log) {
-  return cfg_io_save_parser(url, NULL, src, log);
+cfg_io_save(struct cfg_instance *instance,
+    const char *url, struct cfg_db *src, struct autobuf *log) {
+  return cfg_io_save_parser(instance, url, NULL, src, log);
 }
 
 #endif /* CFG_IO_H_ */

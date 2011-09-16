@@ -46,7 +46,6 @@
 #include <stdlib.h>
 
 #include "common/common_types.h"
-#include "config/cfg.h"
 
 /* one block of allocated memory */
 #ifdef CFG_MEMORY_MANAGER

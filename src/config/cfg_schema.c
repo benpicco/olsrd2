@@ -55,7 +55,6 @@
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
 
-static struct cfg_schema *_handle_default_schema(struct cfg_schema *);
 static bool _validate_cfg_entry(struct cfg_schema_section *schema_section,
     struct cfg_db *db, struct cfg_section_type *section,
     struct cfg_named_section *named, struct cfg_entry *entry,
@@ -72,8 +71,8 @@ _check_single_value(struct cfg_schema_entry *schema_entry,
     struct cfg_named_section *named, struct cfg_entry *entry,
     bool cleanup, const char *section_name, struct autobuf *out);
 
-static struct cfg_schema *_default_schema_ptr = NULL;
-static struct cfg_schema _default_schema;
+const char *CFGLIST_BOOL_TRUE[] = { "true", "1", "on", "yes" };
+const char *CFGLIST_BOOL[] = { "true", "1", "on", "yes", "false", "0", "off", "no" };
 
 /**
  * Initialize a schema
@@ -100,14 +99,13 @@ cfg_schema_remove(struct cfg_schema *schema) {
 
 /**
  * Add a section to a schema
- * @param schema pointer to configuration schema, NULL for default schema
+ * @param schema pointer to configuration schema
  * @param section pointer to section
  * @return -1 if an error happened, 0 otherwise
  */
 int
 cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *section) {
   assert (cfg_is_allowed_key(section->t_type));
-  schema = _handle_default_schema(schema);
 
   section->node.key = section->t_type;
   if (avl_insert(&schema->sections, &section->node)) {
@@ -121,13 +119,12 @@ cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *sec
 
 /**
  * Removes a section from a schema
- * @param schema pointer to configuration schema, NULL for default schema
+ * @param schema pointer to configuration schema
  * @param section pointer to section
  */
 void
 cfg_schema_remove_section(struct cfg_schema *schema, struct cfg_schema_section *section) {
   struct cfg_schema_entry *entry, *ent_it;
-  schema = _handle_default_schema(schema);
 
   /* kill entries of section_schema */
   CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, ent_it) {
@@ -724,25 +721,6 @@ cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry __attribute__
   array->last_value = value->last_value - value->value + array->value;
   array->length = value->length;
   return 0;
-}
-
-/**
- * Converts a null pointer into the default schema pointer.
- * Initializes the default schema if necessary.
- * @param schema pointer to custom schema or NULL
- * @return argument pointer or default schema pointer if argument was NULL
- */
-static struct cfg_schema *
-_handle_default_schema(struct cfg_schema *schema) {
-  if (schema != NULL) {
-    return schema;
-  }
-
-  if (_default_schema_ptr == NULL) {
-    cfg_schema_add(&_default_schema);
-    _default_schema_ptr = &_default_schema;
-  }
-  return _default_schema_ptr;
 }
 
 static bool

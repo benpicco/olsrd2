@@ -50,56 +50,55 @@
 #include "config/cfg_io.h"
 #include "config/cfg_parser.h"
 
-struct avl_tree cfg_parser_tree;
-struct cfg_parser *cfg_parser_default = NULL;
-static bool _parser_initialized = false;
-
-static struct cfg_parser *_find_parser(const char *name, struct autobuf *log);
+static struct cfg_parser *_find_parser(struct cfg_instance *,
+    const char *name);
 
 /**
- * Adds a parser to the global registry.
+ * Adds a parser to the registry.
+ * @param instance pointer to cfg_instance
  * @param parser pointer to parser description
  */
 void
-cfg_parser_add(struct cfg_parser *parser) {
-  if (!_parser_initialized) {
-    avl_init(&cfg_parser_tree, cfg_avlcmp_keys, false, NULL);
-    _parser_initialized = true;
-
-    /* first parser, make it the default (can be overwritten later) */
-    parser->def = true;
-  }
-
+cfg_parser_add(struct cfg_instance *instance, struct cfg_parser *parser) {
   parser->node.key = parser->name;
-  avl_insert(&cfg_parser_tree, &parser->node);
+  avl_insert(&instance->parser_tree, &parser->node);
 
-  if (parser->def) {
-    cfg_parser_default = parser;
+  if (parser->def || instance->parser_tree.count == 1) {
+    instance->default_parser = parser;
   }
 }
 
 /**
- * Removes a parser from the global registry.
+ * Removes a parser from the registry.
+ * @param instance pointer to cfg_instance
  * @param parser pointer to initialized parser description
  */
 void
-cfg_parser_remove(struct cfg_parser *parser) {
+cfg_parser_remove(struct cfg_instance *instance, struct cfg_parser *parser) {
+  struct cfg_parser *ph, *iter;
   if (parser->node.key == NULL) {
     return;
   }
 
-  avl_remove(&cfg_parser_tree, &parser->node);
+  avl_remove(&instance->parser_tree, &parser->node);
   parser->node.key = NULL;
-  if (cfg_parser_default == parser) {
-    cfg_parser_default = NULL;
+  if (instance->default_parser == parser) {
+    instance->default_parser =
+        avl_first_element_safe(&instance->parser_tree, parser, node);
+    CFG_FOR_ALL_PARSER(instance, ph, iter) {
+      if (ph->def) {
+        instance->default_parser = ph;
+        break;
+      }
+    }
   }
-
 }
 
 /**
  * Looks for a parser that can understand a certain buffer content.
  * A path name and a mimetype can be used to give the parser additional
  * hints about the buffers content.
+ * @param instance pointer to cfg_instance
  * @param abuf pointer to buffer to be parsed
  * @param path path where the buffers content was read from (might be NULL)
  * @param mimetype mimetype of buffer (might be NULL)
@@ -107,14 +106,11 @@ cfg_parser_remove(struct cfg_parser *parser) {
  *   parser was found
  */
 const char *
-cfg_parser_find(struct autobuf *abuf, const char *path, const char *mimetype) {
-  struct cfg_parser *parser;
+cfg_parser_find(struct cfg_instance *instance,
+    struct autobuf *abuf, const char *path, const char *mimetype) {
+  struct cfg_parser *parser, *iterator;
 
-  if (!_parser_initialized) {
-    return NULL;
-  }
-
-  avl_for_each_element(&cfg_parser_tree, parser, node) {
+  CFG_FOR_ALL_PARSER(instance, parser, iterator) {
     if (parser->check_hints != NULL) {
       if (parser->check_hints(abuf, path, mimetype)) {
         return parser->name;
@@ -126,6 +122,7 @@ cfg_parser_find(struct autobuf *abuf, const char *path, const char *mimetype) {
 
 /**
  * Parse the content of a buffer into a configuration database
+ * @param instance pointer to cfg_instance
  * @param parser parser name
  * @param src pointer to input buffer
  * @param len length of input buffer
@@ -133,10 +130,11 @@ cfg_parser_find(struct autobuf *abuf, const char *path, const char *mimetype) {
  * @return pointer to configuration database, NULL if an error happened
  */
 struct cfg_db *
-cfg_parser_parse_buffer(const char *parser, void *src, size_t len, struct autobuf *log) {
+cfg_parser_parse_buffer(struct cfg_instance *instance,
+    const char *parser, void *src, size_t len, struct autobuf *log) {
   struct cfg_parser *f;
 
-  f = _find_parser(parser, log);
+  f = _find_parser(instance, parser);
   if (f == NULL) {
     cfg_append_printable_line(log, "Cannot find parser '%s'", parser);
     return NULL;
@@ -153,6 +151,7 @@ cfg_parser_parse_buffer(const char *parser, void *src, size_t len, struct autobu
 
 /**
  * Serialize a configuration database into a buffer
+ * @param instance pointer to cfg_instance
  * @param parser parser name
  * @param dst autobuffer to write into
  * @param src configuration database to serialize
@@ -160,11 +159,12 @@ cfg_parser_parse_buffer(const char *parser, void *src, size_t len, struct autobu
  * @return 0 if database was serialized, -1 if an error happened
  */
 int
-cfg_parser_serialize_to_buffer(const char *parser, struct autobuf *dst,
+cfg_parser_serialize_to_buffer(struct cfg_instance *instance,
+    const char *parser, struct autobuf *dst,
     struct cfg_db *src, struct autobuf *log) {
   struct cfg_parser *f;
 
-  f = _find_parser(parser, log);
+  f = _find_parser(instance, parser);
   if (f == NULL) {
     cfg_append_printable_line(log, "Cannot find parser '%s'", parser);
     return -1;
@@ -181,21 +181,17 @@ cfg_parser_serialize_to_buffer(const char *parser, struct autobuf *dst,
 
 /**
  * Lookup a parser in the registry
+ * @param instance pointer to cfg_instance
  * @param name name of parser, NULL for default parser
  * @return pointer to parser, NULL if not found
  */
 static struct cfg_parser *
-_find_parser(const char *name, struct autobuf *log) {
+_find_parser(struct cfg_instance *instance, const char *name) {
   struct cfg_parser *parser;
 
-  if (!_parser_initialized) {
-    cfg_append_printable_line(log, "Parser-database empty!");
-    return NULL;
-  }
-
   if (name == NULL) {
-    return cfg_parser_default;
+    return instance->default_parser;
   }
 
-  return avl_find_element(&cfg_parser_tree, name, parser, node);
+  return avl_find_element(&instance->parser_tree, name, parser, node);
 }

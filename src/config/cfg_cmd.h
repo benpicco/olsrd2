@@ -42,11 +42,7 @@
 #ifndef CFG_CMD_H_
 #define CFG_CMD_H_
 
-#include "common/common_types.h"
-#include "config/cfg_db.h"
-#include "config/cfg.h"
-
-/* state for parsing a command line */
+/* forward declaration */
 struct cfg_cmd_state {
   /* currently selected parser, NULL for 'auto' */
   char *format;
@@ -58,19 +54,23 @@ struct cfg_cmd_state {
   char *section_name;
 };
 
-EXPORT void cfg_cmd_add(struct cfg_cmd_state *state);
-EXPORT void cfg_cmd_remove(struct cfg_cmd_state *state);
-EXPORT int cfg_cmd_handle_set(struct cfg_db *db,
-    struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
-EXPORT int cfg_cmd_handle_remove(struct cfg_db *db,
-    struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
-EXPORT int cfg_cmd_handle_get(struct cfg_db *db,
-    struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
-EXPORT int cfg_cmd_handle_load(struct cfg_db *db,
-    struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
-EXPORT int cfg_cmd_handle_save(struct cfg_db *db,
-    struct cfg_cmd_state *state, const char *arg, struct autobuf *log);
-EXPORT int cfg_cmd_handle_format(struct cfg_cmd_state *state, const char *arg);
+#include "common/common_types.h"
+#include "config/cfg_db.h"
+#include "config/cfg.h"
+
+/* state for parsing a command line */
+EXPORT void cfg_cmd_clear_state(struct cfg_instance *instance);
+EXPORT int cfg_cmd_handle_set(struct cfg_instance *instance, struct cfg_db *db,
+    const char *arg, struct autobuf *log);
+EXPORT int cfg_cmd_handle_remove(struct cfg_instance *instance, struct cfg_db *db,
+    const char *arg, struct autobuf *log);
+EXPORT int cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
+    const char *arg, struct autobuf *log);
+EXPORT int cfg_cmd_handle_load(struct cfg_instance *instance,
+    struct cfg_db *db, const char *arg, struct autobuf *log);
+EXPORT int cfg_cmd_handle_save(struct cfg_instance *instance, struct cfg_db *db,
+    const char *arg, struct autobuf *log);
+EXPORT int cfg_cmd_handle_format(struct cfg_instance *instance, const char *arg);
 EXPORT int cfg_cmd_handle_schema(struct cfg_db *db,
     const char *arg, struct autobuf *log);
 

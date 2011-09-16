@@ -52,7 +52,6 @@
 #include "config/cfg_memory.h"
 #include "config/cfg_db.h"
 
-
 static struct cfg_section_type *_alloc_section(struct cfg_db *, const char *);
 static void _free_sectiontype(struct cfg_section_type *);
 
