@@ -344,20 +344,20 @@ _telnet_receive_data(struct olsr_stream_session *session) {
 
         cmd_result = _telnet_handle_command(telnet_session, cmd, para);
         switch (cmd_result) {
-          case ACTIVE:
+          case TELNET_RESULT_ACTIVE:
             break;
-          case CONTINOUS:
+          case TELNET_RESULT_CONTINOUS:
             break;
-          case ABUF_ERROR:
+          case TELNET_RESULT_ABUF_ERROR:
             session->out.len = len;
             abuf_appendf(&session->out,
                 "Error in autobuffer during command '%s'.\n", cmd);
             break;
-          case UNKNOWN:
+          case TELNET_RESULT_UNKNOWN_COMMAND:
             session->out.len = len;
             abuf_appendf(&session->out, "Error, unknown command '%s'\n", cmd);
             break;
-          case QUIT:
+          case TELNET_RESULT_QUIT:
             return STREAM_SESSION_SEND_AND_QUIT;
         }
         /* put an empty line behind each command */
@@ -396,7 +396,7 @@ _telnet_handle_command(struct olsr_telnet_session *telnet,
 
   cmd = _check_telnet_command(telnet, NULL, command);
   if (cmd == NULL) {
-    return UNKNOWN;
+    return TELNET_RESULT_UNKNOWN_COMMAND;
   }
 
   return cmd->handler(telnet, command, parameter);
@@ -428,7 +428,7 @@ _check_telnet_command(struct olsr_telnet_session *telnet,
 static enum olsr_telnet_result
 _telnet_quit(struct olsr_telnet_session *telnet __attribute__ ((unused)),
     const char *cmd __attribute__ ((unused)), const char *param __attribute__ ((unused))) {
-  return QUIT;
+  return TELNET_RESULT_QUIT;
 }
 
 static enum olsr_telnet_result
@@ -441,7 +441,7 @@ _telnet_help(struct olsr_telnet_session *telnet,
     ptr = avl_find_element(&telnet_cmd_tree, param, ptr, node);
     if (ptr == NULL) {
       abuf_appendf(&telnet->session.out, "No help text found for command: %s\n", param);
-      return ACTIVE;
+      return TELNET_RESULT_ACTIVE;
     }
 
     if (ptr->help_handler) {
@@ -449,28 +449,28 @@ _telnet_help(struct olsr_telnet_session *telnet,
     }
     else {
       if (abuf_appendf(&telnet->session.out, "%s\n", ptr->help) < 0) {
-        return ABUF_ERROR;
+        return TELNET_RESULT_ABUF_ERROR;
       }
     }
-    return ACTIVE;
+    return TELNET_RESULT_ACTIVE;
   }
 
   if (abuf_puts(&telnet->session.out, "Known commands:\n") < 0) {
-    return ABUF_ERROR;
+    return TELNET_RESULT_ABUF_ERROR;
   }
 
   FOR_ALL_TELNET_COMMANDS(ptr, iterator) {
     if (_check_telnet_command(telnet, ptr, NULL)) {
       if (abuf_appendf(&telnet->session.out, "  %s\n", ptr->command) < 0) {
-        return ABUF_ERROR;
+        return TELNET_RESULT_ABUF_ERROR;
       }
     }
   }
 
   if (abuf_puts(&telnet->session.out, "Use 'help <command> to see a help text for one command\n") < 0) {
-    return ABUF_ERROR;
+    return TELNET_RESULT_ABUF_ERROR;
   }
-  return ACTIVE;
+  return TELNET_RESULT_ACTIVE;
 }
 
 static enum olsr_telnet_result
@@ -479,9 +479,9 @@ _telnet_echo(struct olsr_telnet_session *telnet,
 
   if (abuf_appendf(&telnet->session.out, "%s\n",
       param == NULL ? "" : param) < 0) {
-    return ABUF_ERROR;
+    return TELNET_RESULT_ABUF_ERROR;
   }
-  return ACTIVE;
+  return TELNET_RESULT_ACTIVE;
 }
 
 static enum olsr_telnet_result
@@ -491,7 +491,7 @@ _telnet_timeout(struct olsr_telnet_session *telnet,
   timeout = (uint32_t)strtoul(param, NULL, 10) * 1000;
 
   olsr_stream_set_timeout(&telnet->session, timeout);
-  return ACTIVE;
+  return TELNET_RESULT_ACTIVE;
 }
 
 static void
@@ -509,7 +509,7 @@ static void
 _telnet_repeat_timer(void *data) {
   struct olsr_telnet_session *con = data;
 
-  if (_telnet_handle_command(con, con->stop_data[1], con->stop_data[2]) != ACTIVE) {
+  if (_telnet_handle_command(con, con->stop_data[1], con->stop_data[2]) != TELNET_RESULT_ACTIVE) {
     con->stop_handler(con);
   }
 
@@ -525,12 +525,12 @@ _telnet_repeat(struct olsr_telnet_session *telnet,
 
   if (telnet->stop_handler) {
     abuf_puts(&telnet->session.out, "Error, you cannot stack continous output commands\n");
-    return ACTIVE;
+    return TELNET_RESULT_ACTIVE;
   }
 
   if (param == NULL || (ptr = strchr(param, ' ')) == NULL) {
     abuf_puts(&telnet->session.out, "Missing parameters for repeat\n");
-    return ACTIVE;
+    return TELNET_RESULT_ACTIVE;
   }
 
   ptr++;
@@ -552,17 +552,17 @@ _telnet_repeat(struct olsr_telnet_session *telnet,
   }
 
   /* start command the first time */
-  if (_telnet_handle_command(telnet, telnet->stop_data[1], telnet->stop_data[2]) != ACTIVE) {
+  if (_telnet_handle_command(telnet, telnet->stop_data[1], telnet->stop_data[2]) != TELNET_RESULT_ACTIVE) {
     telnet->stop_handler(telnet);
   }
-  return CONTINOUS;
+  return TELNET_RESULT_CONTINOUS;
 }
 
 static enum olsr_telnet_result
 _telnet_version(struct olsr_telnet_session *telnet,
     const char *cmd __attribute__ ((unused)), const char *param __attribute__ ((unused))) {
   olsr_builddata_printversion(&telnet->session.out);
-  return ACTIVE;
+  return TELNET_RESULT_ACTIVE;
 }
 
 static enum olsr_telnet_result
@@ -573,24 +573,24 @@ _telnet_plugin(struct olsr_telnet_session *telnet,
 
   if (param == NULL || strcasecmp(param, "list") == 0) {
     if (abuf_puts(&telnet->session.out, "Plugins:\n") < 0) {
-      return ABUF_ERROR;
+      return TELNET_RESULT_ABUF_ERROR;
     }
     OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) {
       if (abuf_appendf(&telnet->session.out, " %-30s\t%s\t%s\n",
           plugin->name, olsr_plugins_is_enabled(plugin) ? "enabled" : "",
           olsr_plugins_is_static(plugin) ? "static" : "") < 0) {
-        return ABUF_ERROR;
+        return TELNET_RESULT_ABUF_ERROR;
       }
     }
-    return ACTIVE;
+    return TELNET_RESULT_ACTIVE;
   }
 
   para2 = strchr(param, ' ');
   if (para2 == NULL) {
     if (abuf_appendf(&telnet->session.out, "Error, missing or unknown parameter\n") < 0) {
-      return ABUF_ERROR;
+      return TELNET_RESULT_ABUF_ERROR;
     }
-    return ACTIVE;
+    return TELNET_RESULT_ACTIVE;
   }
   *para2++ = 0;
 
@@ -598,7 +598,7 @@ _telnet_plugin(struct olsr_telnet_session *telnet,
   if (strcasecmp(param, "load") == 0) {
     if (plugin != NULL) {
       abuf_appendf(&telnet->session.out, "Plugin %s already loaded\n", para2);
-      return ACTIVE;
+      return TELNET_RESULT_ACTIVE;
     }
     plugin = olsr_plugins_load(para2);
     if (plugin != NULL) {
@@ -607,14 +607,14 @@ _telnet_plugin(struct olsr_telnet_session *telnet,
     else {
       abuf_appendf(&telnet->session.out, "Could not load plugin %s\n", para2);
     }
-    return ACTIVE;
+    return TELNET_RESULT_ACTIVE;
   }
 
   if (plugin == NULL) {
     if (abuf_appendf(&telnet->session.out, "Error, could not find plugin '%s'.\n", para2) < 0) {
-      return ABUF_ERROR;
+      return TELNET_RESULT_ABUF_ERROR;
     }
-    return ACTIVE;
+    return TELNET_RESULT_ACTIVE;
   }
   if (strcasecmp(param, "activate") == 0) {
     if (olsr_plugins_is_enabled(plugin)) {
@@ -658,5 +658,5 @@ _telnet_plugin(struct olsr_telnet_session *telnet,
   else {
     abuf_appendf(&telnet->session.out, "Unknown command '%s %s %s'.\n", cmd, param, para2);
   }
-  return ACTIVE;
+  return TELNET_RESULT_ACTIVE;
 }

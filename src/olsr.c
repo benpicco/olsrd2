@@ -171,8 +171,7 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* initialize logging to config interface */
-  olsr_logcfg_init(olsr_setup_debuglevel1);
+  /* initialize logging schema */
   olsr_logcfg_addschema(olsr_cfg_get_schema());
 
   /* load static plugins */

@@ -14,11 +14,11 @@
 #include "olsr_stream_socket.h"
 
 enum olsr_telnet_result {
-  ACTIVE,
-  CONTINOUS,
-  QUIT,
-  ABUF_ERROR,
-  UNKNOWN,
+  TELNET_RESULT_ACTIVE,
+  TELNET_RESULT_CONTINOUS,
+  TELNET_RESULT_QUIT,
+  TELNET_RESULT_ABUF_ERROR,
+  TELNET_RESULT_UNKNOWN_COMMAND,
 };
 
 struct olsr_telnet_session {

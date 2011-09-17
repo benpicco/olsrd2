@@ -6,26 +6,27 @@
  */
 
 #include "common/common_types.h"
+#include "olsr_logging_cfg.h"
 #include "olsr.h"
 #include "olsr_setup.h"
 
 /* define the logging sources that are part of debug level 1 */
 static enum log_source _level_1_sources[] = {
-    LOG_MAIN,
-    0,
+  LOG_MAIN,
+  0,
 };
-
-enum log_source *olsr_setup_debuglevel1 = _level_1_sources;
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_setupcfg_state);
 OLSR_SUBSYSTEM_STATE(olsr_setup_state);
 
-
 int
 olsr_setup_cfginit(void) {
   if (olsr_subsystem_init(&olsr_setupcfg_state))
     return 0;
+
+  /* initialize logging configuration first */
+  olsr_logcfg_init(_level_1_sources, ARRAYSIZE(_level_1_sources));
 
   /* add custom configuration setup here */
 
