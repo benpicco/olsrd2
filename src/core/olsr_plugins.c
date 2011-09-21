@@ -50,7 +50,10 @@
 #include "common/avl.h"
 #include "common/avl_comp.h"
 #include "common/template.h"
+
 #include "builddata/data.h"
+#include "builddata/plugin_static.h"
+
 #include "olsr_logging.h"
 #include "olsr_memcookie.h"
 #include "olsr_plugins.h"
@@ -140,15 +143,27 @@ olsr_plugins_hook(struct olsr_plugin *pl_def) {
   pl_def->p_node.key = pl_def->name;
   avl_insert(&plugin_tree, &pl_def->p_node);
 
-  /* initialize the plugin */
-  if (olsr_plugins_load(pl_def->name) == NULL) {
-    OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin %s", pl_def->name);
-    return;
-  }
-
-  OLSR_INFO(LOG_PLUGINLOADER, "Loaded plugin %s", pl_def->name);
+  OLSR_INFO(LOG_PLUGINLOADER, "Hooked plugin %s", pl_def->name);
 }
 
+int
+olsr_plugins_init_static(void) {
+  struct olsr_plugin *p, *it;
+  int error = 0;
+
+  assert(!avl_is_empty(&plugin_tree));
+
+  /* make sure all static plugins are loaded */
+  olsr_plugins_load_static();
+
+  OLSR_FOR_ALL_PLUGIN_ENTRIES(p, it) {
+    if (olsr_plugins_load(p->name) == NULL) {
+      OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin '%s'", p->name);
+      error = 1;
+    }
+  }
+  return error;
+}
 /**
  * Query for a certain plugin name
  * @param libname name of plugin

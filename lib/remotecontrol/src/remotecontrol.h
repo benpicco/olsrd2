@@ -1,7 +1,7 @@
 
 /*
  * The olsr.org Optimized Link-State Routing daemon(olsrd)
- * Copyright (c) 2004-2011, the olsr.org team - see HISTORY file
+ * Copyright (c) 2004-2009, the olsr.org team - see HISTORY file
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,58 +39,18 @@
  *
  */
 
-#ifndef OLSR_H_
-#define OLSR_H_
-
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-
-#include "common/common_types.h"
-
-/* variable for subsystem state */
-#define OLSR_SUBSYSTEM_STATE(var_name) static bool var_name = false
-
-EXPORT void olsr_exit(void);
-EXPORT void olsr_commit(void);
-
-/**
- * Subsystem marker API for 'being initialized' state.
- * Call this function at the beginning of the initialization.
- * @param ptr pointer to initialized state variable of subsystem
- * @return true if initialization should be skipped, false otherwise
+/*
+ * Dynamic linked library for the olsr.org olsr daemon
  */
-static INLINE bool
-olsr_subsystem_init(bool *ptr) {
-  if (*ptr)
-    return true;
 
-  *ptr = true;
-  return false;
-}
+#ifndef _OLSRD_DEBUGINFO
+#define _OLSRD_DEBUGINFO
 
-/**
- * Subsystem marker API for 'being initialized' state.
- * Call this function at the beginning of the cleanup.
- * @param ptr pointer to initialized state variable of subsystem
- * @return true if cleanup should be skipped, false otherwise
+#endif
+
+/*
+ * Local Variables:
+ * c-basic-offset: 2
+ * indent-tabs-mode: nil
+ * End:
  */
-static INLINE bool
-olsr_subsystem_cleanup(bool *ptr) {
-  if (*ptr) {
-    *ptr = false;
-    return false;
-  }
-  return true;
-}
-
-/**
- * Subsystem marker API for 'being initialized' state.
- * @param ptr pointer to initialized state variable of subsystem
- * @return true if the subsystem is initialized
- */
-static INLINE bool
-olsr_subsystem_is_initialized(bool *ptr) {
-  return *ptr;
-}
-#endif /* OLSR_H_ */

@@ -43,6 +43,7 @@
 #define OLSR_CFG_H_
 
 #include "common/common_types.h"
+#include "common/autobuf.h"
 #include "common/list.h"
 #include "common/netaddr.h"
 #include "config/cfg_schema.h"
@@ -65,6 +66,7 @@ EXPORT extern struct olsr_config_global config_global;
 int olsr_cfg_init(void) __attribute__((warn_unused_result));
 void olsr_cfg_cleanup(void);
 int olsr_cfg_apply(void);
+int olsr_cfg_rollback(void);
 
 /* do not export this to plugins */
 int olsr_cfg_update_globalcfg(bool);

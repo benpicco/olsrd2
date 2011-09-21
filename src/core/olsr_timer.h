@@ -114,7 +114,7 @@ struct olsr_timer_entry {
 };
 
 /* Timers */
-extern struct list_entity EXPORT(timerinfo_list);
+EXPORT extern struct list_entity timerinfo_list;
 #define OLSR_FOR_ALL_TIMERS(ti, iterator) list_for_each_element_safe(&timerinfo_list, ti, node, iterator)
 
 int olsr_timer_init(void) __attribute__((warn_unused_result));

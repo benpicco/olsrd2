@@ -326,7 +326,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
     return 1;
   }
 
-  if (arg == NULL) {
+  if (arg == NULL || *arg == 0) {
     abuf_puts(log, "List of section types:\n"
         "(use this command with the types as parameter for more information)\n");
 

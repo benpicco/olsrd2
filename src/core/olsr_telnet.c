@@ -393,12 +393,17 @@ static enum olsr_telnet_result
 _telnet_handle_command(struct olsr_telnet_session *telnet,
     const char *command, const char *parameter) {
   struct olsr_telnet_command *cmd;
-
+#if !defined(REMOVE_LOG_INFO)
+  struct netaddr_str buf;
+#endif
   cmd = _check_telnet_command(telnet, NULL, command);
   if (cmd == NULL) {
     return TELNET_RESULT_UNKNOWN_COMMAND;
   }
 
+  OLSR_INFO(LOG_TELNET, "Executing command from %s: %s %s",
+      netaddr_to_string(&buf, &telnet->session.remote_address), command,
+      parameter == NULL ? "" : parameter);
   return cmd->handler(telnet, command, parameter);
 }
 

@@ -75,7 +75,6 @@ static struct olsr_stream_session *_create_session(
     struct olsr_stream_socket *comport, int sock, struct netaddr *remote_addr);
 static void _parse_connection(int fd, void *data,
         enum olsr_sockethandler_flags flags);
-static void _remove_session(struct olsr_stream_session *con);
 
 static void _timeout_handler(void *);
 
@@ -208,7 +207,7 @@ olsr_stream_remove(struct olsr_stream_socket *comport) {
     comport = list_first_element(&olsr_stream_head, comport, node);
     while (!list_is_empty(&comport->session)) {
       session = list_first_element(&comport->session, session, node);
-      _remove_session(session);
+      olsr_stream_close(session);
     }
 
     list_remove(&comport->node);
@@ -266,6 +265,24 @@ olsr_stream_set_timeout(struct olsr_stream_session *con, uint32_t timeout) {
 }
 
 void
+olsr_stream_close(struct olsr_stream_session *session) {
+  if (session->comport->config.cleanup) {
+    session->comport->config.cleanup(session);
+  }
+
+  session->comport->config.allowed_sessions++;
+  list_remove(&session->node);
+
+  os_close(session->scheduler_entry->fd);
+  olsr_socket_remove(session->scheduler_entry);
+
+  abuf_free(&session->in);
+  abuf_free(&session->out);
+
+  olsr_memcookie_free(session->comport->config.memcookie, session);
+}
+
+void
 olsr_stream_add_managed(struct olsr_stream_managed *managed) {
   memset(managed, 0, sizeof(*managed));
   managed->config.allowed_sessions = 10;
@@ -284,11 +301,18 @@ olsr_stream_apply_managed(struct olsr_stream_managed *managed,
       return -1;
     }
   }
+  else {
+    olsr_stream_remove(&managed->socket_v4);
+  }
+
   if (config_global.ipv6) {
     if (_apply_managed_socket(managed,
         &managed->socket_v6, &config->bindto_v6, config->port)) {
       return -1;
     }
+  }
+  else {
+    olsr_stream_remove(&managed->socket_v6);
   }
   return 0;
 }
@@ -358,8 +382,8 @@ _parse_request(int fd, void *data, unsigned int flags) {
     return;
   }
 
+  netaddr_from_socket(&remote_addr, &remote_socket);
   if (comport->config.acl) {
-    netaddr_from_socket(&remote_addr, &remote_socket);
     if (!olsr_acl_check_accept(comport->config.acl, &remote_addr)) {
       OLSR_DEBUG(LOG_SOCKET_STREAM, "Access from %s to socket %s blocked because of ACL",
           netaddr_to_string(&buf1, &remote_addr),
@@ -450,27 +474,9 @@ parse_request_error:
 }
 
 static void
-_remove_session(struct olsr_stream_session *session) {
-  if (session->comport->config.cleanup) {
-    session->comport->config.cleanup(session);
-  }
-
-  session->comport->config.allowed_sessions++;
-  list_remove(&session->node);
-
-  os_close(session->scheduler_entry->fd);
-  olsr_socket_remove(session->scheduler_entry);
-
-  abuf_free(&session->in);
-  abuf_free(&session->out);
-
-  olsr_memcookie_free(session->comport->config.memcookie, session);
-}
-
-static void
 _timeout_handler(void *data) {
   struct olsr_stream_session *session = data;
-  _remove_session(session);
+  olsr_stream_close(session);
 }
 
 static void
@@ -591,7 +597,7 @@ _parse_connection(int fd, void *data,
     /* clean up connection by calling cleanup directly */
     olsr_timer_stop(session->timeout);
     session->timeout = NULL;
-    _remove_session(session);
+    olsr_stream_close(session);
   }
   return;
 }

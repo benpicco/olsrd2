@@ -157,7 +157,7 @@ os_net_getsocket(union netaddr_socket *bindto,
   }
 
   if (os_net_configsocket(sock, bindto, flags, recvbuf, log_src)) {
-    close(sock);
+    os_close(sock);
     return -1;
   }
   return sock;

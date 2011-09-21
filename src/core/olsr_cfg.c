@@ -169,6 +169,8 @@ olsr_cfg_apply(void) {
     return -1;
   }
 
+  OLSR_INFO(LOG_CONFIG, "Apply configuration");
+
   /*** phase 1: activate all plugins ***/
   result = -1;
   old_db = NULL;
@@ -251,8 +253,30 @@ apply_failed:
   if (old_db) {
     cfg_db_remove(old_db);
   }
+
   abuf_free(&log);
   return result;
+}
+
+int
+olsr_cfg_rollback(void) {
+  struct cfg_db *db;
+
+  /* remember old db */
+  db = _olsr_raw_db;
+
+  OLSR_INFO(LOG_CONFIG, "Rollback configuration");
+
+  _olsr_raw_db = cfg_db_duplicate(_olsr_work_db);
+  if (_olsr_raw_db == NULL) {
+    OLSR_WARN(LOG_CONFIG, "Cannot create raw configuration database.");
+    _olsr_raw_db = db;
+    return -1;
+  }
+
+  /* free old db */
+  cfg_db_remove(db);
+  return 0;
 }
 
 int
@@ -272,15 +296,20 @@ olsr_cfg_update_globalcfg(bool raw) {
  */
 int
 olsr_cfg_create_new_rawdb(void) {
-  /* free old db */
-  cfg_db_remove(_olsr_raw_db);
+  struct cfg_db *db;
+
+  /* remember old db */
+  db = _olsr_raw_db;
 
   /* initialize database */
   if ((_olsr_raw_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create raw configuration database.");
-    olsr_exit();
+    _olsr_raw_db = db;
     return -1;
   }
+
+  /* free old db */
+  cfg_db_remove(db);
 
   cfg_db_link_schema(_olsr_raw_db, &_olsr_schema);
   return 0;

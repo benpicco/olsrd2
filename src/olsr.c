@@ -71,7 +71,7 @@
 #include "olsr_setup.h"
 #include "olsr.h"
 
-static bool running, reload_config, exit_called;
+static bool running, reload_config, commit_config, exit_called;
 static char *schema_name;
 
 enum argv_short_options {
@@ -153,6 +153,7 @@ main(int argc, char **argv) {
   /* setup signal handler */
   running = true;
   reload_config = false;
+  commit_config = false;
   exit_called = false;
   setup_signalhandler();
 
@@ -174,8 +175,11 @@ main(int argc, char **argv) {
   /* initialize logging schema */
   olsr_logcfg_addschema(olsr_cfg_get_schema());
 
+  /* prepare plugin initialization */
+  olsr_plugins_init();
+
   /* load static plugins */
-  olsr_plugins_load_static();
+  olsr_plugins_init_static();
 
   /* parse command line and read configuration files */
   return_code = parse_commandline(argc, argv, false);
@@ -237,9 +241,6 @@ main(int argc, char **argv) {
   if (olsr_setup_init()) {
     goto olsrd_cleanup;
   }
-
-  /* activate plugins */
-  olsr_plugins_init();
 
   /* show schema if necessary */
   if (schema_name) {
@@ -307,6 +308,11 @@ olsr_exit(void) {
   exit_called = true;
 }
 
+void
+olsr_commit(void) {
+  commit_config = true;
+}
+
 /**
  * Handle incoming SIGINT signal
  * @param signo
@@ -367,6 +373,14 @@ mainloop(int argc, char **argv) {
         olsr_cfg_apply();
       }
       reload_config = false;
+    }
+
+    /* commit config if triggered */
+    if (commit_config) {
+      OLSR_INFO(LOG_MAIN, "Commiting configuration");
+      olsr_cfg_apply();
+
+      commit_config = false;
     }
   }
 

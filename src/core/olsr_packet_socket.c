@@ -104,14 +104,14 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   memset(pktsocket, 0, sizeof(*pktsocket));
 
   /* Init socket */
-  s = os_net_getsocket(local, OS_SOCKET_UDP, 0, LOG_SOCKET_STREAM);
+  s = os_net_getsocket(local, OS_SOCKET_UDP, 0, LOG_SOCKET_PACKET);
   if (s < 0) {
     return -1;
   }
 
   if ((pktsocket->scheduler_entry = olsr_socket_add(
       s, olsr_packet_event, pktsocket, OLSR_SOCKET_READ)) == NULL) {
-    OLSR_WARN(LOG_SOCKET_STREAM, "Packet socket hookup to scheduler failed for %s\n",
+    OLSR_WARN(LOG_SOCKET_PACKET, "Packet socket hookup to scheduler failed for %s\n",
         netaddr_socket_to_string(&buf, local));
     goto open_comport_error;
   }
