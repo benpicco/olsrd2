@@ -162,11 +162,10 @@ struct cfg_schema_section {
   bool t_mandatory;
 
   /*
-   * set to true to mark section as stateful, so it must be
-   * acknowledged before being written over by configuration
-   * changes
+   * true if delta listeners should NOT be triggered for
+   * this section on a cfg_delta_trigger_non_optional() call.
    */
-  bool t_confirm;
+  bool t_optional;
 
   /* help text for section */
   const char *t_help;

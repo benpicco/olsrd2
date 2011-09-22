@@ -64,6 +64,7 @@ static struct cfg_db *_olsr_raw_db = NULL;
 static struct cfg_db *_olsr_work_db = NULL;
 static struct cfg_schema _olsr_schema;
 static struct cfg_delta _olsr_delta;
+static bool _first_apply;
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_cfg_state);
@@ -127,6 +128,8 @@ olsr_cfg_init(void) {
 
   /* initialize global config */
   memset(&config_global, 0, sizeof(config_global));
+  _first_apply = true;
+
   return 0;
 }
 
@@ -237,7 +240,13 @@ olsr_cfg_apply(void) {
   olsr_cfg_update_globalcfg(false);
 
   /* calculate delta and call handlers */
-  cfg_delta_calculate(&_olsr_delta, old_db, _olsr_work_db);
+  if (_first_apply) {
+    cfg_delta_trigger_non_optional(&_olsr_delta, &_olsr_schema, _olsr_work_db);
+    _first_apply = false;
+  }
+  else {
+    cfg_delta_calculate(&_olsr_delta, old_db, _olsr_work_db);
+  }
 
   /* success */
   result = 0;

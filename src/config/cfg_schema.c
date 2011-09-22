@@ -106,6 +106,7 @@ cfg_schema_remove(struct cfg_schema *schema) {
 int
 cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *section) {
   assert (cfg_is_allowed_key(section->t_type));
+  assert (section->t_optional || !section->t_named);
 
   section->node.key = section->t_type;
   if (avl_insert(&schema->sections, &section->node)) {

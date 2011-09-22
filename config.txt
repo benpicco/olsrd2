@@ -4,7 +4,7 @@
 #	ipv4	yes
 #	ipv6	yes
 
-[telnet]
+#[telnet]
 #	acl	127.0.0.1/8
 #	acl	default_reject
 #	bindto_v4	11.0.0.1

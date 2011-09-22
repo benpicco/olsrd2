@@ -10,6 +10,7 @@
 
 #include "common/common_types.h"
 #include "common/avl.h"
+#include "common/list.h"
 #include "olsr_netaddr_acl.h"
 #include "olsr_stream_socket.h"
 
@@ -19,6 +20,16 @@ enum olsr_telnet_result {
   TELNET_RESULT_QUIT,
   TELNET_RESULT_ABUF_ERROR,
   TELNET_RESULT_UNKNOWN_COMMAND,
+};
+
+struct olsr_telnet_cleanup;
+
+struct olsr_telnet_cleanup {
+  struct list_entity node;
+  struct olsr_telnet_session *session;
+
+  void (*cleanup_handler)(struct olsr_telnet_cleanup *);
+  void *custom;
 };
 
 struct olsr_telnet_session {
@@ -34,6 +45,7 @@ struct olsr_telnet_session {
   void (*stop_handler)(struct olsr_telnet_session *);
   void *stop_data[4];
 
+  struct list_entity cleanup_list;
 };
 
 typedef enum olsr_telnet_result (*olsr_telnethandler)
@@ -65,5 +77,19 @@ void olsr_telnet_cleanup(void);
 
 EXPORT int olsr_telnet_add(struct olsr_telnet_command *command);
 EXPORT void olsr_telnet_remove(struct olsr_telnet_command *command);
+
+EXPORT void olsr_telnet_stop(struct olsr_telnet_session *session);
+
+static INLINE void
+olsr_telnet_add_cleanup(struct olsr_telnet_session *session,
+    struct olsr_telnet_cleanup *cleanup) {
+  cleanup->session = session;
+  list_add_tail(&session->cleanup_list, &cleanup->node);
+}
+
+static INLINE void
+olsr_telnet_remove_cleanup(struct olsr_telnet_cleanup *cleanup) {
+  list_remove(&cleanup->node);
+}
 
 #endif /* OLSR_TELNET_H_ */

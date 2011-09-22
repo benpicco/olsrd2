@@ -36,7 +36,6 @@ enum cfg_telnet_idx {
 
 /* static function prototypes */
 static void _config_changed(void);
-static int _apply_config(struct cfg_named_section *section);
 static int _telnet_init(struct olsr_stream_session *);
 static void _telnet_cleanup(struct olsr_stream_session *);
 static void _telnet_create_error(struct olsr_stream_session *,
@@ -117,7 +116,6 @@ struct avl_tree telnet_cmd_tree;
 
 int
 olsr_telnet_init(void) {
-  struct cfg_named_section *section;
   size_t i;
 
   if (olsr_subsystem_init(&olsr_telnet_state))
@@ -151,15 +149,6 @@ olsr_telnet_init(void) {
   _telnet_managed.config.cleanup = _telnet_cleanup;
   _telnet_managed.config.receive_data = _telnet_receive_data;
   _telnet_managed.config.create_error = _telnet_create_error;
-
-  section = cfg_db_find_unnamedsection(olsr_cfg_get_rawdb(),
-      _CFG_TELNET_SECTION);
-  if (_apply_config(section)) {
-    olsr_memcookie_remove(_telnet_memcookie);
-    olsr_timer_remove(_telnet_repeat_timerinfo);
-    olsr_subsystem_cleanup(&olsr_telnet_state);
-    return -1;
-  }
 
   /* initialize telnet commands */
   avl_init(&telnet_cmd_tree, avl_comp_strcasecmp, false, NULL);
@@ -197,19 +186,23 @@ olsr_telnet_remove(struct olsr_telnet_command *command) {
   avl_remove(&telnet_cmd_tree, &command->node);
 }
 
-static void
-_config_changed(void) {
-  _apply_config(telnet_handler.post);
+void
+olsr_telnet_stop(struct olsr_telnet_session *session) {
+  if (session->stop_handler) {
+    session->stop_handler(session);
+    session->stop_handler = NULL;
+  }
 }
 
-static int
-_apply_config(struct cfg_named_section *section) {
+static void
+_config_changed(void) {
   struct olsr_stream_managed_config config;
   int ret = -1;
 
   /* generate binary config */
   memset(&config, 0, sizeof(config));
-  if (cfg_schema_tobin(&config, section, telnet_entries, ARRAYSIZE(telnet_entries))) {
+  if (cfg_schema_tobin(&config, telnet_handler.post,
+      telnet_entries, ARRAYSIZE(telnet_entries))) {
     /* error in conversion */
     OLSR_WARN(LOG_TELNET, "Cannot map telnet config to binary data");
     goto apply_config_failed;
@@ -224,7 +217,6 @@ _apply_config(struct cfg_named_section *section) {
   /* fall through */
 apply_config_failed:
   olsr_acl_remove(&config.acl);
-  return ret;
 }
 
 static int
@@ -238,18 +230,29 @@ _telnet_init(struct olsr_stream_session *session) {
   telnet_session->stop_handler = NULL;
   telnet_session->timeout_value = 120000;
 
+  list_init_head(&telnet_session->cleanup_list);
+
   return 0;
 }
 
 static void
 _telnet_cleanup(struct olsr_stream_session *session) {
   struct olsr_telnet_session *telnet_session;
+  struct olsr_telnet_cleanup *handler, *it;
 
   /* get telnet session pointer */
   telnet_session = (struct olsr_telnet_session *)session;
-  if (telnet_session->stop_handler) {
-    telnet_session->stop_handler(telnet_session);
-    telnet_session->stop_handler = NULL;
+
+  /* stop continuous commands */
+  olsr_telnet_stop(telnet_session);
+
+  /* call all cleanup handlers */
+  list_for_each_element_safe(&telnet_session->cleanup_list, handler, node, it) {
+    /* remove from list first */
+    olsr_telnet_remove_cleanup(handler);
+
+    /* after this command the handler pointer might not be valid anymore */
+    handler->cleanup_handler(handler);
   }
 }
 
@@ -420,11 +423,13 @@ _check_telnet_command(struct olsr_telnet_session *telnet,
       return cmd;
     }
   }
+  if (cmd->acl == NULL) {
+    return cmd;
+  }
 
-  if (cmd->acl != NULL
-      && !olsr_acl_check_accept(cmd->acl, &telnet->session.remote_address)) {
+  if (!olsr_acl_check_accept(cmd->acl, &telnet->session.remote_address)) {
     OLSR_DEBUG(LOG_TELNET, "Blocked telnet command '%s' to '%s' because of acl",
-        command, netaddr_to_string(&buf, &telnet->session.remote_address));
+        cmd->command, netaddr_to_string(&buf, &telnet->session.remote_address));
     return NULL;
   }
   return cmd;

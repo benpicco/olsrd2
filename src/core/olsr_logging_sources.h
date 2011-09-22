@@ -59,6 +59,7 @@ enum log_source {
   LOG_SOCKET_PACKET,
   LOG_PLUGINLOADER,
   LOG_TELNET,
+  LOG_PLUGINS,
 
   /* add you custom logging sources here */
 

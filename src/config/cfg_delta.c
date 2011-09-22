@@ -48,17 +48,20 @@
 #include "config/cfg_db.h"
 #include "config/cfg_delta.h"
 
-static void _delta_section(struct cfg_delta *delta,
+static void _delta_section(struct cfg_delta_handler *handler,
     struct cfg_section_type *pre_change, struct cfg_section_type *post_change,
     struct cfg_schema_section *schema);
-static void _handle_namedsection(struct cfg_delta *delta, const char *type,
+static void _handle_namedsection(struct cfg_delta_handler *handler,
     struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
     struct cfg_schema_section *schema_section);
 static bool _setup_filterresults(struct cfg_delta_handler *handler,
     struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
     struct cfg_schema_section *schema);
+static bool _compare_db_keyvalue_pair(struct cfg_entry *pre, struct cfg_entry *post,
+    struct cfg_schema_section *schema);
 static int _cmp_section_types(struct cfg_section_type *, struct cfg_section_type *);
 static int _cmp_named_section(struct cfg_named_section *, struct cfg_named_section *);
+static int _cmp_entries(struct cfg_entry *ptr1, struct cfg_entry *ptr2);
 
 /**
  * Initialize the root of a delta handler list
@@ -143,6 +146,68 @@ cfg_delta_add_handler_by_schema(
   cfg_delta_add_handler(delta, d_handler);
 }
 
+void
+cfg_delta_trigger_non_optional(struct cfg_delta *delta,
+    struct cfg_schema *schema, struct cfg_db *post) {
+  struct cfg_delta_handler *handler;
+  struct cfg_schema_section *schema_section;
+  struct cfg_section_type *post_type;
+  int i;
+
+  avl_for_each_element(&delta->handler, handler, node) {
+    /* prepare handler */
+    handler->pre = NULL;
+    if (handler->filter) {
+      for (i=0; handler->filter[i].k; i++) {
+        handler->filter[i].pre = NULL;
+        handler->filter[i].changed = true;
+      }
+    }
+
+    avl_for_each_element(&schema->sections, schema_section, node) {
+      if (handler->s_type != NULL
+          && cfg_cmp_keys(handler->s_type, schema_section->t_type) != 0) {
+        /* handler only listenes to other section type */
+        continue;
+      }
+
+      post_type = cfg_db_find_sectiontype(post, schema_section->t_type);
+
+      if (schema_section->t_optional) {
+        if (post_type) {
+          /* optional section, handler normally */
+          avl_for_each_element(&post_type->names, handler->post, node) {
+            _handle_namedsection(handler, NULL, handler->post, schema_section);
+          }
+        }
+        continue;
+      }
+
+      /* non-optional sections are unnamed */
+      if (post_type) {
+        handler->post = cfg_db_get_unnamed_section(post_type);
+      }
+      else {
+        handler->post = NULL;
+      }
+
+      /* trigger all */
+      if (handler->filter) {
+        for (i=0; handler->filter[i].k; i++) {
+          if (handler->post) {
+            handler->filter[i].post =
+                cfg_db_get_entry(handler->post, handler->filter[i].k);
+          }
+          else {
+            handler->filter[i].post = NULL;
+          }
+        }
+      }
+      handler->callback();
+    }
+  }
+}
+
 /**
  * Calculates the difference between two configuration
  * databases and call all corresponding handlers.
@@ -159,13 +224,6 @@ cfg_delta_calculate(struct cfg_delta *delta,
   struct cfg_schema *schema;
   struct cfg_schema_section *schema_section;
 
-  /* cleanup delta handler flags */
-  avl_for_each_element(&delta->handler, handler, node) {
-    handler->_trigger_callback = false;
-    handler->pre = NULL;
-    handler->post = NULL;
-  }
-
   /* initialize section handling */
   schema = NULL;
   schema_section = NULL;
@@ -173,90 +231,70 @@ cfg_delta_calculate(struct cfg_delta *delta,
     schema = pre_change->schema;
   }
 
-  /* iterate over section types */
-  section_pre = avl_first_element_safe(&pre_change->sectiontypes, section_pre, node);
-  section_post = avl_first_element_safe(&post_change->sectiontypes, section_post, node);
 
-  while (section_pre != NULL || section_post != NULL) {
-    int cmp_sections;
-
-    /* compare pre and post */
-    cmp_sections = _cmp_section_types(section_pre, section_post);
-
-    if (cmp_sections < 0) {
-      /* handle pre-section */
-      if (schema) {
-        schema_section = cfg_schema_find_section(schema, section_pre->type);
-      }
-      CFG_FOR_ALL_SECTION_NAMES(section_pre, named, named_it) {
-        _handle_namedsection(delta, section_pre->type, named, NULL, schema_section);
-      }
-    }
-    else if (cmp_sections > 0) {
-      /* handle post-section */
-      if (schema) {
-        schema_section = cfg_schema_find_section(schema, section_post->type);
-      }
-      CFG_FOR_ALL_SECTION_NAMES(section_post, named, named_it) {
-        _handle_namedsection(delta, section_post->type, NULL, named, schema_section);
-      }
-    }
-    else {
-      /* type is available in both db's, this might be an change event */
-      if (schema) {
-        schema_section = cfg_schema_find_section(schema, section_pre->type);
-      }
-      _delta_section(delta, section_pre, section_post, schema_section);
-    }
-
-    if (cmp_sections <= 0) {
-      section_pre = avl_next_element_safe(&pre_change->sectiontypes, section_pre, node);
-    }
-    if (cmp_sections >= 0) {
-      section_post = avl_next_element_safe(&post_change->sectiontypes, section_post, node);
-    }
-  }
-
-  /* cleanup delta handler flags */
+  /* Iterate over delta handlers */
   avl_for_each_element(&delta->handler, handler, node) {
-    if (handler->_trigger_callback && handler->s_type != NULL) {
-      handler->callback();
+    /* iterate over section types */
+    section_pre = avl_first_element_safe(&pre_change->sectiontypes, section_pre, node);
+    section_post = avl_first_element_safe(&post_change->sectiontypes, section_post, node);
+
+    while (section_pre != NULL || section_post != NULL) {
+      int cmp_sections;
+
+      /* compare pre and post */
+      cmp_sections = _cmp_section_types(section_pre, section_post);
+
+      if (cmp_sections < 0) {
+        /* handle pre-section */
+        if (schema) {
+          schema_section = cfg_schema_find_section(schema, section_pre->type);
+        }
+
+        if (handler->s_type == NULL || cfg_cmp_keys(handler->s_type, section_pre->type) == 0) {
+          CFG_FOR_ALL_SECTION_NAMES(section_pre, named, named_it) {
+            _handle_namedsection(handler, named, NULL, schema_section);
+          }
+        }
+      }
+      else if (cmp_sections > 0) {
+        /* handle post-section */
+        if (schema) {
+          schema_section = cfg_schema_find_section(schema, section_post->type);
+        }
+        if (handler->s_type == NULL || cfg_cmp_keys(handler->s_type, section_post->type) == 0) {
+          CFG_FOR_ALL_SECTION_NAMES(section_post, named, named_it) {
+            _handle_namedsection(handler, NULL, named, schema_section);
+          }
+        }
+      }
+      else {
+        /* type is available in both db's, this might be an change event */
+        if (schema) {
+          schema_section = cfg_schema_find_section(schema, section_pre->type);
+        }
+        if (handler->s_type == NULL || cfg_cmp_keys(handler->s_type, section_pre->type) == 0) {
+          _delta_section(handler, section_pre, section_post, schema_section);
+        }
+      }
+
+      if (cmp_sections <= 0) {
+        section_pre = avl_next_element_safe(&pre_change->sectiontypes, section_pre, node);
+      }
+      if (cmp_sections >= 0) {
+        section_post = avl_next_element_safe(&post_change->sectiontypes, section_post, node);
+      }
     }
   }
-}
-
-static int
-_cmp_section_types(struct cfg_section_type *ptr1, struct cfg_section_type *ptr2) {
-  if (ptr1 == NULL || ptr1->type == NULL) {
-    return (ptr2 == NULL || ptr2->type == NULL) ? 0 : 1;
-  }
-  if (ptr2 == NULL || ptr2->type == NULL) {
-    return -1;
-  }
-
-  return strcasecmp(ptr1->type, ptr2->type);
-}
-
-static int
-_cmp_named_section(struct cfg_named_section *ptr1, struct cfg_named_section *ptr2) {
-  if (ptr1 == NULL || ptr1->name == NULL) {
-    return (ptr2 == NULL || ptr2->name == NULL) ? 0 : 1;
-  }
-  if (ptr2 == NULL || ptr2->name == NULL) {
-    return -1;
-  }
-
-  return strcasecmp(ptr1->name, ptr2->name);
 }
 
 /**
  * Calculates the delta between two section types
- * @param delta pointer to cfg_delta object
+ * @param delta pointer to cfg_delta_handler object
  * @param pre_change
  * @param post_change
  */
 static void
-_delta_section(struct cfg_delta *delta,
+_delta_section(struct cfg_delta_handler *handler,
     struct cfg_section_type *pre_change, struct cfg_section_type *post_change,
     struct cfg_schema_section *schema) {
   struct cfg_named_section *named_pre = NULL, *named_post = NULL;
@@ -272,15 +310,15 @@ _delta_section(struct cfg_delta *delta,
 
     if (cmp_sections < 0) {
       /* handle pre-named */
-      _handle_namedsection(delta, pre_change->type, named_pre, NULL, schema);
+      _handle_namedsection(handler, named_pre, NULL, schema);
     }
     else if (cmp_sections > 0) {
       /* handle post-section */
-      _handle_namedsection(delta, post_change->type, NULL, named_post, schema);
+      _handle_namedsection(handler, NULL, named_post, schema);
     }
     else {
       /* named section is available in both db's, we have section change */
-      _handle_namedsection(delta, pre_change->type, named_pre, named_post, schema);
+      _handle_namedsection(handler, named_pre, named_post, schema);
     }
 
     if (cmp_sections <= 0) {
@@ -293,33 +331,21 @@ _delta_section(struct cfg_delta *delta,
 }
 /**
  * Handles the difference between two named sections
- * @param delta pointer to cfg_delta object
- * @param type pointer to type string of section
+ * @param delta pointer to cfg_delta_handler object
  * @param pre_change pointer to a named section before the change,
  *   NULL if section was added.
  * @param post_change pointer to a named section after the change,
  *   NULL if section was removed.
  */
 static void
-_handle_namedsection(struct cfg_delta *delta, const char *type,
+_handle_namedsection(struct cfg_delta_handler *handler,
     struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
     struct cfg_schema_section *schema_section) {
-  struct cfg_delta_handler *handler;
+  if (_setup_filterresults(handler, pre_change, post_change, schema_section)) {
+    handler->pre = pre_change;
+    handler->post = post_change;
 
-  avl_for_each_element(&delta->handler, handler, node) {
-    if (handler->s_type != NULL && cfg_cmp_keys(handler->s_type, type) != 0) {
-      continue;
-    }
-
-    if ((handler->_trigger_callback =
-        _setup_filterresults(handler, pre_change, post_change, schema_section))) {
-      handler->pre = pre_change;
-      handler->post = post_change;
-
-      if (handler->s_type == NULL) {
-        handler->callback();
-      }
-    }
+    handler->callback();
   }
 }
 
@@ -340,74 +366,157 @@ static bool
 _setup_filterresults(struct cfg_delta_handler *handler,
     struct cfg_named_section *pre_change, struct cfg_named_section *post_change,
     struct cfg_schema_section *schema) {
-  const char *_EMPTY = "";
   struct cfg_entry *pre, *post;
-  struct cfg_schema_entry *schema_entry;
-  const char *pre_value, *post_value;
-  size_t pre_len, post_len;
   bool change;
   size_t i;
-
-  if (handler->filter == NULL) {
-    return true;
-  }
 
   pre = NULL;
   post = NULL;
   change = false;
 
-  for (i=0; handler->filter[i].k != NULL; i++) {
-    if (pre_change) {
-      pre = avl_find_element(&pre_change->entries, handler->filter[i].k, pre, node);
-    }
-    if (post_change) {
-      post = avl_find_element(&post_change->entries, handler->filter[i].k, post, node);
-    }
-
-    handler->filter[i].pre = pre;
-    handler->filter[i].post = post;
-
-    if (pre == NULL && post == NULL) {
-      handler->filter[i].changed = false;
-      continue;
-    }
-
-    pre_value = _EMPTY;
-    pre_len = 0;
-    post_value = _EMPTY;
-    post_len = 0;
-
-    if (pre) {
-      /* get value */
-      pre_value = pre->val.value;
-      pre_len = pre->val.length;
-    }
-    else if(schema) {
-      /* look for default value */
-      schema_entry = cfg_schema_find_entry(schema, post->name);
-      if (schema_entry) {
-        pre_value = schema_entry->t_default;
-        pre_len = strlen(pre_value) + 1;
+  if (handler->filter) {
+    for (i=0; handler->filter[i].k != NULL; i++) {
+      if (pre_change) {
+        pre = avl_find_element(&pre_change->entries, handler->filter[i].k, pre, node);
       }
-    }
-
-    if (post) {
-      /* get value */
-      post_value = post->val.value;
-      post_len = post->val.length;
-    }
-    else if(schema) {
-      /* look for default value */
-      schema_entry = cfg_schema_find_entry(schema, pre->name);
-      if (schema_entry) {
-        post_value = schema_entry->t_default;
-        post_len = strlen(post_value) + 1;
+      if (post_change) {
+        post = avl_find_element(&post_change->entries, handler->filter[i].k, post, node);
       }
-    }
 
-    handler->filter[i].changed = (pre_len != post_len)
-        || (memcmp(pre_value, post_value, pre_len) != 0);
-    change |= handler->filter[i].changed;
+      handler->filter[i].pre = pre;
+      handler->filter[i].post = post;
+
+      handler->filter[i].changed = _compare_db_keyvalue_pair(pre, post, schema);
+      change |= handler->filter[i].changed;
+    }
+    return change;
   }
-  return change;
+
+  /* no filter, just look for a single change */
+  if (pre_change) {
+    pre = avl_first_element_safe(&pre_change->entries, pre, node);
+  }
+  if (post_change) {
+    post = avl_first_element_safe(&post_change->entries, post, node);
+  }
+
+  while (pre != NULL || post != NULL) {
+    int cmp_entries;
+
+    /* compare pre and post */
+    cmp_entries = _cmp_entries(pre, post);
+
+    if (cmp_entries < 0) {
+      /* handle pre */
+      if (_compare_db_keyvalue_pair(pre, NULL, schema)) {
+        return true;
+      }
+    }
+    else if (cmp_entries > 0) {
+      /* handle post */
+      if (_compare_db_keyvalue_pair(NULL, post, schema)) {
+        return true;
+      }
+    }
+    else {
+      /* entry is available in both db's, we might have change */
+      if (_compare_db_keyvalue_pair(pre, post, schema)) {
+        return true;
+      }
+    }
+
+    if (pre != NULL && cmp_entries <= 0) {
+      pre = avl_next_element_safe(&pre_change->entries, pre, node);
+    }
+    if (post != NULL && cmp_entries >= 0) {
+      post = avl_next_element_safe(&post_change->entries, post, node);
+    }
+  }
+
+  return false;
+}
+
+static bool
+_compare_db_keyvalue_pair(struct cfg_entry *pre, struct cfg_entry *post,
+    struct cfg_schema_section *schema) {
+  const char *_EMPTY = "";
+  struct cfg_schema_entry *schema_entry;
+  const char *pre_value, *post_value;
+  size_t pre_len, post_len;
+
+  if (pre == NULL && post == NULL) {
+    return false;
+  }
+
+  pre_value = _EMPTY;
+  pre_len = 0;
+  post_value = _EMPTY;
+  post_len = 0;
+
+  if (pre) {
+    /* get value */
+    pre_value = pre->val.value;
+    pre_len = pre->val.length;
+  }
+  else if(schema) {
+    /* look for default value */
+    schema_entry = cfg_schema_find_entry(schema, post->name);
+    if (schema_entry) {
+      pre_value = schema_entry->t_default;
+      pre_len = strlen(pre_value) + 1;
+    }
+  }
+
+  if (post) {
+    /* get value */
+    post_value = post->val.value;
+    post_len = post->val.length;
+  }
+  else if(schema) {
+    /* look for default value */
+    schema_entry = cfg_schema_find_entry(schema, pre->name);
+    if (schema_entry) {
+      post_value = schema_entry->t_default;
+      post_len = strlen(post_value) + 1;
+    }
+  }
+
+  return  (pre_len != post_len)
+      || (memcmp(pre_value, post_value, pre_len) != 0);
+}
+
+static int
+_cmp_section_types(struct cfg_section_type *ptr1, struct cfg_section_type *ptr2) {
+  if (ptr1 == NULL) {
+    return (ptr2 == NULL) ? 0 : 1;
+  }
+  if (ptr2 == NULL) {
+    return -1;
+  }
+
+  return strcasecmp(ptr1->type, ptr2->type);
+}
+
+static int
+_cmp_named_section(struct cfg_named_section *ptr1, struct cfg_named_section *ptr2) {
+  if (ptr1 == NULL || ptr1->name == NULL) {
+    return (ptr2 == NULL || ptr2->name == NULL) ? 0 : 1;
+  }
+  if (ptr2 == NULL || ptr2->name == NULL) {
+    return -1;
+  }
+
+  return strcasecmp(ptr1->name, ptr2->name);
+}
+
+static int
+_cmp_entries(struct cfg_entry *ptr1, struct cfg_entry *ptr2) {
+  if (ptr1 == NULL) {
+    return (ptr2 == NULL) ? 0 : 1;
+  }
+  if (ptr2 == NULL) {
+    return -1;
+  }
+
+  return strcasecmp(ptr1->name, ptr2->name);
 }

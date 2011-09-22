@@ -94,13 +94,6 @@ struct cfg_delta_handler {
   void *custom;
 
   /*
-   * internal variable for triggering section-type
-   * specific allbacks, will always be true when this
-   * callbacks are triggered.
-   */
-  bool _trigger_callback;
-
-  /*
    * Pointer to named section before and after the change.
    * One of the variables might be zero if section was
    * added or removed.
@@ -139,6 +132,8 @@ EXPORT void cfg_delta_add_handler_by_schema(
     const struct cfg_schema_section *s_section, const struct cfg_schema_entry *s_entries,
     size_t count);
 
+EXPORT void cfg_delta_trigger_non_optional(struct cfg_delta *delta,
+    struct cfg_schema *schema, struct cfg_db *post);
 EXPORT void cfg_delta_calculate(struct cfg_delta *, struct cfg_db *, struct cfg_db *);
 
 #endif /* CFG_DELTA_H_ */
