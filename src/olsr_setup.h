@@ -23,10 +23,16 @@
 #define OLSRD_GLOBAL_CONF_FILE "/etc/olsrd.conf"
 #endif
 
-/* define custom logging sources for enum array */
+/*
+ * define custom logging sources for enum array
+ * (comma separated list of enum constants)
+ */
 #define OLSR_SETUP_LOGGING_SOURCES
 
-/* define custom logging sources names */
+/*
+ * define custom logging sources names
+ * (comma separater list of strings)
+ */
 #define OLSR_SETUP_LOGGING_NAMES
 
 int olsr_setup_cfginit(void);
