@@ -44,7 +44,6 @@
 
 /* forward declaration */
 struct cfg_instance;
-struct cfg_stringarray;
 
 #include <ctype.h>
 
@@ -57,13 +56,22 @@ struct cfg_stringarray;
 #include "config/cfg_parser.h"
 
 struct cfg_instance {
+  /* tree of io handlers and format parsers */
   struct avl_tree io_tree;
   struct avl_tree parser_tree;
 
+  /* default io handler and format parser */
   struct cfg_io *default_io;
   struct cfg_parser *default_parser;
 
-  struct cfg_cmd_state cmd_state;
+  /* currently selected parser, NULL for 'auto' */
+  char *cmd_format;
+
+  /* last used section type */
+  char *cmd_section_type;
+
+  /* last used section name, NULL for unnamed section */
+  char *cmd_section_name;
 };
 
 EXPORT void cfg_add(struct cfg_instance *);

@@ -89,6 +89,8 @@ EXPORT void cfg_memory_free(struct cfg_memory *, void *ptr, size_t);
 
 EXPORT char *cfg_memory_strdup(struct cfg_memory *mem, const char *txt);
 #else /* CFG_MEMORY_MANAGER */
+
+/* see doxygen comments in cfg_memory.c */
 static INLINE void
 cfg_memory_add(struct cfg_memory *m __attribute__((unused))) {}
 static INLINE void

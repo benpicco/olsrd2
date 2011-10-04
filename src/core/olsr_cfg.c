@@ -241,7 +241,7 @@ olsr_cfg_apply(void) {
 
   /* calculate delta and call handlers */
   if (_first_apply) {
-    cfg_delta_trigger_non_optional(&_olsr_delta, &_olsr_schema, _olsr_work_db);
+    cfg_delta_trigger_non_optional(&_olsr_delta, _olsr_work_db);
     _first_apply = false;
   }
   else {

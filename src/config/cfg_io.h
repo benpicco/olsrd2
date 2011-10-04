@@ -84,6 +84,7 @@ EXPORT int cfg_io_save_parser(struct cfg_instance *,
 /**
  * Load a configuration database from an external source.
  * This call will always use autodetection for choosing the parser.
+ * @param instance pointer to cfg_instance
  * @param url URL specifying the external source
  *   might contain io-handler specification with <iohandler>://
  *   syntax.
@@ -99,6 +100,7 @@ cfg_io_load(struct cfg_instance *instance, const char *url, struct autobuf *log)
 /**
  * Store a configuration database into an external destination.
  * This call will always use autodetection for choosing the parser.
+ * @param instance pointer to cfg_instance
  * @param url URL specifying the external source
  *   might contain io-handler specification with <iohandler>://
  *   syntax.

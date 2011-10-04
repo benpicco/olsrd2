@@ -43,6 +43,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "common/common_types.h"
 #include "common/avl.h"
 #include "common/avl_comp.h"
 #include "common/string.h"
@@ -96,20 +97,24 @@ cfg_db_remove(struct cfg_db *db) {
 }
 
 /**
- * Copy parts of a db into a new db
+ * Copy parts of a configuration database into a new db
  * @param dst pointer to target db
- * @param src
- * @param section_type
- * @param section_name
- * @param entry_name
+ * @param src pointer to source database
+ * @param section_type section type to copy, NULL for all types
+ * @param section_name section name to copy, NULL for all names
+ * @param entry_name entry name to copy, NULL for all entries
+ * @return 0 if copy was successful, -1 if an error happened.
+ *   In case of an error, the destination might contain a partial
+ *   copy.
  */
-void
+int
 _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
     const char *section_type, const char *section_name, const char *entry_name) {
   struct cfg_section_type *section, *section_it;
   struct cfg_named_section *named, *named_it;
   struct cfg_entry *entry, *entry_it;
   char *ptr;
+  bool dummy;
 
   CFG_FOR_ALL_SECTION_TYPES(src, section, section_it) {
     if (section_type != NULL && cfg_cmp_keys(section->type, section_type) != 0) {
@@ -121,7 +126,9 @@ _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
         continue;
       }
 
-      _cfg_db_add_section(dst, section->type, named->name);
+      if (_cfg_db_add_section(dst, section->type, named->name, &dummy) == NULL) {
+        return -1;
+      }
 
       CFG_FOR_ALL_ENTRIES(named, entry, entry_it) {
         if (entry_name != NULL && cfg_cmp_keys(entry->name, entry_name) != 0) {
@@ -129,11 +136,15 @@ _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
         }
 
         CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
-          cfg_db_set_entry(dst, section->type, named->name, entry->name, ptr, true);
+          if (cfg_db_set_entry(
+              dst, section->type, named->name, entry->name, ptr, true) == NULL) {
+            return -1;
+          }
         }
       }
     }
   }
+  return 0;
 }
 
 /**
@@ -141,27 +152,38 @@ _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
  * @param db pointer to configuration database
  * @param section_type type of section
  * @param section_name name of section, NULL if an unnamed one
+ * @param new_section pointer to bool, will be set to true if a new
+ *   section was created, false otherwise
  * @return pointer to named section, NULL if an error happened
  */
 struct cfg_named_section *
 _cfg_db_add_section(struct cfg_db *db, const char *section_type,
-    const char *section_name) {
+    const char *section_name, bool *new_section) {
   struct cfg_section_type *section;
-  struct cfg_named_section *named;
+  struct cfg_named_section *named = NULL;
 
   /* consistency check */
   assert (section_type);
+
+  *new_section = false;
 
   /* get section */
   section = avl_find_element(&db->sectiontypes, section_type, section, node);
   if (section == NULL) {
     section = _alloc_section(db, section_type);
+    if (section == NULL) {
+      return NULL;
+    }
+    *new_section = true;
+  }
+  else {
+    /* get named section */
+    named = avl_find_element(&section->names, section_name, named, node);
   }
 
-  /* get named section */
-  named = avl_find_element(&section->names, section_name, named, node);
   if (named == NULL) {
     named = _alloc_namedsection(section, section_name);
+    *new_section = true;
   }
 
   return named;
@@ -209,7 +231,7 @@ cfg_db_find_namedsection(
 }
 
 /**
- * Removes a section type (including all entries of it)
+ * Removes a named section (including all entries of it)
  * from a configuration database.
  * If the section_type below is empty afterwards, you might
  * want to delete it too.
@@ -234,7 +256,7 @@ cfg_db_remove_namedsection(struct cfg_db *db, const char *section_type,
 }
 
 /**
- * Changes an entry to a configuration database
+ * Sets an entry to a configuration database
  * @param db pointer to configuration database
  * @param section_type type of section
  * @param section_name name of section, NULL if an unnamed one
@@ -251,17 +273,25 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
   struct cfg_entry *entry;
   struct cfg_named_section *named;
   char *old = NULL;
-  size_t old_size = 0, new_size = 0;
+  size_t old_size = 0, new_size;
+  bool new_section = false, new_entry = NULL;
 
   new_size = strlen(value) + 1;
 
   /* create section */
-  named = _cfg_db_add_section(db, section_type, section_name);
+  named = _cfg_db_add_section(db, section_type, section_name, &new_section);
+  if (!named) {
+    return NULL;
+  }
 
   /* get entry */
   entry = avl_find_element(&named->entries, entry_name, entry, node);
-  if (entry == NULL) {
+  if (!entry) {
     entry = _alloc_entry(named, entry_name);
+    if (!entry) {
+      goto set_entry_error;
+    }
+    new_entry = true;
   }
 
   /* copy old values */
@@ -272,7 +302,10 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
 
   entry->val.length = old_size + new_size;
   entry->val.value = cfg_memory_alloc_string(&db->memory, entry->val.length);
-
+  if (entry->val.value == NULL) {
+    entry->val.value = old;
+    goto set_entry_error;
+  }
   if (old_size) {
     memcpy(entry->val.value, old, old_size);
   }
@@ -281,6 +314,14 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
 
   cfg_memory_free_string(&db->memory, old);
   return entry;
+set_entry_error:
+  if (new_entry) {
+    _free_entry(entry);
+  }
+  if (new_section) {
+    _free_namedsection(named);
+  }
+  return NULL;
 }
 
 /**
@@ -374,7 +415,7 @@ cfg_db_get_entry_value(struct cfg_db *db, const char *section_type,
  * @param section_name name of section, NULL if an unnamed one
  * @param entry_name entry name
  * @param value value to be removed from the list
- * @return 0 if the element was removes, -1 if it wasn't there
+ * @return 0 if the element was removed, -1 if it wasn't there
  */
 int
 cfg_db_remove_element(struct cfg_db *db, const char *section_type,
@@ -425,8 +466,8 @@ cfg_db_remove_element(struct cfg_db *db, const char *section_type,
 
 
 /**
- * Counts the number of list items of an entry
- * @param entry pointer to entry
+ * Counts the number of list items of a configuration entry
+ * @param entry pointer to cfg entry
  * @return number of items in the entries value
  */
 size_t
@@ -446,7 +487,7 @@ cfg_db_entry_get_listsize(struct cfg_entry *entry) {
  * Creates a section type in a configuration database
  * @param db pointer to configuration database
  * @param type type of section
- * @return pointer to section type
+ * @return pointer to section type, NULL if allocation failed
  */
 static struct cfg_section_type *
 _alloc_section(struct cfg_db *db, const char *type) {
@@ -455,7 +496,15 @@ _alloc_section(struct cfg_db *db, const char *type) {
   assert(type);
 
   section = cfg_memory_alloc(&db->memory, sizeof(*section));
+  if (!section) {
+    return NULL;
+  }
+
   section->type = cfg_memory_strdup(&db->memory, type);
+  if (!section->type) {
+    cfg_memory_free(&db->memory, section, sizeof(*section));
+    return NULL;
+  }
 
   section->node.key = section->type;
   avl_insert(&db->sectiontypes, &section->node);
@@ -488,8 +537,8 @@ _free_sectiontype(struct cfg_section_type *section) {
 /**
  * Creates a named section in a configuration database.
  * @param section pointer to section type
- * @param name name of section (may not be NULL)
- * @return pointer to named section
+ * @param name name of section (might be NULL)
+ * @return pointer to named section, NULL if allocation failed
  */
 static struct cfg_named_section *
 _alloc_namedsection(struct cfg_section_type *section,
@@ -497,7 +546,15 @@ _alloc_namedsection(struct cfg_section_type *section,
   struct cfg_named_section *named;
 
   named = cfg_memory_alloc(&section->db->memory, sizeof(*section));
+  if (!named) {
+    return NULL;
+  }
+
   named->name = cfg_memory_strdup(&section->db->memory, name);
+  if (!named->name && name != NULL) {
+    cfg_memory_free(&section->db->memory, named, sizeof(*named));
+    return NULL;
+  }
 
   named->node.key = named->name;
   avl_insert(&section->names, &named->node);
@@ -530,7 +587,7 @@ _free_namedsection(struct cfg_named_section *named) {
  * It will not initialize the value.
  * @param named pointer to named section
  * @param name name of entry
- * @return pointer to configuration entry
+ * @return pointer to configuration entry, NULL if allocation failed
  */
 static struct cfg_entry *
 _alloc_entry(struct cfg_named_section *named,
@@ -538,8 +595,16 @@ _alloc_entry(struct cfg_named_section *named,
   struct cfg_entry *entry;
 
   entry = cfg_memory_alloc(&named->section_type->db->memory, sizeof(*entry));
+  if (!entry) {
+    return NULL;
+  }
 
   entry->name = cfg_memory_strdup(&named->section_type->db->memory, name);
+  if (!entry->name) {
+    cfg_memory_free(&named->section_type->db->memory, entry, sizeof(*entry));
+    return NULL;
+  }
+
   entry->node.key = entry->name;
   avl_insert(&named->entries, &entry->node);
 

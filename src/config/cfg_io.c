@@ -60,13 +60,15 @@ static struct cfg_io *_find_io(struct cfg_instance *instance,
     const char *url, const char **io_param, struct autobuf *log);
 
 /**
- * Add a new io-handler to the registry
+ * Add a new io-handler to the registry. Name of io handler
+ * must be already initialized.
  * @param instance pointer to cfg_instance
  * @param io pointer to io handler object
  */
 void
 cfg_io_add(struct cfg_instance *instance, struct cfg_io *io) {
-  io->node.key = &io->name;
+  assert (io->name);
+  io->node.key = io->name;
   avl_insert(&instance->io_tree, &io->node);
 
   if (io->def || instance->io_tree.count == 1) {
@@ -75,20 +77,20 @@ cfg_io_add(struct cfg_instance *instance, struct cfg_io *io) {
 }
 
 /**
- * Unregister an io-handler
+ * Unregister an io-handler.
  * @param instance pointer to cfg_instance
  * @param io pointer to io handler
  */
 void
 cfg_io_remove(struct cfg_instance *instance, struct cfg_io *io) {
   struct cfg_io *ioh, *iter;
-  if (io->name) {
+  if (io->node.key) {
     avl_remove(&instance->io_tree, &io->node);
     io->node.key = NULL;
-    io->name = NULL;
   }
 
   if (instance->default_io == io) {
+    /* get new default io handler */
     instance->default_io = avl_first_element_safe(&instance->io_tree, io, node);
     CFG_FOR_ALL_IO(instance, ioh, iter) {
       if (ioh->def) {

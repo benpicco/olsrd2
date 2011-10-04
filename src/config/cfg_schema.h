@@ -113,9 +113,10 @@ struct cfg_schema_entry;
  * };
  *
  * struct cfg_schema_entry test_entries[] = {
- *   CFG_VALIDATE_BOOL("enable", "true"),
- *   CFG_VALIDATE_PRINTABLE("logfile", "/tmp/test", .t_list = true),
- *   CFG_VALIDATE_INT_MINMAX("value", "0", 0, 20),
+ *   CFG_VALIDATE_BOOL("enable", "true", "boolean help text"),
+ *   CFG_VALIDATE_PRINTABLE("logfile", "/tmp/test",
+ *     "printable helptext", .t_list = true),
+ *   CFG_VALIDATE_INT_MINMAX("value", "0", "int helptext", 0, 20),
  * };
  */
 
@@ -133,9 +134,10 @@ struct cfg_schema_entry;
  * };
  *
  * struct cfg_schema_entry test_entries[] = {
- *   CFG_MAP_BOOL(bin_data, enable, "true"),
- *   CFG_MAP_PRINTABLE(bin_data, logfile, "/tmp/test", .t_list = true),
- *   CFG_MAP_INT_MINMAX(bin_data, value, "0", 0, 20),
+ *   CFG_MAP_BOOL(bin_data, enable, "boolean help text"),
+ *   CFG_MAP_PRINTABLE(bin_data, logfile, "/tmp/test",
+ *     "printable helptext", .t_list = true),
+ *   CFG_MAP_INT_MINMAX(bin_data, value, "0", "int helptext", 0, 20),
  * };
  */
 
@@ -287,7 +289,8 @@ cfg_schema_find_section(struct cfg_schema *schema, const char *type) {
  * @param entry pointer to entry
  */
 static INLINE void
-cfg_schema_remove_entry(struct cfg_schema_section *section, struct cfg_schema_entry *entry) {
+cfg_schema_remove_entry(struct cfg_schema_section *section,
+    struct cfg_schema_entry *entry) {
   avl_remove(&section->entries, &entry->node);
   entry->node.key = NULL;
 }

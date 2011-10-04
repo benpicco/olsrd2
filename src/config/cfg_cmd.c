@@ -53,6 +53,7 @@
 #include "config/cfg_io.h"
 #include "config/cfg_cmd.h"
 
+/* internal struct to get result for argument parsing */
 struct _parsed_argument {
   char *type;
   char *name;
@@ -70,10 +71,12 @@ static int _do_parse_arg(struct cfg_instance *instance,
  */
 void
 cfg_cmd_clear_state(struct cfg_instance *instance) {
-  free(instance->cmd_state.format);
-  free(instance->cmd_state.section_name);
-  free(instance->cmd_state.section_type);
-  memset(&instance->cmd_state, 0, sizeof(instance->cmd_state));
+  free(instance->cmd_format);
+  free(instance->cmd_section_name);
+  free(instance->cmd_section_type);
+  instance->cmd_format = NULL;
+  instance->cmd_section_name = NULL;
+  instance->cmd_section_type = NULL;
 }
 
 /**
@@ -89,7 +92,9 @@ cfg_cmd_handle_set(struct cfg_instance *instance, struct cfg_db *db,
     const char *arg, struct autobuf *log) {
   struct _parsed_argument pa;
   char *ptr;
+  bool dummy;
 
+  /* get temporary copy of argument string */
   ptr = alloca(strlen(arg)+1);
   strcpy(ptr, arg);
 
@@ -98,8 +103,8 @@ cfg_cmd_handle_set(struct cfg_instance *instance, struct cfg_db *db,
   }
 
   if (pa.value != NULL) {
-    if (NULL == cfg_db_set_entry(db, instance->cmd_state.section_type,
-        instance->cmd_state.section_name, pa.key, pa.value, true)) {
+    if (NULL == cfg_db_set_entry(db, instance->cmd_section_type,
+        instance->cmd_section_name, pa.key, pa.value, true)) {
       cfg_append_printable_line(log, "Cannot create entry: '%s'\n", arg);
       return -1;
     }
@@ -113,7 +118,7 @@ cfg_cmd_handle_set(struct cfg_instance *instance, struct cfg_db *db,
 
   /* set section */
   if (NULL == _cfg_db_add_section(db,
-      instance->cmd_state.section_type, instance->cmd_state.section_name)) {
+      instance->cmd_section_type, instance->cmd_section_name, &dummy)) {
     cfg_append_printable_line(log, "Cannot create section: '%s'\n", arg);
     return -1;
   }
@@ -147,24 +152,24 @@ cfg_cmd_handle_remove(struct cfg_instance *instance, struct cfg_db *db,
   }
 
   if (pa.key != NULL) {
-    if (cfg_db_remove_entry(db, instance->cmd_state.section_type,
-        instance->cmd_state.section_name, pa.key)) {
+    if (cfg_db_remove_entry(db, instance->cmd_section_type,
+        instance->cmd_section_name, pa.key)) {
       cfg_append_printable_line(log, "Cannot remove entry: '%s'\n", arg);
       return -1;
     }
     return 0;
   }
 
-  if (instance->cmd_state.section_name) {
+  if (instance->cmd_section_name) {
     if (cfg_db_remove_namedsection(db,
-        instance->cmd_state.section_type, instance->cmd_state.section_name)) {
+        instance->cmd_section_type, instance->cmd_section_name)) {
       cfg_append_printable_line(log, "Cannot remove section: '%s'\n", arg);
       return -1;
     }
   }
 
-  if (instance->cmd_state.section_type) {
-    if (cfg_db_remove_sectiontype(db, instance->cmd_state.section_type)) {
+  if (instance->cmd_section_type) {
+    if (cfg_db_remove_sectiontype(db, instance->cmd_section_type)) {
       cfg_append_printable_line(log, "Cannot remove section: '%s'\n", arg);
       return -1;
     }
@@ -173,7 +178,7 @@ cfg_cmd_handle_remove(struct cfg_instance *instance, struct cfg_db *db,
 }
 
 /**
- * Implements the 'view' command for the command line
+ * Implements the 'get' command for the command line
  * @param instance pointer to cfg_instance
  * @param db pointer to cfg_db to be modified
  * @param arg argument of command
@@ -212,7 +217,7 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
 
   if (pa.key != NULL) {
     if (NULL == (entry = cfg_db_find_entry(db,
-        instance->cmd_state.section_type, instance->cmd_state.section_name, pa.key))) {
+        instance->cmd_section_type, instance->cmd_section_name, pa.key))) {
       cfg_append_printable_line(log, "Cannot find data for entry: '%s'\n", arg);
       return -1;
     }
@@ -267,7 +272,7 @@ cfg_cmd_handle_load(struct cfg_instance *instance, struct cfg_db *db,
     const char *arg, struct autobuf *log) {
   struct cfg_db *temp_db;
 
-  temp_db = cfg_io_load_parser(instance, arg, instance->cmd_state.format, log);
+  temp_db = cfg_io_load_parser(instance, arg, instance->cmd_format, log);
   if (temp_db != NULL) {
     cfg_db_copy(db, temp_db);
     cfg_db_remove(temp_db);
@@ -286,7 +291,7 @@ cfg_cmd_handle_load(struct cfg_instance *instance, struct cfg_db *db,
 int
 cfg_cmd_handle_save(struct cfg_instance *instance, struct cfg_db *db,
     const char *arg, struct autobuf *log) {
-  return cfg_io_save_parser(instance, arg, instance->cmd_state.format, db, log);
+  return cfg_io_save_parser(instance, arg, instance->cmd_format, db, log);
 }
 
 /**
@@ -297,14 +302,14 @@ cfg_cmd_handle_save(struct cfg_instance *instance, struct cfg_db *db,
  */
 int
 cfg_cmd_handle_format(struct cfg_instance *instance, const char *arg) {
-  free (instance->cmd_state.format);
+  free (instance->cmd_format);
 
   if (strcasecmp(arg, "auto") == 0) {
-    instance->cmd_state.format = NULL;
+    instance->cmd_format = NULL;
     return 0;
   }
 
-  return (instance->cmd_state.format = strdup(arg)) != NULL;
+  return (instance->cmd_format = strdup(arg)) != NULL;
 }
 
 /**
@@ -341,7 +346,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
     return 0;
   }
 
-  /* copy string */
+  /* copy string into stack*/
   copy = alloca(strlen(arg) + 1);
   strcpy(copy, arg);
 
@@ -426,19 +431,19 @@ _do_parse_arg(struct cfg_instance *instance,
     pa->type = &arg[matchers[2].rm_so];
     arg[matchers[2].rm_eo] = 0;
 
-    free (instance->cmd_state.section_type);
-    instance->cmd_state.section_type = strdup(pa->type);
+    free (instance->cmd_section_type);
+    instance->cmd_section_type = strdup(pa->type);
 
     /* remove name */
-    free (instance->cmd_state.section_name);
-    instance->cmd_state.section_name = NULL;
+    free (instance->cmd_section_name);
+    instance->cmd_section_name = NULL;
   }
   if (matchers[4].rm_so != -1) {
     pa->name = &arg[matchers[4].rm_so];
     arg[matchers[4].rm_eo] = 0;
 
     /* name has already been deleted by section type code */
-    instance->cmd_state.section_name = strdup(pa->name);
+    instance->cmd_section_name = strdup(pa->name);
   }
   if (matchers[5].rm_so != -1) {
     pa->key = &arg[matchers[5].rm_so];

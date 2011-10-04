@@ -46,7 +46,10 @@ struct cfg_delta;
 struct cfg_delta_handler;
 struct cfg_delta_filter;
 
+#include "common/common_types.h"
+#include "common/avl.h"
 #include "common/list.h"
+
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
 
@@ -109,7 +112,7 @@ struct cfg_delta_filter {
   /* key of the entry this filter matches */
   const char *k;
 
-  /* true if parameter was changed */
+  /* true if entry was changed */
   bool changed;
 
   /*
@@ -132,8 +135,7 @@ EXPORT void cfg_delta_add_handler_by_schema(
     const struct cfg_schema_section *s_section, const struct cfg_schema_entry *s_entries,
     size_t count);
 
-EXPORT void cfg_delta_trigger_non_optional(struct cfg_delta *delta,
-    struct cfg_schema *schema, struct cfg_db *post);
 EXPORT void cfg_delta_calculate(struct cfg_delta *, struct cfg_db *, struct cfg_db *);
+EXPORT void cfg_delta_trigger_non_optional(struct cfg_delta *delta, struct cfg_db *post);
 
 #endif /* CFG_DELTA_H_ */

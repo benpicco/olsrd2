@@ -60,6 +60,7 @@ enum log_source {
   LOG_PLUGINLOADER,
   LOG_TELNET,
   LOG_PLUGINS,
+  LOG_HTTP,
 
   /* add you custom logging sources here */
 

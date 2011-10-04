@@ -78,10 +78,7 @@ cfg_remove(struct cfg_instance *instance) {
     cfg_parser_remove(instance, parser);
   }
 
-  free(instance->cmd_state.format);
-  free(instance->cmd_state.section_name);
-  free(instance->cmd_state.section_type);
-  memset(instance, 0, sizeof(*instance));
+  cfg_cmd_clear_state(instance);
 }
 
 /**

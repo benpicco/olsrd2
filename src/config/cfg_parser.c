@@ -54,12 +54,15 @@ static struct cfg_parser *_find_parser(struct cfg_instance *,
     const char *name);
 
 /**
- * Adds a parser to the registry.
+ * Adds a parser to the registry. Parser name field must already
+ * be initialized.
  * @param instance pointer to cfg_instance
  * @param parser pointer to parser description
  */
 void
 cfg_parser_add(struct cfg_instance *instance, struct cfg_parser *parser) {
+  assert(parser->name);
+
   parser->node.key = parser->name;
   avl_insert(&instance->parser_tree, &parser->node);
 

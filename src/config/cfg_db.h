@@ -50,6 +50,7 @@ struct cfg_entry;
 
 #include "common/avl.h"
 #include "common/common_types.h"
+
 #include "config/cfg_memory.h"
 #include "config/cfg_schema.h"
 #include "config/cfg_stringarray.h"
@@ -117,11 +118,12 @@ struct cfg_entry {
 
 EXPORT struct cfg_db *cfg_db_add(void);
 EXPORT void cfg_db_remove(struct cfg_db *);
-EXPORT void _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
+EXPORT int _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
     const char *section_type, const char *section_name, const char *entry_name);
 
 EXPORT struct cfg_named_section *_cfg_db_add_section(
-    struct cfg_db *, const char *section_type, const char *section_name);
+    struct cfg_db *, const char *section_type, const char *section_name,
+    bool *new_section);
 
 EXPORT int cfg_db_remove_sectiontype(struct cfg_db *, const char *section_type);
 
@@ -165,7 +167,10 @@ cfg_db_duplicate(struct cfg_db *src) {
 
   dst = cfg_db_add();
   if (dst) {
-    _cfg_db_append(dst, src, NULL, NULL, NULL);
+    if (_cfg_db_append(dst, src, NULL, NULL, NULL)) {
+      cfg_db_remove(dst);
+      return NULL;
+    }
   }
   return dst;
 }
@@ -176,10 +181,13 @@ cfg_db_duplicate(struct cfg_db *src) {
  * @param dst destination database which will hold the values of
  *   both databases after the copy
  * @param src source of the append process
+ * @return 0 if copy was successful, -1 if an error happened.
+ *   In case of an error, the destination might contain a partial
+ *   copy.
  */
-static INLINE void
+static INLINE int
 cfg_db_copy(struct cfg_db *dst, struct cfg_db *src) {
-  _cfg_db_append(dst, src, NULL, NULL, NULL);
+  return _cfg_db_append(dst, src, NULL, NULL, NULL);
 }
 
 /**
@@ -189,11 +197,14 @@ cfg_db_copy(struct cfg_db *dst, struct cfg_db *src) {
  *   both databases after the copy
  * @param src source of the append process
  * @param section_type type of section to be copied
+ * @return 0 if copy was successful, -1 if an error happened.
+ *   In case of an error, the destination might contain a partial
+ *   copy.
  */
-static INLINE void
+static INLINE int
 cfg_db_copy_sectiontype(struct cfg_db *dst, struct cfg_db *src,
     const char *section_type) {
-  _cfg_db_append(dst, src, section_type, NULL, NULL);
+  return _cfg_db_append(dst, src, section_type, NULL, NULL);
 }
 
 /**
@@ -204,11 +215,14 @@ cfg_db_copy_sectiontype(struct cfg_db *dst, struct cfg_db *src,
  * @param src source of the append process
  * @param section_type type of section to be copied
  * @param section_name name of section to be copied
+ * @return 0 if copy was successful, -1 if an error happened.
+ *   In case of an error, the destination might contain a partial
+ *   copy.
  */
-static INLINE void
+static INLINE int
 cfg_db_copy_namedsection(struct cfg_db *dst, struct cfg_db *src,
     const char *section_type, const char *section_name) {
-  _cfg_db_append(dst, src, section_type, section_name, NULL);
+  return _cfg_db_append(dst, src, section_type, section_name, NULL);
 }
 
 /**
@@ -219,11 +233,14 @@ cfg_db_copy_namedsection(struct cfg_db *dst, struct cfg_db *src,
  * @param src source of the append process
  * @param section_type type of section to be copied
  * @param section_name name of section to be copied
+ * @return 0 if copy was successful, -1 if an error happened.
+ *   In case of an error, the destination might contain a partial
+ *   copy.
  */
-static INLINE void
+static INLINE int
 cfg_db_copy_entry(struct cfg_db *dst, struct cfg_db *src,
     const char *section_type, const char *section_name, const char *entry_name) {
-  _cfg_db_append(dst, src, section_type, section_name, entry_name);
+  return _cfg_db_append(dst, src, section_type, section_name, entry_name);
 }
 
 /**
@@ -324,7 +341,8 @@ cfg_db_get_unnamed_section(struct cfg_section_type *stype) {
 static INLINE struct cfg_named_section *
 cfg_db_add_namedsection(
     struct cfg_db *db, const char *section_type, const char *section_name) {
-  return _cfg_db_add_section(db, section_type, section_name);
+  bool dummy;
+  return _cfg_db_add_section(db, section_type, section_name, &dummy);
 }
 
 /**
@@ -336,7 +354,8 @@ cfg_db_add_namedsection(
 static INLINE struct cfg_named_section *
 cfg_db_add_unnamedsection(
     struct cfg_db *db, const char *section_type) {
-  return _cfg_db_add_section(db, section_type, NULL);
+  bool dummy;
+  return _cfg_db_add_section(db, section_type, NULL, &dummy);
 }
 
 
@@ -348,10 +367,13 @@ cfg_db_add_unnamedsection(
  * @param entry_name entry name
  * @param value entry value
  */
-static INLINE void
+static INLINE int
 cfg_db_overwrite_entry(struct cfg_db *db, const char *section_type,
     const char *section_name, const char *entry_name, const char *value) {
-  cfg_db_set_entry(db, section_type, section_name, entry_name, value, false);
+  if (cfg_db_set_entry(db, section_type, section_name, entry_name, value, false)) {
+    return 0;
+  }
+  return -1;
 }
 
 /**
@@ -362,10 +384,13 @@ cfg_db_overwrite_entry(struct cfg_db *db, const char *section_type,
  * @param entry_name entry name
  * @param value entry value
  */
-static INLINE void
+static INLINE int
 cfg_db_add_entry(struct cfg_db *db, const char *section_type,
     const char *section_name, const char *entry_name, const char *value) {
-  cfg_db_set_entry(db, section_type, section_name, entry_name, value, true);
+  if (cfg_db_set_entry(db, section_type, section_name, entry_name, value, true)) {
+    return 0;
+  }
+  return -1;
 }
 
 /**

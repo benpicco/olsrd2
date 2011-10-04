@@ -65,7 +65,7 @@ static int _cmp_entries(struct cfg_entry *ptr1, struct cfg_entry *ptr2);
 
 /**
  * Initialize the root of a delta handler list
- * @param delta pointer to cfg_delta object
+ * @param delta pointer to uninitialized cfg_delta object
  */
 void
 cfg_delta_add(struct cfg_delta *delta) {
@@ -112,7 +112,9 @@ cfg_delta_remove_handler(struct cfg_delta *delta, struct cfg_delta_handler *hand
 }
 
 /**
- * Adds a delta handler by copying a schema section and entries
+ * Adds a delta handler by copying a schema section and entries.
+ * cfg_delta filter array must have one MORE element than the schema_entry
+ * array, because it has to end with a NULL entry.
  * @param delta base pointer for delta calculation
  * @param callback callback for delta handling
  * @param priority defines the order of delta callbacks
@@ -120,7 +122,7 @@ cfg_delta_remove_handler(struct cfg_delta *delta, struct cfg_delta_handler *hand
  * @param d_filter pointer to uninitialized array of cfg_delta_filter
  * @param s_section pointer to initialized schema_section
  * @param s_entries pointer to initialized array of schema_entry
- * @param count number of schema_entry and cfg_delta_filter in array
+ * @param count number of schema_entry objects in array
  */
 void
 cfg_delta_add_handler_by_schema(
@@ -146,68 +148,6 @@ cfg_delta_add_handler_by_schema(
   cfg_delta_add_handler(delta, d_handler);
 }
 
-void
-cfg_delta_trigger_non_optional(struct cfg_delta *delta,
-    struct cfg_schema *schema, struct cfg_db *post) {
-  struct cfg_delta_handler *handler;
-  struct cfg_schema_section *schema_section;
-  struct cfg_section_type *post_type;
-  int i;
-
-  avl_for_each_element(&delta->handler, handler, node) {
-    /* prepare handler */
-    handler->pre = NULL;
-    if (handler->filter) {
-      for (i=0; handler->filter[i].k; i++) {
-        handler->filter[i].pre = NULL;
-        handler->filter[i].changed = true;
-      }
-    }
-
-    avl_for_each_element(&schema->sections, schema_section, node) {
-      if (handler->s_type != NULL
-          && cfg_cmp_keys(handler->s_type, schema_section->t_type) != 0) {
-        /* handler only listenes to other section type */
-        continue;
-      }
-
-      post_type = cfg_db_find_sectiontype(post, schema_section->t_type);
-
-      if (schema_section->t_optional) {
-        if (post_type) {
-          /* optional section, handler normally */
-          avl_for_each_element(&post_type->names, handler->post, node) {
-            _handle_namedsection(handler, NULL, handler->post, schema_section);
-          }
-        }
-        continue;
-      }
-
-      /* non-optional sections are unnamed */
-      if (post_type) {
-        handler->post = cfg_db_get_unnamed_section(post_type);
-      }
-      else {
-        handler->post = NULL;
-      }
-
-      /* trigger all */
-      if (handler->filter) {
-        for (i=0; handler->filter[i].k; i++) {
-          if (handler->post) {
-            handler->filter[i].post =
-                cfg_db_get_entry(handler->post, handler->filter[i].k);
-          }
-          else {
-            handler->filter[i].post = NULL;
-          }
-        }
-      }
-      handler->callback();
-    }
-  }
-}
-
 /**
  * Calculates the difference between two configuration
  * databases and call all corresponding handlers.
@@ -230,7 +170,6 @@ cfg_delta_calculate(struct cfg_delta *delta,
   if (pre_change->schema == post_change->schema) {
     schema = pre_change->schema;
   }
-
 
   /* Iterate over delta handlers */
   avl_for_each_element(&delta->handler, handler, node) {
@@ -288,10 +227,77 @@ cfg_delta_calculate(struct cfg_delta *delta,
 }
 
 /**
+ * Trigger all delta listeners, even for default values.
+ * @param delta pointer to delta object
+ * @param post pointer to target database which must contain a schema
+ */
+void
+cfg_delta_trigger_non_optional(struct cfg_delta *delta,
+    struct cfg_db *post) {
+  struct cfg_delta_handler *handler;
+  struct cfg_schema_section *schema_section;
+  struct cfg_section_type *post_type;
+  int i;
+
+  avl_for_each_element(&delta->handler, handler, node) {
+    /* prepare handler */
+    handler->pre = NULL;
+    if (handler->filter) {
+      for (i=0; handler->filter[i].k; i++) {
+        handler->filter[i].pre = NULL;
+        handler->filter[i].changed = true;
+      }
+    }
+
+    avl_for_each_element(&post->schema->sections, schema_section, node) {
+      if (handler->s_type != NULL
+          && cfg_cmp_keys(handler->s_type, schema_section->t_type) != 0) {
+        /* handler only listenes to other section type */
+        continue;
+      }
+
+      post_type = cfg_db_find_sectiontype(post, schema_section->t_type);
+
+      if (schema_section->t_optional) {
+        if (post_type) {
+          /* optional section, handler normally */
+          avl_for_each_element(&post_type->names, handler->post, node) {
+            _handle_namedsection(handler, NULL, handler->post, schema_section);
+          }
+        }
+        continue;
+      }
+
+      /* non-optional sections are unnamed */
+      if (post_type) {
+        handler->post = cfg_db_get_unnamed_section(post_type);
+      }
+      else {
+        handler->post = NULL;
+      }
+
+      /* trigger all */
+      if (handler->filter) {
+        for (i=0; handler->filter[i].k; i++) {
+          if (handler->post) {
+            handler->filter[i].post =
+                cfg_db_get_entry(handler->post, handler->filter[i].k);
+          }
+          else {
+            handler->filter[i].post = NULL;
+          }
+        }
+      }
+      handler->callback();
+    }
+  }
+}
+/**
  * Calculates the delta between two section types
- * @param delta pointer to cfg_delta_handler object
- * @param pre_change
- * @param post_change
+ * @param handler pointer to cfg_delta_handler object
+ * @param pre_change section type object of pre-db
+ * @param post_change section type object of post-db
+ * @param schema pointer to schema of both sections or NULL
  */
 static void
 _delta_section(struct cfg_delta_handler *handler,
@@ -331,11 +337,13 @@ _delta_section(struct cfg_delta_handler *handler,
 }
 /**
  * Handles the difference between two named sections
- * @param delta pointer to cfg_delta_handler object
+ * @param handler pointer to cfg_delta_handler object
  * @param pre_change pointer to a named section before the change,
  *   NULL if section was added.
  * @param post_change pointer to a named section after the change,
  *   NULL if section was removed.
+ * @param schema_section schema of both named sections, NULL if no
+ *   schema.
  */
 static void
 _handle_namedsection(struct cfg_delta_handler *handler,
@@ -358,6 +366,7 @@ _handle_namedsection(struct cfg_delta_handler *handler,
  *   NULL if section was added.
  * @param post_change pointer to a named section after the change,
  *   NULL if section was removed.
+ * @param schema pointer to schema of both section, NULL if no schema.
  * @return true if callback has to be called, either because at least
  *   one filter matches or because the handler has no filters.
  *   false otherwise.
@@ -436,6 +445,15 @@ _setup_filterresults(struct cfg_delta_handler *handler,
   return false;
 }
 
+/**
+ * Compare two configuration entries. Function will lookup the default
+ * values if necessary.
+ * @param pre pointer to entry before change, NULL if entry is new
+ * @param post pointer to entry after change, NULL if entry was removed
+ * @param schema pointer to schema of the section of both entries,
+ *   NULL if no schema
+ * @return true if both entries are different
+ */
 static bool
 _compare_db_keyvalue_pair(struct cfg_entry *pre, struct cfg_entry *post,
     struct cfg_schema_section *schema) {
@@ -485,6 +503,14 @@ _compare_db_keyvalue_pair(struct cfg_entry *pre, struct cfg_entry *post,
       || (memcmp(pre_value, post_value, pre_len) != 0);
 }
 
+/**
+ * Comparator function for section_type objects. It use a case
+ * insensitive comparater, NULL pointers are considered less than
+ * any non-null object.
+ * @param ptr1 pointer to section type 1
+ * @param ptr2 pointer to section type 2
+ * @return -1 if ptr1<ptr2, 0 if ptr1=ptr2, 1 if ptr1>ptr2
+ */
 static int
 _cmp_section_types(struct cfg_section_type *ptr1, struct cfg_section_type *ptr2) {
   if (ptr1 == NULL) {
@@ -497,6 +523,14 @@ _cmp_section_types(struct cfg_section_type *ptr1, struct cfg_section_type *ptr2)
   return strcasecmp(ptr1->type, ptr2->type);
 }
 
+/**
+ * Comparator function for named-section objects. It use a case
+ * insensitive comparater, NULL pointers are considered less than
+ * any non-null object.
+ * @param ptr1 pointer to named section 1
+ * @param ptr2 pointer to named section 2
+ * @return -1 if ptr1<ptr2, 0 if ptr1=ptr2, 1 if ptr1>ptr2
+ */
 static int
 _cmp_named_section(struct cfg_named_section *ptr1, struct cfg_named_section *ptr2) {
   if (ptr1 == NULL || ptr1->name == NULL) {
@@ -509,6 +543,14 @@ _cmp_named_section(struct cfg_named_section *ptr1, struct cfg_named_section *ptr
   return strcasecmp(ptr1->name, ptr2->name);
 }
 
+/**
+ * Comparator function for db-entry objects. It use a case
+ * insensitive comparater, NULL pointers are considered less than
+ * any non-null object.
+ * @param ptr1 pointer to db entry 1
+ * @param ptr2 pointer to db entry  2
+ * @return -1 if ptr1<ptr2, 0 if ptr1=ptr2, 1 if ptr1>ptr2
+ */
 static int
 _cmp_entries(struct cfg_entry *ptr1, struct cfg_entry *ptr2) {
   if (ptr1 == NULL) {

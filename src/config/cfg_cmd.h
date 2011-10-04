@@ -42,19 +42,9 @@
 #ifndef CFG_CMD_H_
 #define CFG_CMD_H_
 
-/* forward declaration */
-struct cfg_cmd_state {
-  /* currently selected parser, NULL for 'auto' */
-  char *format;
-
-  /* last used section type */
-  char *section_type;
-
-  /* last used section name, NULL for unnamed section */
-  char *section_name;
-};
-
+#include "common/autobuf.h"
 #include "common/common_types.h"
+
 #include "config/cfg_db.h"
 #include "config/cfg.h"
 

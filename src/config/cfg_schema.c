@@ -106,11 +106,11 @@ cfg_schema_remove(struct cfg_schema *schema) {
 int
 cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *section) {
   assert (cfg_is_allowed_key(section->t_type));
-  assert (section->t_optional || !section->t_named);
 
   section->node.key = section->t_type;
   if (avl_insert(&schema->sections, &section->node)) {
     /* name collision */
+    section->node.key = NULL;
     return -1;
   }
 
@@ -127,12 +127,15 @@ void
 cfg_schema_remove_section(struct cfg_schema *schema, struct cfg_schema_section *section) {
   struct cfg_schema_entry *entry, *ent_it;
 
-  /* kill entries of section_schema */
-  CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, ent_it) {
-    cfg_schema_remove_entry(section, entry);
-  }
+  if (section->node.key) {
+    /* kill entries of section_schema */
+    CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, ent_it) {
+      cfg_schema_remove_entry(section, entry);
+    }
 
-  avl_remove(&schema->sections, &section->node);
+    avl_remove(&schema->sections, &section->node);
+    section->node.key = NULL;
+  }
 }
 
 /**
@@ -170,6 +173,7 @@ cfg_schema_add_entry(struct cfg_schema_section *section, struct cfg_schema_entry
   entry->node.key = &entry->t_name[0];
   if (avl_insert(&section->entries, &entry->node)) {
     /* name collision */
+    entry->node.key = NULL;
     return -1;
   }
   return 0;
@@ -216,7 +220,7 @@ cfg_schema_validate(struct cfg_db *db,
   bool hasName = false;
 
   if (db->schema == NULL) {
-    return 1;
+    return -1;
   }
 
   CFG_FOR_ALL_SECTION_TYPES(db, section, section_it) {
@@ -347,6 +351,17 @@ cfg_schema_validate(struct cfg_db *db,
   return error ? -1 : 0;
 }
 
+/**
+ * Convert the entries of a db section into binary representation by
+ * using the mappings defined in a schema section. The function assumes
+ * that the section was already validated.
+ * @param target pointer to target binary buffer
+ * @param named pointer to named section
+ * @param entries pointer to array of schema entries
+ * @param count number of schema entries
+ * @return 0 if conversion was successful, -1 if an error happened.
+ *   An error might result in a partial initialized target buffer.
+ */
 int
 cfg_schema_tobin(void *target, struct cfg_named_section *named,
     const struct cfg_schema_entry *entries, size_t count) {
@@ -394,6 +409,7 @@ cfg_schema_tobin(void *target, struct cfg_named_section *named,
 
 /**
  * Schema entry validator for string maximum length.
+ * See CFG_VALIDATE_STRING_LEN macro in cfg_schema.h
  * @param entry pointer to schema entry
  * @param section_name name of section type and name
  * @param value value of schema entry, NULL for help text generation
@@ -422,7 +438,7 @@ cfg_schema_validate_strlen(const struct cfg_schema_entry *entry,
 /**
  * Schema entry validator for strings printable characters
  * and a maximum length.
- * See CFG_VALIDATE_PRINTABLE() und CFG_VALIDATE_PRINTABLE_LEN()
+ * See CFG_VALIDATE_PRINTABLE() and CFG_VALIDATE_PRINTABLE_LEN()
  * macro in cfg_schema.h
  * @param entry pointer to schema entry
  * @param section_name name of section type and name
@@ -453,8 +469,8 @@ cfg_schema_validate_printable(const struct cfg_schema_entry *entry,
 
 /**
  * Schema entry validator for choice (list of possible strings)
- * See CFG_VALIDATE_CHOICE() macro in cfg_schema.h
  * List selection will be case insensitive.
+ * See CFG_VALIDATE_CHOICE() macro in cfg_schema.h
  * @param entry pointer to schema entry
  * @param section_name name of section type and name
  * @param value value of schema entry
@@ -490,7 +506,7 @@ cfg_schema_validate_choice(const struct cfg_schema_entry *entry,
 }
 
 /**
- * Schema entry validator for integers
+ * Schema entry validator for integers.
  * See CFG_VALIDATE_INT() and CFG_VALIDATE_INT_MINMAX() macro in cfg_schema.h
  * @param entry pointer to schema entry
  * @param section_name name of section type and name
@@ -528,8 +544,8 @@ cfg_schema_validate_int(const struct cfg_schema_entry *entry,
 }
 
 /**
- * Schema entry validator for network addresses and prefixes
- * See CFG_VALIDATE_NETADDR_() macros in cfg_schema.h
+ * Schema entry validator for network addresses and prefixes.
+ * See CFG_VALIDATE_NETADDR_*() macros in cfg_schema.h
  * @param entry pointer to schema entry
  * @param section_name name of section type and name
  * @param value value of schema entry
@@ -630,6 +646,16 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
   return -1;
 }
 
+/**
+ * Binary converter for string pointers. This validator will
+ * allocate additional memory for the string.
+ * See CFG_MAP_STRING() and CFG_MAP_STRING_LEN() macro
+ * in cfg_schema.h
+ * @param s_entry pointer to configuration entry schema.
+ * @param value pointer to value of configuration entry.
+ * @param reference pointer to binary output buffer.
+ * @return 0 if conversion succeeded, -1 otherwise.
+ */
 int
 cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     struct cfg_stringarray *value, void *reference) {
@@ -641,9 +667,17 @@ cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((un
   }
 
   *ptr = strdup(value->last_value);
-  return *ptr == NULL ? 1 : 0;
+  return *ptr == NULL ? -1 : 0;
 }
 
+/**
+ * Binary converter for string arrays.
+ * See CFG_MAP_STRING_ARRAY() macro in cfg_schema.h
+ * @param s_entry pointer to configuration entry schema.
+ * @param value pointer to value of configuration entry.
+ * @param reference pointer to binary output buffer.
+ * @return 0 if conversion succeeded, -1 otherwise.
+ */
 int
 cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
     struct cfg_stringarray *value, void *reference) {
@@ -655,6 +689,15 @@ cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
   return 0;
 }
 
+/**
+ * Binary converter for integers chosen as an index in a predefined
+ * string list.
+ * See CFG_MAP_CHOICE() macro in cfg_schema.h
+ * @param s_entry pointer to configuration entry schema.
+ * @param value pointer to value of configuration entry.
+ * @param reference pointer to binary output buffer.
+ * @return 0 if conversion succeeded, -1 otherwise.
+ */
 int
 cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
     struct cfg_stringarray *value, void *reference) {
@@ -667,6 +710,14 @@ cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
   return 0;
 }
 
+/**
+ * Binary converter for integers.
+ * See CFG_MAP_INT() macro in cfg_schema.h
+ * @param s_entry pointer to configuration entry schema.
+ * @param value pointer to value of configuration entry.
+ * @param reference pointer to binary output buffer.
+ * @return 0 if conversion succeeded, -1 otherwise.
+ */
 int
 cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     struct cfg_stringarray *value, void *reference) {
@@ -678,7 +729,14 @@ cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry __attribute__((unuse
   return 0;
 }
 
-int
+/**
+ * Binary converter for netaddr objects.
+ * See CFG_MAP_NETADDR_*() macros in cfg_schema.h
+ * @param s_entry pointer to configuration entry schema.
+ * @param value pointer to value of configuration entry.
+ * @param reference pointer to binary output buffer.
+ * @return 0 if conversion succeeded, -1 otherwise.
+ */int
 cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     struct cfg_stringarray *value, void *reference) {
   struct netaddr *ptr;
@@ -688,6 +746,14 @@ cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry __attribute__((u
   return netaddr_from_string(ptr, value->last_value);
 }
 
+ /**
+  * Binary converter for booleans.
+  * See CFG_MAP_BOOL() macro in cfg_schema.h
+  * @param s_entry pointer to configuration entry schema.
+  * @param value pointer to value of configuration entry.
+  * @param reference pointer to binary output buffer.
+  * @return 0 if conversion succeeded, -1 otherwise.
+  */
 int
 cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     struct cfg_stringarray *value, void *reference) {
@@ -699,6 +765,14 @@ cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry __attribute__((unus
   return 0;
 }
 
+/**
+ * Binary converter for list of strings.
+ * See CFG_MAP_STRINGLIST() macro in cfg_schema.h
+ * @param s_entry pointer to configuration entry schema.
+ * @param value pointer to value of configuration entry.
+ * @param reference pointer to binary output buffer.
+ * @return 0 if conversion succeeded, -1 otherwise.
+ */
 int
 cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     struct cfg_stringarray *value, void *reference) {
@@ -724,6 +798,20 @@ cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry __attribute__
   return 0;
 }
 
+/**
+ * Validates on configuration entry.
+ * @param schema_section pointer to schema section
+ * @param db pointer to database
+ * @param section pointer to database section type
+ * @param named pointer to named section
+ * @param entry pointer to configuration entry
+ * @param section_name name of section including type (for debug output)
+ * @param cleanup true if bad entries should be removed
+ * @param failFast true if fail on first error instead of validating
+ *   more list entries.
+ * @param out error output buffer
+ * @return true if an error happened, false otherwise
+ */
 static bool
 _validate_cfg_entry(struct cfg_schema_section *schema_section,
     struct cfg_db *db, struct cfg_section_type *section,
@@ -810,6 +898,18 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
   return warning;
 }
 
+/**
+ * Checks configuration database entries which are not a list of values.
+ * @param schema_entry pointer the schema of entry
+ * @param db pointer to database
+ * @param section pointer to database section type
+ * @param named pointer to named section
+ * @param entry pointer to configuration entry
+ * @param cleanup true if bad values should be removed
+ * @param section_name name of section including type (for debug output)
+ * @param out error output buffer
+ * @return true if an error happened, false otherwise
+ */
 static bool
 _check_single_value(struct cfg_schema_entry *schema_entry,
     struct cfg_db *db, struct cfg_section_type *section,
@@ -834,6 +934,18 @@ _check_single_value(struct cfg_schema_entry *schema_entry,
   return warning;
 }
 
+/**
+ * Checks a database section for missing mandatory entries
+ * @param schema_section pointer to schema of section
+ * @param db pointer to database
+ * @param section pointer to database section type
+ * @param named pointer to named section
+ * @param failFast true if fail on first error instead of validating
+ *   the rest of the section.
+ * @param section_name name of section including type (for debug output)
+ * @param out error output buffer
+ * @return true if an error happened, false otherwise
+ */
 static bool
 _check_missing_entries(struct cfg_schema_section *schema_section,
     struct cfg_db *db, struct cfg_section_type *section,

@@ -133,6 +133,9 @@ _compact_parse(char *src, size_t len, struct autobuf *log) {
   char *eol, *line;
 
   db = cfg_db_add();
+  if (!db) {
+    return NULL;
+  }
 
   memset(section, 0, sizeof(section));
   memset(name, 0, sizeof(name));
@@ -218,6 +221,7 @@ _parse_line(struct cfg_db *db, char *line,
     char *name, size_t name_size,
     struct autobuf *log) {
   char *first, *ptr;
+  bool dummy;
 
   /* trim leading and trailing whitespaces */
   first = line;
@@ -265,7 +269,9 @@ _parse_line(struct cfg_db *db, char *line,
     }
 
     /* add section to db */
-    _cfg_db_add_section(db, section, *name ? name : NULL);
+    if (_cfg_db_add_section(db, section, *name ? name : NULL, &dummy) == NULL) {
+      return -1;
+    }
     return 0;
   }
 
@@ -294,6 +300,8 @@ _parse_line(struct cfg_db *db, char *line,
   }
 
   /* found two tokens */
-  cfg_db_add_entry(db, section, *name ? name : NULL, first, ptr);
+  if (cfg_db_add_entry(db, section, *name ? name : NULL, first, ptr)) {
+    return -1;
+  }
   return 0;
 }
