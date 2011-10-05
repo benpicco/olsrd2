@@ -28,7 +28,7 @@ olsr_acl_add(struct olsr_netaddr_acl *acl) {
 }
 
 int
-olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *acl, struct cfg_stringarray *array) {
+olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *acl, struct strarray *array) {
   size_t accept_count, reject_count;
   char *ptr;
   accept_count = 0;
@@ -38,7 +38,7 @@ olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *acl, struct cfg_stringarray *ar
   memset(acl, 0, sizeof(acl));
 
   /* count number of address entries */
-  CFG_FOR_ALL_STRINGS(array, ptr) {
+  FOR_ALL_STRINGS(array, ptr) {
     if (_handle_control_cmd(acl, ptr) == 0) {
       continue;
     }
@@ -66,7 +66,7 @@ olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *acl, struct cfg_stringarray *ar
   }
 
   /* read netaddr strings into buffers */
-  CFG_FOR_ALL_STRINGS(array, ptr) {
+  FOR_ALL_STRINGS(array, ptr) {
     char *addr;
     if (_handle_control_cmd(acl, ptr) == 0) {
       continue;
@@ -184,7 +184,7 @@ olsr_acl_validate(const struct cfg_schema_entry *entry,
 
 int
 olsr_acl_tobin(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    struct cfg_stringarray *value, void *reference) {
+    struct strarray *value, void *reference) {
   struct olsr_netaddr_acl *ptr;
 
   ptr = (struct olsr_netaddr_acl *)reference;

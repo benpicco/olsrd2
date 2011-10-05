@@ -780,10 +780,3 @@ _avl_remove_worker(struct avl_tree *tree, struct avl_node *node)
 
   parent->right = min;
 }
-
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
- */

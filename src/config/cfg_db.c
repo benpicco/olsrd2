@@ -50,7 +50,6 @@
 
 #include "config/cfg.h"
 #include "config/cfg_schema.h"
-#include "config/cfg_memory.h"
 #include "config/cfg_db.h"
 
 static struct cfg_section_type *_alloc_section(struct cfg_db *, const char *);
@@ -75,7 +74,6 @@ cfg_db_add(void) {
   db = calloc(1, sizeof(*db));
   if (db) {
     avl_init(&db->sectiontypes, cfg_avlcmp_keys, false, NULL);
-    cfg_memory_add(&db->memory);
   }
   return db;
 }
@@ -91,8 +89,6 @@ cfg_db_remove(struct cfg_db *db) {
   CFG_FOR_ALL_SECTION_TYPES(db, section, section_it) {
     _free_sectiontype(section);
   }
-
-  cfg_memory_remove(&db->memory);
   free(db);
 }
 
@@ -135,7 +131,7 @@ _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
           continue;
         }
 
-        CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
+        FOR_ALL_STRINGS(&entry->val, ptr) {
           if (cfg_db_set_entry(
               dst, section->type, named->name, entry->name, ptr, true) == NULL) {
             return -1;
@@ -272,11 +268,7 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
     bool append) {
   struct cfg_entry *entry;
   struct cfg_named_section *named;
-  char *old = NULL;
-  size_t old_size = 0, new_size;
   bool new_section = false, new_entry = NULL;
-
-  new_size = strlen(value) + 1;
 
   /* create section */
   named = _cfg_db_add_section(db, section_type, section_name, &new_section);
@@ -294,25 +286,14 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
     new_entry = true;
   }
 
-  /* copy old values */
-  old = entry->val.value;
-  if (entry->val.value != NULL && append) {
-    old_size = entry->val.length;
+  if (!append) {
+    strarray_free(&entry->val);
   }
-
-  entry->val.length = old_size + new_size;
-  entry->val.value = cfg_memory_alloc_string(&db->memory, entry->val.length);
-  if (entry->val.value == NULL) {
-    entry->val.value = old;
+  /* append new entry */
+  if (strarray_append(&entry->val, value)) {
     goto set_entry_error;
   }
-  if (old_size) {
-    memcpy(entry->val.value, old, old_size);
-  }
-  memcpy(entry->val.value + old_size, value, new_size);
-  entry->val.last_value = entry->val.value + old_size;
 
-  cfg_memory_free_string(&db->memory, old);
   return entry;
 set_entry_error:
   if (new_entry) {
@@ -421,7 +402,7 @@ int
 cfg_db_remove_element(struct cfg_db *db, const char *section_type,
     const char *section_name, const char *entry_name, const char *value) {
   struct cfg_entry *entry;
-  char *ptr, *last_ptr;
+  char *ptr;
 
   /* find entry */
   entry = cfg_db_find_entry(db, section_type, section_name, entry_name);
@@ -438,26 +419,11 @@ cfg_db_remove_element(struct cfg_db *db, const char *section_type,
     return -1;
   }
 
-  last_ptr = NULL;
-  CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
+  FOR_ALL_STRINGS(&entry->val, ptr) {
     if (strcmp(ptr, value) == 0) {
-      size_t value_len = strlen(value) + 1;
-
-      entry->val.length -= value_len;
-
-      if (entry->val.last_value != ptr) {
-        /* not the last element */
-        size_t offset = (size_t)(ptr - entry->val.value);
-        memmove(ptr, ptr + value_len, entry->val.length - offset);
-        entry->val.last_value -= value_len;
-      }
-      else {
-        /* last element */
-        entry->val.last_value = last_ptr;
-      }
+      strarray_remove(&entry->val, ptr);
       return 0;
     }
-    last_ptr = ptr;
   }
 
   /* element not in list */
@@ -495,14 +461,14 @@ _alloc_section(struct cfg_db *db, const char *type) {
 
   assert(type);
 
-  section = cfg_memory_alloc(&db->memory, sizeof(*section));
+  section = calloc(1, sizeof(*section));
   if (!section) {
     return NULL;
   }
 
-  section->type = cfg_memory_strdup(&db->memory, type);
+  section->type = strdup(type);
   if (!section->type) {
-    cfg_memory_free(&db->memory, section, sizeof(*section));
+    free (section);
     return NULL;
   }
 
@@ -530,8 +496,8 @@ _free_sectiontype(struct cfg_section_type *section) {
   }
 
   avl_remove(&section->db->sectiontypes, &section->node);
-  cfg_memory_free_string(&section->db->memory, section->type);
-  cfg_memory_free(&section->db->memory, section, sizeof(*section));
+  free(section->type);
+  free(section);
 }
 
 /**
@@ -545,14 +511,14 @@ _alloc_namedsection(struct cfg_section_type *section,
     const char *name) {
   struct cfg_named_section *named;
 
-  named = cfg_memory_alloc(&section->db->memory, sizeof(*section));
+  named = calloc(1, sizeof(*section));
   if (!named) {
     return NULL;
   }
 
-  named->name = cfg_memory_strdup(&section->db->memory, name);
+  named->name = (name == NULL) ? NULL : strdup(name);
   if (!named->name && name != NULL) {
-    cfg_memory_free(&section->db->memory, named, sizeof(*named));
+    free (named);
     return NULL;
   }
 
@@ -578,8 +544,8 @@ _free_namedsection(struct cfg_named_section *named) {
   }
 
   avl_remove(&named->section_type->names, &named->node);
-  cfg_memory_free_string(&named->section_type->db->memory, named->name);
-  cfg_memory_free(&named->section_type->db->memory, named, sizeof(*named));
+  free (named->name);
+  free (named);
 }
 
 /**
@@ -594,14 +560,16 @@ _alloc_entry(struct cfg_named_section *named,
     const char *name) {
   struct cfg_entry *entry;
 
-  entry = cfg_memory_alloc(&named->section_type->db->memory, sizeof(*entry));
+  assert(name);
+
+  entry = calloc (1, sizeof(*entry));
   if (!entry) {
     return NULL;
   }
 
-  entry->name = cfg_memory_strdup(&named->section_type->db->memory, name);
+  entry->name = strdup(name);
   if (!entry->name) {
-    cfg_memory_free(&named->section_type->db->memory, entry, sizeof(*entry));
+    free (entry);
     return NULL;
   }
 
@@ -622,7 +590,8 @@ _free_entry(struct cfg_entry *entry) {
   avl_remove(&entry->named_section->entries, &entry->node);
 
   db = entry->named_section->section_type->db;
-  cfg_memory_free_string(&db->memory, entry->name);
-  cfg_memory_free_string(&db->memory, entry->val.value);
-  cfg_memory_free(&db->memory, entry, sizeof(*entry));
+
+  strarray_free(&entry->val);
+  free(entry->name);
+  free(entry);
 }

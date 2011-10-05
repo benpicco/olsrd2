@@ -308,7 +308,7 @@ _apply_log_setting(struct cfg_named_section *named,
 
   entry = cfg_db_get_entry(named, entry_name);
   if (entry) {
-    CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
+    FOR_ALL_STRINGS(&entry->val, ptr) {
       i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, ARRAYSIZE(LOG_SOURCE_NAMES));
       logging_cfg.mask[severity][i] = true;
     }

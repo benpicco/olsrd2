@@ -573,10 +573,3 @@ avl_delete(struct avl_tree *tree, struct avl_node *node) {
        element = ptr, ptr = avl_next_element(ptr, node_member), (tree)->count--)
 
 #endif /* _AVL_H */
-
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
- */

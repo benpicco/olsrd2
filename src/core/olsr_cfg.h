@@ -50,7 +50,7 @@
 #include "config/cfg_delta.h"
 
 struct olsr_config_global {
-  struct cfg_stringarray plugin;
+  struct strarray plugin;
 
   bool fork;
   bool failfast;

@@ -132,9 +132,147 @@ str_trim (char **ptr) {
   *ptr = string;
 }
 
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
+/**
+ * Copy a string array into another array. This overwrites
+ * all data in the original array.
+ * @param dst destination array
+ * @param src source array
+ * @return 0 if array was copied, -1 if an error happened
  */
+int
+strarray_copy(struct strarray *dst, struct strarray *src) {
+  char *ptr;
+
+  ptr = realloc(dst->value, src->length);
+  if (!ptr) {
+    return -1;
+  }
+
+  memcpy(ptr, src->value, src->length);
+  dst->last_value = src->last_value - src->value + ptr;
+  dst->length = src->length;
+  dst->value = ptr;
+  return 0;
+}
+
+/**
+ * Appends a string to an existing string array. Only use this
+ * if the string-array value has been allocated with malloc/calloc.
+ * @param array pointer to string array object
+ * @param string pointer to string to append
+ * @return 0 if string was appended, -1 if an error happened
+ */
+int
+strarray_append(struct strarray *array, const char *string) {
+  size_t length, new_length;
+  char *ptr;
+
+  length = strlen(string) + 1;
+
+  new_length = array->length + length;
+  ptr = realloc(array->value, new_length);
+  if (ptr == NULL) {
+    return -1;
+  }
+
+  memcpy(ptr + array->length, string, length);
+  array->value = ptr;
+  array->last_value = ptr + array->length;
+  array->length = new_length;
+  return 0;
+}
+
+/**
+ * Remove an element from a string array
+ * @param array pointer to string array object
+ * @param element an element to be removed from the array
+ * @param resize array afterwards
+ */
+void
+strarray_remove_ext(struct strarray *array,
+    char *element, bool resize) {
+  char *ptr1, *ptr2;
+  size_t len;
+
+  if (array->value == array->last_value) {
+    /* remove only element */
+    strarray_free(array);
+    return;
+  }
+
+  /* get length of element to remove */
+  len = strlen(element) + 1;
+
+  /* adjust length */
+  array->length -= len;
+
+  /* fix last_value pointer */
+  if (element == array->last_value) {
+    /* search for the 'second last' element */
+    FOR_ALL_STRINGS(array, ptr1) {
+      if (ptr1 == element) {
+        break;
+      }
+      ptr2 = ptr1;
+    }
+    array->last_value = ptr2;
+  }
+  else {
+    /* just move the last value pointer backwards */
+    array->last_value -= len;
+
+    /* remove element from memory */
+    memmove(element, element + len, array->length - (element - array->value));
+  }
+
+  if (!resize) {
+    return;
+  }
+
+  /* adjust memory block */
+  ptr1 = realloc(array->value, array->length);
+  if (ptr1 == NULL || array->value == ptr1) {
+    /* just keep the current memory block */
+    return;
+  }
+
+  /* adjust last-value pointer to new memory block */
+  array->last_value = array->last_value - array->value + ptr1;
+
+  /* adjust value pointer to new memory block*/
+  array->value = ptr1;
+}
+
+/**
+ * @param array pointer to strarray object
+ * @return number of strings in string array
+ */
+size_t
+strarray_get_count(struct strarray *array) {
+  size_t count = 0;
+  char *ptr;
+
+  FOR_ALL_STRINGS(array, ptr) {
+    count ++;
+  }
+  return count;
+}
+
+/**
+ * @param array pointer to strarray object
+ * @param index position of the requested object inside the array
+ * @return string at the specified index, NULL if not found
+ */
+char *
+strarray_get(struct strarray *array, size_t idx) {
+  size_t count = 0;
+  char *ptr;
+
+  FOR_ALL_STRINGS(array, ptr) {
+    if (count == idx) {
+      return ptr;
+    }
+    count ++;
+  }
+  return NULL;
+}

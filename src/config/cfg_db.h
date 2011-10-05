@@ -50,18 +50,14 @@ struct cfg_entry;
 
 #include "common/avl.h"
 #include "common/common_types.h"
+#include "common/string.h"
 
-#include "config/cfg_memory.h"
 #include "config/cfg_schema.h"
-#include "config/cfg_stringarray.h"
 
 /* Represents a single database with configuration entries */
 struct cfg_db {
   /* tree of all sections of this db */
   struct avl_tree sectiontypes;
-
-  /* string memory handling for db */
-  struct cfg_memory memory;
 
   /* linked schema of db */
   struct cfg_schema *schema;
@@ -106,7 +102,7 @@ struct cfg_entry {
   char *name;
 
   /* value of entry, might contain multiple strings */
-  struct cfg_stringarray val;
+  struct strarray val;
 
   /* backpointer to named section */
   struct cfg_named_section *named_section;

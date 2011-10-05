@@ -49,15 +49,119 @@
 
 #include "common/common_types.h"
 
+/*
+ * Represents a string or an array of strings
+ * The strings (including there Zero-Byte) are just appended
+ * into a large binary buffer. The struct contains a pointer
+ * to the first and to the last string and the size of the
+ * binary buffer
+ *
+ * typically append operations are done by realloc() calls
+ * while remove operations are done with memmove
+ */
+struct strarray {
+  /* pointer to the first string */
+  char *value;
+
+  /* pointer to the last string */
+  char *last_value;
+
+  /* total length of all strings including zero-bytes */
+  size_t length;
+};
+
 EXPORT char *strscpy (char *dest, const char *src, size_t size);
 EXPORT char *strscat (char *dest, const char *src, size_t size);
 EXPORT void str_trim (char **ptr);
 
-#endif
+EXPORT int strarray_copy(struct strarray *dst, struct strarray *src);
+EXPORT int strarray_append(struct strarray *, const char *);
+EXPORT void strarray_remove_ext(struct strarray *, char *, bool);
 
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
+EXPORT char *strarray_get(struct strarray *array, size_t idx);
+EXPORT size_t strarray_get_count(struct strarray *array);
+
+/**
+ * Initialize string array object
+ * @param array pointer to string array object
  */
+static INLINE void
+strarray_init(struct strarray *array) {
+  memset(array, 0, sizeof(*array));
+}
+
+/**
+ * Free memory of string array object
+ * @param array pointer to string array object
+ */
+static INLINE void
+strarray_free(struct strarray *array) {
+  free(array->value);
+  strarray_init(array);
+}
+
+/**
+ * Remove an element from a string array
+ * @param array pointer to string array object
+ * @param element an element to be removed from the array
+ */
+static INLINE void
+strarray_remove(struct strarray *array, char *element) {
+  strarray_remove_ext(array, element, true);
+}
+
+/**
+ * @param array pointer to strarray object
+ * @return pointer to first string of string array
+ */
+static INLINE char *
+strarray_get_first(struct strarray *array) {
+  return array->value;
+}
+
+/**
+ * @param array pointer to strarray object
+ * @return pointer to last string of string array
+ */
+static INLINE char *
+strarray_get_last(struct strarray *array) {
+  return array->last_value;
+}
+
+/**
+ * Do not call this function for the last string in
+ * a string array.
+ * @param array pointer to strarray object
+ * @param current pointer to a string in array
+ * @return pointer to next string in string array
+ */
+static INLINE char *
+strarray_get_next(struct strarray *array __attribute__((unused)),
+    char *current) {
+  return current + strlen(current) + 1;
+}
+
+/**
+ * @param array pointer to strarray object
+ * @param current pointer to a string in array
+ * @return pointer to next string in string array,
+ *   NULL if there is no further string
+ */
+static INLINE char *
+strarray_get_next_safe(struct strarray *array, char *current) {
+  if (current == array->last_value) {
+    return NULL;
+  }
+  return current + strlen(current) + 1;
+}
+
+/**
+ * Loop over an array of strings. This loop should not be used if elements are
+ * removed from the array during the loop.
+ *
+ * @param array pointer to strarray object
+ * @param charptr pointer to loop variable
+ */
+#define FOR_ALL_STRINGS(array, charptr) for (charptr = strarray_get_first(array); charptr != NULL && charptr <= strarray_get_last(array); charptr = strarray_get_next(array, charptr))
+
+#endif

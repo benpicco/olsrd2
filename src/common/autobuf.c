@@ -358,12 +358,3 @@ static void *
 _malloc(size_t size) {
   return calloc(size, 1);
 }
-
-/*
- * Local Variables:
- * mode: c
- * style: linux
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- */

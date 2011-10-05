@@ -165,7 +165,7 @@ olsr_cfg_apply(void) {
   struct autobuf log;
   bool found;
   int result;
-  const char *ptr;
+  char *ptr;
 
   if (abuf_init(&log, 0)) {
     OLSR_WARN_OOM(LOG_CONFIG);
@@ -180,7 +180,7 @@ olsr_cfg_apply(void) {
   entry = NULL;
 
   /* load plugins */
-  CFG_FOR_ALL_STRINGS(&config_global.plugin, ptr) {
+  FOR_ALL_STRINGS(&config_global.plugin, ptr) {
     if (olsr_plugins_load(ptr) == NULL && config_global.failfast) {
       goto apply_failed;
     }
@@ -191,7 +191,7 @@ olsr_cfg_apply(void) {
     found = false;
 
     /* search if plugin should still be active */
-    CFG_FOR_ALL_STRINGS(&config_global.plugin, ptr) {
+    FOR_ALL_STRINGS(&config_global.plugin, ptr) {
       if (olsr_plugins_get(ptr) == plugin) {
         found = true;
         break;

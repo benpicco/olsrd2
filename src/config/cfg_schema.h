@@ -58,9 +58,9 @@ struct cfg_schema_entry;
 #include "common/autobuf.h"
 #include "common/avl.h"
 #include "common/netaddr.h"
+#include "common/string.h"
 
 #include "config/cfg_db.h"
-#include "config/cfg_stringarray.h"
 
 #if !defined(REMOVE_HELPTEXT)
 #define _CFG_VALIDATE(name, def, help, args...)                  { .t_name = (name), .t_default = (def), .t_help = (help), ##args }
@@ -216,7 +216,7 @@ struct cfg_schema_entry {
 
   /* callback for converting string into binary */
   int (*t_to_binary)(const struct cfg_schema_entry *s_entry,
-      struct cfg_stringarray *value, void *ptr);
+      struct strarray *value, void *ptr);
 
   /* offset of current binary data compared to reference pointer */
   size_t t_offset;
@@ -256,19 +256,19 @@ EXPORT int cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out);
 
 EXPORT int cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 EXPORT int cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 EXPORT int cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 EXPORT int cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 EXPORT int cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 EXPORT int cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 EXPORT int cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 
 /**
  * Finds a section in a schema

@@ -367,7 +367,7 @@ cfg_schema_tobin(void *target, struct cfg_named_section *named,
     const struct cfg_schema_entry *entries, size_t count) {
   char *ptr;
   size_t i;
-  struct cfg_stringarray default_array, *value;
+  struct strarray default_array, *value;
 
   ptr = (char *)target;
 
@@ -658,7 +658,7 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
  */
 int
 cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    struct cfg_stringarray *value, void *reference) {
+    struct strarray *value, void *reference) {
   char **ptr;
 
   ptr = (char **)reference;
@@ -666,7 +666,7 @@ cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((un
     free(ptr);
   }
 
-  *ptr = strdup(value->last_value);
+  *ptr = strdup(strarray_get_last(value));
   return *ptr == NULL ? -1 : 0;
 }
 
@@ -680,12 +680,12 @@ cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((un
  */
 int
 cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference) {
+    struct strarray *value, void *reference) {
   char *ptr;
 
   ptr = (char *)reference;
 
-  strscpy(ptr, value->last_value, (size_t)s_entry->t_validate_params.p_i1);
+  strscpy(ptr, strarray_get_last(value), (size_t)s_entry->t_validate_params.p_i1);
   return 0;
 }
 
@@ -700,12 +700,13 @@ cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
  */
 int
 cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference) {
+    struct strarray *value, void *reference) {
   int *ptr;
 
   ptr = (int *)reference;
 
-  *ptr = cfg_get_choice_index(value->last_value, s_entry->t_validate_params.p_ptr,
+  *ptr = cfg_get_choice_index(strarray_get_last(value),
+      s_entry->t_validate_params.p_ptr,
       (size_t)s_entry->t_validate_params.p_i1);
   return 0;
 }
@@ -720,12 +721,12 @@ cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
  */
 int
 cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    struct cfg_stringarray *value, void *reference) {
+    struct strarray *value, void *reference) {
   int *ptr;
 
   ptr = (int *)reference;
 
-  *ptr = strtol(value->last_value, NULL, 10);
+  *ptr = strtol(strarray_get_last(value), NULL, 10);
   return 0;
 }
 
@@ -738,12 +739,12 @@ cfg_schema_tobin_int(const struct cfg_schema_entry *s_entry __attribute__((unuse
  * @return 0 if conversion succeeded, -1 otherwise.
  */int
 cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    struct cfg_stringarray *value, void *reference) {
+    struct strarray *value, void *reference) {
   struct netaddr *ptr;
 
   ptr = (struct netaddr *)reference;
 
-  return netaddr_from_string(ptr, value->last_value);
+  return netaddr_from_string(ptr, strarray_get_last(value));
 }
 
  /**
@@ -756,12 +757,12 @@ cfg_schema_tobin_netaddr(const struct cfg_schema_entry *s_entry __attribute__((u
   */
 int
 cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    struct cfg_stringarray *value, void *reference) {
+    struct strarray *value, void *reference) {
   bool *ptr;
 
   ptr = (bool *)reference;
 
-  *ptr = cfg_get_bool(value->last_value);
+  *ptr = cfg_get_bool(strarray_get_last(value));
   return 0;
 }
 
@@ -775,27 +776,12 @@ cfg_schema_tobin_bool(const struct cfg_schema_entry *s_entry __attribute__((unus
  */
 int
 cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    struct cfg_stringarray *value, void *reference) {
-  struct cfg_stringarray *array;
+    struct strarray *value, void *reference) {
+  struct strarray *array;
 
-  array = (struct cfg_stringarray *)reference;
+  array = (struct strarray *)reference;
 
-  /* move new value into binary target */
-  free (array->value);
-
-  if (value->value == NULL || value->length == 0) {
-    memset(array, 0, sizeof(*array));
-    return 0;
-  }
-  array->value = malloc(value->length);
-  if (array->value == NULL) {
-    return -1;
-  }
-
-  memcpy(array->value, value->value, value->length);
-  array->last_value = value->last_value - value->value + array->value;
-  array->length = value->length;
-  return 0;
+  return strarray_copy(array, value);
 }
 
 /**
@@ -838,30 +824,23 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
   }
 
   if (cleanup) {
-    char *last_valid = entry->val.value;
-
     /* first remove duplicate entries */
-    CFG_FOR_ALL_STRINGS(&entry->val, ptr1) {
+    FOR_ALL_STRINGS(&entry->val, ptr1) {
       /* get pointer to next element */
       ptr2 = ptr1 + strlen(ptr1)+1;
 
       /* compare list value to any later value */
-      while (ptr2 <= entry->val.last_value) {
-        size = strlen(ptr2) + 1;
-
+      while (ptr2 <= strarray_get_last(&entry->val)) {
         if (strcmp(ptr2, ptr1) == 0) {
           /* duplicate found, remove it */
-          size_t offset = (size_t)(ptr2 - entry->val.value);
-          memmove (ptr2, ptr2 + size, entry->val.length - size - offset);
-          entry->val.length -= size;
+
+          strarray_remove_ext(&entry->val, ptr2, false);
         }
         else {
-          ptr2 += size;
+          ptr2 = strarray_get_next(&entry->val, ptr2);
         }
       }
-      last_valid = ptr1;
     }
-    entry->val.last_value = last_valid;
   }
 
   /* now validate syntax */

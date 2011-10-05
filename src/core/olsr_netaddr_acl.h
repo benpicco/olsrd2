@@ -41,7 +41,7 @@ struct olsr_netaddr_acl {
 };
 
 EXPORT void olsr_acl_add(struct olsr_netaddr_acl *);
-EXPORT int olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *, struct cfg_stringarray *);
+EXPORT int olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *, struct strarray *);
 EXPORT void olsr_acl_remove(struct olsr_netaddr_acl *);
 EXPORT int olsr_acl_copy(struct olsr_netaddr_acl *to, struct olsr_netaddr_acl *from);
 
@@ -50,6 +50,6 @@ EXPORT bool olsr_acl_check_accept(struct olsr_netaddr_acl *, struct netaddr *);
 EXPORT int olsr_acl_validate(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out);
 EXPORT int olsr_acl_tobin(const struct cfg_schema_entry *s_entry,
-    struct cfg_stringarray *value, void *reference);
+    struct strarray *value, void *reference);
 
 #endif /* OLSR_NETADDR_ACL_H_ */

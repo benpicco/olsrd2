@@ -223,7 +223,7 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
     }
 
     cfg_append_printable_line(log, "Key '%s' has value:", arg);
-    CFG_FOR_ALL_STRINGS(&entry->val, ptr) {
+    FOR_ALL_STRINGS(&entry->val, ptr) {
       cfg_append_printable_line(log, "%s", ptr);
     }
     return 0;

@@ -2,7 +2,6 @@ SET(OLSRD_CONFIG_SRCS cfg_cmd.c
                       cfg_db.c
                       cfg_delta.c
                       cfg_io.c
-                      cfg_memory.c
                       cfg_parser.c
                       cfg_schema.c
                       cfg.c)

@@ -16,6 +16,7 @@ struct abuf_template_storage {
   size_t end;
   size_t key_index;
 };
+
 EXPORT int abuf_template_init(const char **keys, size_t length,
     const char *format, struct abuf_template_storage *indexTable, size_t indexLength);
 EXPORT int abuf_templatef(struct autobuf *autobuf, const char *format,

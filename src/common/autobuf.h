@@ -129,12 +129,3 @@ abuf_append_uint32(struct autobuf *autobuf, const uint32_t l) {
 }
 
 #endif
-
-/*
- * Local Variables:
- * mode: c
- * style: linux
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- */
