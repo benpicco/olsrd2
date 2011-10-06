@@ -179,7 +179,6 @@ static struct cfg_io *
 _find_io(struct cfg_instance *instance,
     const char *url, const char **io_param, struct autobuf *log) {
   struct cfg_io *io;
-  char *buffer;
   const char *ptr1;
 
   ptr1 = strstr(url, "://");
@@ -193,13 +192,16 @@ _find_io(struct cfg_instance *instance,
     ptr1 = url;
   }
   else {
-    buffer = alloca(strlen(url) + 1);
-    strcpy(buffer, url);
-    if (ptr1 - url < (int)sizeof(buffer)) {
-      buffer[ptr1 - url] = 0;
-    }
+    char *buffer;
+
+    buffer = strdup(url);
+    if (!buffer)
+      return NULL;
+
+    buffer[ptr1 - url] = 0;
 
     io = avl_find_element(&instance->io_tree, buffer, io, node);
+    free (buffer);
     ptr1 += 3;
   }
 

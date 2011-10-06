@@ -39,11 +39,6 @@
  *
  */
 
-#ifndef WIN32
-#include <alloca.h>
-#else
-#include <malloc.h>
-#endif
 #include <regex.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -93,36 +88,46 @@ cfg_cmd_handle_set(struct cfg_instance *instance, struct cfg_db *db,
   struct _parsed_argument pa;
   char *ptr;
   bool dummy;
+  int result;
 
   /* get temporary copy of argument string */
-  ptr = alloca(strlen(arg)+1);
-  strcpy(ptr, arg);
+  ptr = strdup(arg);
+  if (!ptr)
+    return -1;
+
+  /* prepare for cleanup */
+  result = -1;
 
   if (_do_parse_arg(instance, ptr, &pa, log)) {
-    return -1;
+    goto handle_set_cleanup;
   }
 
   if (pa.value != NULL) {
-    if (NULL == cfg_db_set_entry(db, instance->cmd_section_type,
+    if (cfg_db_set_entry(db, instance->cmd_section_type,
         instance->cmd_section_name, pa.key, pa.value, true)) {
-      cfg_append_printable_line(log, "Cannot create entry: '%s'\n", arg);
-      return -1;
+      result = 0;
     }
-    return 0;
+    else {
+      cfg_append_printable_line(log, "Cannot create entry: '%s'\n", arg);
+    }
+    result = 0;
+    goto handle_set_cleanup;
   }
 
   if (pa.key != NULL) {
     cfg_append_printable_line(log, "Key without value is not allowed for set command: %s", arg);
-    return -1;
+    goto handle_set_cleanup;
   }
 
   /* set section */
   if (NULL == _cfg_db_add_section(db,
       instance->cmd_section_type, instance->cmd_section_name, &dummy)) {
     cfg_append_printable_line(log, "Cannot create section: '%s'\n", arg);
-    return -1;
+    goto handle_set_cleanup;
   }
-  return 0;
+handle_set_cleanup:
+  free(ptr);
+  return result;
 }
 
 /**
@@ -138,43 +143,55 @@ cfg_cmd_handle_remove(struct cfg_instance *instance, struct cfg_db *db,
     const char *arg, struct autobuf *log) {
   struct _parsed_argument pa;
   char *ptr;
+  int result;
 
-  ptr = alloca(strlen(arg)+1);
-  strcpy(ptr, arg);
+  /* get temporary copy of argument string */
+  ptr = strdup(arg);
+  if (!ptr)
+    return -1;
+
+  /* prepare for cleanup */
+  result = -1;
 
   if (_do_parse_arg(instance, ptr, &pa, log)) {
-    return -1;
+    goto handle_remove_cleanup;
   }
 
   if (pa.value != NULL) {
     cfg_append_printable_line(log, "Value is not allowed for remove command: %s", arg);
-    return -1;
+    goto handle_remove_cleanup;
   }
 
   if (pa.key != NULL) {
-    if (cfg_db_remove_entry(db, instance->cmd_section_type,
+    if (!cfg_db_remove_entry(db, instance->cmd_section_type,
         instance->cmd_section_name, pa.key)) {
-      cfg_append_printable_line(log, "Cannot remove entry: '%s'\n", arg);
-      return -1;
+      result = 0;
     }
-    return 0;
+    else {
+      cfg_append_printable_line(log, "Cannot remove entry: '%s'\n", arg);
+    }
+    goto handle_remove_cleanup;
   }
 
   if (instance->cmd_section_name) {
     if (cfg_db_remove_namedsection(db,
         instance->cmd_section_type, instance->cmd_section_name)) {
       cfg_append_printable_line(log, "Cannot remove section: '%s'\n", arg);
-      return -1;
+      goto handle_remove_cleanup;
     }
   }
 
   if (instance->cmd_section_type) {
     if (cfg_db_remove_sectiontype(db, instance->cmd_section_type)) {
       cfg_append_printable_line(log, "Cannot remove section: '%s'\n", arg);
-      return -1;
+      goto handle_remove_cleanup;
     }
   }
-  return 0;
+  result = 0;
+
+handle_remove_cleanup:
+  free(ptr);
+  return result;
 }
 
 /**
@@ -193,6 +210,7 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
   struct cfg_entry *entry, *entry_it;
   struct _parsed_argument pa;
   char *ptr;
+  int result;
 
   if (arg == NULL || *arg == 0) {
     cfg_append_printable_line(log, "Section types in database:");
@@ -203,37 +221,43 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
     return 0;
   }
 
-  ptr = alloca(strlen(arg)+1);
-  strcpy(ptr, arg);
+  ptr = strdup(arg);
+  if (!ptr) {
+    return -1;
+  }
+
+  /* prepare for cleanup */
+  result = -1;
 
   if (_do_parse_arg(instance, ptr, &pa, log)) {
-    return -1;
+    goto handle_get_cleanup;
   }
 
   if (pa.value != NULL) {
     cfg_append_printable_line(log, "Value is not allowed for view command: %s", arg);
-    return -1;
+    goto handle_get_cleanup;
   }
 
   if (pa.key != NULL) {
     if (NULL == (entry = cfg_db_find_entry(db,
         instance->cmd_section_type, instance->cmd_section_name, pa.key))) {
       cfg_append_printable_line(log, "Cannot find data for entry: '%s'\n", arg);
-      return -1;
+      goto handle_get_cleanup;
     }
 
     cfg_append_printable_line(log, "Key '%s' has value:", arg);
     FOR_ALL_STRINGS(&entry->val, ptr) {
       cfg_append_printable_line(log, "%s", ptr);
     }
-    return 0;
+    result = 0;
+    goto handle_get_cleanup;
   }
 
   if (pa.name == NULL) {
     type = cfg_db_find_sectiontype(db, pa.type);
     if (type == NULL || type->names.count == 0) {
       cfg_append_printable_line(log, "Cannot find data for section type: %s", arg);
-      return -1;
+      goto handle_get_cleanup;
     }
 
     named = avl_first_element(&type->names, named, node);
@@ -242,21 +266,26 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
       CFG_FOR_ALL_SECTION_NAMES(type, named, named_it) {
         cfg_append_printable_line(log, "%s", named->name);
       }
-      return 0;
+      result = 0;
+      goto handle_get_cleanup;
     }
   }
 
   named = cfg_db_find_namedsection(db, pa.type, pa.name);
   if (named == NULL) {
     cfg_append_printable_line(log, "Cannot find data for section: %s", arg);
-    return -1;
+    goto handle_get_cleanup;
   }
 
   cfg_append_printable_line(log, "Entry keys for section '%s':", arg);
   CFG_FOR_ALL_ENTRIES(named, entry, entry_it) {
     cfg_append_printable_line(log, "%s", entry->name);
   }
-  return 0;
+  result = 0;
+
+handle_get_cleanup:
+  free(ptr);
+  return result;
 }
 
 /**
@@ -325,10 +354,11 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   struct cfg_schema_section *s_section, *s_section_it;
   struct cfg_schema_entry *s_entry, *s_entry_it;
   char *copy, *ptr;
+  int result;
 
   if (db->schema == NULL) {
     abuf_puts(log, "Internal error, database not connected to schema\n");
-    return 1;
+    return -1;
   }
 
   if (arg == NULL || *arg == 0) {
@@ -347,8 +377,10 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   }
 
   /* copy string into stack*/
-  copy = alloca(strlen(arg) + 1);
-  strcpy(copy, arg);
+  copy = strdup(arg);
+
+  /* prepare for cleanup */
+  result = -1;
 
   ptr = strchr(copy, '.');
   if (ptr) {
@@ -358,7 +390,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   s_section = avl_find_element(&db->schema->sections, copy, s_section, node);
   if (s_section == NULL) {
     cfg_append_printable_line(log, "Unknown section type '%s'", copy);
-    return 1;
+    goto handle_schema_cleanup;
   }
 
   if (ptr == NULL) {
@@ -372,14 +404,15 @@ cfg_cmd_handle_schema(struct cfg_db *db,
           s_entry->t_help ? ": " : "",
           s_entry->t_help ? s_entry->t_help : "");
     }
-    return 0;
+    result = 0;
+    goto handle_schema_cleanup;
   }
 
   s_entry = avl_find_element(&s_section->entries, ptr, s_entry, node);
   if (s_entry == NULL) {
     cfg_append_printable_line(log, "Unknown entry name '%s' in section type '%s'",
         ptr, copy);
-    return 1;
+    goto handle_schema_cleanup;
   }
 
   cfg_append_printable_line(log, "%s.%s%s%s%s%s",
@@ -396,7 +429,12 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   if (s_entry->t_validate) {
     s_entry->t_validate(s_entry, NULL, NULL, log);
   }
-  return 0;
+
+  result = 0;
+
+handle_schema_cleanup:
+  free (ptr);
+  return result;
 }
 
 /**

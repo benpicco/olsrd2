@@ -196,7 +196,7 @@ strarray_append(struct strarray *array, const char *string) {
 void
 strarray_remove_ext(struct strarray *array,
     char *element, bool resize) {
-  char *ptr1, *ptr2;
+  char *ptr1, *ptr2 = NULL;
   size_t len;
 
   if (array->value == array->last_value) {
