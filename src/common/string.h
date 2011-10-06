@@ -49,6 +49,10 @@
 
 #include "common/common_types.h"
 
+#define STRARRAY_BLOCKSIZE    64
+#define STRARRAY_MEMSIZE(b)   (((b) + (STRARRAY_BLOCKSIZE-1)) & (~(STRARRAY_BLOCKSIZE - 1)))
+
+
 /*
  * Represents a string or an array of strings
  * The strings (including there Zero-Byte) are just appended

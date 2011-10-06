@@ -143,7 +143,12 @@ int
 strarray_copy(struct strarray *dst, struct strarray *src) {
   char *ptr;
 
-  ptr = realloc(dst->value, src->length);
+  if (src->length == 0) {
+    memset(dst, 0, sizeof(*dst));
+    return 0;
+  }
+
+  ptr = realloc(dst->value, STRARRAY_MEMSIZE(src->length));
   if (!ptr) {
     return -1;
   }
@@ -170,7 +175,7 @@ strarray_append(struct strarray *array, const char *string) {
   length = strlen(string) + 1;
 
   new_length = array->length + length;
-  ptr = realloc(array->value, new_length);
+  ptr = realloc(array->value, STRARRAY_MEMSIZE(new_length));
   if (ptr == NULL) {
     return -1;
   }
@@ -230,7 +235,7 @@ strarray_remove_ext(struct strarray *array,
   }
 
   /* adjust memory block */
-  ptr1 = realloc(array->value, array->length);
+  ptr1 = realloc(array->value, STRARRAY_MEMSIZE(array->length));
   if (ptr1 == NULL || array->value == ptr1) {
     /* just keep the current memory block */
     return;

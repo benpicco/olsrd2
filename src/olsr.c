@@ -59,6 +59,7 @@
 #include "builddata/data.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
+#include "olsr_http.h"
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"
 #include "olsr_memcookie.h"
@@ -236,6 +237,7 @@ main(int argc, char **argv) {
   if (olsr_telnet_init()) {
     goto olsrd_cleanup;
   }
+  olsr_http_init();
 
   /* activate custom additions to framework */
   if (olsr_setup_init()) {
@@ -279,6 +281,7 @@ olsrd_cleanup:
   olsr_setup_cleanup();
 
   /* free framework resources */
+  olsr_http_cleanup();
   olsr_telnet_cleanup();
   olsr_stream_cleanup();
   olsr_packet_cleanup();
