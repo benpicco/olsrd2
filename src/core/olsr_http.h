@@ -16,8 +16,7 @@
 #include "core/olsr_netaddr_acl.h"
 
 #define OLSR_HTTP_MAX_HEADERS 16
-#define OLSR_HTTP_MAX_FORMS 8
-#define OLSR_HTTP_MAX_QUERIES 8
+#define OLSR_HTTP_MAX_PARAMS 8
 #define OLSR_HTTP_MAX_URI_LENGTH 256
 
 enum olsr_http_result {
@@ -32,6 +31,9 @@ enum olsr_http_result {
 };
 
 struct olsr_http_session {
+  /* address of remote client */
+  struct netaddr *remote;
+
   const char *method; /* get/post/... */
   const char *request_uri;
   const char *http_version;
@@ -40,15 +42,10 @@ struct olsr_http_session {
   char *header_value[OLSR_HTTP_MAX_HEADERS];
   size_t header_count;
 
-  /* parameter of the URI for GET */
-  char *query_name[OLSR_HTTP_MAX_QUERIES];
-  char *query_value[OLSR_HTTP_MAX_QUERIES];
-  size_t query_count;
-
-  /* parameter of the URI for POST */
-  char *form_name[OLSR_HTTP_MAX_FORMS];
-  char *form_value[OLSR_HTTP_MAX_FORMS];
-  size_t form_count;
+  /* parameter of the URI for GET/POST */
+  char *param_name[OLSR_HTTP_MAX_PARAMS];
+  char *param_value[OLSR_HTTP_MAX_PARAMS];
+  size_t param_count;
 
   /* content type for answer, NULL means plain/html */
   const char *content_type;
@@ -87,6 +84,9 @@ EXPORT void olsr_http_remove(struct olsr_http_handler *);
 EXPORT const char *olsr_http_lookup_value(char **keys, char **values,
     size_t count, const char *key);
 
+EXPORT const char *HTTP_CONTENTTYPE_HTML;
+EXPORT const char *HTTP_CONTENTTYPE_TEXT;
+
 /**
  * Lookup the value of one http header field.
  * @param session pointer to http session
@@ -106,21 +106,9 @@ olsr_http_lookup_header(struct olsr_http_session *session, const char *key) {
  * @return parameter value or NULL if not found
  */
 static INLINE const char *
-olsr_http_lookup_get(struct olsr_http_session *session, const char *key) {
-  return olsr_http_lookup_value(session->query_name, session->query_value,
-      session->query_count, key);
-}
-
-/**
- * Lookup the value of one http request parameter delivered by POST
- * @param session pointer to http session
- * @param key header field name
- * @return parameter value or NULL if not found
- */
-static INLINE const char *
-olsr_http_lookup_post(struct olsr_http_session *session, const char *key) {
-  return olsr_http_lookup_value(session->form_name, session->form_value,
-      session->form_count, key);
+olsr_http_lookup_param(struct olsr_http_session *session, const char *key) {
+  return olsr_http_lookup_value(session->param_name, session->param_value,
+      session->param_count, key);
 }
 
 #endif /* OLSR_HTTP_H_ */

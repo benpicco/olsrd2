@@ -663,7 +663,7 @@ cfg_schema_tobin_strptr(const struct cfg_schema_entry *s_entry __attribute__((un
 
   ptr = (char **)reference;
   if (*ptr) {
-    free(ptr);
+    free(*ptr);
   }
 
   *ptr = strdup(strarray_get_last(value));

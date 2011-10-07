@@ -28,7 +28,9 @@ static const char _CFG_HTTP_SECTION[] = "http";
 /* Http text constants */
 static const char HTTP_VERSION_1_0[] = "HTTP/1.0";
 static const char HTTP_VERSION_1_1[] = "HTTP/1.1";
-static const char *HTTP_DEFAULT_CONTENTTYPE = "text/html";
+
+const char *HTTP_CONTENTTYPE_HTML = "text/html";
+const char *HTTP_CONTENTTYPE_TEXT = "text/plain";
 
 static const char HTTP_GET[] = "GET";
 static const char HTTP_POST[] = "POST";
@@ -273,8 +275,8 @@ _cb_receive_data(struct olsr_stream_session *session) {
       return STREAM_SESSION_ACTIVE;;
     }
 
-    header.form_count = _parse_query_string(
-        first_header, header.form_name, header.form_value, OLSR_HTTP_MAX_FORMS);
+    header.param_count = _parse_query_string(first_header,
+        header.param_name, header.param_value, OLSR_HTTP_MAX_PARAMS);
   }
 
   /* strip the URL fragment away */
@@ -291,8 +293,8 @@ _cb_receive_data(struct olsr_stream_session *session) {
     ptr = strchr(uri, '?');
     if (ptr != NULL) {
       *ptr++ = 0;
-      header.query_count = _parse_query_string(
-          ptr, header.query_name, header.query_value, OLSR_HTTP_MAX_QUERIES);
+      header.param_count = _parse_query_string(ptr,
+          header.param_name, header.param_value, OLSR_HTTP_MAX_PARAMS);
     }
   } else if (strcmp(header.method, HTTP_POST) != 0) {
     OLSR_INFO(LOG_HTTP, "HTTP method not implemented :'%s'", header.method);
@@ -453,7 +455,7 @@ _create_http_header(struct olsr_stream_session *session,
 
   /* MIME type */
   if (content_type == NULL) {
-    content_type = HTTP_DEFAULT_CONTENTTYPE;
+    content_type = HTTP_CONTENTTYPE_HTML;
   }
   abuf_appendf(&buf, "Content-type: %s\r\n", content_type);
 

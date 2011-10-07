@@ -119,6 +119,7 @@ OLSR_PLUGIN7 {
   .deactivate = true,
 };
 
+/* configuration */
 static struct cfg_schema_section _remotecontrol_section = {
   .t_type = "remotecontrol"
 };
