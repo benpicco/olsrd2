@@ -77,6 +77,7 @@ struct strarray {
 EXPORT char *strscpy (char *dest, const char *src, size_t size);
 EXPORT char *strscat (char *dest, const char *src, size_t size);
 EXPORT void str_trim (char **ptr);
+EXPORT const char *str_hasnextword (const char *buffer, const char *word);
 
 EXPORT int strarray_copy(struct strarray *dst, struct strarray *src);
 EXPORT int strarray_append(struct strarray *, const char *);

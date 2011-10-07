@@ -35,26 +35,19 @@ static void _telnet_create_error(struct olsr_stream_session *,
 static enum olsr_stream_session_state _telnet_receive_data(
     struct olsr_stream_session *);
 static enum olsr_telnet_result _telnet_handle_command(
-    struct olsr_telnet_session *, const char *, const char *);
+    struct olsr_telnet_data *);
 static struct olsr_telnet_command *_check_telnet_command(
-    struct olsr_telnet_session *telnet,
-    struct olsr_telnet_command *cmd, const char *command);
+    struct olsr_telnet_data *data, const char *name,
+    struct olsr_telnet_command *cmd);
 
 static void _telnet_repeat_timer(void *data);
-static enum olsr_telnet_result _telnet_quit(
-    struct olsr_telnet_session *con, const char *cmd, const char *param);
-static enum olsr_telnet_result _telnet_help(
-    struct olsr_telnet_session *con, const char *cmd, const char *param);
-static enum olsr_telnet_result _telnet_echo(
-    struct olsr_telnet_session *con, const char *cmd, const char *param);
-static enum olsr_telnet_result _telnet_repeat(
-    struct olsr_telnet_session *con, const char *cmd, const char *param);
-static enum olsr_telnet_result _telnet_timeout(
-    struct olsr_telnet_session *con, const char *cmd, const char *param);
-static enum olsr_telnet_result _telnet_version(
-    struct olsr_telnet_session *con, const char *cmd, const char *param);
-static enum olsr_telnet_result _telnet_plugin(
-    struct olsr_telnet_session *con, const char *cmd, const char *param);
+static enum olsr_telnet_result _telnet_quit(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _telnet_help(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _telnet_echo(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _telnet_repeat(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _telnet_timeout(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _telnet_version(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _telnet_plugin(struct olsr_telnet_data *data);
 
 /* global and static variables */
 static struct cfg_schema_section telnet_section = {
@@ -179,11 +172,28 @@ olsr_telnet_remove(struct olsr_telnet_command *command) {
 }
 
 void
-olsr_telnet_stop(struct olsr_telnet_session *session) {
-  if (session->stop_handler) {
-    session->stop_handler(session);
-    session->stop_handler = NULL;
+olsr_telnet_stop(struct olsr_telnet_data *data) {
+  if (data->stop_handler) {
+    data->stop_handler(data);
+    data->stop_handler = NULL;
   }
+}
+
+enum olsr_telnet_result
+olsr_telnet_execute(const char *cmd, const char *para,
+    struct autobuf *out, struct netaddr *remote) {
+  struct olsr_telnet_data data;
+  enum olsr_telnet_result result;
+
+  memset(&data, 0, sizeof(data));
+  data.command = cmd;
+  data.parameter = para;
+  data.out = out;
+  data.remote = remote;
+
+  result = _telnet_handle_command(&data);
+  olsr_telnet_stop(&data);
+  return result;
 }
 
 static void
@@ -218,11 +228,13 @@ _telnet_init(struct olsr_stream_session *session) {
   /* get telnet session pointer */
   telnet_session = (struct olsr_telnet_session *)session;
 
-  telnet_session->show_echo = true;
-  telnet_session->stop_handler = NULL;
-  telnet_session->timeout_value = 120000;
+  telnet_session->data.show_echo = true;
+  telnet_session->data.stop_handler = NULL;
+  telnet_session->data.timeout_value = 120000;
+  telnet_session->data.out = &telnet_session->session.out;
+  telnet_session->data.remote = &telnet_session->session.remote_address;
 
-  list_init_head(&telnet_session->cleanup_list);
+  list_init_head(&telnet_session->data.cleanup_list);
 
   return 0;
 }
@@ -236,10 +248,10 @@ _telnet_cleanup(struct olsr_stream_session *session) {
   telnet_session = (struct olsr_telnet_session *)session;
 
   /* stop continuous commands */
-  olsr_telnet_stop(telnet_session);
+  olsr_telnet_stop(&telnet_session->data);
 
   /* call all cleanup handlers */
-  list_for_each_element_safe(&telnet_session->cleanup_list, handler, node, it) {
+  list_for_each_element_safe(&telnet_session->data.cleanup_list, handler, node, it) {
     /* remove from list first */
     olsr_telnet_remove_cleanup(handler);
 
@@ -328,16 +340,18 @@ _telnet_receive_data(struct olsr_stream_session *session) {
       }
 
       /* if we are doing continous output, stop it ! */
-      if (telnet_session->stop_handler) {
-        telnet_session->stop_handler(telnet_session);
-        telnet_session->stop_handler = NULL;
+      if (telnet_session->data.stop_handler) {
+        telnet_session->data.stop_handler(&telnet_session->data);
+        telnet_session->data.stop_handler = NULL;
       }
 
       if (strlen(cmd) != 0) {
         OLSR_DEBUG(LOG_TELNET, "Processing telnet command: '%s' '%s'",
             cmd, para);
 
-        cmd_result = _telnet_handle_command(telnet_session, cmd, para);
+        telnet_session->data.command = cmd;
+        telnet_session->data.parameter = para;
+        cmd_result = _telnet_handle_command(&telnet_session->data);
         switch (cmd_result) {
           case TELNET_RESULT_ACTIVE:
             break;
@@ -356,7 +370,7 @@ _telnet_receive_data(struct olsr_stream_session *session) {
             return STREAM_SESSION_SEND_AND_QUIT;
         }
         /* put an empty line behind each command */
-        if (telnet_session->show_echo) {
+        if (telnet_session->data.show_echo) {
           abuf_puts(&session->out, "\n");
         }
       }
@@ -373,11 +387,11 @@ _telnet_receive_data(struct olsr_stream_session *session) {
   }
 
   /* reset timeout */
-  olsr_stream_set_timeout(session, telnet_session->timeout_value);
+  olsr_stream_set_timeout(session, telnet_session->data.timeout_value);
 
   /* print prompt */
   if (processedCommand && session->state == STREAM_SESSION_ACTIVE
-      && telnet_session->show_echo) {
+      && telnet_session->data.show_echo) {
     abuf_puts(&session->out, "> ");
   }
 
@@ -385,32 +399,31 @@ _telnet_receive_data(struct olsr_stream_session *session) {
 }
 
 static enum olsr_telnet_result
-_telnet_handle_command(struct olsr_telnet_session *telnet,
-    const char *command, const char *parameter) {
+_telnet_handle_command(struct olsr_telnet_data *data) {
   struct olsr_telnet_command *cmd;
 #if !defined(REMOVE_LOG_INFO)
   struct netaddr_str buf;
 #endif
-  cmd = _check_telnet_command(telnet, NULL, command);
+  cmd = _check_telnet_command(data, data->command, NULL);
   if (cmd == NULL) {
     return TELNET_RESULT_UNKNOWN_COMMAND;
   }
 
   OLSR_INFO(LOG_TELNET, "Executing command from %s: %s %s",
-      netaddr_to_string(&buf, &telnet->session.remote_address), command,
-      parameter == NULL ? "" : parameter);
-  return cmd->handler(telnet, command, parameter);
+      netaddr_to_string(&buf, data->remote), data->command,
+      data->parameter == NULL ? "" : data->parameter);
+  return cmd->handler(data);
 }
 
 static struct olsr_telnet_command *
-_check_telnet_command(struct olsr_telnet_session *telnet,
-    struct olsr_telnet_command *cmd, const char *command) {
+_check_telnet_command(struct olsr_telnet_data *data,
+    const char *name, struct olsr_telnet_command *cmd) {
 #if !defined(REMOVE_LOG_DEBUG)
   struct netaddr_str buf;
 #endif
 
   if (cmd == NULL) {
-    cmd = avl_find_element(&telnet_cmd_tree, command, cmd, node);
+    cmd = avl_find_element(&telnet_cmd_tree, name, cmd, node);
     if (cmd == NULL) {
       return cmd;
     }
@@ -419,166 +432,166 @@ _check_telnet_command(struct olsr_telnet_session *telnet,
     return cmd;
   }
 
-  if (!olsr_acl_check_accept(cmd->acl, &telnet->session.remote_address)) {
+  if (!olsr_acl_check_accept(cmd->acl, data->remote)) {
     OLSR_DEBUG(LOG_TELNET, "Blocked telnet command '%s' to '%s' because of acl",
-        cmd->command, netaddr_to_string(&buf, &telnet->session.remote_address));
+        cmd->command, netaddr_to_string(&buf, data->remote));
     return NULL;
   }
   return cmd;
 }
 
 static enum olsr_telnet_result
-_telnet_quit(struct olsr_telnet_session *telnet __attribute__ ((unused)),
-    const char *cmd __attribute__ ((unused)), const char *param __attribute__ ((unused))) {
+_telnet_quit(struct olsr_telnet_data *data __attribute__((unused))) {
   return TELNET_RESULT_QUIT;
 }
 
 static enum olsr_telnet_result
-_telnet_help(struct olsr_telnet_session *telnet,
-    const char *cmd __attribute__ ((unused)), const char *param) {
+_telnet_help(struct olsr_telnet_data *data) {
   struct olsr_telnet_command *ptr, *iterator;
 
-  if (param != NULL) {
-    ptr = _check_telnet_command(telnet, NULL, param);
-    ptr = avl_find_element(&telnet_cmd_tree, param, ptr, node);
+  if (data->parameter != NULL && data->parameter[0] != 0) {
+    ptr = _check_telnet_command(data, data->parameter, NULL);
     if (ptr == NULL) {
-      abuf_appendf(&telnet->session.out, "No help text found for command: %s\n", param);
+      abuf_appendf(data->out, "No help text found for command: %s\n", data->parameter);
       return TELNET_RESULT_ACTIVE;
     }
 
     if (ptr->help_handler) {
-      ptr->help_handler(telnet, param, "");
+      ptr->help_handler(data);
     }
     else {
-      if (abuf_appendf(&telnet->session.out, "%s\n", ptr->help) < 0) {
+      if (abuf_appendf(data->out, "%s\n", ptr->help) < 0) {
         return TELNET_RESULT_ABUF_ERROR;
       }
     }
     return TELNET_RESULT_ACTIVE;
   }
 
-  if (abuf_puts(&telnet->session.out, "Known commands:\n") < 0) {
+  if (abuf_puts(data->out, "Known commands:\n") < 0) {
     return TELNET_RESULT_ABUF_ERROR;
   }
 
   FOR_ALL_TELNET_COMMANDS(ptr, iterator) {
-    if (_check_telnet_command(telnet, ptr, NULL)) {
-      if (abuf_appendf(&telnet->session.out, "  %s\n", ptr->command) < 0) {
+    if (_check_telnet_command(data, NULL, ptr)) {
+      if (abuf_appendf(data->out, "  %s\n", ptr->command) < 0) {
         return TELNET_RESULT_ABUF_ERROR;
       }
     }
   }
 
-  if (abuf_puts(&telnet->session.out, "Use 'help <command> to see a help text for one command\n") < 0) {
+  if (abuf_puts(data->out, "Use 'help <command> to see a help text for one command\n") < 0) {
     return TELNET_RESULT_ABUF_ERROR;
   }
   return TELNET_RESULT_ACTIVE;
 }
 
 static enum olsr_telnet_result
-_telnet_echo(struct olsr_telnet_session *telnet,
-    const char *cmd __attribute__ ((unused)), const char *param) {
+_telnet_echo(struct olsr_telnet_data *data) {
 
-  if (abuf_appendf(&telnet->session.out, "%s\n",
-      param == NULL ? "" : param) < 0) {
+  if (abuf_appendf(data->out, "%s\n",
+      data->parameter == NULL ? "" : data->parameter) < 0) {
     return TELNET_RESULT_ABUF_ERROR;
   }
   return TELNET_RESULT_ACTIVE;
 }
 
 static enum olsr_telnet_result
-_telnet_timeout(struct olsr_telnet_session *telnet,
-    const char *cmd __attribute__ ((unused)), const char *param) {
-  uint32_t timeout;
-  timeout = (uint32_t)strtoul(param, NULL, 10) * 1000;
-
-  olsr_stream_set_timeout(&telnet->session, timeout);
+_telnet_timeout(struct olsr_telnet_data *data) {
+  data->timeout_value = (uint32_t)strtoul(data->parameter, NULL, 10) * 1000;
   return TELNET_RESULT_ACTIVE;
 }
 
 static void
-_telnet_repeat_stophandler(struct olsr_telnet_session *con) {
-  olsr_timer_stop((struct olsr_timer_entry *)con->stop_data[0]);
-  free(con->stop_data[1]);
+_telnet_repeat_stophandler(struct olsr_telnet_data *data) {
+  olsr_timer_stop((struct olsr_timer_entry *)data->stop_data[0]);
+  free(data->stop_data[1]);
 
-  con->stop_handler = NULL;
-  con->stop_data[0] = NULL;
-  con->stop_data[1] = NULL;
-  con->stop_data[2] = NULL;
+  data->stop_handler = NULL;
+  data->stop_data[0] = NULL;
+  data->stop_data[1] = NULL;
+  data->stop_data[2] = NULL;
 }
 
 static void
-_telnet_repeat_timer(void *data) {
-  struct olsr_telnet_session *con = data;
+_telnet_repeat_timer(void *ptr) {
+  struct olsr_telnet_data *telnet_data = ptr;
+  struct olsr_telnet_session *session;
 
-  if (_telnet_handle_command(con, con->stop_data[1], con->stop_data[2]) != TELNET_RESULT_ACTIVE) {
-    con->stop_handler(con);
+  /* set command/parameter with repeat settings */
+  telnet_data->command = telnet_data->stop_data[1];
+  telnet_data->parameter = telnet_data->stop_data[2];
+
+  if (_telnet_handle_command(telnet_data) != TELNET_RESULT_ACTIVE) {
+    telnet_data->stop_handler(telnet_data);
   }
 
-  olsr_stream_flush(&con->session);
+  /* reconstruct original session pointer */
+  session = container_of(telnet_data, struct olsr_telnet_session, data);
+  olsr_stream_flush(&session->session);
 }
 
 static enum olsr_telnet_result
-_telnet_repeat(struct olsr_telnet_session *telnet,
-    const char *cmd __attribute__ ((unused)), const char *param) {
-  int interval = 0;
-  char *ptr;
+_telnet_repeat(struct olsr_telnet_data *data) {
   struct olsr_timer_entry *timer;
+  int interval = 0;
+  char *ptr = NULL;
 
-  if (telnet->stop_handler) {
-    abuf_puts(&telnet->session.out, "Error, you cannot stack continous output commands\n");
+  if (data->stop_handler) {
+    abuf_puts(data->out, "Error, you cannot stack continous output commands\n");
     return TELNET_RESULT_ACTIVE;
   }
 
-  if (param == NULL || (ptr = strchr(param, ' ')) == NULL) {
-    abuf_puts(&telnet->session.out, "Missing parameters for repeat\n");
+  if (data->parameter == NULL || (ptr = strchr(data->parameter, ' ')) == NULL) {
+    abuf_puts(data->out, "Missing parameters for repeat\n");
     return TELNET_RESULT_ACTIVE;
   }
 
   ptr++;
 
-  interval = atoi(param);
+  interval = atoi(data->parameter);
 
-  timer = olsr_timer_start(interval * 1000, 0, telnet, _telnet_repeat_timerinfo);
-  telnet->stop_handler = _telnet_repeat_stophandler;
-  telnet->stop_data[0] = timer;
-  telnet->stop_data[1] = strdup(ptr);
-  telnet->stop_data[2] = NULL;
+  timer = olsr_timer_start(interval * 1000, 0, data, _telnet_repeat_timerinfo);
+  data->stop_handler = _telnet_repeat_stophandler;
+  data->stop_data[0] = timer;
+  data->stop_data[1] = strdup(ptr);
+  data->stop_data[2] = NULL;
 
   /* split command/parameter and remember it */
-  ptr = strchr(telnet->stop_data[1], ' ');
+  ptr = strchr(data->stop_data[1], ' ');
   if (ptr != NULL) {
     /* found a parameter */
     *ptr++ = 0;
-    telnet->stop_data[2] = ptr;
+    data->stop_data[2] = ptr;
   }
 
   /* start command the first time */
-  if (_telnet_handle_command(telnet, telnet->stop_data[1], telnet->stop_data[2]) != TELNET_RESULT_ACTIVE) {
-    telnet->stop_handler(telnet);
+  data->command = data->stop_data[1];
+  data->parameter = data->stop_data[2];
+
+  if (_telnet_handle_command(data) != TELNET_RESULT_ACTIVE) {
+    data->stop_handler(data);
   }
+
   return TELNET_RESULT_CONTINOUS;
 }
 
 static enum olsr_telnet_result
-_telnet_version(struct olsr_telnet_session *telnet,
-    const char *cmd __attribute__ ((unused)), const char *param __attribute__ ((unused))) {
-  olsr_builddata_printversion(&telnet->session.out);
+_telnet_version(struct olsr_telnet_data *data) {
+  olsr_builddata_printversion(data->out);
   return TELNET_RESULT_ACTIVE;
 }
 
 static enum olsr_telnet_result
-_telnet_plugin(struct olsr_telnet_session *telnet,
-    const char *cmd __attribute__ ((unused)), const char *param __attribute__ ((unused))) {
+_telnet_plugin(struct olsr_telnet_data *data) {
   struct olsr_plugin *plugin, *iterator;
-  char *para2 = NULL;
+  const char *plugin_name = NULL;
 
-  if (param == NULL || strcasecmp(param, "list") == 0) {
-    if (abuf_puts(&telnet->session.out, "Plugins:\n") < 0) {
+  if (data->parameter == NULL || strcasecmp(data->parameter, "list") == 0) {
+    if (abuf_puts(data->out, "Plugins:\n") < 0) {
       return TELNET_RESULT_ABUF_ERROR;
     }
     OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) {
-      if (abuf_appendf(&telnet->session.out, " %-30s\t%s\t%s\n",
+      if (abuf_appendf(data->out, " %-30s\t%s\t%s\n",
           plugin->name, olsr_plugins_is_enabled(plugin) ? "enabled" : "",
           olsr_plugins_is_static(plugin) ? "static" : "") < 0) {
         return TELNET_RESULT_ABUF_ERROR;
@@ -587,78 +600,84 @@ _telnet_plugin(struct olsr_telnet_session *telnet,
     return TELNET_RESULT_ACTIVE;
   }
 
-  para2 = strchr(param, ' ');
-  if (para2 == NULL) {
-    if (abuf_appendf(&telnet->session.out, "Error, missing or unknown parameter\n") < 0) {
+  plugin_name = strchr(data->parameter, ' ');
+  if (plugin_name == NULL) {
+    if (abuf_appendf(data->out, "Error, missing or unknown parameter\n") < 0) {
       return TELNET_RESULT_ABUF_ERROR;
     }
     return TELNET_RESULT_ACTIVE;
   }
-  *para2++ = 0;
 
-  plugin = olsr_plugins_get(para2);
-  if (strcasecmp(param, "load") == 0) {
+  /* skip whitespaces */
+  while (isspace(*plugin_name)) {
+    plugin_name++;
+  }
+
+  plugin = olsr_plugins_get(plugin_name);
+  if (str_hasnextword(data->parameter, "load") == NULL) {
     if (plugin != NULL) {
-      abuf_appendf(&telnet->session.out, "Plugin %s already loaded\n", para2);
+      abuf_appendf(data->out, "Plugin %s already loaded\n", plugin_name);
       return TELNET_RESULT_ACTIVE;
     }
-    plugin = olsr_plugins_load(para2);
+    plugin = olsr_plugins_load(plugin_name);
     if (plugin != NULL) {
-      abuf_appendf(&telnet->session.out, "Plugin %s successfully loaded\n", para2);
+      abuf_appendf(data->out, "Plugin %s successfully loaded\n", plugin_name);
     }
     else {
-      abuf_appendf(&telnet->session.out, "Could not load plugin %s\n", para2);
+      abuf_appendf(data->out, "Could not load plugin %s\n", plugin_name);
     }
     return TELNET_RESULT_ACTIVE;
   }
 
   if (plugin == NULL) {
-    if (abuf_appendf(&telnet->session.out, "Error, could not find plugin '%s'.\n", para2) < 0) {
+    if (abuf_appendf(data->out,
+        "Error, could not find plugin '%s'.\n", plugin_name) < 0) {
       return TELNET_RESULT_ABUF_ERROR;
     }
     return TELNET_RESULT_ACTIVE;
   }
-  if (strcasecmp(param, "activate") == 0) {
+  if (str_hasnextword(data->parameter, "activate") == NULL) {
     if (olsr_plugins_is_enabled(plugin)) {
-      abuf_appendf(&telnet->session.out, "Plugin %s already active\n", para2);
+      abuf_appendf(data->out, "Plugin %s already active\n", plugin_name);
     }
     else {
       if (olsr_plugins_enable(plugin)) {
-        abuf_appendf(&telnet->session.out, "Could not activate plugin %s\n", para2);
+        abuf_appendf(data->out, "Could not activate plugin %s\n", plugin_name);
       }
       else {
-        abuf_appendf(&telnet->session.out, "Plugin %s successfully activated\n", para2);
+        abuf_appendf(data->out, "Plugin %s successfully activated\n", plugin_name);
       }
     }
   }
-  else if (strcasecmp(param, "deactivate") == 0) {
+  else if (str_hasnextword(data->parameter, "deactivate") == NULL) {
     if (!olsr_plugins_is_enabled(plugin)) {
-      abuf_appendf(&telnet->session.out, "Plugin %s is not active\n", para2);
+      abuf_appendf(data->out, "Plugin %s is not active\n", plugin_name);
     }
     else {
       if (olsr_plugins_disable(plugin)) {
-        abuf_appendf(&telnet->session.out, "Could not deactivate plugin %s\n", para2);
+        abuf_appendf(data->out, "Could not deactivate plugin %s\n", plugin_name);
       }
       else {
-        abuf_appendf(&telnet->session.out, "Plugin %s successfully deactivated\n", para2);
+        abuf_appendf(data->out, "Plugin %s successfully deactivated\n", plugin_name);
       }
     }
   }
-  else if (strcasecmp(param, "unload") == 0) {
+  else if (str_hasnextword(data->parameter, "unload") == NULL) {
     if (olsr_plugins_is_static(plugin)) {
-      abuf_appendf(&telnet->session.out, "Plugin %s is static and cannot be unloaded\n", para2);
+      abuf_appendf(data->out, "Plugin %s is static and cannot be unloaded\n", plugin_name);
     }
     else {
       if (olsr_plugins_unload(plugin)) {
-        abuf_appendf(&telnet->session.out, "Could not unload plugin %s\n", para2);
+        abuf_appendf(data->out, "Could not unload plugin %s\n", plugin_name);
       }
       else {
-        abuf_appendf(&telnet->session.out, "Plugin %s successfully unloaded\n", para2);
+        abuf_appendf(data->out, "Plugin %s successfully unloaded\n", plugin_name);
       }
     }
   }
   else {
-    abuf_appendf(&telnet->session.out, "Unknown command '%s %s %s'.\n", cmd, param, para2);
+    abuf_appendf(data->out, "Unknown command '%s %s %s'.\n",
+        data->command, data->parameter, plugin_name);
   }
   return TELNET_RESULT_ACTIVE;
 }

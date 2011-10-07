@@ -133,6 +133,35 @@ str_trim (char **ptr) {
 }
 
 /**
+ * Check if a string starts with a certain word. The function
+ * is not case sensitive and does NOT modify the input strings.
+ * @param buffer pointer to string
+ * @param word pointer to the word
+ * @return pointer to the string behind the word, NULL if no match
+ */
+const char *
+str_hasnextword (const char *buffer, const char *word) {
+  /* skip whitespaces first */
+  while (isblank(*buffer)) {
+    buffer++;
+  }
+
+  while (*word != 0 && *buffer != 0 && !isblank(*buffer) && tolower(*word) == tolower(*buffer)) {
+    word++;
+    buffer++;
+  }
+
+  /* complete match ? */
+  if (*word == 0 && (*buffer == 0 || isblank(*buffer))) {
+    while (isblank(*buffer)) {
+      buffer++;
+    }
+    return buffer;
+  }
+  return NULL;
+}
+
+/**
  * Copy a string array into another array. This overwrites
  * all data in the original array.
  * @param dst destination array

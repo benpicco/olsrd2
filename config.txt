@@ -9,3 +9,9 @@
 #	acl	default_reject
 #	bindto_v4	11.0.0.1
 #	port	2007
+
+#[http]
+#	acl	127.0.0.1/8
+#	acl	default_reject
+#	bindto_v4	11.0.0.1
+#	port	8080
