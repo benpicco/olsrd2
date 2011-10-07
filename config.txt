@@ -1,17 +1,24 @@
 [global]
-	fork	no
-#	plugin	test
-#	ipv4	yes
-#	ipv6	yes
+	fork		no
+#	plugin		test
+#	ipv4		yes
+#	ipv6		yes
 
 #[telnet]
-#	acl	127.0.0.1/8
-#	acl	default_reject
+#	acl		127.0.0.1/8
+#	acl		default_reject
 #	bindto_v4	11.0.0.1
-#	port	2007
+#	port		2007
 
 #[http]
-#	acl	127.0.0.1/8
-#	acl	default_reject
+#	acl		127.0.0.1/8
+#	acl		default_reject
 #	bindto_v4	11.0.0.1
-#	port	8080
+#	port		8080
+
+[httptelnet]
+#	acl		127.0.0.1/8
+#	acl		default_reject
+#       site		/telnet
+#       Example name/password "wiki"/"pedia"
+#       auth		d2lraTpwZWRpYQ==

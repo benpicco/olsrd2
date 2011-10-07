@@ -106,6 +106,15 @@ strarray_free(struct strarray *array) {
 }
 
 /**
+ * @param array pointer to string array object
+ * @return true if the array is empty, false otherwise
+ */
+static INLINE bool
+strarray_is_empty(struct strarray *array) {
+  return array->length == 0;
+}
+
+/**
  * Remove an element from a string array
  * @param array pointer to string array object
  * @param element an element to be removed from the array

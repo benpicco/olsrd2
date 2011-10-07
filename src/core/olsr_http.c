@@ -53,6 +53,8 @@ static enum olsr_stream_session_state _cb_receive_data(
     struct olsr_stream_session *session);
 static void _cb_create_error(struct olsr_stream_session *session,
     enum olsr_stream_errors error);
+static bool _auth_okay(struct olsr_http_handler *handler,
+    struct olsr_http_session *session);
 static void _create_http_error(struct olsr_stream_session *session,
     enum olsr_http_result error);
 static struct olsr_http_handler *_get_site_handler(const char *uri);
@@ -316,7 +318,20 @@ _cb_receive_data(struct olsr_stream_session *session) {
   else {
     enum olsr_http_result result;
 
-    // TODO: implement ACL and passwords
+    /* check acl */
+    if (!olsr_acl_check_accept(&handler->acl, &session->remote_address)) {
+      _create_http_error(session, HTTP_403_FORBIDDEN);
+      return STREAM_SESSION_SEND_AND_QUIT;
+    }
+
+    /* check if username/password is necessary */
+    if (!strarray_is_empty(&handler->auth)) {
+      if (!_auth_okay(handler, &header)) {
+        _create_http_error(session, HTTP_401_UNAUTHORIZED);
+        return STREAM_SESSION_SEND_AND_QUIT;
+      }
+    }
+
     result = handler->content_handler(&session->out, &header);
     if (result != HTTP_200_OK) {
       /* create error message */
@@ -327,6 +342,30 @@ _cb_receive_data(struct olsr_stream_session *session) {
     }
   }
   return STREAM_SESSION_SEND_AND_QUIT;
+}
+
+static bool
+_auth_okay(struct olsr_http_handler *handler,
+    struct olsr_http_session *session) {
+  const char *auth, *name_pw_base64;
+  char *ptr;
+
+  auth = olsr_http_lookup_header(session, "Authorization");
+  if (auth == NULL) {
+    return false;
+  }
+
+  name_pw_base64 = str_hasnextword(auth, "Basic");
+  if (name_pw_base64 == NULL) {
+    return false;
+  }
+
+  FOR_ALL_STRINGS(&handler->auth, ptr) {
+    if (strcmp(ptr, name_pw_base64) == 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
