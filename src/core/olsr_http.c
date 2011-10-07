@@ -166,7 +166,7 @@ olsr_http_remove(struct olsr_http_handler *handler) {
  * @return pointer to value or NULL if not found
  */
 const char *
-olsr_http_get_value(char **keys, char **values, size_t count, const char *key) {
+olsr_http_lookup_value(char **keys, char **values, size_t count, const char *key) {
   size_t i;
 
   for (i=0; i<count; i++) {
@@ -260,7 +260,7 @@ _cb_receive_data(struct olsr_stream_session *session) {
   if (strcmp(header.method, HTTP_POST) == 0) {
     const char *content_length;
 
-    content_length = olsr_http_get_value(header.header_name, header.header_value,
+    content_length = olsr_http_lookup_value(header.header_name, header.header_value,
         header.header_count, HTTP_CONTENT_LENGTH);
     if (!content_length) {
       OLSR_INFO(LOG_HTTP, "Need 'content-length' for POST requests");

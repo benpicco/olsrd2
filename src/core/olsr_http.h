@@ -84,6 +84,43 @@ void olsr_http_cleanup(void);
 EXPORT void olsr_http_add(struct olsr_http_handler *);
 EXPORT void olsr_http_remove(struct olsr_http_handler *);
 
-EXPORT const char *olsr_http_get_value(char **keys, char **values,
+EXPORT const char *olsr_http_lookup_value(char **keys, char **values,
     size_t count, const char *key);
+
+/**
+ * Lookup the value of one http header field.
+ * @param session pointer to http session
+ * @param key header field name
+ * @return header field value or NULL if not found
+ */
+static INLINE const char *
+olsr_http_lookup_header(struct olsr_http_session *session, const char *key) {
+  return olsr_http_lookup_value(session->header_name, session->header_value,
+      session->header_count, key);
+}
+
+/**
+ * Lookup the value of one http request parameter delivered by GET
+ * @param session pointer to http session
+ * @param key header field name
+ * @return parameter value or NULL if not found
+ */
+static INLINE const char *
+olsr_http_lookup_get(struct olsr_http_session *session, const char *key) {
+  return olsr_http_lookup_value(session->query_name, session->query_value,
+      session->query_count, key);
+}
+
+/**
+ * Lookup the value of one http request parameter delivered by POST
+ * @param session pointer to http session
+ * @param key header field name
+ * @return parameter value or NULL if not found
+ */
+static INLINE const char *
+olsr_http_lookup_post(struct olsr_http_session *session, const char *key) {
+  return olsr_http_lookup_value(session->form_name, session->form_value,
+      session->form_count, key);
+}
+
 #endif /* OLSR_HTTP_H_ */
