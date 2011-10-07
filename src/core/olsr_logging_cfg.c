@@ -321,7 +321,8 @@ _apply_log_setting(struct cfg_named_section *named,
 static void
 _olsr_logcfg_apply(void) {
   if (olsr_logcfg_apply(olsr_cfg_get_db())) {
-    /* TODO: really exit OLSR when logging file cannot be opened ? */
-    olsr_exit();
+    if (config_global.failfast) {
+      olsr_exit();
+    }
   }
 }
