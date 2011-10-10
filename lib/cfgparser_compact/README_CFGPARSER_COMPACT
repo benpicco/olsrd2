@@ -1,11 +1,6 @@
-   PLUGIN CONFIGURATION
-==========================
-
-The plugin needs no configuration at all.
-
-
    PLUGIN USAGE
 ==================
+CFGPARSER_COMPACT plugin by Henning Rogge
 
 The plugin supports the 'compact' configuration format.
 
@@ -21,6 +16,14 @@ as are empty lines.
 Comment lines begin with a Number Sign.
 
 
+
+   PLUGIN CONFIGURATION
+==========================
+
+The plugin needs no configuration.
+
+
+
    EXAMPLE CONFIGURATION
 ===========================
 
@@ -32,6 +35,3 @@ Comment lines begin with a Number Sign.
 
 [txtinfo]
 	port	1
-
-
-- Henning Rogge

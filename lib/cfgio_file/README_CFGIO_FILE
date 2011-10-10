@@ -1,12 +1,13 @@
-   PLUGIN CONFIGURATION
-==========================
-
-The plugin needs no configuration at all.
-
    PLUGIN USAGE
 ==================
+CFGIO_FILE plugin by Henning Rogge
 
 The plugin supports loading and storing configuration data from
 and to files.
 
-- Henning Rogge
+
+
+   PLUGIN CONFIGURATION
+==========================
+
+The plugin needs no configuration.

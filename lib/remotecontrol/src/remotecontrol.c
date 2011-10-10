@@ -78,14 +78,14 @@ struct _remotecontrol_session {
 };
 
 /* prototypes */
-static int _plugin_load(void);
-static int _plugin_unload(void);
-static int _plugin_enable(void);
-static int _plugin_disable(void);
+static int _cb_plugin_load(void);
+static int _cb_plugin_unload(void);
+static int _cb_plugin_enable(void);
+static int _cb_plugin_disable(void);
 
-static enum olsr_telnet_result _handle_resource(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _handle_log(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _handle_config(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_handle_resource(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_handle_log(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_handle_config(struct olsr_telnet_data *data);
 static enum olsr_telnet_result _update_logfilter(struct olsr_telnet_data *data,
     struct log_handler_mask *mask, const char *current, bool value);
 
@@ -96,14 +96,14 @@ static enum olsr_telnet_result _start_logging(struct olsr_telnet_data *data,
     struct _remotecontrol_session *rc_session);
 static void _stop_logging(struct olsr_telnet_data *data);
 
-static void _print_log(struct log_handler_entry *,
+static void _cb_print_log(struct log_handler_entry *,
     enum log_severity, enum log_source,
     bool, const char *, int, char *, int, int);
 
-static void _config_changed(void);
+static void _cb_config_changed(void);
 static struct _remotecontrol_session *
     _get_remotecontrol_session(struct olsr_telnet_data *data);
-static void _handle_session_cleanup(struct olsr_telnet_cleanup *cleanup);
+static void _cb_handle_session_cleanup(struct olsr_telnet_cleanup *cleanup);
 
 
 /* plugin declaration */
@@ -111,10 +111,10 @@ OLSR_PLUGIN7 {
   .descr = "OLSRD remote control and debug plugin",
   .author = "Henning Rogge",
 
-  .load = _plugin_load,
-  .unload = _plugin_unload,
-  .enable = _plugin_enable,
-  .disable = _plugin_disable,
+  .load = _cb_plugin_load,
+  .unload = _cb_plugin_unload,
+  .enable = _cb_plugin_enable,
+  .disable = _cb_plugin_disable,
 
   .deactivate = true,
 };
@@ -130,24 +130,24 @@ static struct cfg_schema_entry _remotecontrol_entries[] = {
 
 static struct cfg_delta_handler _remotecontrol_handler = {
   .s_type = "remotecontrol",
-  .callback = _config_changed,
+  .callback = _cb_config_changed,
 };
 
 static struct _remotecontrol_cfg _remotecontrol_config;
 
 /* command callbacks and names */
 static struct olsr_telnet_command _telnet_cmds[] = {
-  TELNET_CMD("resources", _handle_resource,
+  TELNET_CMD("resources", _cb_handle_resource,
       "\"resources memory\": display information about memory usage\n"
       "\"resources timer\": display information about active timers\n",
       .acl = &_remotecontrol_config.acl),
-  TELNET_CMD("log", _handle_log,
+  TELNET_CMD("log", _cb_handle_log,
       "\"log\":      continuous output of logging to this console\n"
       "\"log show\": show configured logging option for debuginfo output\n"
       "\"log add <severity> <source1> <source2> ...\": Add one or more sources of a defined severity for logging\n"
       "\"log remove <severity> <source1> <source2> ...\": Remove one or more sources of a defined severity for logging\n",
       .acl = &_remotecontrol_config.acl),
-  TELNET_CMD("config", _handle_config,
+  TELNET_CMD("config", _cb_handle_config,
       "\"config commit\":                                   Commit changed configuration\n"
       "\"config revert\":                                   Revert to active configuration\n"
       "\"config schema\":                                   Display all allowed section types of configuration\n"
@@ -180,10 +180,10 @@ static struct list_entity _remote_sessions;
 
 /**
  * Initialize remotecontrol plugin
- * @return 0 if plugin was initialized, -1 if an error happened
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_load(void)
+_cb_plugin_load(void)
 {
   int i;
 
@@ -220,10 +220,10 @@ _plugin_load(void)
 
 /**
  * Free all resources of remotecontrol plugin
- * @return 0 if plugin was unloaded, -1 if an error happened
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_unload(void)
+_cb_plugin_unload(void)
 {
   olsr_acl_remove(&_remotecontrol_config.acl);
 
@@ -234,10 +234,10 @@ _plugin_unload(void)
 
 /**
  * Enable remotecontrol plugin
- * @return 0 if plugin was enabled, -1 if an error happened
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_enable(void)
+_cb_plugin_enable(void)
 {
   size_t i;
 
@@ -252,10 +252,10 @@ _plugin_enable(void)
 
 /**
  * Deactivate remotecontrol plugin
- * @return 0 if plugin was disabled, -1 if an error happened
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_disable(void)
+_cb_plugin_disable(void)
 {
   struct _remotecontrol_session *session, *it;
   size_t i;
@@ -314,24 +314,24 @@ _print_timer(struct autobuf *buf) {
  * @return telnet result constant
  */
 static enum olsr_telnet_result
-_handle_resource(struct olsr_telnet_data *data) {
+_cb_handle_resource(struct olsr_telnet_data *data) {
   if (data->parameter == NULL || strcasecmp(data->parameter, "memory") == 0) {
     if (abuf_puts(data->out, "Memory cookies:\n") < 0) {
-      return TELNET_RESULT_ABUF_ERROR;
+      return TELNET_RESULT_INTERNAL_ERROR;
     }
 
     if (_print_memory(data->out)) {
-      return TELNET_RESULT_ABUF_ERROR;
+      return TELNET_RESULT_INTERNAL_ERROR;
     }
   }
 
   if (data->parameter == NULL || strcasecmp(data->parameter, "timer") == 0) {
     if (abuf_puts(data->out, "\nTimer cookies:\n") < 0) {
-      return TELNET_RESULT_ABUF_ERROR;
+      return TELNET_RESULT_INTERNAL_ERROR;
     }
 
     if (_print_timer(data->out)) {
-      return TELNET_RESULT_ABUF_ERROR;
+      return TELNET_RESULT_INTERNAL_ERROR;
     }
   }
   return TELNET_RESULT_ACTIVE;
@@ -395,7 +395,7 @@ _update_logfilter(struct olsr_telnet_data *data,
  * @param prefixLength
  */
 static void
-_print_log(struct log_handler_entry *h __attribute__((unused)),
+_cb_print_log(struct log_handler_entry *h __attribute__((unused)),
     enum log_severity severity __attribute__((unused)),
     enum log_source source __attribute__((unused)),
     bool no_header __attribute__((unused)),
@@ -430,6 +430,12 @@ _stop_logging(struct olsr_telnet_data *session) {
   session->stop_handler = NULL;
 }
 
+/**
+ * Activate logging handler for telnet output
+ * @param data pointer to telnet data
+ * @param rc_session pointer to remotecontrol session
+ * @return telnet result code
+ */
 static enum olsr_telnet_result
 _start_logging(struct olsr_telnet_data *data,
     struct _remotecontrol_session *rc_session) {
@@ -437,12 +443,12 @@ _start_logging(struct olsr_telnet_data *data,
 
   log_handler = calloc(1, sizeof(*log_handler));
   if (log_handler == NULL) {
-    return TELNET_RESULT_ABUF_ERROR;
+    return TELNET_RESULT_INTERNAL_ERROR;
   }
 
   log_handler->bitmask_ptr = &rc_session->mask;
   log_handler->custom = data;
-  log_handler->handler = _print_log;
+  log_handler->handler = _cb_print_log;
 
   data->stop_handler = _stop_logging;
   data->stop_data[0] = log_handler;
@@ -458,14 +464,14 @@ _start_logging(struct olsr_telnet_data *data,
  * @return telnet result constant
  */
 static enum olsr_telnet_result
-_handle_log(struct olsr_telnet_data *data) {
+_cb_handle_log(struct olsr_telnet_data *data) {
   struct _remotecontrol_session *rc_session;
   const char *next;
   enum log_source src;
 
   rc_session = _get_remotecontrol_session(data);
   if (rc_session == NULL) {
-    return TELNET_RESULT_ABUF_ERROR;
+    return TELNET_RESULT_INTERNAL_ERROR;
   }
 
   if (data->parameter == NULL) {
@@ -508,14 +514,14 @@ _handle_log(struct olsr_telnet_data *data) {
 }
 
 /**
- * Handle resource command
- * @param con pointer to telnet telnet
+ * Handle config command
+ * @param con pointer to telnet data
  * @param cmd name of command (should be "resource")
  * @param param parameters
  * @return telnet result constant
  */
 static enum olsr_telnet_result
-_handle_config(struct olsr_telnet_data *data) {
+_cb_handle_config(struct olsr_telnet_data *data) {
   const char *next = NULL;
 
   if (data->parameter == NULL || *data->parameter == 0) {
@@ -570,7 +576,7 @@ _handle_config(struct olsr_telnet_data *data) {
  * Update configuration of remotecontrol plugin
  */
 static void
-_config_changed(void) {
+_cb_config_changed(void) {
   if (cfg_schema_tobin(&_remotecontrol_config, _remotecontrol_handler.post,
       _remotecontrol_entries, ARRAYSIZE(_remotecontrol_entries))) {
     OLSR_WARN(LOG_CONFIG, "Could not convert remotecontrol config to bin");
@@ -578,6 +584,12 @@ _config_changed(void) {
   }
 }
 
+/**
+ * Look for remotecontrol session of telnet data. Create one if
+ * necessary
+ * @param data pointer to telnet data
+ * @return remotecontrol session, NULL if an error happened
+ */
 static struct _remotecontrol_session *
 _get_remotecontrol_session(struct olsr_telnet_data *data) {
   struct _remotecontrol_session *cl;
@@ -595,7 +607,7 @@ _get_remotecontrol_session(struct olsr_telnet_data *data) {
     return NULL;
   }
 
-  cl->cleanup.cleanup_handler = _handle_session_cleanup;
+  cl->cleanup.cleanup_handler = _cb_handle_session_cleanup;
   cl->cleanup.custom = cl;
   olsr_telnet_add_cleanup(data, &cl->cleanup);
 
@@ -608,8 +620,12 @@ _get_remotecontrol_session(struct olsr_telnet_data *data) {
   return cl;
 }
 
+/**
+ * Cleanup remotecontrol session if telnet session is over
+ * @param cleanup pointer to telnet cleanup handler
+ */
 static void
-_handle_session_cleanup(struct olsr_telnet_cleanup *cleanup) {
+_cb_handle_session_cleanup(struct olsr_telnet_cleanup *cleanup) {
   struct _remotecontrol_session *session;
 
   session = cleanup->custom;

@@ -55,33 +55,34 @@
 
 #include <stdio.h>
 
-static int _plugin_load(void);
-static int _plugin_unload(void);
+static int _cb_plugin_load(void);
+static int _cb_plugin_unload(void);
 
-static struct cfg_db *_file_load(struct cfg_instance *instance,
+static struct cfg_db *_cb_file_load(struct cfg_instance *instance,
     const char *param, const char *parser, struct autobuf *log);
-static int _file_save(struct cfg_instance *instance,
+static int _cb_file_save(struct cfg_instance *instance,
     const char *param, const char *parser, struct cfg_db *src, struct autobuf *log);
 
 OLSR_PLUGIN7 {
   .descr = "OLSRD file io handler for configuration system",
   .author = "Henning Rogge",
-  .load = _plugin_load,
-  .unload = _plugin_unload,
+  .load = _cb_plugin_load,
+  .unload = _cb_plugin_unload,
 };
 
 struct cfg_io cfg_io_file = {
   .name = "file",
-  .load = _file_load,
-  .save = _file_save,
+  .load = _cb_file_load,
+  .save = _cb_file_save,
   .def = true,
 };
 
 /**
  * Constructor of plugin, called before parameters are initialized
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_load(void)
+_cb_plugin_load(void)
 {
   cfg_io_add(olsr_cfg_get_instance(), &cfg_io_file);
   return 0;
@@ -89,9 +90,10 @@ _plugin_load(void)
 
 /**
  * Destructor of plugin
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_unload(void)
+_cb_plugin_unload(void)
 {
   cfg_io_remove(olsr_cfg_get_instance(), &cfg_io_file);
   return 0;
@@ -115,7 +117,7 @@ _plugin_unload(void)
  * @return pointer to configuration database, NULL if an error happened
  */
 static struct cfg_db *
-_file_load(struct cfg_instance *instance,
+_cb_file_load(struct cfg_instance *instance,
     const char *param, const char *parser, struct autobuf *log) {
   struct autobuf dst;
   struct cfg_db *db;
@@ -178,7 +180,7 @@ _file_load(struct cfg_instance *instance,
  * @return 0 if database was stored sucessfully, -1 otherwise
  */
 static int
-_file_save(struct cfg_instance *instance,
+_cb_file_save(struct cfg_instance *instance,
     const char *param, const char *parser,
     struct cfg_db *src_db, struct autobuf *log) {
   int fd = 0;

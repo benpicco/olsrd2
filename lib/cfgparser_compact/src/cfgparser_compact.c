@@ -58,12 +58,12 @@
 
 #include <stdio.h>
 
-static int _plugin_load(void);
-static int _plugin_unload(void);
+static int _cb_plugin_load(void);
+static int _cb_plugin_unload(void);
 
-static struct cfg_db *_compact_parse(
+static struct cfg_db *_cb_compact_parse(
     char *src, size_t len, struct autobuf *log);
-static int _compact_serialize(
+static int _cb_compact_serialize(
     struct autobuf *dst, struct cfg_db *src, struct autobuf *log);
 static int _parse_line(struct cfg_db *db, char *line,
     char *section, size_t section_size,
@@ -73,22 +73,23 @@ static int _parse_line(struct cfg_db *db, char *line,
 OLSR_PLUGIN7 {
   .descr = "OLSRD compact configuration format plugin",
   .author = "Henning Rogge",
-  .load = _plugin_load,
-  .unload = _plugin_unload,
+  .load = _cb_plugin_load,
+  .unload = _cb_plugin_unload,
 };
 
 struct cfg_parser cfg_parser_compact = {
   .name = "compact",
-  .parse = _compact_parse,
-  .serialize = _compact_serialize,
+  .parse = _cb_compact_parse,
+  .serialize = _cb_compact_serialize,
   .def = true
 };
 
 /**
  * Constructor of plugin, called before parameters are initialized
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_load(void)
+_cb_plugin_load(void)
 {
   cfg_parser_add(olsr_cfg_get_instance(), &cfg_parser_compact);
   return 0;
@@ -96,9 +97,10 @@ _plugin_load(void)
 
 /**
  * Destructor of plugin
+ * @return always returns 0 (cannot fail)
  */
 static int
-_plugin_unload(void)
+_cb_plugin_unload(void)
 {
   cfg_parser_remove(olsr_cfg_get_instance(), &cfg_parser_compact);
   return 0;
@@ -112,12 +114,13 @@ _plugin_unload(void)
  * All lines beginning with '#' will be ignored as comments.
  * All leading and trailing whitespaces will be ignored.
  *
- * Sections are defined as '[<section-typ>]'.
+ * Sections are defined as '[<section-type>]'.
  * Named sections are defined as '[<section-type>=<section-name>]'.
  * Entrys are defined as 'key value'.
  *
  * No entry must be put before the first section.
  */
+
 /**
  * Parse a buffer into a configuration database
  * @param src pointer to text buffer
@@ -126,7 +129,7 @@ _plugin_unload(void)
  * @return pointer to configuration database, NULL if an error happened
  */
 static struct cfg_db *
-_compact_parse(char *src, size_t len, struct autobuf *log) {
+_cb_compact_parse(char *src, size_t len, struct autobuf *log) {
   char section[128];
   char name[128];
   struct cfg_db *db;
@@ -175,7 +178,7 @@ _compact_parse(char *src, size_t len, struct autobuf *log) {
  * @return 0 if database was serialized, -1 otherwise
  */
 static int
-_compact_serialize(struct autobuf *dst, struct cfg_db *src,
+_cb_compact_serialize(struct autobuf *dst, struct cfg_db *src,
     struct autobuf *log __attribute__ ((unused))) {
   struct cfg_section_type *section, *s_it;
   struct cfg_named_section *name, *n_it;

@@ -403,7 +403,7 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
             break;
           case TELNET_RESULT_CONTINOUS:
             break;
-          case TELNET_RESULT_ABUF_ERROR:
+          case TELNET_RESULT_INTERNAL_ERROR:
             session->out.len = len;
             abuf_appendf(&session->out,
                 "Error in autobuffer during command '%s'.\n", cmd);
@@ -530,26 +530,26 @@ _cb_telnet_help(struct olsr_telnet_data *data) {
     }
     else {
       if (abuf_appendf(data->out, "%s\n", ptr->help) < 0) {
-        return TELNET_RESULT_ABUF_ERROR;
+        return TELNET_RESULT_INTERNAL_ERROR;
       }
     }
     return TELNET_RESULT_ACTIVE;
   }
 
   if (abuf_puts(data->out, "Known commands:\n") < 0) {
-    return TELNET_RESULT_ABUF_ERROR;
+    return TELNET_RESULT_INTERNAL_ERROR;
   }
 
   FOR_ALL_TELNET_COMMANDS(ptr, iterator) {
     if (_check_telnet_command(data, NULL, ptr)) {
       if (abuf_appendf(data->out, "  %s\n", ptr->command) < 0) {
-        return TELNET_RESULT_ABUF_ERROR;
+        return TELNET_RESULT_INTERNAL_ERROR;
       }
     }
   }
 
   if (abuf_puts(data->out, "Use 'help <command> to see a help text for one command\n") < 0) {
-    return TELNET_RESULT_ABUF_ERROR;
+    return TELNET_RESULT_INTERNAL_ERROR;
   }
   return TELNET_RESULT_ACTIVE;
 }
@@ -564,7 +564,7 @@ _cb_telnet_echo(struct olsr_telnet_data *data) {
 
   if (abuf_appendf(data->out, "%s\n",
       data->parameter == NULL ? "" : data->parameter) < 0) {
-    return TELNET_RESULT_ABUF_ERROR;
+    return TELNET_RESULT_INTERNAL_ERROR;
   }
   return TELNET_RESULT_ACTIVE;
 }
@@ -690,13 +690,13 @@ _cb_telnet_plugin(struct olsr_telnet_data *data) {
 
   if (data->parameter == NULL || strcasecmp(data->parameter, "list") == 0) {
     if (abuf_puts(data->out, "Plugins:\n") < 0) {
-      return TELNET_RESULT_ABUF_ERROR;
+      return TELNET_RESULT_INTERNAL_ERROR;
     }
     OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) {
       if (abuf_appendf(data->out, " %-30s\t%s\t%s\n",
           plugin->name, olsr_plugins_is_enabled(plugin) ? "enabled" : "",
           olsr_plugins_is_static(plugin) ? "static" : "") < 0) {
-        return TELNET_RESULT_ABUF_ERROR;
+        return TELNET_RESULT_INTERNAL_ERROR;
       }
     }
     return TELNET_RESULT_ACTIVE;
@@ -705,7 +705,7 @@ _cb_telnet_plugin(struct olsr_telnet_data *data) {
   plugin_name = strchr(data->parameter, ' ');
   if (plugin_name == NULL) {
     if (abuf_appendf(data->out, "Error, missing or unknown parameter\n") < 0) {
-      return TELNET_RESULT_ABUF_ERROR;
+      return TELNET_RESULT_INTERNAL_ERROR;
     }
     return TELNET_RESULT_ACTIVE;
   }
@@ -734,7 +734,7 @@ _cb_telnet_plugin(struct olsr_telnet_data *data) {
   if (plugin == NULL) {
     if (abuf_appendf(data->out,
         "Error, could not find plugin '%s'.\n", plugin_name) < 0) {
-      return TELNET_RESULT_ABUF_ERROR;
+      return TELNET_RESULT_INTERNAL_ERROR;
     }
     return TELNET_RESULT_ACTIVE;
   }
