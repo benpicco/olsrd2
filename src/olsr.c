@@ -369,7 +369,7 @@ mainloop(int argc, char **argv) {
     /* reload configuration if triggered */
     if (reload_config) {
       OLSR_INFO(LOG_MAIN, "Reloading configuration");
-      if (olsr_cfg_create_new_rawdb()) {
+      if (olsr_cfg_clear_rawdb()) {
         running = false;
       }
       else if (parse_commandline(argc, argv, true) == -1) {

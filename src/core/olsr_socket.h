@@ -70,6 +70,7 @@ struct olsr_socket_entry {
   /* custom data pointer for sockets */
   void *data;
 
+  // TODO: convert into two booleans
   /* flags (OLSR_SOCKET_READ and OLSR_SOCKET_WRITE) */
   enum olsr_sockethandler_flags flags;
 };
@@ -108,10 +109,3 @@ olsr_socket_disable(struct olsr_socket_entry *entry, unsigned int flags)
 }
 
 #endif
-
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
- */

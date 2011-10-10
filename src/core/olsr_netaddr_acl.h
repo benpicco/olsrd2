@@ -41,7 +41,7 @@ struct olsr_netaddr_acl {
 };
 
 EXPORT void olsr_acl_add(struct olsr_netaddr_acl *);
-EXPORT int olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *, struct strarray *);
+EXPORT int olsr_acl_from_strarray(struct olsr_netaddr_acl *, struct strarray *);
 EXPORT void olsr_acl_remove(struct olsr_netaddr_acl *);
 EXPORT int olsr_acl_copy(struct olsr_netaddr_acl *to, struct olsr_netaddr_acl *from);
 

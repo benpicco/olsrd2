@@ -128,12 +128,3 @@ olsr_plugins_is_enabled(struct olsr_plugin *p) {
 }
 
 #endif
-
-/*
- * Local Variables:
- * mode: c
- * style: linux
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- */

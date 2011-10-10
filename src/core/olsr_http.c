@@ -61,7 +61,7 @@ static struct olsr_http_handler *_get_site_handler(const char *uri);
 static const char *_get_headertype_string(enum olsr_http_result type);
 static void _create_http_header(struct olsr_stream_session *session,
     enum olsr_http_result code, const char *content_type);
-static int _parse_http_header(char *message, size_t message_len,
+static int _parse_http_header(char *header_data, size_t header_len,
     struct olsr_http_session *header);
 static size_t _parse_query_string(char *s,
     char **name, char **value, size_t count);
@@ -344,6 +344,12 @@ _cb_receive_data(struct olsr_stream_session *session) {
   return STREAM_SESSION_SEND_AND_QUIT;
 }
 
+/**
+ * Check if an incoming session is authorized to view a http site.
+ * @param handler pointer to site handler
+ * @param session pointer to http session.
+ * @return true if authorized, false if not
+ */
 static bool
 _auth_okay(struct olsr_http_handler *handler,
     struct olsr_http_session *session) {
@@ -524,48 +530,48 @@ _create_http_header(struct olsr_stream_session *session,
 
 /**
  * Parse a HTTP header
- * @param message pointer to header data
- * @param message_len length of header data
+ * @param header_data pointer to header data
+ * @param header_len length of header data
  * @param header pointer to object to store the results
  * @return 0 if http header was correct, -1 if an error happened
  */
 static int
-_parse_http_header(char *message, size_t message_len,
+_parse_http_header(char *header_data, size_t header_len,
     struct olsr_http_session *header) {
   size_t header_index;
 
-  assert(message);
+  assert(header_data);
   assert(header);
 
   memset(header, 0, sizeof(struct olsr_http_session));
-  header->method = message;
+  header->method = header_data;
 
   while(true) {
-    if (message_len < 2) {
+    if (header_len < 2) {
       goto unexpected_end;
     }
 
-    if (*message == ' ' && header->http_version == NULL) {
-      *message = '\0';
+    if (*header_data == ' ' && header->http_version == NULL) {
+      *header_data = '\0';
 
       if (header->request_uri == NULL) {
-        header->request_uri = &message[1];
+        header->request_uri = &header_data[1];
       }
       else if (header->http_version == NULL) {
-        header->http_version = &message[1];
+        header->http_version = &header_data[1];
       }
     }
-    else if (*message == '\r') {
-      *message = '\0';
+    else if (*header_data == '\r') {
+      *header_data = '\0';
     }
-    else if (*message == '\n') {
-      *message = '\0';
+    else if (*header_data == '\n') {
+      *header_data = '\0';
 
-      message++; message_len--;
+      header_data++; header_len--;
       break;
     }
 
-    message++; message_len--;
+    header_data++; header_len--;
   }
 
   if (header->http_version == NULL) {
@@ -573,17 +579,17 @@ _parse_http_header(char *message, size_t message_len,
   }
 
   for(header_index = 0; true; header_index++) {
-    if (message_len < 1) {
+    if (header_len < 1) {
       goto unexpected_end;
     }
 
-    if (*message == '\n') {
+    if (*header_data == '\n') {
       break;
     }
-    else if (*message == '\r') {
-      if (message_len < 2) return true;
+    else if (*header_data == '\r') {
+      if (header_len < 2) return true;
 
-      if (message[1] == '\n') {
+      if (header_data[1] == '\n') {
         break;
       }
     }
@@ -592,93 +598,93 @@ _parse_http_header(char *message, size_t message_len,
       goto too_many_fields;
     }
 
-    header->header_name[header_index] = message;
+    header->header_name[header_index] = header_data;
 
     while(true) {
-      if (message_len < 1) {
+      if (header_len < 1) {
         goto unexpected_end;
       }
 
-      if (*message == ':') {
-        *message = '\0';
+      if (*header_data == ':') {
+        *header_data = '\0';
 
-        message++; message_len--;
+        header_data++; header_len--;
         break;
       }
-      else if (*message == ' ' || *message == '\t') {
-        *message = '\0';
+      else if (*header_data == ' ' || *header_data == '\t') {
+        *header_data = '\0';
       }
-      else if (*message == '\n' || *message == '\r') {
+      else if (*header_data == '\n' || *header_data == '\r') {
         goto unexpected_end;
       }
 
-      message++; message_len--;
+      header_data++; header_len--;
     }
 
     while(true) {
-      if (message_len < 1) {
+      if (header_len < 1) {
         goto unexpected_end;
       }
 
       if (header->header_value[header_index] == NULL) {
-        if (*message != ' ' && *message != '\t') {
-          header->header_value[header_index] = message;
+        if (*header_data != ' ' && *header_data != '\t') {
+          header->header_value[header_index] = header_data;
         }
       }
 
-      if (*message == '\n') {
-        if (message_len < 2) {
+      if (*header_data == '\n') {
+        if (header_len < 2) {
           goto unexpected_end;
         }
 
-        if (message[1] == ' ' || message[1] == '\t') {
-          *message = ' ';
-          message[1] = ' ';
+        if (header_data[1] == ' ' || header_data[1] == '\t') {
+          *header_data = ' ';
+          header_data[1] = ' ';
 
-          message += 2; message_len -= 2;
+          header_data += 2; header_len -= 2;
           continue;
         }
 
-        *message = '\0';
+        *header_data = '\0';
 
         if (header->header_value[header_index] == NULL) {
-          header->header_value[header_index] = message;
+          header->header_value[header_index] = header_data;
         }
 
-        message++; message_len--;
+        header_data++; header_len--;
         break;
       }
-      else if (*message == '\r') {
-        if (message_len < 2) {
+      else if (*header_data == '\r') {
+        if (header_len < 2) {
           goto unexpected_end;
         }
 
-        if (message[1] == '\n') {
-          if (message_len < 3) {
+        if (header_data[1] == '\n') {
+          if (header_len < 3) {
             goto unexpected_end;
           }
 
-          if (message[2] == ' ' || message[2] == '\t') {
-            *message = ' ';
-            message[1] = ' ';
-            message[2] = ' ';
+          if (header_data[2] == ' ' || header_data[2] == '\t') {
+            *header_data = ' ';
+            header_data[1] = ' ';
+            header_data[2] = ' ';
 
-            message += 3; message_len -= 3;
+            header_data += 3; header_len -= 3;
             continue;
           }
 
-          *message = '\0';
+          *header_data = '\0';
 
           if (header->header_value[header_index] == NULL) {
-            header->header_value[header_index] = message;
+            header->header_value[header_index] = header_data;
           }
 
-          message += 2; message_len -= 2;
+          header_data += 2; header_len -= 2;
           break;
         }
       }
 
-      message++; message_len--;
+      header_data++; header_len--;
     }
   }
 

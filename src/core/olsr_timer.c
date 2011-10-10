@@ -68,7 +68,8 @@ OLSR_SUBSYSTEM_STATE(olsr_timer_state);
 static uint32_t calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val);
 
 /**
- * Init datastructures for maintaining timers.
+ * Initialize timer scheduler subsystem
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 olsr_timer_init(void)
@@ -145,9 +146,10 @@ olsr_timer_cleanup(void)
   olsr_memcookie_remove(timerinfo_cookie);
 }
 
+// TODO: remove malloc by using pointer to initialized timer_info?
 /**
  * Add a new group of timers to the scheduler
- * @param name
+ * @param name name of timer
  * @param callback timer event function
  * @param periodic true if the timer is periodic, false otherwise
  * @return new timer info
@@ -192,7 +194,6 @@ olsr_timer_remove(struct olsr_timer_info *info) {
 
 /**
  * Start a new timer.
- *
  * @param rel_time time expressed in milliseconds
  * @param jitter_pct expressed in percent
  * @param context for the callback function
@@ -201,7 +202,7 @@ olsr_timer_remove(struct olsr_timer_info *info) {
  */
 struct olsr_timer_entry *
 olsr_timer_start(unsigned int rel_time,
-                 uint8_t jitter_pct, void *context, struct olsr_timer_info *ti)
+    uint8_t jitter_pct, void *context, struct olsr_timer_info *ti)
 {
   struct olsr_timer_entry *timer;
 #if !defined(REMOVE_LOG_DEBUG)
@@ -248,7 +249,6 @@ olsr_timer_start(unsigned int rel_time,
 
 /**
  * Delete a timer.
- *
  * @param timer the olsr_timer_entry that shall be removed
  */
 void
@@ -280,8 +280,7 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
 }
 
 /**
- * Change a olsr_timer_entry.
- *
+ * Change time when a timer should fire.
  * @param timer olsr_timer_entry to be changed.
  * @param rel_time new relative time expressed in units of milliseconds.
  * @param jitter_pct new jitter expressed in percent.
@@ -351,7 +350,7 @@ olsr_timer_set(struct olsr_timer_entry **timer_ptr,
 
 /**
  * Walk through the timer list and check if any timer is ready to fire.
- * Callback the provided function with the context pointer.
+ * Call the provided function with the context pointer.
  */
 void
 olsr_timer_walk(void)
@@ -461,11 +460,10 @@ olsr_timer_walk(void)
 
 /**
  * Decrement a relative timer by a random number range.
- *
  * @param the relative timer expressed in units of milliseconds.
  * @param the jitter in percent
- * @param cached result of random() at system init.
- * @return the absolute timer
+ * @param random_val cached random variable to calculate jitter
+ * @return the absolute time when timer will fire
  */
 static uint32_t
 calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val)

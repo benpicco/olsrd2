@@ -74,6 +74,8 @@ OLSR_SUBSYSTEM_STATE(olsr_logging_state);
 
 /**
  * Initialize logging system
+ * @param def_severity default severity level
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 olsr_log_init(enum log_severity def_severity)
@@ -88,7 +90,7 @@ olsr_log_init(enum log_severity def_severity)
 
   if (abuf_init(&logbuffer, 4096)) {
     fputs("Not enough memory for logging buffer\n", stderr);
-    olsr_logging_state--;
+    olsr_subsystem_cleanup(&olsr_logging_state);
     return -1;
   }
 
@@ -231,7 +233,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   tm_ptr = localtime((time_t *) & timeval.tv_sec);
   now = *tm_ptr;
 
-  /* generate log string (insert file/line in DEBUG mode) */
+  /* generate log string */
   abuf_clear(&logbuffer);
   if (!no_header) {
     p1 = abuf_appendf(&logbuffer, "%d:%02d:%02d.%03ld ",
@@ -318,6 +320,8 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
     }
   }
 }
+
+// TODO: clean up this interface
 
 /**
  * Logger for stderr output

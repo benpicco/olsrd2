@@ -62,7 +62,7 @@ OLSR_SUBSYSTEM_STATE(olsr_memcookie_state);
  * @return number of bytes including padding for alignment
  */
 static inline size_t
-calc_aligned_size(size_t size) {
+_calc_aligned_size(size_t size) {
   static const size_t add = sizeof(size_t) * 2 - 1;
   static const size_t mask = ~(sizeof(size_t)*2 - 1);
 
@@ -98,7 +98,7 @@ void
 olsr_memcookie_init(void) {
   /* check size of memory prefix */
   assert (sizeof(struct olsr_memory_prefix)
-      == calc_aligned_size(sizeof(struct olsr_memory_prefix)));
+      == _calc_aligned_size(sizeof(struct olsr_memory_prefix)));
 
   if (olsr_subsystem_init(&olsr_memcookie_state))
     return;
@@ -146,7 +146,7 @@ olsr_memcookie_add(const char *cookie_name, size_t size)
   ci->ci_name = cookie_name;
   ci->ci_node.key = ci->ci_name;
   ci->ci_size = size;
-  ci->ci_custom_offset = sizeof(struct olsr_memory_prefix) + calc_aligned_size(size);
+  ci->ci_custom_offset = sizeof(struct olsr_memory_prefix) + _calc_aligned_size(size);
   ci->ci_min_free_count = COOKIE_FREE_LIST_THRESHOLD;
 
   /* no custom data at this point */
@@ -352,7 +352,7 @@ olsr_memcookie_add_custom(const char *memcookie_name, const char *name, size_t s
     return NULL;
   }
   custom_cookie->name = name;
-  custom_cookie->size = calc_aligned_size(size);
+  custom_cookie->size = _calc_aligned_size(size);
   custom_cookie->init = init;
   custom_cookie->move = move;
 
@@ -481,11 +481,3 @@ olsr_memcookie_remove_custom(const char*memcookie_name, struct olsr_memcookie_cu
   list_remove(&custom->node);
   free (custom);
 }
-
-
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
- */

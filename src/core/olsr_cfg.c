@@ -53,7 +53,7 @@
 #include "olsr.h"
 
 /* static prototypes */
-static int _validate_global(struct cfg_schema_section *, const char *section_name,
+static int _cb_validate_global(struct cfg_schema_section *, const char *section_name,
     struct cfg_named_section *, struct autobuf *);
 
 /* global config */
@@ -72,7 +72,7 @@ OLSR_SUBSYSTEM_STATE(olsr_cfg_state);
 /* define global configuration template */
 static struct cfg_schema_section global_section = {
   .t_type = CFG_SECTION_GLOBAL,
-  .t_validate = _validate_global,
+  .t_validate = _cb_validate_global,
 };
 
 static struct cfg_schema_entry global_entries[] = {
@@ -91,6 +91,7 @@ static struct cfg_schema_entry global_entries[] = {
 
 /**
  * Initializes the olsrd configuration subsystem
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 olsr_cfg_init(void) {
@@ -267,6 +268,10 @@ apply_failed:
   return result;
 }
 
+/**
+ * Copy work-db into raw-db to roll back changes before commit.
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_cfg_rollback(void) {
   struct cfg_db *db;
@@ -288,6 +293,12 @@ olsr_cfg_rollback(void) {
   return 0;
 }
 
+/**
+ * Update binary copy of global config section
+ * @param raw true if data shall be taken from raw database,
+ *   false if work-db should be taken as a source.
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_cfg_update_globalcfg(bool raw) {
   struct cfg_named_section *named;
@@ -304,7 +315,7 @@ olsr_cfg_update_globalcfg(bool raw) {
  * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_cfg_create_new_rawdb(void) {
+olsr_cfg_clear_rawdb(void) {
   struct cfg_db *db;
 
   /* remember old db */
@@ -324,6 +335,9 @@ olsr_cfg_create_new_rawdb(void) {
   return 0;
 }
 
+/**
+ * @return pointer to configuration instance object
+ */
 struct cfg_instance *
 olsr_cfg_get_instance(void) {
   return &_olsr_cfg_instance;
@@ -371,7 +385,7 @@ olsr_cfg_get_delta(void) {
  * @return -1 if section is not valid, 0 otherwise
  */
 static int
-_validate_global(struct cfg_schema_section *schema __attribute__((unused)),
+_cb_validate_global(struct cfg_schema_section *schema __attribute__((unused)),
     const char *section_name __attribute__((unused)),
     struct cfg_named_section *section, struct autobuf *log) {
   struct olsr_config_global config;

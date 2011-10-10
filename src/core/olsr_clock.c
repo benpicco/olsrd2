@@ -62,6 +62,7 @@ static int olsr_get_timezone(void);
 
 /**
  * Initialize olsr clock system
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 olsr_clock_init(void) {
@@ -92,6 +93,7 @@ olsr_clock_cleanup(void) {
 
 /**
  * Update the internal clock to current system time
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 olsr_clock_update(void)
@@ -182,105 +184,11 @@ olsr_clock_isPast(uint32_t absolute)
 }
 
 /**
- *Function that converts a double to a mantissa/exponent
- *product as described in RFC3626:
- *
- * value = C*(1+a/16)*2^b [in seconds]
- *
- *  where a is the integer represented by the four highest bits of the
- *  field and b the integer represented by the four lowest bits of the
- *  field.
- *
- *@param interval the time interval to process
- *
- *@return a 8-bit mantissa/exponent product
- */
-uint8_t
-olsr_clock_encode_olsrv1(const uint32_t interval)
-{
-  uint8_t a = 0, b = 0;                /* Underflow defaults */
-
-  /* It is sufficent to compare the integer part since we test on >=.
-   * So we have now only a floating point division and the rest of the loop
-   * are only integer operations.
-   *
-   * const unsigned int unscaled_interval = interval / VTIME_SCALE_FACTOR;
-   *
-   * VTIME_SCALE_FACTOR = 1/16
-   *
-   * => unscaled_interval = interval(ms) / 1000 * 16
-   *                      = interval(ms) / 125 * 2
-   */
-
-  unsigned unscaled_interval = interval;
-  while (unscaled_interval >= 62) {
-    unscaled_interval >>= 1;
-    b++;
-  }
-
-  if (0 < b) {
-    if (15 < --b) {
-      a = 15;                   /* Overflow defaults */
-      b = 15;
-    } else {
-      a = (interval >> (b + 2)) - 15;
-    }
-  }
-
-  return (a << 4) + b;
-}
-
-/**
- * Function for converting a mantissa/exponent 8bit value back
- * to double as described in RFC3626:
- *
- * value = C*(1+a/16)*2^b [in seconds]
- *
- *  where a is the integer represented by the four highest bits of the
- *  field and b the integer represented by the four lowest bits of the
- *  field.
- *
- * me is the 8 bit mantissa/exponent value
- *
- * To avoid expensive floating maths, we transform the equation:
- *     value = C * (1 + a / 16) * 2^b
- * first, we make an int addition from the floating point addition:
- *     value = C * ((16 + a) / 16) * 2^b
- * then we get rid of a pair of parentheses
- *     value = C * (16 + a) / 16 * 2^b
- * and now we make an int multiplication from the floating point one
- *     value = C * (16 + a) * 2^b / 16
- * so that we can make a shift from the multiplication
- *     value = C * ((16 + a) << b) / 16
- * and sionce C and 16 are constants
- *     value = ((16 + a) << b) * C / 16
- *
- * VTIME_SCALE_FACTOR = 1/16
- *
- * =>  value(ms) = ((16 + a) << b) / 256 * 1000
- *
- * 1. case: b >= 8
- *           = ((16 + a) << (b-8)) * 1000
- *
- * 2. case: b <= 8
- *           = ((16 + a) * 1000) >> (8-b)
- */
-uint32_t
-olsr_clock_decode_olsrv1(const uint8_t me)
-{
-  const uint8_t a = me >> 4;
-  const uint8_t b = me & 0x0F;
-
-  if (b >= 8) {
-    return ((16 + a) << (b - 8)) * 1000;
-  }
-  assert(me == olsr_clock_encode_olsrv1(((16 + a) * 1000) >> (8 - b)));
-  return ((16 + a) * 1000) >> (8 - b);
-}
-
-/**
  * converts an unsigned integer value into a string representation
  * (divided by 1000)
+ * @param buffer pointer to time string buffer
+ * @param t current OLSR time
+ * @return pointer to time string
  */
 char *
 olsr_clock_to_string(struct millitxt_buf *buffer, uint32_t t) {
@@ -291,6 +199,8 @@ olsr_clock_to_string(struct millitxt_buf *buffer, uint32_t t) {
 /**
  * converts a floating point text into a unsigned integer representation
  * (multiplied by 1000)
+ * @param txt pointer to text representation
+ * @return integer representation
  */
 uint32_t olsr_clock_parse_string(char *txt) {
   uint32_t t = 0;
@@ -324,7 +234,7 @@ uint32_t olsr_clock_parse_string(char *txt) {
  * Format an absolute wallclock system time string.
  * May be called upto 4 times in a single printf() statement.
  * Displays microsecond resolution.
- *
+ * @param buf pointer to timeval buffer
  * @return buffer to a formatted system time string.
  */
 const char *
@@ -349,26 +259,26 @@ olsr_clock_getWallclockString(struct timeval_buf *buf)
  * Displays millisecond resolution.
  *
  * @param buf string buffer for creating output
- * @param clk absolute timestamp
+ * @param clk OLSR timestamp
  * @return buffer to a formatted system time string.
  */
 const char *
 olsr_clock_toClockString(struct timeval_buf *buf, uint32_t clk)
 {
-  unsigned int msec = clk % 1000;
-  unsigned int sec = clk / 1000;
+  unsigned int msec = clk % MSEC_PER_SEC;
+  unsigned int sec = clk / MSEC_PER_SEC;
 
   snprintf(buf->buf, sizeof(buf),
-      "%02u:%02u:%02u.%03u", sec / 3600, (sec % 3600) / 60, (sec % 60), (msec % MSEC_PER_SEC));
+      "%02u:%02u:%02u.%03u", sec / 3600, (sec % 3600) / 60, (sec % 60), msec);
 
   return buf->buf;
 }
 
 /**
- * Returns the difference between gmt and local time in seconds.
  * Use gmtime() and localtime() to keep things simple.
+ * taken and modified from www.tcpdump.org.
  *
- * taken and slightly modified from www.tcpdump.org.
+ * @return difference between gmt and local time in seconds.
  */
 static int
 olsr_get_timezone(void)
@@ -377,10 +287,20 @@ olsr_get_timezone(void)
   static int time_diff = OLSR_TIMEZONE_UNINITIALIZED;
   if (time_diff == OLSR_TIMEZONE_UNINITIALIZED) {
     int dir;
-    const time_t t = time(NULL);
-    const struct tm gmt = *gmtime(&t);
-    const struct tm *loc = localtime(&t);
+    struct timeval tv;
+    time_t t;
+    struct tm gmt;
+    struct tm *loc;
 
+    if (os_gettimeofday(&tv, 0)) {
+      OLSR_WARN(LOG_TIMER, "Cannot read internal clock: %s (%d)",
+          strerror(errno), errno);
+      return 0;
+    }
+
+    t = tv.tv_sec;
+    gmt = *gmtime(&t);
+    loc = localtime(&t);
     time_diff = (loc->tm_hour - gmt.tm_hour) * 60 * 60 + (loc->tm_min - gmt.tm_min) * 60;
 
     /*
@@ -397,10 +317,3 @@ olsr_get_timezone(void)
   }
   return time_diff;
 }
-
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
- */

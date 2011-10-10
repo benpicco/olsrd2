@@ -71,6 +71,7 @@ olsr_socket_intfree(struct olsr_socket_entry *sock) {
 
 /**
  * Initialize olsr socket scheduler
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 olsr_socket_init(void) {
@@ -108,9 +109,10 @@ olsr_socket_cleanup(void)
   olsr_memcookie_remove(socket_memcookie);
 }
 
+// TODO: remove malloc by giving function initialized socket entry
 /**
- * Add a socket and handler to the socketset
- * beeing used in the main select(2) loop
+ * Add a socket handler to the list of sockets
+ * being used in the main select(2) loop
  *
  * @param fd file descriptor for socket
  * @param pf_imm processing callback
@@ -277,10 +279,3 @@ olsr_socket_handle(uint32_t until_time)
     return -1;
   return 0;
 }
-
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
- */

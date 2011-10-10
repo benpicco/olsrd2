@@ -46,8 +46,6 @@
 #include "common/list.h"
 #include "common/avl.h"
 
-extern struct avl_tree EXPORT(olsr_cookie_tree);
-
 /*
  * This is a cookie. A cookie is a tool aimed for olsrd developers.
  * It is used for tracking resource usage in the system and also
@@ -140,6 +138,8 @@ struct olsr_memory_prefix {
 
 #define COOKIE_FREE_LIST_THRESHOLD 10   /* Blocks / Percent  */
 
+extern struct avl_tree EXPORT(olsr_cookie_tree);
+
 /* Externals. */
 void olsr_memcookie_init(void);
 void olsr_memcookie_cleanup(void);
@@ -191,10 +191,3 @@ olsr_memcookie_set_minfree(struct olsr_memcookie_info *ci, uint32_t min_free)
 }
 
 #endif /* _OLSR_MEMCOOKIE_H */
-
-/*
- * Local Variables:
- * c-basic-offset: 2
- * indent-tabs-mode: nil
- * End:
- */

@@ -123,8 +123,8 @@ olsr_plugins_cleanup(void) {
 }
 
 /**
- * This function is called by the constructor of a plugin.
- *
+ * This function is called by the constructor of a plugin to
+ * insert the plugin into the global list.
  * @param pl_def pointer to plugin definition
  */
 void
@@ -146,6 +146,10 @@ olsr_plugins_hook(struct olsr_plugin *pl_def) {
   OLSR_INFO(LOG_PLUGINLOADER, "Hooked plugin %s", pl_def->name);
 }
 
+/**
+ * Initialize all static plugins
+ * @return -1 if a static plugin could not be loaded, 0 otherwise
+ */
 int
 olsr_plugins_init_static(void) {
   struct olsr_plugin *p, *it;
@@ -159,11 +163,12 @@ olsr_plugins_init_static(void) {
   OLSR_FOR_ALL_PLUGIN_ENTRIES(p, it) {
     if (olsr_plugins_load(p->name) == NULL) {
       OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin '%s'", p->name);
-      error = 1;
+      error = -1;
     }
   }
   return error;
 }
+
 /**
  * Query for a certain plugin name
  * @param libname name of plugin
@@ -199,9 +204,8 @@ olsr_plugins_get(const char *libname) {
 
 /**
  * Load a plugin and call its initialize callback
- *
- *@param libname the name of the library(file)
- *@return plugin db object
+ * @param libname the name of the library(file)
+ * @return plugin db object
  */
 struct olsr_plugin *
 olsr_plugins_load(const char *libname)
@@ -407,12 +411,3 @@ _open_plugin(const char *filename) {
   abuf_free(&abuf);
   return result;
 }
-
-/*
- * Local Variables:
- * mode: c
- * style: linux
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- */

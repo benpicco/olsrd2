@@ -27,12 +27,12 @@
 #define _CFG_TELNET_SECTION "telnet"
 
 /* static function prototypes */
-static void _config_changed(void);
-static int _telnet_init(struct olsr_stream_session *);
-static void _telnet_cleanup(struct olsr_stream_session *);
-static void _telnet_create_error(struct olsr_stream_session *,
+static void _cb_config_changed(void);
+static int _cb_telnet_init(struct olsr_stream_session *);
+static void _cb_telnet_cleanup(struct olsr_stream_session *);
+static void _cb_telnet_create_error(struct olsr_stream_session *,
     enum olsr_stream_errors);
-static enum olsr_stream_session_state _telnet_receive_data(
+static enum olsr_stream_session_state _cb_telnet_receive_data(
     struct olsr_stream_session *);
 static enum olsr_telnet_result _telnet_handle_command(
     struct olsr_telnet_data *);
@@ -40,14 +40,14 @@ static struct olsr_telnet_command *_check_telnet_command(
     struct olsr_telnet_data *data, const char *name,
     struct olsr_telnet_command *cmd);
 
-static void _telnet_repeat_timer(void *data);
-static enum olsr_telnet_result _telnet_quit(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _telnet_help(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _telnet_echo(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _telnet_repeat(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _telnet_timeout(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _telnet_version(struct olsr_telnet_data *data);
-static enum olsr_telnet_result _telnet_plugin(struct olsr_telnet_data *data);
+static void _cb_telnet_repeat_timer(void *data);
+static enum olsr_telnet_result _cb_telnet_quit(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_telnet_help(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_telnet_echo(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_telnet_repeat(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_telnet_timeout(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_telnet_version(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_telnet_plugin(struct olsr_telnet_data *data);
 
 /* global and static variables */
 static struct cfg_schema_section telnet_section = {
@@ -68,22 +68,22 @@ static struct cfg_schema_entry telnet_entries[] = {
 
 static struct cfg_delta_handler telnet_handler = {
   .s_type = _CFG_TELNET_SECTION,
-  .callback = _config_changed
+  .callback = _cb_config_changed
 };
 
 /* built-in telnet commands */
 static struct olsr_telnet_command _builtin[] = {
-  TELNET_CMD("quit", _telnet_quit, "Ends telnet session"),
-  TELNET_CMD("exit", _telnet_quit, "Ends telnet session"),
-  TELNET_CMD("help", _telnet_help,
+  TELNET_CMD("quit", _cb_telnet_quit, "Ends telnet session"),
+  TELNET_CMD("exit", _cb_telnet_quit, "Ends telnet session"),
+  TELNET_CMD("help", _cb_telnet_help,
       "help: Display the online help text and a list of commands"),
-  TELNET_CMD("echo", _telnet_echo,"echo <string>: Prints a string"),
-  TELNET_CMD("repeat", _telnet_repeat,
+  TELNET_CMD("echo", _cb_telnet_echo,"echo <string>: Prints a string"),
+  TELNET_CMD("repeat", _cb_telnet_repeat,
       "repeat <seconds> <command>: Repeats a telnet command every X seconds"),
-  TELNET_CMD("timeout", _telnet_timeout,
+  TELNET_CMD("timeout", _cb_telnet_timeout,
       "timeout <seconds> :Sets telnet session timeout"),
-  TELNET_CMD("version", _telnet_version, "Displays version of the program"),
-  TELNET_CMD("plugin", _telnet_plugin,
+  TELNET_CMD("version", _cb_telnet_version, "Displays version of the program"),
+  TELNET_CMD("plugin", _cb_telnet_plugin,
         "control plugins dynamically, parameters are 'list',"
         " 'activate <plugin>', 'deactivate <plugin>', "
         "'load <plugin>' and 'unload <plugin>'"),
@@ -99,6 +99,10 @@ static struct olsr_timer_info *_telnet_repeat_timerinfo;
 
 struct avl_tree telnet_cmd_tree;
 
+/**
+ * Initialize telnet subsystem
+ * @return 0 if initialized successfully, -1 otherwise
+ */
 int
 olsr_telnet_init(void) {
   size_t i;
@@ -113,7 +117,7 @@ olsr_telnet_init(void) {
     return -1;
   }
 
-  _telnet_repeat_timerinfo = olsr_timer_add("txt repeat timer", _telnet_repeat_timer, true);
+  _telnet_repeat_timerinfo = olsr_timer_add("txt repeat timer", _cb_telnet_repeat_timer, true);
   if (_telnet_repeat_timerinfo == NULL) {
     olsr_memcookie_remove(_telnet_memcookie);
     olsr_subsystem_cleanup(&olsr_telnet_state);
@@ -130,10 +134,10 @@ olsr_telnet_init(void) {
   _telnet_managed.config.maximum_input_buffer = 4096;
   _telnet_managed.config.allowed_sessions = 3;
   _telnet_managed.config.memcookie = _telnet_memcookie;
-  _telnet_managed.config.init = _telnet_init;
-  _telnet_managed.config.cleanup = _telnet_cleanup;
-  _telnet_managed.config.receive_data = _telnet_receive_data;
-  _telnet_managed.config.create_error = _telnet_create_error;
+  _telnet_managed.config.init = _cb_telnet_init;
+  _telnet_managed.config.cleanup = _cb_telnet_cleanup;
+  _telnet_managed.config.receive_data = _cb_telnet_receive_data;
+  _telnet_managed.config.create_error = _cb_telnet_create_error;
 
   /* initialize telnet commands */
   avl_init(&telnet_cmd_tree, avl_comp_strcasecmp, false, NULL);
@@ -144,6 +148,9 @@ olsr_telnet_init(void) {
   return 0;
 }
 
+/**
+ * Cleanup all allocated data of telnet subsystem
+ */
 void
 olsr_telnet_cleanup(void) {
   if (olsr_subsystem_cleanup(&olsr_telnet_state))
@@ -157,6 +164,11 @@ olsr_telnet_cleanup(void) {
   olsr_memcookie_remove(_telnet_memcookie);
 }
 
+/**
+ * Add a new telnet command to telnet subsystem
+ * @param command pointer to initialized telnet command object
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_telnet_add(struct olsr_telnet_command *command) {
   command->node.key = command->command;
@@ -166,6 +178,10 @@ olsr_telnet_add(struct olsr_telnet_command *command) {
   return 0;
 }
 
+/**
+ * Remove a telnet command from telnet subsystem
+ * @param command pointer to telnet command object
+ */
 void
 olsr_telnet_remove(struct olsr_telnet_command *command) {
   avl_remove(&telnet_cmd_tree, &command->node);
@@ -179,6 +195,14 @@ olsr_telnet_stop(struct olsr_telnet_data *data) {
   }
 }
 
+/**
+ * Execute a telnet command.
+ * @param cmd pointer to name of command
+ * @param para pointer to parameter string
+ * @param out buffer for output of command
+ * @param remote pointer to address which triggers the execution
+ * @return result of telnet command
+ */
 enum olsr_telnet_result
 olsr_telnet_execute(const char *cmd, const char *para,
     struct autobuf *out, struct netaddr *remote) {
@@ -196,8 +220,11 @@ olsr_telnet_execute(const char *cmd, const char *para,
   return result;
 }
 
+/**
+ * Handler for configuration changes
+ */
 static void
-_config_changed(void) {
+_cb_config_changed(void) {
   struct olsr_stream_managed_config config;
   int ret = -1;
 
@@ -221,8 +248,13 @@ apply_config_failed:
   olsr_acl_remove(&config.acl);
 }
 
+/**
+ * Initialization of incoming telnet session
+ * @param session pointer to TCP session
+ * @return 0
+ */
 static int
-_telnet_init(struct olsr_stream_session *session) {
+_cb_telnet_init(struct olsr_stream_session *session) {
   struct olsr_telnet_session *telnet_session;
 
   /* get telnet session pointer */
@@ -239,8 +271,12 @@ _telnet_init(struct olsr_stream_session *session) {
   return 0;
 }
 
+/**
+ * Cleanup of telnet session
+ * @param session pointer to TCP session
+ */
 static void
-_telnet_cleanup(struct olsr_stream_session *session) {
+_cb_telnet_cleanup(struct olsr_stream_session *session) {
   struct olsr_telnet_session *telnet_session;
   struct olsr_telnet_cleanup *handler, *it;
 
@@ -260,8 +296,13 @@ _telnet_cleanup(struct olsr_stream_session *session) {
   }
 }
 
+/**
+ * Create error string for telnet session
+ * @param session pointer to TCP stream
+ * @param error TCP error code to generate
+ */
 static void
-_telnet_create_error(struct olsr_stream_session *session,
+_cb_telnet_create_error(struct olsr_stream_session *session,
     enum olsr_stream_errors error) {
   switch(error) {
     case STREAM_REQUEST_FORBIDDEN:
@@ -276,8 +317,13 @@ _telnet_create_error(struct olsr_stream_session *session,
   }
 }
 
+/**
+ * Handler for receiving data from telnet session
+ * @param session pointer to TCP session
+ * @return TCP session state
+ */
 static enum olsr_stream_session_state
-_telnet_receive_data(struct olsr_stream_session *session) {
+_cb_telnet_receive_data(struct olsr_stream_session *session) {
   static const char defaultCommand[] = "/link/neigh/topology/hna/mid/routes";
   static char tmpbuf[128];
 
@@ -398,6 +444,11 @@ _telnet_receive_data(struct olsr_stream_session *session) {
   return STREAM_SESSION_ACTIVE;
 }
 
+/**
+ * Helper function to call telnet command handler
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
 _telnet_handle_command(struct olsr_telnet_data *data) {
   struct olsr_telnet_command *cmd;
@@ -415,6 +466,14 @@ _telnet_handle_command(struct olsr_telnet_data *data) {
   return cmd->handler(data);
 }
 
+/**
+ * Checks for existing (and allowed) telnet command.
+ * Either name or cmd should be NULL, but not both.
+ * @param data pointer to telnet data
+ * @param name pointer to command name (might be NULL)
+ * @param cmd pointer to telnet command object (might be NULL)
+ * @return telnet command object or NULL if not found or forbidden
+ */
 static struct olsr_telnet_command *
 _check_telnet_command(struct olsr_telnet_data *data,
     const char *name, struct olsr_telnet_command *cmd) {
@@ -440,13 +499,23 @@ _check_telnet_command(struct olsr_telnet_data *data,
   return cmd;
 }
 
+/**
+ * Telnet command 'quit'
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
-_telnet_quit(struct olsr_telnet_data *data __attribute__((unused))) {
+_cb_telnet_quit(struct olsr_telnet_data *data __attribute__((unused))) {
   return TELNET_RESULT_QUIT;
 }
 
+/**
+ * Telnet command 'help'
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
-_telnet_help(struct olsr_telnet_data *data) {
+_cb_telnet_help(struct olsr_telnet_data *data) {
   struct olsr_telnet_command *ptr, *iterator;
 
   if (data->parameter != NULL && data->parameter[0] != 0) {
@@ -485,8 +554,13 @@ _telnet_help(struct olsr_telnet_data *data) {
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Telnet command 'echo'
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
-_telnet_echo(struct olsr_telnet_data *data) {
+_cb_telnet_echo(struct olsr_telnet_data *data) {
 
   if (abuf_appendf(data->out, "%s\n",
       data->parameter == NULL ? "" : data->parameter) < 0) {
@@ -495,14 +569,23 @@ _telnet_echo(struct olsr_telnet_data *data) {
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Telnet command 'timeout'
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
-_telnet_timeout(struct olsr_telnet_data *data) {
+_cb_telnet_timeout(struct olsr_telnet_data *data) {
   data->timeout_value = (uint32_t)strtoul(data->parameter, NULL, 10) * 1000;
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Stop handler for repeating telnet commands
+ * @param data pointer to telnet data
+ */
 static void
-_telnet_repeat_stophandler(struct olsr_telnet_data *data) {
+_cb_telnet_repeat_stophandler(struct olsr_telnet_data *data) {
   olsr_timer_stop((struct olsr_timer_entry *)data->stop_data[0]);
   free(data->stop_data[1]);
 
@@ -512,8 +595,12 @@ _telnet_repeat_stophandler(struct olsr_telnet_data *data) {
   data->stop_data[2] = NULL;
 }
 
+/**
+ * Timer event handler for repeating telnet commands
+ * @param ptr pointer to custom data
+ */
 static void
-_telnet_repeat_timer(void *ptr) {
+_cb_telnet_repeat_timer(void *ptr) {
   struct olsr_telnet_data *telnet_data = ptr;
   struct olsr_telnet_session *session;
 
@@ -530,8 +617,13 @@ _telnet_repeat_timer(void *ptr) {
   olsr_stream_flush(&session->session);
 }
 
+/**
+ * Telnet command 'repeat'
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
-_telnet_repeat(struct olsr_telnet_data *data) {
+_cb_telnet_repeat(struct olsr_telnet_data *data) {
   struct olsr_timer_entry *timer;
   int interval = 0;
   char *ptr = NULL;
@@ -551,7 +643,7 @@ _telnet_repeat(struct olsr_telnet_data *data) {
   interval = atoi(data->parameter);
 
   timer = olsr_timer_start(interval * 1000, 0, data, _telnet_repeat_timerinfo);
-  data->stop_handler = _telnet_repeat_stophandler;
+  data->stop_handler = _cb_telnet_repeat_stophandler;
   data->stop_data[0] = timer;
   data->stop_data[1] = strdup(ptr);
   data->stop_data[2] = NULL;
@@ -575,14 +667,24 @@ _telnet_repeat(struct olsr_telnet_data *data) {
   return TELNET_RESULT_CONTINOUS;
 }
 
+/**
+ * Telnet command 'version'
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
-_telnet_version(struct olsr_telnet_data *data) {
+_cb_telnet_version(struct olsr_telnet_data *data) {
   olsr_builddata_printversion(data->out);
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Telnet command 'plugin'
+ * @param data pointer to telnet data
+ * @return telnet command result
+ */
 static enum olsr_telnet_result
-_telnet_plugin(struct olsr_telnet_data *data) {
+_cb_telnet_plugin(struct olsr_telnet_data *data) {
   struct olsr_plugin *plugin, *iterator;
   const char *plugin_name = NULL;
 

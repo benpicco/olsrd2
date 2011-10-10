@@ -57,7 +57,7 @@ static char input_buffer[65536];
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_packet_state);
 
-static void olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags);
+static void _cb_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags);
 
 /**
  * Initialize packet socket handler
@@ -110,7 +110,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   }
 
   if ((pktsocket->scheduler_entry = olsr_socket_add(
-      s, olsr_packet_event, pktsocket, OLSR_SOCKET_READ)) == NULL) {
+      s, _cb_packet_event, pktsocket, OLSR_SOCKET_READ)) == NULL) {
     OLSR_WARN(LOG_SOCKET_PACKET, "Packet socket hookup to scheduler failed for %s\n",
         netaddr_socket_to_string(&buf, local));
     goto open_comport_error;
@@ -203,7 +203,7 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
  * @param flags socket handler flags about event (read and/or write)
  */
 static void
-olsr_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
+_cb_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
   struct olsr_packet_socket *pktsocket = data;
   union netaddr_socket *skt, sock;
   uint16_t length;

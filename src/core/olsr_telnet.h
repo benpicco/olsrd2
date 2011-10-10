@@ -95,6 +95,11 @@ EXPORT enum olsr_telnet_result olsr_telnet_execute(
     const char *cmd, const char *para,
     struct autobuf *out, struct netaddr *remote);
 
+/**
+ * Add a cleanup handler to a telnet session
+ * @param data pointer to telnet data
+ * @param cleanup pointer to initialized cleanup handler
+ */
 static INLINE void
 olsr_telnet_add_cleanup(struct olsr_telnet_data *data,
     struct olsr_telnet_cleanup *cleanup) {
@@ -102,6 +107,10 @@ olsr_telnet_add_cleanup(struct olsr_telnet_data *data,
   list_add_tail(&data->cleanup_list, &cleanup->node);
 }
 
+/**
+ * Removes a cleanup handler to a telnet session
+ * @param cleanup pointer to cleanup handler
+ */
 static INLINE void
 olsr_telnet_remove_cleanup(struct olsr_telnet_cleanup *cleanup) {
   list_remove(&cleanup->node);

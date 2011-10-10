@@ -65,7 +65,7 @@
 #define LOG_FILE_ENTRY   "file"
 
 /* prototype for configuration change handler */
-static void _olsr_logcfg_apply(void);
+static void _cb_logcfg_apply(void);
 static void _apply_log_setting(struct cfg_named_section *named,
     const char *entry_name, enum log_severity severity);
 
@@ -91,8 +91,8 @@ static struct cfg_schema_entry logging_entries[] = {
 };
 
 static struct cfg_delta_handler logcfg_delta_handler = {
-//  .s_type = LOG_SECTION,
-  .callback = _olsr_logcfg_apply,
+  .s_type = LOG_SECTION,
+  .callback = _cb_logcfg_apply,
 };
 
 static enum log_source *debug_lvl_1 = NULL;
@@ -319,10 +319,8 @@ _apply_log_setting(struct cfg_named_section *named,
  * Wrapper for configuration delta handling
  */
 static void
-_olsr_logcfg_apply(void) {
+_cb_logcfg_apply(void) {
   if (olsr_logcfg_apply(olsr_cfg_get_db())) {
-    if (config_global.failfast) {
-      olsr_exit();
-    }
+    // TODO: open logging file failed, decide what to do
   }
 }

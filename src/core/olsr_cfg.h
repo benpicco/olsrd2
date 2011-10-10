@@ -70,7 +70,7 @@ int olsr_cfg_rollback(void);
 
 /* do not export this to plugins */
 int olsr_cfg_update_globalcfg(bool);
-int olsr_cfg_create_new_rawdb(void);
+int olsr_cfg_clear_rawdb(void);
 
 EXPORT struct cfg_instance *olsr_cfg_get_instance(void);
 EXPORT struct cfg_db *olsr_cfg_get_db(void);

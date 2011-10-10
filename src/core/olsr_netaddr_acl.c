@@ -22,13 +22,32 @@ static const char *_FIRST_ACCEPT = "first_accept";
 static const char *_DEFAULT_ACCEPT = "default_accept";
 static const char *_DEFAULT_REJECT = "default_reject";
 
+/**
+ * Initialize an ACL object. It will contain no addresses on both
+ * accept and reject list and will be "accept first", "reject default".
+ * @param acl pointer to ACL
+ */
 void
 olsr_acl_add(struct olsr_netaddr_acl *acl) {
   memset(acl, 0, sizeof(acl));
 }
 
+void
+olsr_acl_remove(struct olsr_netaddr_acl *acl) {
+  free(acl->accept);
+  free(acl->reject);
+
+  memset(acl, 0, sizeof(*acl));
+}
+
+/**
+ * Initialize an ACL with a list of string parameters.
+ * @param acl pointer to uninitialized ACL
+ * @param array pointer to array of text arguments for ACL
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
-olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *acl, struct strarray *array) {
+olsr_acl_from_strarray(struct olsr_netaddr_acl *acl, struct strarray *array) {
   size_t accept_count, reject_count;
   char *ptr;
   accept_count = 0;
@@ -93,20 +112,16 @@ olsr_acl_from_cfg_entry(struct olsr_netaddr_acl *acl, struct strarray *array) {
   return 0;
 
 from_entry_error:
-  free(acl->accept);
-  free(acl->reject);
-  memset(acl, 0, sizeof(*acl));
+  olsr_acl_remove(acl);
   return -1;
 }
 
-void
-olsr_acl_remove(struct olsr_netaddr_acl *acl) {
-  free(acl->accept);
-  free(acl->reject);
-
-  memset(acl, 0, sizeof(*acl));
-}
-
+/**
+ * Copy one ACL to another one.
+ * @param to pointer to destination ACL
+ * @param from pointer to source ACL
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_acl_copy(struct olsr_netaddr_acl *to, struct olsr_netaddr_acl *from) {
   olsr_acl_remove(to);
@@ -130,6 +145,12 @@ olsr_acl_copy(struct olsr_netaddr_acl *to, struct olsr_netaddr_acl *from) {
   return 0;
 }
 
+/**
+ * Check if an address is accepted by an ACL
+ * @param acl pointer to ACL
+ * @param addr pointer to address
+ * @return true if accepted, false otherwise
+ */
 bool
 olsr_acl_check_accept(struct olsr_netaddr_acl *acl, struct netaddr *addr) {
   if (acl->reject_first) {
@@ -152,8 +173,8 @@ olsr_acl_check_accept(struct olsr_netaddr_acl *acl, struct netaddr *addr) {
 }
 
 /**
- * Schema entry validator for access control lists
- * See CFG_VALIDATE_ACL_() macros
+ * Schema entry validator for access control lists.
+ * See CFG_VALIDATE_ACL_*() macros.
  * @param entry pointer to schema entry
  * @param section_name name of section type and name
  * @param value value of schema entry
@@ -182,6 +203,14 @@ olsr_acl_validate(const struct cfg_schema_entry *entry,
   return cfg_schema_validate_netaddr(entry, section_name, value, out);
 }
 
+/**
+ * Schema entry binary converter for ACL entries.
+ * See CFG_MAP_ACL_*() macros.
+ * @param s_entry pointer to schema entry.
+ * @param value pointer to value to configuration entry
+ * @param reference pointer to binary target
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_acl_tobin(const struct cfg_schema_entry *s_entry __attribute__((unused)),
     struct strarray *value, void *reference) {
@@ -192,9 +221,15 @@ olsr_acl_tobin(const struct cfg_schema_entry *s_entry __attribute__((unused)),
   free(ptr->accept);
   free(ptr->reject);
 
-  return olsr_acl_from_cfg_entry(ptr, value);
+  return olsr_acl_from_strarray(ptr, value);
 }
 
+/**
+ * Handle the four control text blocks for ACL initialization.
+ * @param acl pointer to ACL
+ * @param cmd pointer to control word
+ * @return -1 if not a control word, 0 if control world was applied
+ */
 static int
 _handle_control_cmd(struct olsr_netaddr_acl *acl, const char *cmd) {
   if (strcasecmp(cmd, _DEFAULT_ACCEPT) == 0) {
@@ -218,6 +253,12 @@ _handle_control_cmd(struct olsr_netaddr_acl *acl, const char *cmd) {
   return 0;
 }
 
+/**
+ * @param array pointer to array of addresses and networks
+ * @param length length of array
+ * @param addr pointer of address to be checked
+ * @return true if address is inside list of addresses and networks
+ */
 static bool
 _is_in_array(struct netaddr *array, size_t length, struct netaddr *addr) {
   size_t i;

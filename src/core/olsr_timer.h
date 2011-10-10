@@ -123,7 +123,7 @@ void olsr_timer_walk(void);
 
 EXPORT struct olsr_timer_info *olsr_timer_add(
     const char *name, timer_cb_func callback, bool periodic) __attribute__((warn_unused_result));
-void olsr_timer_remove(struct olsr_timer_info *);
+EXPORT void olsr_timer_remove(struct olsr_timer_info *);
 
 EXPORT void olsr_timer_set(struct olsr_timer_entry **, uint32_t, uint8_t,
     void *, struct olsr_timer_info *);
