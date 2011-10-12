@@ -331,7 +331,7 @@ netaddr_from_string(struct netaddr *dst, const char *src) {
   strscpy(buf.buf, src, sizeof(buf));
   ptr1 = buf.buf;
 
-  str_trim(&ptr1);
+  ptr1 = str_trim(ptr1);
 
   ptr2 = ptr1;
   while (*ptr2 != 0 && !isspace(*ptr2) && *ptr2 != '/') {

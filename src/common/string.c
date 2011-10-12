@@ -98,38 +98,30 @@ strscat(char *dest, const char *src, size_t size)
 
 /**
  * Removes leading and trailing whitespaces from a string.
- * Instead of moving characters around, it will change the
- * pointer to the beginning of the buffer.
- * @param ptr pointer to string-pointer
+ * @param ptr input string to be modified string-pointer
+ * @return pointer to first non-whitespace character in string
  */
-void
-str_trim (char **ptr) {
-  char *string, *end;
+char *
+str_trim (char *ptr) {
+  char *end;
 
-  if (ptr == NULL || *ptr == NULL) {
-    return;
+  if (!ptr) {
+    return NULL;
   }
 
-  string = *ptr;
-
   /* skip leading whitespaces */
-  while (isspace(*string)) {
-    string++;
+  while (isspace(*ptr)) {
+    ptr++;
   }
 
   /* get end of string */
-  end = string;
-  while (*end) {
-    end++;
-  }
-  end--;
+  end = ptr + strlen(ptr) - 1;
 
   /* remove trailing whitespaces */
-  while (end > string && isspace(*end)) {
+  while (end > ptr && isspace(*end)) {
     *end-- = 0;
   }
-
-  *ptr = string;
+  return ptr;
 }
 
 /**
@@ -141,7 +133,7 @@ str_trim (char **ptr) {
  */
 const char *
 str_hasnextword (const char *buffer, const char *word) {
-  /* skip whitespaces first */
+  /* skip whitespace prefix */
   while (isblank(*buffer)) {
     buffer++;
   }

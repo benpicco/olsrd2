@@ -227,8 +227,7 @@ _parse_line(struct cfg_db *db, char *line,
   bool dummy;
 
   /* trim leading and trailing whitespaces */
-  first = line;
-  str_trim(&first);
+  first = str_trim(line);
 
   if (*first == 0 || *first == '#') {
     /* empty line or comment */
@@ -249,11 +248,11 @@ _parse_line(struct cfg_db *db, char *line,
     if (ptr) {
       /* trim section name */
       *ptr++ = 0;
-      str_trim(&ptr);
+      ptr = str_trim(ptr);
     }
 
     /* trim section name */
-    str_trim(&first);
+    first = str_trim(first);
     if (*first == 0) {
       cfg_append_printable_line(log,
           "Section syntax error, no section type found");
@@ -294,7 +293,7 @@ _parse_line(struct cfg_db *db, char *line,
   *ptr++ = 0;
 
   /* trim second token */
-  str_trim(&ptr);
+  ptr = str_trim(ptr);
 
   if (*ptr == 0) {
     cfg_append_printable_line(log,
