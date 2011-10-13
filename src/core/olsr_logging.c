@@ -213,10 +213,9 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
     const char *file, int line, const char *format, ...)
 {
   struct log_handler_entry *h, *iterator;
+  struct log_parameters param;
   va_list ap;
   int p1 = 0, p2 = 0, p3 = 0;
-  struct tm now, *tm_ptr;
-  struct timeval timeval;
 
   /* test if event is consumed by any log handler */
   if (!log_global_mask.mask[severity][source]) {
@@ -226,18 +225,21 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
 
   va_start(ap, format);
 
-  /* calculate local time */
-  os_gettimeofday(&timeval, NULL);
-
-  /* there is no localtime_r in win32 */
-  tm_ptr = localtime((time_t *) & timeval.tv_sec);
-  now = *tm_ptr;
-
   /* generate log string */
   abuf_clear(&logbuffer);
   if (!no_header) {
+    struct tm *tm_ptr;
+    struct timeval timeval;
+
+    /* calculate local time */
+    os_gettimeofday(&timeval, NULL);
+
+    /* there is no localtime_r in win32 */
+    tm_ptr = localtime((time_t *) & timeval.tv_sec);
+
     p1 = abuf_appendf(&logbuffer, "%d:%02d:%02d.%03ld ",
-                  now.tm_hour, now.tm_min, now.tm_sec, (long)(timeval.tv_usec / 1000));
+                  tm_ptr->tm_hour, tm_ptr->tm_min, tm_ptr->tm_sec,
+                  (long)(timeval.tv_usec / 1000));
 
     p2 = abuf_appendf(&logbuffer, "%s(%s) %s %d: ",
         LOG_SEVERITY_NAMES[severity], LOG_SOURCE_NAMES[source], file, line);
@@ -250,16 +252,25 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
     p3--;
   }
 
+  param.severity = severity;
+  param.source = source;
+  param.no_header = no_header;
+  param.file = file;
+  param.line = line;
+  param.buffer = logbuffer.buf;
+  param.timeLength = p1;
+  param.prefixLength = p2-p1;
+
   /* use stderr logger if nothing has been configured */
   if (list_is_empty(&log_handler_list)) {
-    olsr_log_stderr(NULL, severity, source, no_header, file, line, logbuffer.buf, p1, p2-p1);
+    olsr_log_stderr(NULL, &param);
     return;
   }
 
   /* call all log handlers */
   FOR_ALL_LOGHANDLERS(h, iterator) {
     if (h->int_bitmask.mask[severity][source]) {
-      h->handler(h, severity, source, no_header, file, line, logbuffer.buf, p1, p2-p1);
+      h->handler(h, &param);
     }
   }
   va_end(ap);
@@ -279,9 +290,9 @@ void
 olsr_log_oom(enum log_severity severity, enum log_source source,
     const char *file, int line)
 {
-  static const char digits[] = "0123456789";
-  static struct log_handler_entry *h, *iterator;
-  static int i,j;
+  struct log_handler_entry *h, *iterator;
+  struct log_parameters param;
+  int i,j;
 
   /* test if event is consumed by any log handler */
   if (!log_global_mask.mask[severity][source])
@@ -299,7 +310,7 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
   j = strlen(logbuffer.buf) + 4;
 
   for (i=0; i < 5; i++) {
-    logbuffer.buf[j-i] = digits[line % 10];
+    logbuffer.buf[j-i] = '0' + (line % 10);
     line /= 10;
   }
   logbuffer.buf[++j] = ' ';
@@ -307,97 +318,68 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
 
   strscat(logbuffer.buf, OUT_OF_MEMORY_ERROR, logbuffer.size);
 
+  param.severity = severity;
+  param.source = source;
+  param.no_header = true;
+  param.file = file;
+  param.line = line;
+  param.buffer = logbuffer.buf;
+  param.timeLength = 0;
+  param.prefixLength = 0;
+
+
   /* use stderr logger if nothing has been configured */
   if (list_is_empty(&log_handler_list)) {
-    olsr_log_stderr(NULL, severity, source, false, file, line, logbuffer.buf, 0, 0);
+    olsr_log_stderr(NULL, &param);
     return;
   }
 
   /* call all log handlers */
   FOR_ALL_LOGHANDLERS(h, iterator) {
     if (h->int_bitmask.mask[severity][source]) {
-      h->handler(h, severity, source, false, file, line, logbuffer.buf, 0, 0);
+      h->handler(h, &param);
     }
   }
 }
 
-// TODO: clean up this interface
-
 /**
  * Logger for stderr output
- * @param entry
- * @param severity
- * @param source
- * @param no_header
- * @param file
- * @param line
- * @param buffer
- * @param timeLength
- * @param prefixLength
+ * @param entry logging handler, might be NULL because this is the
+ *   default logger
+ * @param param logging parameter set
  */
 void
 olsr_log_stderr(struct log_handler_entry *entry __attribute__ ((unused)),
-    enum log_severity severity __attribute__ ((unused)),
-    enum log_source source __attribute__ ((unused)),
-    bool no_header __attribute__ ((unused)),
-    const char *file __attribute__ ((unused)), int line __attribute__ ((unused)),
-    char *buffer,
-    int timeLength __attribute__ ((unused)),
-    int prefixLength __attribute__ ((unused)))
+    struct log_parameters *param)
 {
-  fputs(buffer, stderr);
+  fputs(param->buffer, stderr);
   fputc('\n', stderr);
 }
 
 /**
  * Logger for file output
- * @param entry
- * @param severity
- * @param source
- * @param no_header
- * @param file
- * @param line
- * @param buffer
- * @param timeLength
- * @param prefixLength
+ * @param entry logging handler
+ * @param param logging parameter set
  */
 void
 olsr_log_file(struct log_handler_entry *entry,
-    enum log_severity severity __attribute__ ((unused)),
-    enum log_source source __attribute__ ((unused)),
-    bool no_header __attribute__ ((unused)),
-    const char *file __attribute__ ((unused)), int line __attribute__ ((unused)),
-    char *buffer,
-    int timeLength __attribute__ ((unused)),
-    int prefixLength __attribute__ ((unused)))
+    struct log_parameters *param)
 {
   FILE *f;
 
   f = entry->custom;
-  fputs(buffer, f);
+  fputs(param->buffer, f);
   fputc('\n', f);
 }
 
 /**
  * Logger for syslog output
- * @param entry
- * @param severity
- * @param source
- * @param no_header
- * @param file
- * @param line
- * @param buffer
- * @param timeLength
- * @param prefixLength
+ * @param entry logging handler, might be NULL
+ * @param param logging parameter set
  */
 void
 olsr_log_syslog(struct log_handler_entry *entry __attribute__ ((unused)),
-    enum log_severity severity __attribute__ ((unused)),
-    enum log_source source __attribute__ ((unused)),
-    bool no_header __attribute__ ((unused)),
-    const char *file __attribute__ ((unused)), int line __attribute__ ((unused)),
-    char *buffer, int timeLength,
-    int prefixLength __attribute__ ((unused)))
+    struct log_parameters *param)
 {
-  os_printline(severity, &buffer[timeLength]);
+  os_printline(severity, param->buffer + param->timeLength);
 }

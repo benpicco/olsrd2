@@ -97,8 +97,8 @@ static enum olsr_telnet_result _start_logging(struct olsr_telnet_data *data,
 static void _stop_logging(struct olsr_telnet_data *data);
 
 static void _cb_print_log(struct log_handler_entry *,
-    enum log_severity, enum log_source,
-    bool, const char *, int, char *, int, int);
+    struct log_parameters *);
+
 
 static void _cb_config_changed(void);
 static struct _remotecontrol_session *
@@ -384,30 +384,15 @@ _update_logfilter(struct olsr_telnet_data *data,
 
 /**
  * Log handler for telnet output
- * @param h
- * @param severity
- * @param source
- * @param no_header
- * @param file
- * @param line
- * @param buffer
- * @param timeLength
- * @param prefixLength
+ * @param entry logging handler
+ * @param param logging parameter set
  */
 static void
 _cb_print_log(struct log_handler_entry *h __attribute__((unused)),
-    enum log_severity severity __attribute__((unused)),
-    enum log_source source __attribute__((unused)),
-    bool no_header __attribute__((unused)),
-    const char *file __attribute__((unused)),
-    int line __attribute__((unused)),
-    char *buffer,
-    int timeLength __attribute__((unused)),
-    int prefixLength __attribute__((unused)))
-{
+    struct log_parameters *param) {
   struct olsr_telnet_session *telnet = h->custom;
 
-  abuf_puts(&telnet->session.out, buffer);
+  abuf_puts(&telnet->session.out, param->buffer);
   abuf_puts(&telnet->session.out, "\n");
 
   /* This might trigger logging output in olsr_socket_stream ! */

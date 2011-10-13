@@ -61,6 +61,17 @@ enum log_severity {
   LOG_SEVERITY_COUNT                   //!< LOG_SEVERITY_COUNT
 };
 
+struct log_parameters {
+  enum log_severity severity;
+  enum log_source source;
+  bool no_header;
+  const char *file;
+  int line;
+  char *buffer;
+  int timeLength;
+  int prefixLength;
+};
+
 extern const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT];
 
 /**
@@ -107,9 +118,7 @@ extern const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT];
 #define OLSR_WARN_OOM(source) do { if (log_global_mask.mask[SEVERITY_WARN][source]) olsr_log_oom(SEVERITY_WARN, source, __FILE__, __LINE__); } while(0)
 #endif
 
-typedef void log_handler_cb(struct log_handler_entry *,
-    enum log_severity, enum log_source,
-    bool, const char *, int, char *, int, int);
+typedef void log_handler_cb(struct log_handler_entry *, struct log_parameters *);
 
 struct log_handler_mask {
   bool mask[LOG_SEVERITY_COUNT][LOG_SOURCE_COUNT];
@@ -144,16 +153,10 @@ EXPORT void olsr_log(enum log_severity, enum log_source, bool, const char *, int
 EXPORT void olsr_log_oom(enum log_severity, enum log_source, const char *, int);
 
 EXPORT void olsr_log_stderr(struct log_handler_entry *,
-    enum log_severity severity, enum log_source source,
-    bool no_header, const char *file, int line, char *buffer,
-    int timeLength, int prefixLength);
+    struct log_parameters *);
 EXPORT void olsr_log_syslog(struct log_handler_entry *,
-    enum log_severity severity, enum log_source source,
-    bool no_header, const char *file, int line, char *buffer,
-    int timeLength, int prefixLength);
+    struct log_parameters *);
 EXPORT void olsr_log_file(struct log_handler_entry *,
-    enum log_severity severity, enum log_source source,
-    bool no_header, const char *file, int line, char *buffer,
-    int timeLength, int prefixLength);
+    struct log_parameters *);
 
 #endif /* OLSR_LOGGING_H_ */
