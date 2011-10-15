@@ -133,7 +133,7 @@ olsr_stream_cleanup(void) {
  */
 void
 olsr_stream_flush(struct olsr_stream_session *con) {
-  olsr_socket_set_write(con->scheduler_entry, true);
+  olsr_socket_set_write(&con->scheduler_entry, true);
 }
 
 /**
@@ -165,12 +165,12 @@ olsr_stream_add(struct olsr_stream_socket *stream_socket,
     goto add_stream_error;
   }
 
-  if ((stream_socket->scheduler_entry = olsr_socket_add(s,
-      _cb_parse_request, stream_socket, true, false)) == NULL) {
-    OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket hookup to scheduler failed for %s\n",
-        netaddr_socket_to_string(&buf, local));
-    goto add_stream_error;
-  }
+  stream_socket->scheduler_entry.fd = s;
+  stream_socket->scheduler_entry.process = _cb_parse_request;
+  stream_socket->scheduler_entry.data = stream_socket;
+  stream_socket->scheduler_entry.event_read = true;
+
+  olsr_socket_add(&stream_socket->scheduler_entry);
   memcpy(&stream_socket->local_socket, local, sizeof(stream_socket->local_socket));
 
   if (stream_socket->config.memcookie == NULL) {
@@ -189,11 +189,11 @@ olsr_stream_add(struct olsr_stream_socket *stream_socket,
   return 0;
 
 add_stream_error:
+  if (stream_socket->scheduler_entry.fd) {
+    olsr_socket_remove(&stream_socket->scheduler_entry);
+  }
   if (s != -1) {
     os_close(s);
-  }
-  if (stream_socket->scheduler_entry) {
-    olsr_socket_remove(stream_socket->scheduler_entry);
   }
   return -1;
 }
@@ -215,10 +215,8 @@ olsr_stream_remove(struct olsr_stream_socket *stream_socket) {
 
     list_remove(&stream_socket->node);
 
-    if (stream_socket->scheduler_entry) {
-      os_close(stream_socket->scheduler_entry->fd);
-      olsr_socket_remove(stream_socket->scheduler_entry);
-    }
+    os_close(stream_socket->scheduler_entry.fd);
+    olsr_socket_remove(&stream_socket->scheduler_entry);
   }
 }
 
@@ -291,8 +289,8 @@ olsr_stream_close(struct olsr_stream_session *session) {
   session->comport->config.allowed_sessions++;
   list_remove(&session->node);
 
-  os_close(session->scheduler_entry->fd);
-  olsr_socket_remove(session->scheduler_entry);
+  os_close(session->scheduler_entry.fd);
+  olsr_socket_remove(&session->scheduler_entry);
 
   abuf_free(&session->in);
   abuf_free(&session->out);
@@ -481,11 +479,12 @@ _create_session(struct olsr_stream_socket *stream_socket,
     goto parse_request_error;
   }
 
-  if ((session->scheduler_entry = olsr_socket_add(sock,
-      &_cb_parse_connection, session, true, true)) == NULL) {
-    OLSR_WARN(LOG_SOCKET_STREAM, "Cannot hook incoming session into scheduler");
-    goto parse_request_error;
-  }
+  session->scheduler_entry.fd = sock;
+  session->scheduler_entry.process = _cb_parse_connection;
+  session->scheduler_entry.data = session;
+  session->scheduler_entry.event_read = true;
+  session->scheduler_entry.event_write = true;
+  olsr_socket_add(&session->scheduler_entry);
 
   session->send_first = stream_socket->config.send_first;
   session->comport = stream_socket;
@@ -641,14 +640,14 @@ _cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
       }
     } else {
       OLSR_DEBUG(LOG_SOCKET_STREAM, "  activating output in scheduler\n");
-      olsr_socket_set_write(session->scheduler_entry, true);
+      olsr_socket_set_write(&session->scheduler_entry, true);
     }
   }
 
   if (session->out.len == 0) {
     /* nothing to send anymore */
     OLSR_DEBUG(LOG_SOCKET_STREAM, "  deactivating output in scheduler\n");
-    olsr_socket_set_write(session->scheduler_entry, false);
+    olsr_socket_set_write(&session->scheduler_entry, false);
     if (session->state == STREAM_SESSION_SEND_AND_QUIT) {
       session->state = STREAM_SESSION_CLEANUP;
     }

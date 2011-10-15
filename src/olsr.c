@@ -229,9 +229,7 @@ main(int argc, char **argv) {
   if (olsr_timer_init()) {
     goto olsrd_cleanup;
   }
-  if (olsr_socket_init()) {
-    goto olsrd_cleanup;
-  }
+  olsr_socket_init();
   olsr_packet_init();
   if (olsr_stream_init()) {
     goto olsrd_cleanup;

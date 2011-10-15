@@ -72,20 +72,18 @@ struct olsr_socket_entry {
 EXPORT extern struct list_entity socket_head;
 #define OLSR_FOR_ALL_SOCKETS(socket, iterator) list_for_each_element_safe(&socket_head, socket, node, iterator)
 
-int olsr_socket_init(void) __attribute__((warn_unused_result));
+void olsr_socket_init(void);
 void olsr_socket_cleanup(void);
 int olsr_socket_handle(uint32_t until_time) __attribute__((warn_unused_result));
 
-
-EXPORT struct olsr_socket_entry *olsr_socket_add(int fd,
-    socket_handler_func pf_imm, void *data, bool event_read, bool event_write);
+EXPORT void olsr_socket_add(struct olsr_socket_entry *);
 EXPORT void olsr_socket_remove(struct olsr_socket_entry *);
 
 /**
  * Enable one or both flags of a socket handler
  * @param sock pointer to socket entry
  */
-static inline void
+static INLINE void
 olsr_socket_set_read(struct olsr_socket_entry *entry, bool event_read)
 {
   entry->event_read = event_read;
@@ -95,7 +93,7 @@ olsr_socket_set_read(struct olsr_socket_entry *entry, bool event_read)
  * Disable one or both flags of a socket handler
  * @param sock pointer to socket entry
  */
-static inline void
+static INLINE void
 olsr_socket_set_write(struct olsr_socket_entry *entry, bool event_write)
 {
   entry->event_write = event_write;

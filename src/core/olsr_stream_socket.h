@@ -49,6 +49,7 @@
 
 #include "olsr_memcookie.h"
 #include "olsr_netaddr_acl.h"
+#include "olsr_socket.h"
 
 enum olsr_stream_session_state {
   STREAM_SESSION_ACTIVE,
@@ -87,7 +88,7 @@ struct olsr_stream_session {
   struct olsr_stream_socket *comport;
 
   /* scheduler handler for the session */
-  struct olsr_socket_entry *scheduler_entry;
+  struct olsr_socket_entry scheduler_entry;
 
   /* timer for handling session timeout */
   struct olsr_timer_entry *timeout;
@@ -160,11 +161,7 @@ struct olsr_stream_socket {
 
   struct list_entity session;
 
-  /*
-   * represents the scheduler handler for the server socket,
-   * NULL for outgoing streams
-   */
-  struct olsr_socket_entry *scheduler_entry;
+  struct olsr_socket_entry scheduler_entry;
 
   struct olsr_stream_config config;
 };

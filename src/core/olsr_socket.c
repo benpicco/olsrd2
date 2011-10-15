@@ -57,36 +57,18 @@
 /* List of all active sockets in scheduler */
 struct list_entity socket_head;
 
-static struct olsr_memcookie_info *socket_memcookie;
-
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_socket_state);
 
-/* helper function to free socket entry */
-static inline void
-olsr_socket_intfree(struct olsr_socket_entry *sock) {
-  list_remove(&sock->node);
-  olsr_memcookie_free(socket_memcookie, sock);
-}
-
 /**
  * Initialize olsr socket scheduler
- * @return -1 if an error happened, 0 otherwise
  */
-int
+void
 olsr_socket_init(void) {
   if (olsr_subsystem_init(&olsr_socket_state))
-    return 0;
+    return;
 
   list_init_head(&socket_head);
-
-  socket_memcookie = olsr_memcookie_add("socket entry", sizeof(struct olsr_socket_entry));
-  if (socket_memcookie == NULL) {
-    OLSR_WARN_OOM(LOG_SOCKET);
-    olsr_socket_state--;
-    return -1;
-  }
-  return 0;
 }
 
 /**
@@ -102,63 +84,37 @@ olsr_socket_cleanup(void)
     return;
 
   OLSR_FOR_ALL_SOCKETS(entry, iterator) {
+    list_remove(&entry->node);
     os_close(entry->fd);
-    olsr_socket_intfree(entry);
   }
-
-  olsr_memcookie_remove(socket_memcookie);
 }
 
-// TODO: remove malloc by giving function initialized socket entry
 /**
- * Add a socket handler to the list of sockets
- * being used in the main select(2) loop
+ * Add a socket handler to the scheduler
  *
- * @param fd file descriptor for socket
- * @param pf_imm processing callback
- * @param data custom data
- * @param event_read true if socket is waiting for read-event
- * @param event_write true if socket is waiting for write-event
- * @return pointer to socket_entry
+ * @param handler pointer to initialized socket entry
+ * @return -1 if an error happened, 0 otherwise
  */
-struct olsr_socket_entry *
-olsr_socket_add(int fd, socket_handler_func pf_imm, void *data,
-    bool event_read, bool event_write)
+void
+olsr_socket_add(struct olsr_socket_entry *entry)
 {
-  struct olsr_socket_entry *new_entry;
+  assert (entry->fd);
+  assert (entry->process);
 
-  assert (fd);
-  assert (pf_imm);
+  OLSR_DEBUG(LOG_SOCKET, "Adding socket entry %d to scheduler\n", entry->fd);
 
-  OLSR_DEBUG(LOG_SOCKET, "Adding socket entry %d to scheduler\n", fd);
-
-  new_entry = olsr_memcookie_malloc(socket_memcookie);
-  if (new_entry) {
-    new_entry->fd = fd;
-    new_entry->process = pf_imm;
-    new_entry->data = data;
-    new_entry->event_read = event_read;
-    new_entry->event_write = event_write;
-
-    /* Queue */
-    list_add_before(&socket_head, &new_entry->node);
-  }
-
-  return new_entry;
+  list_add_before(&socket_head, &entry->node);
 }
 
 /**
- * Mark a socket and handler for removal from the socket scheduler
+ * Remove a socket from the socket scheduler
  * @param entry pointer to socket entry
  */
 void
 olsr_socket_remove(struct olsr_socket_entry *entry)
 {
-  OLSR_DEBUG(LOG_SOCKET, "Trigger removing socket entry %d\n", entry->fd);
-
-  entry->process = NULL;
-  entry->event_read = false;
-  entry->event_write = false;
+  OLSR_DEBUG(LOG_SOCKET, "Removing socket entry %d\n", entry->fd);
+  list_remove(&entry->node);
 }
 
 /**
@@ -271,12 +227,6 @@ olsr_socket_handle(uint32_t until_time)
     /* we need an absolute time - milliseconds */
     tvp.tv_sec = remaining / MSEC_PER_SEC;
     tvp.tv_usec = (remaining % MSEC_PER_SEC) * USEC_PER_MSEC;
-  }
-
-  OLSR_FOR_ALL_SOCKETS(entry, iterator) {
-    if (entry->process == NULL) {
-      olsr_socket_intfree(entry);
-    }
   }
 
   if (n<0)

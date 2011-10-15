@@ -97,9 +97,6 @@ int
 olsr_packet_add(struct olsr_packet_socket *pktsocket,
     union netaddr_socket *local) {
   int s = -1;
-#if !defined(REMOVE_LOG_WARN)
-  struct netaddr_str buf;
-#endif
 
   memset(pktsocket, 0, sizeof(*pktsocket));
 
@@ -109,12 +106,12 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
     return -1;
   }
 
-  if ((pktsocket->scheduler_entry = olsr_socket_add(
-      s, _cb_packet_event, pktsocket, true, false)) == NULL) {
-    OLSR_WARN(LOG_SOCKET_PACKET, "Packet socket hookup to scheduler failed for %s\n",
-        netaddr_socket_to_string(&buf, local));
-    goto open_comport_error;
-  }
+  pktsocket->scheduler_entry.fd = s;
+  pktsocket->scheduler_entry.process = _cb_packet_event;
+  pktsocket->scheduler_entry.event_read = true;
+  pktsocket->scheduler_entry.event_write = true;
+
+  olsr_socket_add(&pktsocket->scheduler_entry);
 
   abuf_init(&pktsocket->out, 2048);
   list_add_tail(&packet_sockets, &pktsocket->node);
@@ -123,16 +120,6 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   pktsocket->input_buffer = input_buffer;
   pktsocket->input_buffer_length = sizeof(input_buffer);
   return 0;
-
-open_comport_error:
-  if (s != -1) {
-    os_close(s);
-  }
-  if (pktsocket->scheduler_entry) {
-    olsr_socket_remove(pktsocket->scheduler_entry);
-  }
-  abuf_free(&pktsocket->out);
-  return -1;
 }
 
 /**
@@ -142,8 +129,8 @@ open_comport_error:
 void
 olsr_packet_remove(struct olsr_packet_socket *pktsocket) {
   if (list_node_added(&pktsocket->node)) {
-    os_close(pktsocket->scheduler_entry->fd);
-    olsr_socket_remove(pktsocket->scheduler_entry);
+    olsr_socket_remove(&pktsocket->scheduler_entry);
+    os_close(pktsocket->scheduler_entry.fd);
     list_remove(&pktsocket->node);
 
     abuf_free(&pktsocket->out);
@@ -169,7 +156,7 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
 
   if (pktsocket->out.len == 0) {
     /* no backlog of outgoing packets, try to send directly */
-    result = os_sendto(pktsocket->scheduler_entry->fd, data, length, remote);
+    result = os_sendto(pktsocket->scheduler_entry.fd, data, length, remote);
     if (result > 0) {
       /* successful */
       return 0;
@@ -192,7 +179,7 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
   abuf_memcpy(&pktsocket->out, data, length);
 
   /* activate outgoing socket scheduler */
-  olsr_socket_set_write(pktsocket->scheduler_entry, true);
+  olsr_socket_set_write(&pktsocket->scheduler_entry, true);
   return 0;
 }
 
@@ -262,6 +249,6 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
 
   if (pktsocket->out.len == 0) {
     /* nothing left to send, disable outgoing events */
-    olsr_socket_set_write(pktsocket->scheduler_entry, false);
+    olsr_socket_set_write(&pktsocket->scheduler_entry, false);
   }
 }
