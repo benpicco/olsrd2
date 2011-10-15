@@ -57,7 +57,7 @@ static char input_buffer[65536];
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_packet_state);
 
-static void _cb_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags);
+static void _cb_packet_event(int fd, void *data, bool r, bool w);
 
 /**
  * Initialize packet socket handler
@@ -110,7 +110,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   }
 
   if ((pktsocket->scheduler_entry = olsr_socket_add(
-      s, _cb_packet_event, pktsocket, OLSR_SOCKET_READ)) == NULL) {
+      s, _cb_packet_event, pktsocket, true, false)) == NULL) {
     OLSR_WARN(LOG_SOCKET_PACKET, "Packet socket hookup to scheduler failed for %s\n",
         netaddr_socket_to_string(&buf, local));
     goto open_comport_error;
@@ -192,7 +192,7 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
   abuf_memcpy(&pktsocket->out, data, length);
 
   /* activate outgoing socket scheduler */
-  olsr_socket_enable(pktsocket->scheduler_entry, OLSR_SOCKET_WRITE);
+  olsr_socket_set_write(pktsocket->scheduler_entry, true);
   return 0;
 }
 
@@ -200,10 +200,11 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
  * Callback to handle data from the olsr socket scheduler
  * @param fd filedescriptor to read data from
  * @param data custom data pointer
- * @param flags socket handler flags about event (read and/or write)
+ * @param event_read true if read-event is incoming
+ * @param event_write true if write-event is incoming
  */
 static void
-_cb_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
+_cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
   struct olsr_packet_socket *pktsocket = data;
   union netaddr_socket *skt, sock;
   uint16_t length;
@@ -213,7 +214,7 @@ _cb_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
   struct netaddr_str buf;
 #endif
 
-  if ((flags & OLSR_SOCKET_READ) != 0) {
+  if (event_read) {
     /* handle incoming data */
     result = os_recvfrom(fd, pktsocket->input_buffer, pktsocket->input_buffer_length-1, &sock);
     if (result > 0 && pktsocket->receive_data != NULL) {
@@ -229,7 +230,7 @@ _cb_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
     }
   }
 
-  if ((flags & OLSR_SOCKET_WRITE) != 0 && pktsocket->out.len == 0) {
+  if (event_write && pktsocket->out.len == 0) {
     /* handle outgoing data */
 
     /* pointer to remote socket */
@@ -261,6 +262,6 @@ _cb_packet_event(int fd, void *data, enum olsr_sockethandler_flags flags) {
 
   if (pktsocket->out.len == 0) {
     /* nothing left to send, disable outgoing events */
-    olsr_socket_disable(pktsocket->scheduler_entry, OLSR_SOCKET_WRITE);
+    olsr_socket_set_write(pktsocket->scheduler_entry, false);
   }
 }

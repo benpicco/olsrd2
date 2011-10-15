@@ -70,11 +70,10 @@ OLSR_SUBSYSTEM_STATE(olsr_stream_state);
 
 static int _apply_managed_socket(struct olsr_stream_managed *managed,
     struct olsr_stream_socket *stream, struct netaddr *bindto, uint16_t port);
-static void _cb_parse_request(int fd, void *data, unsigned int flags);
+static void _cb_parse_request(int fd, void *data, bool, bool);
 static struct olsr_stream_session *_create_session(
     struct olsr_stream_socket *stream_socket, int sock, struct netaddr *remote_addr);
-static void _cb_parse_connection(int fd, void *data,
-        enum olsr_sockethandler_flags flags);
+static void _cb_parse_connection(int fd, void *data, bool r,bool w);
 
 static void _cb_timeout_handler(void *);
 
@@ -134,7 +133,7 @@ olsr_stream_cleanup(void) {
  */
 void
 olsr_stream_flush(struct olsr_stream_session *con) {
-  olsr_socket_enable(con->scheduler_entry, OLSR_SOCKET_WRITE);
+  olsr_socket_set_write(con->scheduler_entry, true);
 }
 
 /**
@@ -167,7 +166,7 @@ olsr_stream_add(struct olsr_stream_socket *stream_socket,
   }
 
   if ((stream_socket->scheduler_entry = olsr_socket_add(s,
-      _cb_parse_request, stream_socket, OLSR_SOCKET_READ)) == NULL) {
+      _cb_parse_request, stream_socket, true, false)) == NULL) {
     OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket hookup to scheduler failed for %s\n",
         netaddr_socket_to_string(&buf, local));
     goto add_stream_error;
@@ -404,10 +403,12 @@ _apply_managed_socket(struct olsr_stream_managed *managed,
  * Handle incoming server socket event from socket scheduler.
  * @param fd filedescriptor for event
  * @param data custom user data
- * @param flags OLSR_SOCKET_(READ|WRITE)
+ * @param event_read true if read-event is incoming
+ * @param event_write true if write-event is incoming
  */
 static void
-_cb_parse_request(int fd, void *data, unsigned int flags) {
+_cb_parse_request(int fd, void *data, bool event_read,
+    bool event_write __attribute__((unused))) {
   struct olsr_stream_socket *comport;
   union netaddr_socket remote_socket;
   struct netaddr remote_addr;
@@ -417,7 +418,7 @@ _cb_parse_request(int fd, void *data, unsigned int flags) {
       struct netaddr_str buf1, buf2;
 #endif
 
-  if ((flags & OLSR_SOCKET_READ) == 0) {
+  if (!event_read) {
     return;
   }
 
@@ -481,8 +482,7 @@ _create_session(struct olsr_stream_socket *stream_socket,
   }
 
   if ((session->scheduler_entry = olsr_socket_add(sock,
-      &_cb_parse_connection, session,
-      OLSR_SOCKET_READ | OLSR_SOCKET_WRITE)) == NULL) {
+      &_cb_parse_connection, session, true, true)) == NULL) {
     OLSR_WARN(LOG_SOCKET_STREAM, "Cannot hook incoming session into scheduler");
     goto parse_request_error;
   }
@@ -542,11 +542,11 @@ _cb_timeout_handler(void *data) {
  * Handle events for TCP session from network scheduler
  * @param fd filedescriptor of TCP session
  * @param data custom data
- * @param flags OLSR_SOCKET_(READ|WRITE)
+ * @param event_read true if read-event is incoming
+ * @param event_write true if write-event is incoming
  */
 static void
-_cb_parse_connection(int fd, void *data,
-    enum olsr_sockethandler_flags flags) {
+_cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
   struct olsr_stream_session *session;
   struct olsr_stream_socket *comport;
   int len;
@@ -561,7 +561,7 @@ _cb_parse_connection(int fd, void *data,
   OLSR_DEBUG(LOG_SOCKET_STREAM, "Parsing connection of socket %d\n", fd);
 
   if (session->wait_for_connect) {
-    if (flags & OLSR_SOCKET_WRITE) {
+    if (event_write) {
       int value;
       socklen_t value_len;
 
@@ -588,8 +588,7 @@ _cb_parse_connection(int fd, void *data,
   }
 
   /* read data if necessary */
-  if (session->state == STREAM_SESSION_ACTIVE && (flags & OLSR_SOCKET_READ)
-      != 0) {
+  if (session->state == STREAM_SESSION_ACTIVE && event_read) {
     len = recv(fd, buffer, sizeof(buffer), 0);
     if (len > 0) {
       OLSR_DEBUG(LOG_SOCKET_STREAM, "  recv returned %d\n", len);
@@ -627,7 +626,7 @@ _cb_parse_connection(int fd, void *data,
 
   /* send data if necessary */
   if (session->state != STREAM_SESSION_CLEANUP && session->out.len > 0) {
-    if (flags & OLSR_SOCKET_WRITE) {
+    if (event_write) {
       len = send(fd, session->out.buf, session->out.len, 0);
 
       if (len > 0) {
@@ -642,14 +641,14 @@ _cb_parse_connection(int fd, void *data,
       }
     } else {
       OLSR_DEBUG(LOG_SOCKET_STREAM, "  activating output in scheduler\n");
-      olsr_socket_enable(session->scheduler_entry, OLSR_SOCKET_WRITE);
+      olsr_socket_set_write(session->scheduler_entry, true);
     }
   }
 
   if (session->out.len == 0) {
     /* nothing to send anymore */
     OLSR_DEBUG(LOG_SOCKET_STREAM, "  deactivating output in scheduler\n");
-    olsr_socket_disable(session->scheduler_entry, OLSR_SOCKET_WRITE);
+    olsr_socket_set_write(session->scheduler_entry, false);
     if (session->state == STREAM_SESSION_SEND_AND_QUIT) {
       session->state = STREAM_SESSION_CLEANUP;
     }

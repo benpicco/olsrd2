@@ -46,15 +46,9 @@
 #include "common/list.h"
 #include "common/avl.h"
 
-/* flags for socket handler */
-enum olsr_sockethandler_flags {
-  OLSR_SOCKET_READ = 0x04,
-  OLSR_SOCKET_WRITE = 0x08,
-};
-
 /* prototype for socket handler */
 typedef void (*socket_handler_func) (int fd, void *data,
-    enum olsr_sockethandler_flags);
+    bool event_read, bool event_write);
 
 /* This struct represents a single registered socket handler */
 struct olsr_socket_entry {
@@ -70,9 +64,8 @@ struct olsr_socket_entry {
   /* custom data pointer for sockets */
   void *data;
 
-  // TODO: convert into two booleans
-  /* flags (OLSR_SOCKET_READ and OLSR_SOCKET_WRITE) */
-  enum olsr_sockethandler_flags flags;
+  /* event mask for socket handler */
+  bool event_read, event_write;
 };
 
 /* deletion safe macro for socket list traversal */
@@ -85,7 +78,7 @@ int olsr_socket_handle(uint32_t until_time) __attribute__((warn_unused_result));
 
 
 EXPORT struct olsr_socket_entry *olsr_socket_add(int fd,
-    socket_handler_func pf_imm, void *data, unsigned int flags);
+    socket_handler_func pf_imm, void *data, bool event_read, bool event_write);
 EXPORT void olsr_socket_remove(struct olsr_socket_entry *);
 
 /**
@@ -93,9 +86,9 @@ EXPORT void olsr_socket_remove(struct olsr_socket_entry *);
  * @param sock pointer to socket entry
  */
 static inline void
-olsr_socket_enable(struct olsr_socket_entry *entry, unsigned int flags)
+olsr_socket_set_read(struct olsr_socket_entry *entry, bool event_read)
 {
-  entry->flags |= flags;
+  entry->event_read = event_read;
 }
 
 /**
@@ -103,9 +96,9 @@ olsr_socket_enable(struct olsr_socket_entry *entry, unsigned int flags)
  * @param sock pointer to socket entry
  */
 static inline void
-olsr_socket_disable(struct olsr_socket_entry *entry, unsigned int flags)
+olsr_socket_set_write(struct olsr_socket_entry *entry, bool event_write)
 {
-  entry->flags &= ~flags;
+  entry->event_write = event_write;
 }
 
 #endif

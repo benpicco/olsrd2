@@ -117,12 +117,13 @@ olsr_socket_cleanup(void)
  * @param fd file descriptor for socket
  * @param pf_imm processing callback
  * @param data custom data
- * @param flags OLSR_SOCKET_READ/OLSR_SOCKET_WRITE (or both)
+ * @param event_read true if socket is waiting for read-event
+ * @param event_write true if socket is waiting for write-event
  * @return pointer to socket_entry
  */
 struct olsr_socket_entry *
 olsr_socket_add(int fd, socket_handler_func pf_imm, void *data,
-    enum olsr_sockethandler_flags flags)
+    bool event_read, bool event_write)
 {
   struct olsr_socket_entry *new_entry;
 
@@ -136,7 +137,8 @@ olsr_socket_add(int fd, socket_handler_func pf_imm, void *data,
     new_entry->fd = fd;
     new_entry->process = pf_imm;
     new_entry->data = data;
-    new_entry->flags = flags;
+    new_entry->event_read = event_read;
+    new_entry->event_write = event_write;
 
     /* Queue */
     list_add_before(&socket_head, &new_entry->node);
@@ -155,7 +157,8 @@ olsr_socket_remove(struct olsr_socket_entry *entry)
   OLSR_DEBUG(LOG_SOCKET, "Trigger removing socket entry %d\n", entry->fd);
 
   entry->process = NULL;
-  entry->flags = 0;
+  entry->event_read = false;
+  entry->event_write = false;
 }
 
 /**
@@ -170,6 +173,8 @@ olsr_socket_handle(uint32_t until_time)
   struct timeval tvp;
   int32_t remaining;
   int n = 0;
+  bool fd_read;
+  bool fd_write;
 
   /* Update time since this is much used by the parsing functions */
   if (olsr_clock_update()) {
@@ -194,7 +199,11 @@ olsr_socket_handle(uint32_t until_time)
   /* do at least one select */
   for (;;) {
     fd_set ibits, obits;
-    int hfd = 0, fdsets = 0;
+    int hfd = 0;
+
+    fd_read = false;
+    fd_write = false;
+
     FD_ZERO(&ibits);
     FD_ZERO(&obits);
 
@@ -203,15 +212,15 @@ olsr_socket_handle(uint32_t until_time)
       if (entry->process == NULL) {
         continue;
       }
-      if ((entry->flags & OLSR_SOCKET_READ) != 0) {
-        fdsets |= OLSR_SOCKET_READ;
+      if (entry->event_read) {
+        fd_read = true;
         FD_SET((unsigned int)entry->fd, &ibits);        /* And we cast here since we get a warning on Win32 */
       }
-      if ((entry->flags & OLSR_SOCKET_WRITE) != 0) {
-        fdsets |= OLSR_SOCKET_WRITE;
+      if (entry->event_write) {
+        fd_write = true;
         FD_SET((unsigned int)entry->fd, &obits);        /* And we cast here since we get a warning on Win32 */
       }
-      if ((entry->flags & (OLSR_SOCKET_READ | OLSR_SOCKET_WRITE)) != 0 && entry->fd >= hfd) {
+      if ((entry->event_read || entry->event_write) != 0 && entry->fd >= hfd) {
         hfd = entry->fd + 1;
       }
     }
@@ -223,8 +232,8 @@ olsr_socket_handle(uint32_t until_time)
 
     do {
       n = os_select(hfd,
-          fdsets & OLSR_SOCKET_READ ? &ibits : NULL,
-          fdsets & OLSR_SOCKET_WRITE ? &obits : NULL,
+          fd_read ? &ibits : NULL,
+          fd_write ? &obits : NULL,
           NULL, &tvp);
     } while (n == -1 && errno == EINTR);
 
@@ -242,19 +251,14 @@ olsr_socket_handle(uint32_t until_time)
       break;
     }
     OLSR_FOR_ALL_SOCKETS(entry, iterator) {
-      enum olsr_sockethandler_flags flags;
       if (entry->process == NULL) {
         continue;
       }
-      flags = 0;
-      if (FD_ISSET(entry->fd, &ibits)) {
-        flags |= OLSR_SOCKET_READ;
-      }
-      if (FD_ISSET(entry->fd, &obits)) {
-        flags |= OLSR_SOCKET_WRITE;
-      }
-      if (flags != 0) {
-        entry->process(entry->fd, entry->data, flags);
+
+      fd_read = FD_ISSET(entry->fd, &ibits) != 0;
+      fd_write = FD_ISSET(entry->fd, &obits) != 0;
+      if (fd_read || fd_write) {
+        entry->process(entry->fd, entry->data, fd_read, fd_write);
       }
     }
 
