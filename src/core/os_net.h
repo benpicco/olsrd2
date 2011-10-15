@@ -51,32 +51,26 @@
 #include "interface.h"
 
 /*
- * Each OS specific os_net_ include file should define each
- * of the following constants either as OS_GENERIC, OS_INLINE or OS_SPECIFIC.
- *
- * OS_GENERIC means the code use the default implementation.
- * OS_INLINE means an OS specific INLINE code.
- * OS_SPECIFIC means an OS specific normal function.
+ * Set one of the following defines in the os specific os_net includes
+ * to OS_SPECIFIC to define that the os code is implementing the function
+ * itself and does not use the generic function
+ * Set it to OS_GENERIC to define that the code use the default implementation.
  *
  * Example from os_net_linux.h:
  *
  * #define OS_NET_GETSOCKET    OS_GENERIC
  * #define OS_NET_CONFIGSOCKET OS_GENERIC
  * #define OS_NET_JOINMCAST    OS_GENERIC
- * #define OS_NET_SETNONBLOCK  OS_SPECIFIC
- * #define OS_NET_BINDTOIF     OS_SPECIFIC
+ * #define OS_NET_SETNONBLOCK  OS_GENERIC
  * #define OS_NET_CLOSE        OS_GENERIC
  * #define OS_NET_SELECT       OS_GENERIC
  * #define OS_NET_RECVFROM     OS_GENERIC
- * #define OS_NET_SENDTO       OS_GENERIC
- *
+ * #define OS_NET SENDTO       OS_GENERIC
  */
-#define OS_GENERIC  1
-#define OS_SPECIFIC 2
-#define OS_INLINE   3
 
 /* set the guard macro so we can include the os specific settings */
 #define OS_NET_SPECIFIC_INCLUDE
+#include "os_helper.h"
 
 #ifdef OS_LINUX
 #include "os_linux/os_net_linux.h"
@@ -100,65 +94,52 @@ enum olsr_socket_opt {
   OS_SOCKET_MULTICAST = 4,
 };
 
-#if OS_NET_GETSOCKET != OS_INLINE
+/* prototypes for all os_net interfaces */
 EXPORT int os_net_getsocket(union netaddr_socket *bindto,
     enum olsr_socket_opt flags, int recvbuf, enum log_source log_src);
-#endif
-
-#if OS_NET_CONFIGSOCKET != OS_INLINE
 EXPORT int os_net_configsocket(int sock, union netaddr_socket *bindto,
     enum olsr_socket_opt flags, int recvbuf, enum log_source log_src);
-#endif
-
-#if OS_NET_CONFIGSOCKET != OS_INLINE
 EXPORT int net_os_join_mcast(int sock, union netaddr_socket *multicast,
     struct olsr_interface *oif, enum log_source log_src);
-#endif
-
-#if OS_NET_SETNONBLOCK != OS_INLINE
 EXPORT int os_net_set_nonblocking(int sock);
-#endif
+EXPORT int os_recvfrom(
+    int fd, void *buf, size_t length, union netaddr_socket *source);
+EXPORT int os_sendto(
+    int fd, const void *buf, size_t length, union netaddr_socket *dst);
+static INLINE int os_close(int fd);
+static INLINE int os_select(
+    int num, fd_set *r,fd_set *w,fd_set *e, struct timeval *timeout);
 
-#if OS_NET_BINDTOIF != OS_INLINE
-EXPORT int os_net_bind_to_interface(int sock, const char *if_name);
-#endif
+/*
+ * INLINE implementations for generic os_net  interface
+ */
 
-#if OS_NET_CLOSE == OS_SPECIFIC
-EXPORT void os_close(int fd);
-#elif OS_NET_CLOSE == OS_GENERIC
-static INLINE void
+#if OS_NET_CLOSE == OS_GENERIC
+/**
+ * Close a file descriptor
+ * @param fd filedescriptor
+ */
+static INLINE int
 os_close(int fd) {
-  close(fd);
+  return close(fd);
 }
 #endif
 
-#if OS_NET_SELECT == OS_SPECIFIC
-EXPORT int os_select(int num, fd_set *r,fd_set *w,fd_set *e, struct timeval *timeout);
-#elif OS_NET_SELECT == OS_GENERIC
+#if OS_NET_SELECT == OS_GENERIC
+/**
+ * polls a number of sockets for network events. If no even happens or
+ * already has happened, function will return after timeout time.
+ * see 'man select' for more details
+ * @param num
+ * @param r
+ * @param w
+ * @param e
+ * @param timeout
+ * @return
+ */
 static INLINE int
 os_select(int num, fd_set *r,fd_set *w,fd_set *e, struct timeval *timeout) {
   return select(num, r, w, e, timeout);
-}
-#endif
-
-#if OS_NET_RECVFROM == OS_SPECIFIC
-EXPORT int os_recvfrom(int fd, void *buf, size_t length, union netaddr_socket *source);
-#elif OS_NET_RECVFROM == OS_GENERIC
-static INLINE int
-os_recvfrom(int fd, void *buf, size_t length, union netaddr_socket *source) {
-  socklen_t sock_len;
-
-  sock_len = sizeof(*source);
-  return recvfrom(fd, buf, length, 0, &source->std, &sock_len);
-}
-#endif
-
-#if OS_NET_SENDTO == OS_SPECIFIC
-EXPORT int os_sendto(int fd, const void *buf, size_t length, union netaddr_socket *dst);
-#elif OS_NET_SENDTO == OS_GENERIC
-static INLINE int
-os_sendto(int fd, const void *buf, size_t length, union netaddr_socket *dst) {
-  return sendto(fd, buf, length, 0, &dst->std, sizeof(*dst));
 }
 #endif
 

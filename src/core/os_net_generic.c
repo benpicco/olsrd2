@@ -274,25 +274,33 @@ os_net_set_nonblocking(int sock) {
 }
 #endif
 
-#if OS_NET_BINDTOIF == OS_GENERIC
+// TODO: use recvmsg and PKTINFO to get source interface and destination IP
 /**
- * Bind a socket to an interface. Filters out alias part of interface name.
- * @param sock filedescriptor of socket
- * @param if_name name of interface
- * @return -1 if an error happened, 0 otherwise
+ * Receive data from an UDP socket.
+ * @param fd filedescriptor
+ * @param buf buffer for incoming data
+ * @param length length of buffer
+ * @param source pointer to netaddr socket object to store source of packet
+ * @return same as recvfrom()
  */
 int
-os_net_bind_to_interface(int sock, const char *if_name) {
-  char if_buf[IF_NAMESIZE];
-  char *ptr;
+os_recvfrom(int fd, void *buf, size_t length, union netaddr_socket *source) {
+  socklen_t sock_len;
 
-  strscpy(if_buf, if_name, sizeof(if_buf));
-  ptr = strchr(if_buf, ':');
-  if (ptr) {
-    *ptr = 0;
-  }
-
-  /* bind to device using the SO_BINDTODEVICE flag */
-  return setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, if_buf, strlen(if_buf) + 1);
+  sock_len = sizeof(*source);
+  return recvfrom(fd, buf, length, 0, &source->std, &sock_len);
 }
-#endif
+
+// TODO: use sendmsg and PKTINFO to define outgoing source IP and interface
+/**
+ * Sends data to an UDP socket.
+ * @param fd filedescriptor
+ * @param buf buffer for target data
+ * @param length length of buffer
+ * @param dst pointer to netaddr socket to send packet to
+ * @return same as sendto()
+ */
+int
+os_sendto(int fd, const void *buf, size_t length, union netaddr_socket *dst) {
+  return sendto(fd, buf, length, 0, &dst->std, sizeof(*dst));
+}
