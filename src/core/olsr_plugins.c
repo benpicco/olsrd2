@@ -86,14 +86,14 @@ static int _unload_plugin(struct olsr_plugin *plugin, bool cleanup);
 static void *_open_plugin(const char *filename);
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_plugins_state);
+OLSR_SUBSYSTEM_STATE(_plugins_state);
 
 /**
  * Initialize the plugin loader system
  */
 void
 olsr_plugins_init(void) {
-  if (olsr_subsystem_init(&olsr_plugins_state))
+  if (olsr_subsystem_init(&_plugins_state))
     return;
 
   avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
@@ -113,7 +113,7 @@ void
 olsr_plugins_cleanup(void) {
   struct olsr_plugin *plugin, *iterator;
 
-  if (olsr_subsystem_cleanup(&olsr_plugins_state))
+  if (olsr_subsystem_cleanup(&_plugins_state))
     return;
 
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) {

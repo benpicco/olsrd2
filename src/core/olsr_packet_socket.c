@@ -55,7 +55,7 @@ static struct list_entity packet_sockets = { NULL, NULL };
 static char input_buffer[65536];
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_packet_state);
+OLSR_SUBSYSTEM_STATE(_packet_state);
 
 static void _cb_packet_event(int fd, void *data, bool r, bool w);
 
@@ -64,7 +64,7 @@ static void _cb_packet_event(int fd, void *data, bool r, bool w);
  */
 void
 olsr_packet_init(void) {
-  if (olsr_subsystem_init(&olsr_packet_state))
+  if (olsr_subsystem_init(&_packet_state))
     return;
 
   list_init_head(&packet_sockets);
@@ -77,7 +77,7 @@ void
 olsr_packet_cleanup(void) {
   struct olsr_packet_socket *skt;
 
-  if (olsr_subsystem_cleanup(&olsr_packet_state))
+  if (olsr_subsystem_cleanup(&_packet_state))
     return;
 
   while (!list_is_empty(&packet_sockets)) {

@@ -96,14 +96,14 @@ static struct avl_tree _http_site_tree;
 static struct olsr_stream_managed _http_managed_socket;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_olsr_http_state);
+OLSR_SUBSYSTEM_STATE(_http_state);
 
 /**
  * Initialize http subsystem
  */
 void
 olsr_http_init(void) {
-  if (olsr_subsystem_init(&_olsr_http_state))
+  if (olsr_subsystem_init(&_http_state))
     return;
 
   cfg_schema_add_section(olsr_cfg_get_schema(), &_http_section);
@@ -126,7 +126,7 @@ olsr_http_init(void) {
  */
 void
 olsr_http_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_olsr_http_state))
+  if (olsr_subsystem_cleanup(&_http_state))
     return;
 
   olsr_stream_remove_managed(&_http_managed_socket);

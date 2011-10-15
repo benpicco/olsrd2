@@ -67,7 +67,7 @@ static struct cfg_delta _olsr_delta;
 static bool _first_apply;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_cfg_state);
+OLSR_SUBSYSTEM_STATE(_cfg_state);
 
 /* define global configuration template */
 static struct cfg_schema_section global_section = {
@@ -95,7 +95,7 @@ static struct cfg_schema_entry global_entries[] = {
  */
 int
 olsr_cfg_init(void) {
-  if (olsr_subsystem_init(&olsr_cfg_state))
+  if (olsr_subsystem_is_initialized(&_cfg_state))
     return 0;
 
   cfg_add(&_olsr_cfg_instance);
@@ -109,7 +109,6 @@ olsr_cfg_init(void) {
   if ((_olsr_raw_db = cfg_db_add()) == NULL) {
     OLSR_WARN(LOG_CONFIG, "Cannot create raw configuration database.");
     cfg_remove(&_olsr_cfg_instance);
-    olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
   }
 
@@ -118,7 +117,6 @@ olsr_cfg_init(void) {
     OLSR_WARN(LOG_CONFIG, "Cannot create configuration database.");
     cfg_db_remove(_olsr_raw_db);
     cfg_remove(&_olsr_cfg_instance);
-    olsr_subsystem_cleanup(&olsr_cfg_state);
     return -1;
   }
 
@@ -131,6 +129,7 @@ olsr_cfg_init(void) {
   memset(&config_global, 0, sizeof(config_global));
   _first_apply = true;
 
+  olsr_subsystem_init(&_cfg_state);
   return 0;
 }
 
@@ -139,7 +138,7 @@ olsr_cfg_init(void) {
  */
 void
 olsr_cfg_cleanup(void) {
-  if (olsr_subsystem_cleanup(&olsr_cfg_state))
+  if (olsr_subsystem_cleanup(&_cfg_state))
     return;
 
   free(config_global.plugin.value);

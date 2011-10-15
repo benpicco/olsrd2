@@ -70,7 +70,7 @@ const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT] = {
 const char OUT_OF_MEMORY_ERROR[] = "Out of memory error!";
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_logging_state);
+OLSR_SUBSYSTEM_STATE(_logging_state);
 
 /**
  * Initialize logging system
@@ -83,14 +83,14 @@ olsr_log_init(enum log_severity def_severity)
   enum log_severity j;
   enum log_source i;
 
-  if (olsr_subsystem_init(&olsr_logging_state))
+  if (olsr_subsystem_is_initialized(&_logging_state))
     return 0;
 
   list_init_head(&log_handler_list);
 
   if (abuf_init(&logbuffer, 4096)) {
     fputs("Not enough memory for logging buffer\n", stderr);
-    olsr_subsystem_cleanup(&olsr_logging_state);
+    olsr_subsystem_cleanup(&_logging_state);
     return -1;
   }
 
@@ -100,6 +100,8 @@ olsr_log_init(enum log_severity def_severity)
       log_global_mask.mask[j][i] = j >= def_severity;
     }
   }
+
+  olsr_subsystem_init(&_logging_state);
   return 0;
 }
 
@@ -111,7 +113,7 @@ olsr_log_cleanup(void)
 {
   struct log_handler_entry *h, *iterator;
 
-  if (olsr_subsystem_cleanup(&olsr_logging_state))
+  if (olsr_subsystem_cleanup(&_logging_state))
     return;
 
   /* remove all handlers */

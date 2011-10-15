@@ -58,14 +58,14 @@
 struct list_entity socket_head;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_socket_state);
+OLSR_SUBSYSTEM_STATE(_socket_state);
 
 /**
  * Initialize olsr socket scheduler
  */
 void
 olsr_socket_init(void) {
-  if (olsr_subsystem_init(&olsr_socket_state))
+  if (olsr_subsystem_init(&_socket_state))
     return;
 
   list_init_head(&socket_head);
@@ -80,7 +80,7 @@ olsr_socket_cleanup(void)
 {
   struct olsr_socket_entry *entry, *iterator;
 
-  if (olsr_subsystem_cleanup(&olsr_socket_state))
+  if (olsr_subsystem_cleanup(&_socket_state))
     return;
 
   OLSR_FOR_ALL_SOCKETS(entry, iterator) {

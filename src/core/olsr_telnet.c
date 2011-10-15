@@ -90,7 +90,7 @@ static struct olsr_telnet_command _builtin[] = {
 };
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_telnet_state);
+OLSR_SUBSYSTEM_STATE(_telnet_state);
 
 /* telnet session handling */
 static struct olsr_memcookie_info *_telnet_memcookie;
@@ -107,20 +107,18 @@ int
 olsr_telnet_init(void) {
   size_t i;
 
-  if (olsr_subsystem_init(&olsr_telnet_state))
+  if (olsr_subsystem_is_initialized(&_telnet_state))
     return 0;
 
   _telnet_memcookie = olsr_memcookie_add("telnet session",
       sizeof(struct olsr_telnet_session));
   if (_telnet_memcookie == NULL) {
-    olsr_subsystem_cleanup(&olsr_telnet_state);
     return -1;
   }
 
   _telnet_repeat_timerinfo = olsr_timer_add("txt repeat timer", _cb_telnet_repeat_timer, true);
   if (_telnet_repeat_timerinfo == NULL) {
-    olsr_memcookie_remove(_telnet_memcookie);
-    olsr_subsystem_cleanup(&olsr_telnet_state);
+    olsr_subsystem_cleanup(&_telnet_state);
     return -1;
   }
 
@@ -145,6 +143,7 @@ olsr_telnet_init(void) {
     olsr_telnet_add(&_builtin[i]);
   }
 
+  olsr_subsystem_init(&_telnet_state);
   return 0;
 }
 
@@ -153,7 +152,7 @@ olsr_telnet_init(void) {
  */
 void
 olsr_telnet_cleanup(void) {
-  if (olsr_subsystem_cleanup(&olsr_telnet_state))
+  if (olsr_subsystem_cleanup(&_telnet_state))
     return;
 
   olsr_stream_remove_managed(&_telnet_managed);

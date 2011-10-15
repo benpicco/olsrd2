@@ -112,7 +112,7 @@ static struct log_handler_entry file_handler = {
 };
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_logcfg_state);
+OLSR_SUBSYSTEM_STATE(_logcfg_state);
 
 /**
  * Initialize logging configuration
@@ -121,7 +121,7 @@ OLSR_SUBSYSTEM_STATE(olsr_logcfg_state);
  */
 void
 olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t length) {
-  if (olsr_subsystem_init(&olsr_logcfg_state))
+  if (olsr_subsystem_init(&_logcfg_state))
     return;
 
   debug_lvl_1 = debug_lvl_1_ptr;
@@ -138,7 +138,7 @@ olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t length) {
  */
 void
 olsr_logcfg_cleanup(void) {
-  if (olsr_subsystem_cleanup(&olsr_logcfg_state))
+  if (olsr_subsystem_cleanup(&_logcfg_state))
     return;
 
   /* cleanup delta handler */
