@@ -57,6 +57,7 @@
 #include "builddata/plugin_static.h"
 #include "builddata/version.h"
 #include "builddata/data.h"
+#include "os_system.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_http.h"
@@ -220,6 +221,7 @@ main(int argc, char **argv) {
   }
 
   /* initialize basic framework */
+  os_system_openlog();
   olsr_memcookie_init();
   if (olsr_clock_init()) {
     goto olsrd_cleanup;
@@ -288,6 +290,7 @@ olsrd_cleanup:
   olsr_socket_cleanup();
   olsr_timer_cleanup();
   olsr_memcookie_cleanup();
+  os_system_closelog();
   olsr_logcfg_cleanup();
 
   /* free configuration resources */

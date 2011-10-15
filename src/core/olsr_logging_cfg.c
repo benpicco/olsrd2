@@ -54,6 +54,7 @@
 #include "olsr_logging_cfg.h"
 #include "olsr_cfg.h"
 #include "olsr.h"
+#include "os_system.h"
 
 #define LOG_SECTION     "log"
 #define LOG_LEVEL_ENTRY "level"
@@ -321,6 +322,6 @@ _apply_log_setting(struct cfg_named_section *named,
 static void
 _cb_logcfg_apply(void) {
   if (olsr_logcfg_apply(olsr_cfg_get_db())) {
-    // TODO: open logging file failed, decide what to do
+    os_system_log(SEVERITY_WARN, "Could not open logging file");
   }
 }

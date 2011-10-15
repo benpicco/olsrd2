@@ -17,7 +17,7 @@
 #include "olsr_logging.h"
 #include "olsr_netaddr_acl.h"
 #include "olsr_stream_socket.h"
-#include "os_time.h"
+#include "os_system.h"
 #include "olsr.h"
 #include "olsr_setup.h"
 #include "olsr_http.h"
@@ -487,7 +487,7 @@ _create_http_header(struct olsr_stream_session *session,
   abuf_appendf(&buf, "%s %d %s\r\n", HTTP_VERSION_1_0, code, _get_headertype_string(code));
 
   /* Date */
-  os_gettimeofday(&currtime, NULL);
+  os_system_gettimeofday(&currtime);
   abuf_strftime(&buf, "Date: %a, %d %b %Y %H:%M:%S GMT\r\n", localtime(&currtime.tv_sec));
 
   /* Server version */

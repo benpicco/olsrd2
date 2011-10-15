@@ -42,12 +42,5 @@
 #ifndef OS_TIME_H_
 #define OS_TIME_H_
 
-#include <sys/time.h>
-
-#define MSEC_PER_SEC 1000
-#define USEC_PER_MSEC 1000
-
-// TODO: include in os_specific interface
-#define os_gettimeofday(t1,t2)    gettimeofday(t1,t2)
 
 #endif /* OS_TIME_H_ */

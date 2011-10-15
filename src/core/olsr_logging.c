@@ -232,17 +232,20 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
     struct timeval timeval;
 
     /* calculate local time */
-    os_gettimeofday(&timeval, NULL);
+    if (os_system_gettimeofday(&timeval)) {
+      p1 = abuf_appendf(&logbuffer, "gettimeofday-error ");
+    }
+    else {
+      /* there is no localtime_r in win32 */
+      tm_ptr = localtime((time_t *) & timeval.tv_sec);
 
-    /* there is no localtime_r in win32 */
-    tm_ptr = localtime((time_t *) & timeval.tv_sec);
-
-    p1 = abuf_appendf(&logbuffer, "%d:%02d:%02d.%03ld ",
-                  tm_ptr->tm_hour, tm_ptr->tm_min, tm_ptr->tm_sec,
-                  (long)(timeval.tv_usec / 1000));
+      p1 = abuf_appendf(&logbuffer, "%d:%02d:%02d.%03ld ",
+          tm_ptr->tm_hour, tm_ptr->tm_min, tm_ptr->tm_sec,
+          (long)(timeval.tv_usec / 1000));
+    }
 
     p2 = abuf_appendf(&logbuffer, "%s(%s) %s %d: ",
-        LOG_SEVERITY_NAMES[severity], LOG_SOURCE_NAMES[source], file, line);
+          LOG_SEVERITY_NAMES[severity], LOG_SOURCE_NAMES[source], file, line);
   }
   p3 = abuf_vappendf(&logbuffer, format, ap);
 
@@ -259,7 +262,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   param.line = line;
   param.buffer = logbuffer.buf;
   param.timeLength = p1;
-  param.prefixLength = p2-p1;
+  param.prefixLength = p2;
 
   /* use stderr logger if nothing has been configured */
   if (list_is_empty(&log_handler_list)) {
@@ -381,5 +384,5 @@ void
 olsr_log_syslog(struct log_handler_entry *entry __attribute__ ((unused)),
     struct log_parameters *param)
 {
-  os_printline(severity, param->buffer + param->timeLength);
+  os_system_log(param->severity, param->buffer + param->timeLength);
 }

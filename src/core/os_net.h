@@ -94,7 +94,7 @@ enum olsr_socket_opt {
   OS_SOCKET_MULTICAST = 4,
 };
 
-/* prototypes for all os_net interfaces */
+/* prototypes for all os_net functions */
 EXPORT int os_net_getsocket(union netaddr_socket *bindto,
     enum olsr_socket_opt flags, int recvbuf, enum log_source log_src);
 EXPORT int os_net_configsocket(int sock, union netaddr_socket *bindto,
@@ -111,7 +111,7 @@ static INLINE int os_select(
     int num, fd_set *r,fd_set *w,fd_set *e, struct timeval *timeout);
 
 /*
- * INLINE implementations for generic os_net  interface
+ * INLINE implementations for generic os_net functions
  */
 
 #if OS_NET_CLOSE == OS_GENERIC

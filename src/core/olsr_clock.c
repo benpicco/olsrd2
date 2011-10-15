@@ -45,7 +45,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "os_time.h"
+#include "os_system.h"
 #include "olsr_logging.h"
 #include "olsr_clock.h"
 #include "olsr.h"
@@ -70,7 +70,7 @@ olsr_clock_init(void) {
     return 0;
 
   /* Grab initial timestamp */
-  if (os_gettimeofday(&first_tv, NULL)) {
+  if (os_system_gettimeofday(&first_tv)) {
     OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
     return -1;
   }
@@ -101,7 +101,7 @@ olsr_clock_update(void)
   struct timeval tv;
   uint32_t t;
 
-  if (os_gettimeofday(&tv, NULL) != 0) {
+  if (os_system_gettimeofday(&tv) != 0) {
     OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
     return -1;
   }
@@ -241,13 +241,12 @@ const char *
 olsr_clock_getWallclockString(struct timeval_buf *buf)
 {
   struct timeval now;
-  int sec, usec;
+  int sec = 0, usec = 0;
 
-  os_gettimeofday(&now, NULL);
-
-  sec = (int)now.tv_sec + olsr_get_timezone();
-  usec = (int)now.tv_usec;
-
+  if (os_system_gettimeofday(&now) == 0) {
+    sec = (int)now.tv_sec + olsr_get_timezone();
+    usec = (int)now.tv_usec;
+  }
   snprintf(buf->buf, sizeof(buf), "%02d:%02d:%02d.%06d",
       (sec % 86400) / 3600, (sec % 3600) / 60, sec % 60, usec);
 
@@ -292,7 +291,7 @@ olsr_get_timezone(void)
     struct tm gmt;
     struct tm *loc;
 
-    if (os_gettimeofday(&tv, 0)) {
+    if (os_system_gettimeofday(&tv)) {
       OLSR_WARN(LOG_TIMER, "Cannot read internal clock: %s (%d)",
           strerror(errno), errno);
       return 0;
