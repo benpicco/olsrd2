@@ -225,7 +225,6 @@ olsr_telnet_execute(const char *cmd, const char *para,
 static void
 _cb_config_changed(void) {
   struct olsr_stream_managed_config config;
-  int ret = -1;
 
   /* generate binary config */
   memset(&config, 0, sizeof(config));
@@ -240,7 +239,6 @@ _cb_config_changed(void) {
     /* error while updating sockets */
     goto apply_config_failed;
   }
-  ret = 0;
 
   /* fall through */
 apply_config_failed:
@@ -331,11 +329,9 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
   char *eol;
   int len;
   bool processedCommand = false, chainCommands = false;
-  uint32_t old_timeout;
 
   /* get telnet session pointer */
   telnet_session = (struct olsr_telnet_session *)session;
-  old_timeout = session->timeout->timer_period;
 
   /* loop over input */
   while (session->in.len > 0) {

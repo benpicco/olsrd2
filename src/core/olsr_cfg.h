@@ -68,6 +68,11 @@ void olsr_cfg_cleanup(void);
 int olsr_cfg_apply(void);
 int olsr_cfg_rollback(void);
 
+EXPORT void olsr_cfg_trigger_reload(void);
+EXPORT bool olsr_cfg_is_reload_set(void);
+EXPORT void olsr_cfg_trigger_commit(void);
+EXPORT bool olsr_cfg_is_commit_set(void);
+
 /* do not export this to plugins */
 int olsr_cfg_update_globalcfg(bool);
 int olsr_cfg_clear_rawdb(void);

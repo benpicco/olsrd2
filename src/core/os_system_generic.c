@@ -8,8 +8,8 @@
 #include <syslog.h>
 
 #include "builddata/data.h"
+#include "olsr_logging.h"
 #include "os_system.h"
-#include "olsr_setup.h"
 #include "olsr.h"
 
 #if OS_SYSTEM_LOG == OS_GENERIC
@@ -27,7 +27,7 @@ os_system_openlog(void) {
     return;
   }
 
-  openlog(OLSR_SETUP_PROGRAM, LOG_PID | LOG_ODELAY, LOG_DAEMON);
+  openlog(olsr_log_get_programm_name(), LOG_PID | LOG_ODELAY, LOG_DAEMON);
   setlogmask(LOG_UPTO(LOG_DEBUG));
 
   return;

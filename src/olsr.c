@@ -73,7 +73,7 @@
 #include "olsr_setup.h"
 #include "olsr.h"
 
-static bool running, reload_config, commit_config, exit_called;
+static bool running, exit_called;
 static char *schema_name;
 
 enum argv_short_options {
@@ -154,13 +154,11 @@ main(int argc, char **argv) {
 
   /* setup signal handler */
   running = true;
-  reload_config = false;
-  commit_config = false;
   exit_called = false;
   setup_signalhandler();
 
   /* initialize logger */
-  if (olsr_log_init(SEVERITY_WARN)) {
+  if (olsr_log_init(OLSR_SETUP_PROGRAM, SEVERITY_WARN)) {
     goto olsrd_cleanup;
   }
 
@@ -314,7 +312,7 @@ olsr_exit(void) {
 
 void
 olsr_commit(void) {
-  commit_config = true;
+  olsr_cfg_trigger_commit();
 }
 
 /**
@@ -332,7 +330,7 @@ quit_signal_handler(int signo __attribute__ ((unused))) {
  */
 static void
 hup_signal_handler(int signo __attribute__ ((unused))) {
-  reload_config = true;
+  olsr_cfg_trigger_reload();
 }
 
 /**
@@ -368,7 +366,7 @@ mainloop(int argc, char **argv) {
     }
 
     /* reload configuration if triggered */
-    if (reload_config) {
+    if (olsr_cfg_is_reload_set()) {
       OLSR_INFO(LOG_MAIN, "Reloading configuration");
       if (olsr_cfg_clear_rawdb()) {
         running = false;
@@ -376,15 +374,12 @@ mainloop(int argc, char **argv) {
       else if (parse_commandline(argc, argv, true) == -1) {
         olsr_cfg_apply();
       }
-      reload_config = false;
     }
 
     /* commit config if triggered */
-    if (commit_config) {
+    if (olsr_cfg_is_commit_set()) {
       OLSR_INFO(LOG_MAIN, "Commiting configuration");
       olsr_cfg_apply();
-
-      commit_config = false;
     }
   }
 
@@ -566,6 +561,11 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   return return_code;
 }
 
+/**
+ * Call the handle_schema command to give the user the schema of
+ * the configuration including plugins
+ * @return -1 if an error happened, 0 otherwise
+ */
 static int
 display_schema(void) {
   struct autobuf log;
@@ -577,7 +577,7 @@ display_schema(void) {
   cfg_cmd_clear_state(olsr_cfg_get_instance());
 
   if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), schema_name, &log)) {
-    return_code = 1;
+    return_code = -1;
   }
 
   if (log.len > 0) {

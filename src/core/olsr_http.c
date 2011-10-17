@@ -187,7 +187,6 @@ olsr_http_lookup_value(char **keys, char **values, size_t count, const char *key
 static void
 _cb_config_changed(void) {
   struct olsr_stream_managed_config config;
-  int ret = -1;
 
   /* generate binary config */
   memset(&config, 0, sizeof(config));
@@ -202,7 +201,6 @@ _cb_config_changed(void) {
     /* error while updating sockets */
     goto apply_config_failed;
   }
-  ret = 0;
 
   /* fall through */
 apply_config_failed:

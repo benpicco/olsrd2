@@ -66,6 +66,9 @@ static struct cfg_schema _olsr_schema;
 static struct cfg_delta _olsr_delta;
 static bool _first_apply;
 
+/* remember to trigger reload/commit */
+static bool _trigger_reload, _trigger_commit;
+
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_cfg_state);
 
@@ -128,6 +131,8 @@ olsr_cfg_init(void) {
   /* initialize global config */
   memset(&config_global, 0, sizeof(config_global));
   _first_apply = true;
+  _trigger_reload = false;
+  _trigger_commit = false;
 
   olsr_subsystem_init(&_cfg_state);
   return 0;
@@ -153,6 +158,38 @@ olsr_cfg_cleanup(void) {
 }
 
 /**
+ * Trigger lazy configuration reload
+ */
+void
+olsr_cfg_trigger_reload(void) {
+  _trigger_reload = true;
+}
+
+/**
+ * @return true if lazy configuration reload was triggered
+ */
+bool
+olsr_cfg_is_reload_set(void) {
+  return _trigger_reload;
+}
+
+/**
+ * Trigger lazy configuration commit
+ */
+void
+olsr_cfg_trigger_commit(void) {
+  _trigger_reload = true;
+}
+
+/**
+ * @return true if lazy configuration commit was triggered
+ */
+bool
+olsr_cfg_is_commit_set(void) {
+  return _trigger_reload;
+}
+
+/**
  * Applies to content of the raw configuration database into the
  * work database and triggers the change calculation.
  * @return 0 if successful, -1 otherwise
@@ -161,7 +198,6 @@ int
 olsr_cfg_apply(void) {
   struct olsr_plugin *plugin, *plugin_it;
   struct cfg_db *new_db, *old_db;
-  struct cfg_entry *entry;
   struct autobuf log;
   bool found;
   int result;
@@ -177,7 +213,6 @@ olsr_cfg_apply(void) {
   /*** phase 1: activate all plugins ***/
   result = -1;
   old_db = NULL;
-  entry = NULL;
 
   /* load plugins */
   FOR_ALL_STRINGS(&config_global.plugin, ptr) {
@@ -250,6 +285,8 @@ olsr_cfg_apply(void) {
 
   /* success */
   result = 0;
+  _trigger_reload = false;
+  _trigger_commit = false;
 
 apply_failed:
   /* look for loaded but not enabled plugins and unload them */

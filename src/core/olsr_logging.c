@@ -60,6 +60,7 @@ struct log_handler_mask log_global_mask;
 
 static struct list_entity log_handler_list;
 static struct autobuf logbuffer;
+static const char *_programm_name;
 
 const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT] = {
   "DEBUG",
@@ -74,11 +75,12 @@ OLSR_SUBSYSTEM_STATE(_logging_state);
 
 /**
  * Initialize logging system
+ * @param name programm name to be used for logging output
  * @param def_severity default severity level
  * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_log_init(enum log_severity def_severity)
+olsr_log_init(const char *name, enum log_severity def_severity)
 {
   enum log_severity j;
   enum log_source i;
@@ -101,6 +103,7 @@ olsr_log_init(enum log_severity def_severity)
     }
   }
 
+  _programm_name = name;
   olsr_subsystem_init(&_logging_state);
   return 0;
 }
@@ -145,6 +148,14 @@ olsr_log_removehandler(struct log_handler_entry *h)
 {
   list_remove(&h->node);
   olsr_log_updatemask();
+}
+
+/**
+ * @return name of this programm for logging purpose
+ */
+const char *
+olsr_log_get_programm_name(void) {
+  return _programm_name;
 }
 
 /**

@@ -140,8 +140,11 @@ struct log_handler_entry {
 
 EXPORT extern struct log_handler_mask log_global_mask;
 
-EXPORT int olsr_log_init(enum log_severity) __attribute__((warn_unused_result));
+EXPORT int olsr_log_init(const char *, enum log_severity)
+  __attribute__((warn_unused_result));
 EXPORT void olsr_log_cleanup(void);
+
+EXPORT const char *olsr_log_get_programm_name(void);
 
 EXPORT void olsr_log_addhandler(struct log_handler_entry *);
 EXPORT void olsr_log_removehandler(struct log_handler_entry *);
