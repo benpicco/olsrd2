@@ -52,7 +52,7 @@
 #define OLSR_SUBSYSTEM_STATE(var_name) static bool var_name = false
 
 EXPORT void olsr_exit(void);
-EXPORT void olsr_commit(void);
+EXPORT bool olsr_is_running(void);
 
 /**
  * Subsystem marker API for 'being initialized' state.

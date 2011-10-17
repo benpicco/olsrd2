@@ -272,7 +272,9 @@ olsr_cfg_apply(void) {
   /* remove everything not valid */
   cfg_schema_validate(new_db, false, true, false, NULL);
 
-  olsr_cfg_update_globalcfg(false);
+  if (olsr_cfg_update_globalcfg(false)) {
+
+  }
 
   /* calculate delta and call handlers */
   if (_first_apply) {

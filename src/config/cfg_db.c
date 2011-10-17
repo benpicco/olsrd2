@@ -586,10 +586,7 @@ _alloc_entry(struct cfg_named_section *named,
  */
 static void
 _free_entry(struct cfg_entry *entry) {
-  struct cfg_db *db;
   avl_remove(&entry->named_section->entries, &entry->node);
-
-  db = entry->named_section->section_type->db;
 
   strarray_free(&entry->val);
   free(entry->name);

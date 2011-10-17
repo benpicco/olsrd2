@@ -190,6 +190,9 @@ olsr_socket_handle(uint32_t until_time)
           fd_read ? &ibits : NULL,
           fd_write ? &obits : NULL,
           NULL, &tvp);
+      if (!olsr_is_running()) {
+        return 0;
+      }
     } while (n == -1 && errno == EINTR);
 
     if (n == 0) {               /* timeout! */

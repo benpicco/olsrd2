@@ -65,7 +65,7 @@ EXPORT extern struct olsr_config_global config_global;
 
 int olsr_cfg_init(void) __attribute__((warn_unused_result));
 void olsr_cfg_cleanup(void);
-int olsr_cfg_apply(void);
+int olsr_cfg_apply(void) __attribute__((warn_unused_result));
 int olsr_cfg_rollback(void);
 
 EXPORT void olsr_cfg_trigger_reload(void);
@@ -74,8 +74,8 @@ EXPORT void olsr_cfg_trigger_commit(void);
 EXPORT bool olsr_cfg_is_commit_set(void);
 
 /* do not export this to plugins */
-int olsr_cfg_update_globalcfg(bool);
-int olsr_cfg_clear_rawdb(void);
+int olsr_cfg_update_globalcfg(bool) __attribute__((warn_unused_result));
+int olsr_cfg_clear_rawdb(void) __attribute__((warn_unused_result));
 
 EXPORT struct cfg_instance *olsr_cfg_get_instance(void);
 EXPORT struct cfg_db *olsr_cfg_get_db(void);

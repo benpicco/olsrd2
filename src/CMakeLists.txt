@@ -30,7 +30,7 @@ IF(ANDROID)
 ENDIF(ANDROID)
 
 # add main program
-set(OLSRD_SRCS ${OLSRD_SRCS} olsr.c olsr_setup.c)
+set(OLSRD_SRCS ${OLSRD_SRCS} olsr_main.c olsr_setup.c)
 
 # activate symbol export for win32
 IF(WIN32)

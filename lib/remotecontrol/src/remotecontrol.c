@@ -517,7 +517,7 @@ _cb_handle_config(struct olsr_telnet_data *data) {
   if ((next = str_hasnextword(data->parameter, "commit"))) {
     if (!cfg_schema_validate(olsr_cfg_get_rawdb(),
         false, false, true, data->out)) {
-      olsr_commit();
+      olsr_cfg_trigger_commit();
     }
   }
   else if ((next = str_hasnextword(data->parameter, "rollback"))) {

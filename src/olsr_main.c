@@ -73,7 +73,7 @@
 #include "olsr_setup.h"
 #include "olsr.h"
 
-static bool running, exit_called;
+static bool _end_olsr_signal;
 static char *schema_name;
 
 enum argv_short_options {
@@ -153,8 +153,7 @@ main(int argc, char **argv) {
   schema_name = NULL;
 
   /* setup signal handler */
-  running = true;
-  exit_called = false;
+  _end_olsr_signal = false;
   setup_signalhandler();
 
   /* initialize logger */
@@ -179,7 +178,9 @@ main(int argc, char **argv) {
   olsr_plugins_init();
 
   /* load static plugins */
-  olsr_plugins_init_static();
+  if (olsr_plugins_init_static()) {
+    goto olsrd_cleanup;
+  }
 
   /* parse command line and read configuration files */
   return_code = parse_commandline(argc, argv, false);
@@ -253,12 +254,12 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  if (!running) {
+  if (!olsr_is_running()) {
     /*
      * mayor error during late initialization
      * or maybe the user decided otherwise and pressed CTRL-C
      */
-    return_code = exit_called ? 1 : 0;
+    return_code = _end_olsr_signal ? 0 : 1;
     goto olsrd_cleanup;
   }
 
@@ -304,24 +305,13 @@ olsrd_cleanup:
   return return_code;
 }
 
-void
-olsr_exit(void) {
-  running = false;
-  exit_called = true;
-}
-
-void
-olsr_commit(void) {
-  olsr_cfg_trigger_commit();
-}
-
 /**
  * Handle incoming SIGINT signal
  * @param signo
  */
 static void
 quit_signal_handler(int signo __attribute__ ((unused))) {
-  running = false;
+  olsr_exit();
 }
 
 /**
@@ -345,7 +335,7 @@ mainloop(int argc, char **argv) {
   OLSR_INFO(LOG_MAIN, "Starting "OLSR_SETUP_PROGRAM".");
 
   /* enter main loop */
-  while (running) {
+  while (olsr_is_running()) {
     /*
      * Update the global timestamp. We are using a non-wallclock timer here
      * to avoid any undesired side effects if the system clock changes.
@@ -354,7 +344,8 @@ mainloop(int argc, char **argv) {
       exit_code = 1;
       break;
     }
-    next_interval = olsr_clock_get_absolute(50);
+
+    next_interval = olsr_clock_get_absolute(1000);
 
     /* Process timers */
     olsr_timer_walk();
@@ -369,17 +360,21 @@ mainloop(int argc, char **argv) {
     if (olsr_cfg_is_reload_set()) {
       OLSR_INFO(LOG_MAIN, "Reloading configuration");
       if (olsr_cfg_clear_rawdb()) {
-        running = false;
+        break;
       }
-      else if (parse_commandline(argc, argv, true) == -1) {
-        olsr_cfg_apply();
+      if (parse_commandline(argc, argv, true) == -1) {
+        if (olsr_cfg_apply()) {
+          break;
+        }
       }
     }
 
     /* commit config if triggered */
     if (olsr_cfg_is_commit_set()) {
       OLSR_INFO(LOG_MAIN, "Commiting configuration");
-      olsr_cfg_apply();
+      if (olsr_cfg_apply()) {
+        break;
+      }
     }
   }
 
@@ -485,7 +480,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         }
         break;
       case 'q':
-        running = false;
+        olsr_exit();
         break;
 
       case argv_option_schema:

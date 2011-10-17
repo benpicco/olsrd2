@@ -100,7 +100,7 @@ void olsr_plugins_init(void);
 void olsr_plugins_cleanup(void);
 
 EXPORT void olsr_plugins_hook(struct olsr_plugin *plugin);
-int olsr_plugins_init_static(void);
+int olsr_plugins_init_static(void) __attribute__((warn_unused_result));
 
 EXPORT struct olsr_plugin *olsr_plugins_get(const char *libname);
 

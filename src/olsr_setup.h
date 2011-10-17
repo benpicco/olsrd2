@@ -35,8 +35,8 @@
  */
 #define OLSR_SETUP_LOGGING_NAMES
 
-int olsr_setup_cfginit(void);
-int olsr_setup_init(void);
+int olsr_setup_cfginit(void) __attribute__((warn_unused_result));
+int olsr_setup_init(void) __attribute__((warn_unused_result));
 void olsr_setup_cleanup(void);
 void olsr_setup_cfgcleanup(void);
 
