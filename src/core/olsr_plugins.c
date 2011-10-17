@@ -55,7 +55,6 @@
 #include "builddata/plugin_static.h"
 
 #include "olsr_logging.h"
-#include "olsr_memcookie.h"
 #include "olsr_plugins.h"
 #include "olsr.h"
 
