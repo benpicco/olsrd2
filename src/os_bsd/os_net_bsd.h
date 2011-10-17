@@ -46,14 +46,16 @@
 #error "DO not include this file directly, always use 'os_net.h'"
 #endif
 
+#include "os_helper.h"
+
 /* Linux os_net runs on "all default" */
-#define OS_NET_GETSOCKET    0
-#define OS_NET_CONFIGSOCKET 0
-#define OS_NET_JOINMCAST    0
-#define OS_NET_SETNONBLOCK  0
-#define OS_NET_CLOSE        0
-#define OS_NET_SELECT       0
-#define OS_NET_RECVFROM     0
-#define OS_NET SENDTO       0
+#define OS_NET_GETSOCKET    OS_GENERIC
+#define OS_NET_CONFIGSOCKET OS_GENERIC
+#define OS_NET_JOINMCAST    OS_GENERIC
+#define OS_NET_SETNONBLOCK  OS_GENERIC
+#define OS_NET_CLOSE        OS_GENERIC
+#define OS_NET_SELECT       OS_GENERIC
+#define OS_NET_RECVFROM     OS_GENERIC
+#define OS_NET SENDTO       OS_GENERIC
 
 #endif /* OS_NET_BSD_H_ */
