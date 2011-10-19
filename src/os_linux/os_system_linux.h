@@ -14,7 +14,8 @@
 
 #include "os_helper.h"
 
-/* Linux os_system runs on "all default" */
+/* Linux os_system runs on "all default" except for init/cleanup */
+#define OS_SYSTEM_INIT         OS_SPECIFIC
 #define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
 #define OS_SYSTEM_LOG          OS_GENERIC
 

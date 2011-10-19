@@ -145,13 +145,13 @@ olsr_logcfg_cleanup(void) {
   cfg_delta_remove_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
 
   /* clean up former handlers */
-  if (list_node_added(&stderr_handler.node)) {
+  if (list_is_node_added(&stderr_handler.node)) {
     olsr_log_removehandler(&stderr_handler);
   }
-  if (list_node_added(&syslog_handler.node)) {
+  if (list_is_node_added(&syslog_handler.node)) {
     olsr_log_removehandler(&syslog_handler);
   }
-  if (list_node_added(&file_handler.node)) {
+  if (list_is_node_added(&file_handler.node)) {
     FILE *f;
 
     f = file_handler.custom;
@@ -237,7 +237,7 @@ olsr_logcfg_apply(struct cfg_db *db) {
 
   /* and finally modify the logging handlers */
   /* log.file */
-  if (activate_file && !list_node_added(&file_handler.node)) {
+  if (activate_file && !list_is_node_added(&file_handler.node)) {
     FILE *f;
 
     f = fopen(file_name, "w");
@@ -250,7 +250,7 @@ olsr_logcfg_apply(struct cfg_db *db) {
       activate_file = false;
     }
   }
-  else if (!activate_file && list_node_added(&file_handler.node)) {
+  else if (!activate_file && list_is_node_added(&file_handler.node)) {
     FILE *f = file_handler.custom;
     olsr_log_removehandler(&file_handler);
 
@@ -263,10 +263,10 @@ olsr_logcfg_apply(struct cfg_db *db) {
     activate_stderr |= !(activate_syslog || activate_file);
   }
 
-  if (activate_stderr && !list_node_added(&stderr_handler.node)) {
+  if (activate_stderr && !list_is_node_added(&stderr_handler.node)) {
     olsr_log_addhandler(&stderr_handler);
   }
-  else if (!activate_stderr && list_node_added(&stderr_handler.node)) {
+  else if (!activate_stderr && list_is_node_added(&stderr_handler.node)) {
     olsr_log_removehandler(&stderr_handler);
   }
 
@@ -275,10 +275,10 @@ olsr_logcfg_apply(struct cfg_db *db) {
     activate_syslog |= !(activate_stderr || activate_file);
   }
 
-  if (activate_syslog && !list_node_added(&syslog_handler.node)) {
+  if (activate_syslog && !list_is_node_added(&syslog_handler.node)) {
     olsr_log_addhandler(&syslog_handler);
   }
-  else if (!activate_syslog && list_node_added(&syslog_handler.node)) {
+  else if (!activate_syslog && list_is_node_added(&syslog_handler.node)) {
     olsr_log_removehandler(&syslog_handler);
   }
 

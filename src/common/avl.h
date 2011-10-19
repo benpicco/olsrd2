@@ -180,6 +180,15 @@ avl_is_empty(struct avl_tree *tree) {
 }
 
 /**
+ * @param node pointer to avl node
+ * @return true if node is currently in a tree, false otherwise
+ */
+static INLINE bool
+avl_is_node_added(struct avl_node *node) {
+  return list_is_node_added(&node->list);
+}
+
+/**
  * Legacy function for code that still use the old avl_delete
  * function instead of the new avl_remove one.
  *

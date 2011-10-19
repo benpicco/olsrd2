@@ -128,7 +128,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
  */
 void
 olsr_packet_remove(struct olsr_packet_socket *pktsocket) {
-  if (list_node_added(&pktsocket->node)) {
+  if (list_is_node_added(&pktsocket->node)) {
     olsr_socket_remove(&pktsocket->scheduler_entry);
     os_close(pktsocket->scheduler_entry.fd);
     list_remove(&pktsocket->node);

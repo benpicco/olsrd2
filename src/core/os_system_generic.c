@@ -16,6 +16,24 @@
 OLSR_SUBSYSTEM_STATE(_os_log_state);
 #endif
 
+#if OS_SYSTEM_INIT == OS_GENERIC
+
+/**
+ * Do nothing on system initialization
+ * @return 0
+ */
+int
+os_system_init(void) {
+  return 0;
+}
+
+/**
+ * Do nothing on system cleanup
+ */
+void os_system_cleanup(void) {
+}
+
+#endif
 
 #if OS_SYSTEM_LOG == OS_GENERIC
 /**

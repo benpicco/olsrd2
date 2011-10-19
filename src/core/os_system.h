@@ -82,6 +82,9 @@
 #undef OS_NET_SPECIFIC_INCLUDE
 
 /* prototypes for all os_system functions */
+EXPORT int os_system_init(void);
+EXPORT void os_system_cleanup(void);
+
 EXPORT void os_system_openlog(void);
 EXPORT void os_system_closelog(void);
 EXPORT void os_system_log(enum log_severity, const char *);

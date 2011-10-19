@@ -205,7 +205,7 @@ void
 olsr_stream_remove(struct olsr_stream_socket *stream_socket) {
   struct olsr_stream_session *session;
 
-  if (list_node_added(&stream_socket->node)) {
+  if (list_is_node_added(&stream_socket->node)) {
     stream_socket = list_first_element(&olsr_stream_head, stream_socket, node);
     while (!list_is_empty(&stream_socket->session)) {
       session = list_first_element(&stream_socket->session, session, node);

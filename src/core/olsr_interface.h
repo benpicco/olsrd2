@@ -45,12 +45,66 @@
 #include <net/if.h>
 
 #include "common/common_types.h"
+#include "common/avl.h"
+#include "common/list.h"
 #include "common/netaddr.h"
 
-struct olsr_interface {
-  struct netaddr local_v4, local_v6;
-  char name[IF_NAMESIZE];
-  int index;
+#include "olsr_timer.h"
+
+struct olsr_interface_data {
+  /* Interface addresses with mesh-wide scope (at least) */
+  struct netaddr if_v4, if_v6;
+
+  /* IPv6 Interface address with global scope */
+  struct netaddr linklocal_v6;
+
+  /* interface index */
+  unsigned index;
+
+  /* true if the interface exists and is up */
+  bool up;
 };
+
+struct olsr_interface {
+  /* hook interfaces into tree */
+  struct avl_node node;
+
+  /* name of interface */
+  const char *name;
+
+  /* data of interface */
+  struct olsr_interface_data data;
+
+  /*
+   * usage counter to allow multiple instances to add the same
+   * interface
+   */
+  int usage_counter;
+
+  /* timer for lazy interface change handling */
+  struct olsr_timer_entry *change_timer;
+};
+
+struct olsr_interface_listener {
+  /* hook into list of listeners */
+  struct list_entity node;
+
+  /* restrict listener to one interface or NULL for all interfaces */
+  const char *name;
+
+  /* callback for interface change */
+  void (*process)(struct olsr_interface_data *old);
+};
+
+#define OLSR_FOR_ALL_INTERFACES(interf, ptr) avl_for_each_element_safe(&olsr_interface_tree, interf, node, ptr)
+EXPORT extern struct avl_tree olsr_interface_tree;
+
+int olsr_interface_init(void) __attribute__((warn_unused_result));
+void olsr_interface_cleanup(void);
+
+EXPORT void olsr_interface_add_listener(struct olsr_interface_listener *);
+EXPORT void olsr_interface_remove_listener(struct olsr_interface_listener *);
+
+EXPORT void olsr_interface_trigger_change(const char *name);
 
 #endif /* INTERFACE_H_ */

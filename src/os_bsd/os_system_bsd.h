@@ -15,6 +15,7 @@
 #include "os_helper.h"
 
 /* BSD os_system runs on "all default" */
+#define OS_SYSTEM_INIT         OS_GENERIC
 #define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
 #define OS_SYSTEM_LOG          OS_GENERIC
 

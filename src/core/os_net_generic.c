@@ -46,6 +46,7 @@
 #include "common/netaddr.h"
 #include "common/string.h"
 #include "olsr_logging.h"
+#include "olsr_interface.h"
 #include "os_net.h"
 
 #if OS_NET_CONFIGSOCKET == OS_GENERIC
@@ -169,7 +170,7 @@ os_net_getsocket(union netaddr_socket *bindto,
  * Join a socket into a multicast group
  * @param sock filedescriptor of socket
  * @param multicast multicast ip/port to join
- * @param oif pointer to outgoing interface for multicast
+ * @param oif pointer to outgoing interface data for multicast
  * @param log_src logging source for error messages
  * @return -1 if an error happened, 0 otherwise
  */
@@ -185,19 +186,14 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
   char p;
 
   if (multicast->std.sa_family == AF_INET) {
-    if (!IN_MULTICAST(ntohl(multicast->v4.sin_addr.s_addr))) {
-      /* TODO: silent fail ? */
-      return 0;
-    }
-
     OLSR_DEBUG(log_src,
         "Socket on interface %s joining multicast %s (src %s)\n",
         oif->name,
         netaddr_socket_to_string(&buf2, multicast),
-        netaddr_to_string(&buf1, &oif->local_v4));
+        netaddr_to_string(&buf1, &oif->data.if_v4));
 
     v4_mreq.imr_multiaddr = multicast->v4.sin_addr;
-    netaddr_to_binary(&v4_mreq.imr_interface, &oif->local_v4, 4);
+    netaddr_to_binary(&v4_mreq.imr_interface, &oif->data.if_v4, 4);
 
     if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
         &v4_mreq, sizeof(v4_mreq)) < 0) {
@@ -205,7 +201,7 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
       return -1;
     }
 
-    if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, oif->local_v4.addr, 4) < 0) {
+    if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, oif->data.if_v4.addr, 4) < 0) {
       OLSR_WARN(log_src, "Cannot set multicast interface: %s (%d)\n",
           strerror(errno), errno);
       return -1;
@@ -223,10 +219,10 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
         "Socket on interface %s joining multicast %s (src %s)\n",
         oif->name,
         netaddr_socket_to_string(&buf2, multicast),
-        netaddr_to_string(&buf1, &oif->local_v6));
+        netaddr_to_string(&buf1, &oif->data.linklocal_v6));
 
     v6_mreq.ipv6mr_multiaddr = multicast->v6.sin6_addr;
-    v6_mreq.ipv6mr_interface = oif->index;
+    v6_mreq.ipv6mr_interface = oif->data.index;
 
     /* Send multicast */
     if (setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP,
@@ -236,7 +232,7 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
       return -1;
     }
     if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_IF,
-        &oif->index, sizeof(oif->index)) < 0) {
+        &oif->data.index, sizeof(oif->data.index)) < 0) {
       OLSR_WARN(log_src, "Cannot set multicast interface: %s (%d)\n",
           strerror(errno), errno);
       return -1;

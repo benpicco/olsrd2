@@ -61,6 +61,7 @@
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_http.h"
+#include "olsr_interface.h"
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"
 #include "olsr_memcookie.h"
@@ -233,6 +234,18 @@ main(int argc, char **argv) {
   if (olsr_stream_init()) {
     goto olsrd_cleanup;
   }
+
+  /* activate os-specific code */
+  if (os_system_init()) {
+    goto olsrd_cleanup;
+  }
+
+  /* activate interface listening system */
+  if (olsr_interface_init()) {
+    goto olsrd_cleanup;
+  }
+
+  /* activate telnet and http */
   if (olsr_telnet_init()) {
     goto olsrd_cleanup;
   }
@@ -282,6 +295,8 @@ olsrd_cleanup:
   /* free framework resources */
   olsr_http_cleanup();
   olsr_telnet_cleanup();
+  olsr_interface_cleanup();
+  os_system_cleanup();
   olsr_stream_cleanup();
   olsr_packet_cleanup();
   olsr_socket_cleanup();

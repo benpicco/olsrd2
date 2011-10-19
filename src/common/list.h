@@ -175,7 +175,7 @@ list_is_empty(struct list_entity *head) {
  *   false otherwise
  */
 static INLINE bool
-list_node_added(struct list_entity *node) {
+list_is_node_added(struct list_entity *node) {
   return node->next != NULL && node->prev != NULL;
 }
 
