@@ -5,17 +5,22 @@
  *      Author: rogge
  */
 
+/* must be first because of a problem with linux/rtnetlink.h */
 #include <sys/socket.h>
-#include <sys/utsname.h>
-#include <linux/types.h>
+
+/* and now the rest of the includes */
 #include <linux/rtnetlink.h>
+#include <linux/types.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <sys/utsname.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 
 #include "common/common_types.h"
+#include "common/string.h"
 #include "olsr_interface.h"
 #include "olsr_socket.h"
 #include "olsr.h"
@@ -54,6 +59,9 @@ static struct olsr_socket_entry _rtnetlink_socket = {
   .event_read = true,
 };
 
+/* ioctl socket */
+static int _ioctl_fd = -1;
+
 /* static buffers for reading a netlink message */
 static struct iovec _netlink_iov;
 static struct sockaddr_nl _netlink_nladdr;
@@ -83,9 +91,16 @@ os_system_init(void) {
     return 0;
   }
 
+  _ioctl_fd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (_ioctl_fd == -1) {
+    OLSR_WARN(LOG_OS_SYSTEM, "Cannot open ioctl socket: %s (%d)",
+        strerror(errno), errno);
+    return -1;
+  }
   _netlink_header = calloc(NETLINK_BUFFER_SIZE, 1);
   if (_netlink_header == NULL) {
     OLSR_WARN_OOM(LOG_OS_SYSTEM);
+    close(_ioctl_fd);
     return -1;
   }
   _netlink_iov.iov_base = _netlink_header;
@@ -96,6 +111,7 @@ os_system_init(void) {
     OLSR_WARN(LOG_OS_SYSTEM, "Cannot open rtnetlink socket: %s (%d)",
         strerror(errno), errno);
     free(_netlink_header);
+    close(_ioctl_fd);
     return -1;
   }
 
@@ -111,6 +127,7 @@ os_system_init(void) {
         strerror(errno), errno);
     close (_rtnetlink_fd);
     free(_netlink_header);
+    close(_ioctl_fd);
     return -1;
   }
 
@@ -163,6 +180,7 @@ os_system_cleanup(void) {
   }
 
   close(_rtnetlink_fd);
+  close(_ioctl_fd);
 }
 
 /**
@@ -229,6 +247,57 @@ os_system_cleanup_mesh_if(struct olsr_interface *interf) {
   return;
 }
 
+/**
+ * Set interface up or down
+ * @param dev pointer to name of interface
+ * @param up true if interface should be up, false if down
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+os_system_set_interface_state(const char *dev, bool up) {
+  int oldflags;
+  struct ifreq ifr;
+
+  memset(&ifr, 0, sizeof(ifr));
+  strscpy(ifr.ifr_name, dev, IFNAMSIZ);
+
+  if (ioctl(_ioctl_fd, SIOCGIFFLAGS, &ifr) < 0) {
+    OLSR_WARN(LOG_OS_SYSTEM,
+        "ioctl SIOCGIFFLAGS (get flags) error on device %s: %s (%d)\n",
+        dev, strerror(errno), errno);
+    return -1;
+  }
+
+  oldflags = ifr.ifr_flags;
+  if (up) {
+    ifr.ifr_flags |= IFF_UP;
+  }
+  else {
+    ifr.ifr_flags &= ~IFF_UP;
+  }
+
+  if (oldflags == ifr.ifr_flags) {
+    /* interface is already up/down */
+    return 0;
+  }
+
+  if (ioctl(_ioctl_fd, SIOCSIFFLAGS, &ifr) < 0) {
+    OLSR_WARN(LOG_OS_SYSTEM,
+        "ioctl SIOCSIFFLAGS (set flags %s) error on device %s: %s (%d)\n",
+        up ? "up" : "down", dev, strerror(errno), errno);
+    return -1;
+  }
+  return 0;
+}
+
+/**
+ * Overwrite a numeric entry in the procfile system and keep the old
+ * value.
+ * @param file pointer to filename (including full path)
+ * @param old pointer to memory to store old value
+ * @param value new value
+ * @return -1 if an error happened, 0 otherwise
+ */
 static int
 _writeToProc(const char *file, char *old, char value) {
   int fd;

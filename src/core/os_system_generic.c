@@ -56,6 +56,21 @@ os_system_cleanup_mesh_if(
 }
 #endif
 
+#if OS_SYSTEM_SET_IFSTATE == OS_GENERIC
+/**
+ * Set interface up or down
+ * @param dev pointer to name of interface
+ * @param up true if interface should be up, false if down
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+os_system_set_interface_state(
+    const char *dev __attribute__((unused)),
+    bool up __attribute__((unused))) {
+  return -1;
+}
+#endif
+
 #if OS_SYSTEM_LOG == OS_GENERIC
 /**
  * Initialize syslog system

@@ -62,6 +62,7 @@
  *
  * #define OS_SYSTEM_INIT         OS_SPECIFIC
  * #define OS_SYSTEM_INIT_IF      OS_SPECIFIC
+ * #define OS_SYSTEM_SET_IFSTATE  OS_SPECIFIC
  * #define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
  * #define OS_SYSTEM_LOG          OS_GENERIC
  */
@@ -90,10 +91,12 @@ EXPORT void os_system_cleanup(void);
 
 EXPORT int os_system_init_mesh_if(struct olsr_interface *);
 EXPORT void os_system_cleanup_mesh_if(struct olsr_interface *);
+EXPORT int os_system_set_interface_state(const char *dev, bool up);
 
 EXPORT void os_system_openlog(void);
 EXPORT void os_system_closelog(void);
 EXPORT void os_system_log(enum log_severity, const char *);
+
 static INLINE int os_system_gettimeofday(struct timeval *);
 
 /*
