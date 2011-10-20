@@ -47,6 +47,7 @@
 
 #include "common/common_types.h"
 #include "olsr_logging.h"
+#include "olsr_interface.h"
 
 #define MSEC_PER_SEC 1000
 #define USEC_PER_MSEC 1000
@@ -59,6 +60,8 @@
  *
  * Example from os_system_linux.h:
  *
+ * #define OS_SYSTEM_INIT         OS_SPECIFIC
+ * #define OS_SYSTEM_INIT_IF      OS_SPECIFIC
  * #define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
  * #define OS_SYSTEM_LOG          OS_GENERIC
  */
@@ -84,6 +87,9 @@
 /* prototypes for all os_system functions */
 EXPORT int os_system_init(void);
 EXPORT void os_system_cleanup(void);
+
+EXPORT int os_system_init_mesh_if(struct olsr_interface *);
+EXPORT void os_system_cleanup_mesh_if(struct olsr_interface *);
 
 EXPORT void os_system_openlog(void);
 EXPORT void os_system_closelog(void);

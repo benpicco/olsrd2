@@ -81,6 +81,19 @@ struct olsr_interface {
    */
   int usage_counter;
 
+  /*
+   * usage counter to keep track of the number of users on
+   * this interface who want to send mesh traffic
+   */
+  int mesh_counter;
+
+  /*
+   * used to store internal state of interfaces before
+   * configuring them for manet data forwarding.
+   * Only used by os_specific code.
+   */
+  uint32_t _original_state;
+
   /* timer for lazy interface change handling */
   struct olsr_timer_entry *change_timer;
 };
@@ -92,8 +105,15 @@ struct olsr_interface_listener {
   /* restrict listener to one interface or NULL for all interfaces */
   const char *name;
 
+  /*
+   * set to true if listener is on a mesh traffic interface.
+   * keep this false if in doubt, true will trigger some interface
+   * reconfiguration to allow forwarding of user traffic
+   */
+  bool mesh;
+
   /* callback for interface change */
-  void (*process)(struct olsr_interface_data *old);
+  void (*process)(struct olsr_interface *, struct olsr_interface_data *old);
 };
 
 #define OLSR_FOR_ALL_INTERFACES(interf, ptr) avl_for_each_element_safe(&olsr_interface_tree, interf, node, ptr)
@@ -102,7 +122,8 @@ EXPORT extern struct avl_tree olsr_interface_tree;
 int olsr_interface_init(void) __attribute__((warn_unused_result));
 void olsr_interface_cleanup(void);
 
-EXPORT void olsr_interface_add_listener(struct olsr_interface_listener *);
+EXPORT struct olsr_interface *olsr_interface_add_listener(
+    struct olsr_interface_listener *);
 EXPORT void olsr_interface_remove_listener(struct olsr_interface_listener *);
 
 EXPORT void olsr_interface_trigger_change(const char *name);

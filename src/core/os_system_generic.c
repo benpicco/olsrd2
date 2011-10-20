@@ -13,14 +13,14 @@
 #include "olsr.h"
 
 #if OS_SYSTEM_LOG == OS_GENERIC
+/* we only need this subsystem state here in the generic case */
 OLSR_SUBSYSTEM_STATE(_os_log_state);
 #endif
 
 #if OS_SYSTEM_INIT == OS_GENERIC
-
 /**
- * Do nothing on system initialization
- * @return 0
+ * Initialize os-specific subsystem
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 os_system_init(void) {
@@ -28,11 +28,32 @@ os_system_init(void) {
 }
 
 /**
- * Do nothing on system cleanup
+ * Cleanup os-specific subsystem
  */
 void os_system_cleanup(void) {
 }
+#endif
 
+#if OS_SYSTEM_INIT_IF == OS_GENERIC
+/**
+ * Initialize interface for mesh usage
+ * @param interf pointer to interface object
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+os_system_init_mesh_if(
+    struct olsr_interface *interf __attribute__((unused))) {
+  return 0;
+}
+
+/**
+ * Cleanup interface after mesh usage
+ * @param interf pointer to interface object
+ */
+void
+os_system_cleanup_mesh_if(
+    struct olsr_interface *interf __attribute__((unused))) {
+}
 #endif
 
 #if OS_SYSTEM_LOG == OS_GENERIC
