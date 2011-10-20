@@ -103,12 +103,13 @@ static INLINE int os_system_gettimeofday(struct timeval *);
  * INLINE implementations for generic os_net functions
  */
 
-#if OS_NET_CLOSE == OS_GENERIC
+#if OS_SYSTEM_GETTIMEOFDAY == OS_GENERIC
 /**
- * Close a file descriptor
- * @param fd filedescriptor
+ * Inline wrapper around gettimeofday
+ * @param tv pointer to target timeval object
+ * @return -1 if an error happened, 0 otherwise
  */
-static INLINE int
+static int
 os_system_gettimeofday(struct timeval *tv) {
   return gettimeofday(tv, NULL);
 }
