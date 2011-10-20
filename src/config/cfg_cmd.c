@@ -433,7 +433,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   result = 0;
 
 handle_schema_cleanup:
-  free (ptr);
+  free (copy);
   return result;
 }
 

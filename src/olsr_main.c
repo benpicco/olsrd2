@@ -74,8 +74,8 @@
 #include "olsr_setup.h"
 #include "olsr.h"
 
-static bool _end_olsr_signal;
-static char *schema_name;
+static bool _end_olsr_signal, _display_schema;
+static char *_schema_name;
 
 enum argv_short_options {
   argv_option_schema = 256,
@@ -151,7 +151,8 @@ main(int argc, char **argv) {
   /* early initialization */
   return_code = 1;
   fork_pipe = -1;
-  schema_name = NULL;
+  _schema_name = NULL;
+  _display_schema = false;
 
   /* setup signal handler */
   _end_olsr_signal = false;
@@ -236,12 +237,12 @@ main(int argc, char **argv) {
   }
 
   /* activate os-specific code */
-  if (os_system_init()) {
+  if (0 && os_system_init()) {
     goto olsrd_cleanup;
   }
 
   /* activate interface listening system */
-  if (olsr_interface_init()) {
+  if (0 && olsr_interface_init()) {
     goto olsrd_cleanup;
   }
 
@@ -257,7 +258,7 @@ main(int argc, char **argv) {
   }
 
   /* show schema if necessary */
-  if (schema_name) {
+  if (_display_schema) {
     return_code = display_schema();
     goto olsrd_cleanup;
   }
@@ -499,7 +500,8 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         break;
 
       case argv_option_schema:
-        schema_name = optarg;
+        _schema_name = optarg;
+        _display_schema = true;
         break;
 
       case 'l':
@@ -586,7 +588,7 @@ display_schema(void) {
   abuf_init(&log, 1024);
   cfg_cmd_clear_state(olsr_cfg_get_instance());
 
-  if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), schema_name, &log)) {
+  if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), _schema_name, &log)) {
     return_code = -1;
   }
 
