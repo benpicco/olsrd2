@@ -74,21 +74,21 @@ OLSR_SUBSYSTEM_STATE(_cfg_state);
 
 /* define global configuration template */
 static struct cfg_schema_section global_section = {
-  .t_type = CFG_SECTION_GLOBAL,
-  .t_validate = _cb_validate_global,
+  .type = CFG_SECTION_GLOBAL,
+  .cb_validate = _cb_validate_global,
 };
 
 static struct cfg_schema_entry global_entries[] = {
-  CFG_MAP_BOOL(olsr_config_global, fork, "no",
+  CFG_MAP_BOOL(olsr_config_global, fork, "fork", "no",
       "Set to true to fork daemon into background."),
-  CFG_MAP_BOOL(olsr_config_global, failfast, "no",
+  CFG_MAP_BOOL(olsr_config_global, failfast, "failfast", "no",
       "Set to true to stop daemon statup if at least one plugin doesn't load."),
-  CFG_MAP_BOOL(olsr_config_global, ipv4, "yes",
+  CFG_MAP_BOOL(olsr_config_global, ipv4, "ipv4", "yes",
       "Set to true to enable ipv4 support in program."),
-  CFG_MAP_BOOL(olsr_config_global, ipv6, "yes",
+  CFG_MAP_BOOL(olsr_config_global, ipv6, "ipv6", "yes",
       "Set to true to enable ipv6 support in program."),
 
-  CFG_MAP_STRINGLIST(olsr_config_global, plugin, "",
+  CFG_MAP_STRINGLIST(olsr_config_global, plugin, "plugin", NULL,
       "Set list of plugins to be loaded by daemon. Some might need configuration options."),
 };
 
@@ -241,7 +241,7 @@ olsr_cfg_apply(void) {
 
   /*** phase 2: check configuration and apply it ***/
   /* re-validate configuration data */
-  if (cfg_schema_validate(_olsr_raw_db, config_global.failfast, false, true, &log)) {
+  if (cfg_schema_validate(_olsr_raw_db, false, true, &log)) {
     OLSR_WARN(LOG_CONFIG, "Configuration validation failed");
     OLSR_WARN_NH(LOG_CONFIG, "%s", log.buf);
     goto apply_failed;
@@ -270,7 +270,7 @@ olsr_cfg_apply(void) {
   }
 
   /* remove everything not valid */
-  cfg_schema_validate(new_db, false, true, false, NULL);
+  cfg_schema_validate(new_db, true, false, NULL);
 
   if (olsr_cfg_update_globalcfg(false)) {
 

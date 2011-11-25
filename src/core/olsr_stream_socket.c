@@ -138,7 +138,8 @@ olsr_stream_flush(struct olsr_stream_session *con) {
 /**
  * Add a new stream socket to the scheduler
  * @param stream_socket pointer to uninitialized stream socket struct
- * @param local pointer to local ip/port of socket
+ * @param local pointer to local ip/port of socket, port must be 0 if
+ *   this shall be an outgoing socket
  * @return -1 if an error happened, 0 otherwise
  */
 int
@@ -151,25 +152,28 @@ olsr_stream_add(struct olsr_stream_socket *stream_socket,
 
   memset(stream_socket, 0, sizeof(*stream_socket));
 
-  /* Init socket */
-  s = os_net_getsocket(local, OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
-  if (s < 0) {
-    goto add_stream_error;
+  /* server socket not necessary for outgoing connections */
+  if (netaddr_socket_get_port(local) != 0) {
+    /* Init socket */
+    s = os_net_getsocket(local, OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
+    if (s < 0) {
+      goto add_stream_error;
+    }
+
+    /* show that we are willing to listen */
+    if (listen(s, 1) == -1) {
+      OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket listen failed for %s: %s (%d)\n",
+          netaddr_socket_to_string(&buf, local), strerror(errno), errno);
+      goto add_stream_error;
+    }
+
+    stream_socket->scheduler_entry.fd = s;
+    stream_socket->scheduler_entry.process = _cb_parse_request;
+    stream_socket->scheduler_entry.data = stream_socket;
+    stream_socket->scheduler_entry.event_read = true;
+
+    olsr_socket_add(&stream_socket->scheduler_entry);
   }
-
-  /* show that we are willing to listen */
-  if (listen(s, 1) == -1) {
-    OLSR_WARN(LOG_SOCKET_STREAM, "tcp socket listen failed for %s: %s (%d)\n",
-        netaddr_socket_to_string(&buf, local), strerror(errno), errno);
-    goto add_stream_error;
-  }
-
-  stream_socket->scheduler_entry.fd = s;
-  stream_socket->scheduler_entry.process = _cb_parse_request;
-  stream_socket->scheduler_entry.data = stream_socket;
-  stream_socket->scheduler_entry.event_read = true;
-
-  olsr_socket_add(&stream_socket->scheduler_entry);
   memcpy(&stream_socket->local_socket, local, sizeof(stream_socket->local_socket));
 
   if (stream_socket->config.memcookie == NULL) {
@@ -214,8 +218,11 @@ olsr_stream_remove(struct olsr_stream_socket *stream_socket) {
 
     list_remove(&stream_socket->node);
 
-    os_close(stream_socket->scheduler_entry.fd);
-    olsr_socket_remove(&stream_socket->scheduler_entry);
+    if (stream_socket->scheduler_entry.fd) {
+      /* only for server sockets */
+      os_close(stream_socket->scheduler_entry.fd);
+      olsr_socket_remove(&stream_socket->scheduler_entry);
+    }
   }
 }
 
@@ -236,7 +243,8 @@ olsr_stream_connect_to(struct olsr_stream_socket *stream_socket,
   struct netaddr_str buf;
 #endif
 
-  s = os_net_getsocket(remote, OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
+  s = os_net_getsocket(&stream_socket->local_socket,
+      OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
   if (s < 0) {
     return NULL;
   }

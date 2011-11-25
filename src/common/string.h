@@ -57,8 +57,7 @@
  * Represents a string or an array of strings
  * The strings (including there Zero-Byte) are just appended
  * into a large binary buffer. The struct contains a pointer
- * to the first and to the last string and the size of the
- * binary buffer
+ * to the first string and the size of the binary buffer
  *
  * typically append operations are done by realloc() calls
  * while remove operations are done with memmove
@@ -67,11 +66,14 @@ struct strarray {
   /* pointer to the first string */
   char *value;
 
-  /* pointer to the last string */
-  char *last_value;
-
   /* total length of all strings including zero-bytes */
   size_t length;
+};
+
+struct const_strarray {
+  const char *value;
+
+  const size_t length;
 };
 
 EXPORT char *strscpy (char *dest, const char *src, size_t size);
@@ -79,12 +81,29 @@ EXPORT char *strscat (char *dest, const char *src, size_t size);
 EXPORT char *str_trim (char *ptr);
 EXPORT const char *str_hasnextword (const char *buffer, const char *word);
 
-EXPORT int strarray_copy(struct strarray *dst, struct strarray *src);
+EXPORT int strarray_copy(struct strarray *dst, const struct strarray *src);
 EXPORT int strarray_append(struct strarray *, const char *);
+EXPORT int strarray_prepend(struct strarray *array, const char *string);
 EXPORT void strarray_remove_ext(struct strarray *, char *, bool);
 
-EXPORT char *strarray_get(struct strarray *array, size_t idx);
-EXPORT size_t strarray_get_count(struct strarray *array);
+EXPORT char *strarray_get(const struct strarray *array, size_t idx);
+EXPORT size_t strarray_get_count(const struct strarray *array);
+
+static INLINE int
+strarray_copy_c(struct strarray *dst, const struct const_strarray *src) {
+  return strarray_copy(dst, (const struct strarray *)src);
+}
+
+static INLINE const char *
+strarray_get_c(const struct const_strarray *array, size_t idx) {
+  return strarray_get((const struct strarray *)array, idx);
+}
+
+static INLINE size_t
+strarray_get_count_c(const struct const_strarray *array) {
+  return strarray_get_count((const struct strarray *)array);
+}
+
 
 /**
  * Initialize string array object
@@ -110,8 +129,13 @@ strarray_free(struct strarray *array) {
  * @return true if the array is empty, false otherwise
  */
 static INLINE bool
-strarray_is_empty(struct strarray *array) {
-  return array->length == 0;
+strarray_is_empty(const struct strarray *array) {
+  return array->value == NULL;
+}
+
+static INLINE bool
+strarray_is_empty_c(const struct const_strarray *array) {
+  return array->value == NULL;
 }
 
 /**
@@ -129,29 +153,28 @@ strarray_remove(struct strarray *array, char *element) {
  * @return pointer to first string of string array
  */
 static INLINE char *
-strarray_get_first(struct strarray *array) {
+strarray_get_first(const struct strarray *array) {
   return array->value;
 }
 
-/**
- * @param array pointer to strarray object
- * @return pointer to last string of string array
- */
-static INLINE char *
-strarray_get_last(struct strarray *array) {
-  return array->last_value;
+static INLINE const char *
+strarray_get_first_c(const struct const_strarray *array) {
+  return array->value;
 }
 
 /**
  * Do not call this function for the last string in
  * a string array.
- * @param array pointer to strarray object
  * @param current pointer to a string in array
  * @return pointer to next string in string array
  */
 static INLINE char *
-strarray_get_next(struct strarray *array __attribute__((unused)),
-    char *current) {
+strarray_get_next(char *current) {
+  return current + strlen(current) + 1;
+}
+
+static INLINE const char *
+strarray_get_next_c(const char *current) {
   return current + strlen(current) + 1;
 }
 
@@ -162,11 +185,26 @@ strarray_get_next(struct strarray *array __attribute__((unused)),
  *   NULL if there is no further string
  */
 static INLINE char *
-strarray_get_next_safe(struct strarray *array, char *current) {
-  if (current == array->last_value) {
+strarray_get_next_safe(const struct strarray *array, char *current) {
+  char *next;
+
+  next = current + strlen(current) + 1;
+  if (next > array->value + array->length) {
     return NULL;
   }
-  return current + strlen(current) + 1;
+  return next;
+}
+
+static INLINE const char *
+strarray_get_next_safe_c(const struct const_strarray *array,
+    const char *current) {
+  const char *next;
+
+  next = current + strlen(current) + 1;
+  if (next > array->value + array->length) {
+    return NULL;
+  }
+  return next;
 }
 
 /**
@@ -176,6 +214,6 @@ strarray_get_next_safe(struct strarray *array, char *current) {
  * @param array pointer to strarray object
  * @param charptr pointer to loop variable
  */
-#define FOR_ALL_STRINGS(array, charptr) for (charptr = strarray_get_first(array); charptr != NULL && charptr <= strarray_get_last(array); charptr = strarray_get_next(array, charptr))
+#define FOR_ALL_STRINGS(array, charptr) for (charptr = (array)->value; charptr != NULL && charptr < (array)->value + (array)->length; charptr += strlen(charptr) + 1)
 
 #endif

@@ -265,7 +265,7 @@ cfg_db_remove_namedsection(struct cfg_db *db, const char *section_type,
 struct cfg_entry *
 cfg_db_set_entry(struct cfg_db *db, const char *section_type,
     const char *section_name, const char *entry_name, const char *value,
-    bool append) {
+    bool prepend) {
   struct cfg_entry *entry;
   struct cfg_named_section *named;
   bool new_section = false, new_entry = NULL;
@@ -286,11 +286,11 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
     new_entry = true;
   }
 
-  if (!append) {
+  if (!prepend) {
     strarray_free(&entry->val);
   }
-  /* append new entry */
-  if (strarray_append(&entry->val, value)) {
+  /* prepend new entry */
+  if (strarray_prepend(&entry->val, value)) {
     goto set_entry_error;
   }
 
@@ -360,7 +360,7 @@ cfg_db_remove_entry(struct cfg_db *db, const char *section_type,
  * @param entry_name name of the entry
  * @return string value, NULL if not found or list of values
  */
-const char *
+const struct const_strarray *
 cfg_db_get_entry_value(struct cfg_db *db, const char *section_type,
     const char *section_name, const char *entry_name) {
   struct cfg_entry *entry;
@@ -369,7 +369,7 @@ cfg_db_get_entry_value(struct cfg_db *db, const char *section_type,
 
   entry = cfg_db_find_entry(db, section_type, section_name, entry_name);
   if (entry != NULL) {
-    return entry->val.last_value;
+    return (const struct const_strarray *)&entry->val;
   }
 
   if (db->schema == NULL) {
@@ -384,7 +384,7 @@ cfg_db_get_entry_value(struct cfg_db *db, const char *section_type,
 
   s_entry = cfg_schema_find_entry(s_section, entry_name);
   if (s_entry) {
-    return s_entry->t_default;
+    return &s_entry->def;
   }
   return NULL;
 }
@@ -428,25 +428,6 @@ cfg_db_remove_element(struct cfg_db *db, const char *section_type,
 
   /* element not in list */
   return -1;
-}
-
-
-/**
- * Counts the number of list items of a configuration entry
- * @param entry pointer to cfg entry
- * @return number of items in the entries value
- */
-size_t
-cfg_db_entry_get_listsize(struct cfg_entry *entry) {
-  char *ptr;
-  size_t cnt = 1;
-
-  for (ptr = entry->val.value; ptr < entry->val.last_value; ptr++) {
-    if (*ptr == 0) {
-      cnt++;
-    }
-  }
-  return cnt;
 }
 
 /**

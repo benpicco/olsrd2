@@ -56,6 +56,10 @@ static int _subnetmask_to_prefixlen(const char *src);
 static int _read_hexdigit(const char c);
 static bool _binary_is_in_subnet(const struct netaddr *subnet,
     const void *bin);
+
+const struct netaddr NETADDR_IPV4_ANY = { {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, AF_INET, 0 };
+const struct netaddr NETADDR_IPV6_ANY = { {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}, AF_INET6, 0 };
+
 /**
  * Read the binary representation of an address into a netaddr object
  * @param dst pointer to netaddr object
@@ -65,7 +69,8 @@ static bool _binary_is_in_subnet(const struct netaddr *subnet,
  * @return 0 if successful read binary data, -1 otherwise
  */
 int
-netaddr_from_binary(struct netaddr *dst, void *binary, size_t len, uint8_t addr_type) {
+netaddr_from_binary(struct netaddr *dst, const void *binary,
+    size_t len, uint8_t addr_type) {
   memset(dst->addr, 0, sizeof(dst->addr));
   if (addr_type == AF_INET && len >= 4) {
     /* ipv4 */
@@ -106,7 +111,7 @@ netaddr_from_binary(struct netaddr *dst, void *binary, size_t len, uint8_t addr_
  * @return 0 if successful read binary data, -1 otherwise
  */
 int
-netaddr_to_binary(void *dst, struct netaddr *src, size_t len) {
+netaddr_to_binary(void *dst, const struct netaddr *src, size_t len) {
   if (src->type == AF_INET && len >= 4) {
     /* ipv4 */
     memcpy(dst, src->addr, 4);
@@ -138,7 +143,7 @@ netaddr_to_binary(void *dst, struct netaddr *src, size_t len) {
  * @return 0 if successful read binary data, -1 otherwise
  */
 int
-netaddr_from_socket(struct netaddr *dst, union netaddr_socket *src) {
+netaddr_from_socket(struct netaddr *dst, const union netaddr_socket *src) {
   memset(dst->addr, 0, sizeof(dst->addr));
   if (src->std.sa_family == AF_INET) {
     /* ipv4 */
@@ -166,7 +171,7 @@ netaddr_from_socket(struct netaddr *dst, union netaddr_socket *src) {
  * @return 0 if successful read binary data, -1 otherwise
  */
 int
-netaddr_to_socket(union netaddr_socket *dst, struct netaddr *src) {
+netaddr_to_socket(union netaddr_socket *dst, const struct netaddr *src) {
   /* copy address type */
   dst->std.sa_family = src->type;
 
@@ -190,7 +195,7 @@ netaddr_to_socket(union netaddr_socket *dst, struct netaddr *src) {
 
 
 int
-netaddr_to_autobuf(struct autobuf *abuf, struct netaddr *src) {
+netaddr_to_autobuf(struct autobuf *abuf, const struct netaddr *src) {
   switch (src->type) {
     case AF_INET:
       /* ipv4 */
@@ -215,6 +220,61 @@ netaddr_to_autobuf(struct autobuf *abuf, struct netaddr *src) {
 }
 
 /**
+ * Creates a host address from a netmask and a host number part. This function
+ * will copy the netmask and then overwrite the bits after the prefix length
+ * with the one from the host number.
+ * @param host target buffer
+ * @param netmask prefix of result
+ * @param number postfix of result
+ * @param num_length length of the postfix in bytes
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+netaddr_create_host_bin(struct netaddr *host, const struct netaddr *netmask,
+    const void *number, size_t num_length) {
+  size_t host_index, number_index;
+  uint8_t host_part_length;
+  const uint8_t *number_byte;
+
+  number_byte = number;
+
+  /* copy netmask with prefixlength max */
+  memcpy(host, netmask, sizeof(*netmask));
+  host->prefix_len = netaddr_get_maxprefix(host);
+
+  /* unknown address type */
+  if (host->prefix_len == 0) {
+    return -1;
+  }
+
+  /* netmask has no host part */
+  if (host->prefix_len == netmask->prefix_len || num_length == 0) {
+    return 0;
+  }
+
+  /* calculate starting byte in host and number */
+  host_part_length = (host->prefix_len - netmask->prefix_len + 7)/8;
+  if (host_part_length > num_length) {
+    host_index = host->prefix_len/8 - num_length;
+    number_index = 0;
+  }
+  else {
+    host_index = netmask->prefix_len / 8;
+    number_index = num_length - host_part_length;
+
+    /* copy bit masked part */
+    if ((netmask->prefix_len & 7) != 0) {
+      host->addr[host_index++] |=
+          (number_byte[number_index++]) & (255 >> (netmask->prefix_len & 7));
+    }
+  }
+
+  /* copy bytes */
+  memcpy(&host->addr[host_index], &number_byte[number_index], num_length - number_index);
+  return 0;
+}
+
+/**
  * Initialize a netaddr_socket with a netaddr and a port number
  * @param combined pointer to netaddr_socket to be initialized
  * @param addr pointer to netaddr source
@@ -222,7 +282,7 @@ netaddr_to_autobuf(struct autobuf *abuf, struct netaddr *src) {
  * @return 0 if successful read binary data, -1 otherwise
  */
 int
-netaddr_socket_init(union netaddr_socket *combined, struct netaddr *addr, uint16_t port) {
+netaddr_socket_init(union netaddr_socket *combined, const struct netaddr *addr, uint16_t port) {
   /* initialize memory block */
   memset(combined, 0, sizeof(*combined));
 
@@ -251,7 +311,7 @@ netaddr_socket_init(union netaddr_socket *combined, struct netaddr *addr, uint16
  * @return port of socket
  */
 uint16_t
-netaddr_socket_get_port(union netaddr_socket *sock) {
+netaddr_socket_get_port(const union netaddr_socket *sock) {
   switch (sock->std.sa_family) {
     case AF_INET:
       return ntohs(sock->v4.sin_port);
@@ -438,7 +498,7 @@ netaddr_from_string(struct netaddr *dst, const char *src) {
  * @return pointer to target buffer, NULL if an error happened
  */
 const char *
-netaddr_socket_to_string(struct netaddr_str *dst, union netaddr_socket *src) {
+netaddr_socket_to_string(struct netaddr_str *dst, const union netaddr_socket *src) {
   struct netaddr_str buf;
 
   if (src->std.sa_family == AF_INET) {

@@ -204,7 +204,7 @@ avl_insert(struct avl_tree *tree, struct avl_node *new)
   new->right = NULL;
 
   new->balance = 0;
-  new->leader = true;
+  new->follower = false;
 
   if (tree->root == NULL) {
     list_add_head(&tree->list_head, &new->list);
@@ -219,7 +219,7 @@ avl_insert(struct avl_tree *tree, struct avl_node *new)
 
   while (!list_is_last(&tree->list_head, &last->list)) {
     next = list_next_element(last, list);
-    if (next->leader) {
+    if (!next->follower) {
       break;
     }
     last = next;
@@ -231,7 +231,7 @@ avl_insert(struct avl_tree *tree, struct avl_node *new)
     if (!tree->allow_dups)
       return -1;
 
-    new->leader = 0;
+    new->follower = true;
 
     _avl_insert_after(tree, last, new);
     return 0;
@@ -286,11 +286,11 @@ avl_remove(struct avl_tree *tree, struct avl_node *node)
   struct avl_node *parent;
   struct avl_node *left;
   struct avl_node *right;
-  if (node->leader) {
+  if (!node->follower) {
     if (tree->allow_dups
         && !list_is_last(&tree->list_head, &node->list)
-        && !(next = list_next_element(node, list))->leader) {
-      next->leader = true;
+        && (next = list_next_element(node, list))->follower) {
+      next->follower = false;
       next->balance = node->balance;
 
       parent = node->parent;

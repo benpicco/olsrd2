@@ -135,12 +135,11 @@ EXPORT struct cfg_entry *cfg_db_find_entry(struct cfg_db *db,
     const char *section_type, const char *section_name, const char *entry_name);
 EXPORT int cfg_db_remove_entry(struct cfg_db *, const char *section_type,
     const char *section_name, const char *entry_name);
-EXPORT const char *cfg_db_get_entry_value(struct cfg_db *db,
+EXPORT const struct const_strarray *cfg_db_get_entry_value(struct cfg_db *db,
     const char *section_type, const char *section_name, const char *entry_name);
 
 EXPORT int cfg_db_remove_element(struct cfg_db *, const char *section_type,
     const char *section_name, const char *entry_name, const char *value);
-EXPORT size_t cfg_db_entry_get_listsize(struct cfg_entry *entry);
 
 /**
  * Link a configuration schema to a database
@@ -248,8 +247,6 @@ cfg_db_copy_entry(struct cfg_db *dst, struct cfg_db *src,
 static INLINE struct cfg_section_type *
 cfg_db_get_sectiontype(struct cfg_db *db, const char *section_type) {
   struct cfg_section_type *section;
-
-  /* get section */
   return avl_find_element(&db->sectiontypes, section_type, section, node);
 }
 
@@ -309,22 +306,13 @@ cfg_db_is_named_section(struct cfg_named_section *named) {
 
 /**
  * @param pointer to section type
- * @return pointer to named section element of unnamed section type,
- *   NULL if not an unnamed section or named entry is missing.
+ * @return pointer pointer to 'unnamed' named_section element,
+ *   NULL no unnamed section.
  */
 static INLINE struct cfg_named_section *
 cfg_db_get_unnamed_section(struct cfg_section_type *stype) {
   struct cfg_named_section *named;
-
-  if (avl_is_empty(&stype->names)) {
-    return NULL;
-  }
-
-  named = avl_first_element(&stype->names, named, node);
-  if (named != NULL && !cfg_db_is_named_section(named)) {
-    return named;
-  }
-  return NULL;
+  return avl_find_element(&stype->names, NULL, named, node);
 }
 
 /**
@@ -395,7 +383,18 @@ cfg_db_add_entry(struct cfg_db *db, const char *section_type,
  */
 static INLINE bool
 cfg_db_is_multipart_entry(struct cfg_entry *entry) {
-  return entry->val.value != entry->val.last_value;
+  return strarray_get(&entry->val, 1) != NULL;
+}
+
+
+/**
+ * Counts the number of list items of a configuration entry
+ * @param entry pointer to cfg entry
+ * @return number of items in the entries value
+ */
+static INLINE size_t
+cfg_db_entry_get_listsize(struct cfg_entry *entry) {
+  return strarray_get_count(&entry->val);
 }
 
 #endif /* CFG_DB_H_ */

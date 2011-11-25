@@ -88,9 +88,10 @@ struct avl_node {
   signed char balance;
 
   /**
-   * true if first of a series of nodes with same key
+   * true if this is an additional node with the same key
+   * as the one before
    */
-  bool leader;
+  bool follower;
 };
 
 /**
@@ -480,6 +481,25 @@ avl_delete(struct avl_tree *tree, struct avl_node *node) {
  */
 #define avl_for_first_to_element_reverse(tree, last, element, node_member) \
   avl_for_element_range_reverse(avl_first_element(tree, element, node_member), last, element, node_member)
+
+/**
+ * Loop over a block of elements of a tree with a certain key, used similar
+ * to a for() command.
+ * This loop should not be used if elements are removed from the tree during
+ * the loop.
+ *
+ * @param tree pointer to avl-tree
+ * @param element pointer to a node of the tree, this element will
+ *    contain the current node of the list during the loop
+ * @param node_member name of the avl_node element inside the
+ *    larger struct
+ * @param start helper pointer to remember start of iteration
+ * @param key pointer to key
+ */
+#define avl_for_each_elements_with_key(tree, element, node_member, start, key) \
+  for (start = element = avl_find_element(tree, key, element, node_member); \
+       element != NULL && &element->node_member.list != &(tree)->list_head && (element == start || element->node_member.follower); \
+       element = avl_next_element(element, node_member))
 
 /**
  * Loop over a block of nodes of a tree, used similar to a for() command.

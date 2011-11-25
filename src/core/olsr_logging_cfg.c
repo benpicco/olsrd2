@@ -72,20 +72,20 @@ static void _apply_log_setting(struct cfg_named_section *named,
 
 /* define logging configuration template */
 static struct cfg_schema_section logging_section = {
-  .t_type = LOG_SECTION
+  .type = LOG_SECTION
 };
 
 static struct cfg_schema_entry logging_entries[] = {
   CFG_VALIDATE_INT_MINMAX(LOG_LEVEL_ENTRY, "0", "Set debug level template", -2, 3),
   CFG_VALIDATE_CHOICE(LOG_DEBUG_ENTRY, "",
       "Set logging sources that display debug, info and warnings",
-      LOG_SOURCE_NAMES, .t_list = true),
+      LOG_SOURCE_NAMES, .list = true),
   CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "",
       "Set logging sources that display info and warnings",
-      LOG_SOURCE_NAMES, .t_list = true),
+      LOG_SOURCE_NAMES, .list = true),
   CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "",
       "Set logging sources that display warnings",
-      LOG_SOURCE_NAMES, .t_list = true),
+      LOG_SOURCE_NAMES, .list = true),
   CFG_VALIDATE_BOOL(LOG_STDERR_ENTRY, "false", "Set to true to activate logging to stderr"),
   CFG_VALIDATE_BOOL(LOG_SYSLOG_ENTRY, "false", "Set to true to activate logging to syslog"),
   CFG_VALIDATE_STRING(LOG_FILE_ENTRY, "", "Set a filename to log to a file"),
@@ -189,7 +189,7 @@ olsr_logcfg_apply(struct cfg_db *db) {
   memset(&logging_cfg, 0, sizeof(logging_cfg));
 
   /* first apply debug level */
-  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_LEVEL_ENTRY);
+  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_LEVEL_ENTRY)->value;
   switch (atoi(ptr)) {
     case -1:
       /* no logging */
@@ -226,13 +226,13 @@ olsr_logcfg_apply(struct cfg_db *db) {
   }
 
   /* load settings which loggershould be activated */
-  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_SYSLOG_ENTRY);
+  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_SYSLOG_ENTRY)->value;
   activate_syslog = cfg_get_bool(ptr);
 
-  file_name = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_FILE_ENTRY);
+  file_name = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_FILE_ENTRY)->value;
   activate_file = file_name != NULL && *file_name != 0;
 
-  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_STDERR_ENTRY);
+  ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_STDERR_ENTRY)->value;
   activate_stderr = cfg_get_bool(ptr);
 
   /* and finally modify the logging handlers */

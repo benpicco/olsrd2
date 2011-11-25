@@ -121,11 +121,11 @@ OLSR_PLUGIN7 {
 
 /* configuration */
 static struct cfg_schema_section _remotecontrol_section = {
-  .t_type = "remotecontrol"
+  .type = "remotecontrol"
 };
 
 static struct cfg_schema_entry _remotecontrol_entries[] = {
-  CFG_MAP_ACL(_remotecontrol_cfg, acl, "default_accept", "acl for remote control commands"),
+  CFG_MAP_ACL(_remotecontrol_cfg, acl, "acl", "default_accept", "acl for remote control commands"),
 };
 
 static struct cfg_delta_handler _remotecontrol_handler = {
@@ -516,7 +516,7 @@ _cb_handle_config(struct olsr_telnet_data *data) {
 
   if ((next = str_hasnextword(data->parameter, "commit"))) {
     if (!cfg_schema_validate(olsr_cfg_get_rawdb(),
-        false, false, true, data->out)) {
+        false, true, data->out)) {
       olsr_cfg_trigger_commit();
     }
   }

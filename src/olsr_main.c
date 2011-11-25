@@ -554,7 +554,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
 
   if (return_code == -1) {
     /* validate configuration */
-    if (cfg_schema_validate(db, false, false, true, &log)) {
+    if (cfg_schema_validate(db, false, true, &log)) {
       return_code = 1;
     }
   }

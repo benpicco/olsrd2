@@ -96,19 +96,24 @@ struct netaddr_str {
   char buf[INET6_ADDRSTRLEN+16];
 };
 
-EXPORT int netaddr_from_binary(struct netaddr *dst, void *binary, size_t len, uint8_t addr_type);
-EXPORT int netaddr_to_binary(void *dst, struct netaddr *src, size_t len);
-EXPORT int netaddr_from_socket(struct netaddr *dst, union netaddr_socket *src);
-EXPORT int netaddr_to_socket(union netaddr_socket *dst, struct netaddr *src);
-EXPORT int netaddr_to_autobuf(struct autobuf *, struct netaddr *src);
+EXPORT extern const struct netaddr NETADDR_IPV4_ANY;
+EXPORT extern const struct netaddr NETADDR_IPV6_ANY;
 
-EXPORT int netaddr_socket_init(union netaddr_socket *combined, struct netaddr *addr, uint16_t port);
-EXPORT uint16_t netaddr_socket_get_port(union netaddr_socket *sock);
+EXPORT int netaddr_from_binary(struct netaddr *dst, const void *binary, size_t len, uint8_t addr_type);
+EXPORT int netaddr_to_binary(void *dst, const struct netaddr *src, size_t len);
+EXPORT int netaddr_from_socket(struct netaddr *dst, const union netaddr_socket *src);
+EXPORT int netaddr_to_socket(union netaddr_socket *dst, const struct netaddr *src);
+EXPORT int netaddr_to_autobuf(struct autobuf *, const struct netaddr *src);
+EXPORT int netaddr_create_host_bin(struct netaddr *host, const struct netaddr *netmask,
+    const void *number, size_t num_length);
+EXPORT int netaddr_socket_init(union netaddr_socket *combined,
+    const struct netaddr *addr, uint16_t port);
+EXPORT uint16_t netaddr_socket_get_port(const union netaddr_socket *sock);
 
 EXPORT const char *netaddr_to_prefixstring(
     struct netaddr_str *dst, const struct netaddr *src, bool forceprefix);
 EXPORT int netaddr_from_string(struct netaddr *, const char *) __attribute__((warn_unused_result));
-EXPORT const char *netaddr_socket_to_string(struct netaddr_str *, union netaddr_socket *);
+EXPORT const char *netaddr_socket_to_string(struct netaddr_str *, const union netaddr_socket *);
 
 EXPORT int netaddr_cmp_to_socket(const struct netaddr *, const union netaddr_socket *);
 EXPORT bool netaddr_isequal_binary(const struct netaddr *addr,
@@ -137,6 +142,21 @@ netaddr_to_string(struct netaddr_str *dst, const struct netaddr *src) {
   return netaddr_to_prefixstring(dst, src, false);
 }
 
+/**
+ * Creates a host address from a netmask and a host number part. This function
+ * will copy the netmask and then overwrite the bits after the prefix length
+ * with the one from the host number.
+ * @param host target buffer
+ * @param netmask prefix of result
+ * @param host_number postfix of result
+ * @return -1 if an error happened, 0 otherwise
+ */
+static INLINE int
+netaddr_create_host(struct netaddr *host, const struct netaddr *netmask,
+    const struct netaddr *host_number) {
+  return netaddr_create_host_bin(host, netmask, host_number->addr,
+      netaddr_get_maxprefix(host_number));
+}
 
 /**
  * Compares two addresses.

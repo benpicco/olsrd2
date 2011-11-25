@@ -47,9 +47,9 @@ olsr_acl_remove(struct olsr_netaddr_acl *acl) {
  * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_acl_from_strarray(struct olsr_netaddr_acl *acl, struct strarray *array) {
+olsr_acl_from_strarray(struct olsr_netaddr_acl *acl, const struct const_strarray *value) {
   size_t accept_count, reject_count;
-  char *ptr;
+  const char *ptr;
   accept_count = 0;
   reject_count = 0;
 
@@ -57,7 +57,7 @@ olsr_acl_from_strarray(struct olsr_netaddr_acl *acl, struct strarray *array) {
   memset(acl, 0, sizeof(acl));
 
   /* count number of address entries */
-  FOR_ALL_STRINGS(array, ptr) {
+  FOR_ALL_STRINGS(value, ptr) {
     if (_handle_control_cmd(acl, ptr) == 0) {
       continue;
     }
@@ -85,8 +85,8 @@ olsr_acl_from_strarray(struct olsr_netaddr_acl *acl, struct strarray *array) {
   }
 
   /* read netaddr strings into buffers */
-  FOR_ALL_STRINGS(array, ptr) {
-    char *addr;
+  FOR_ALL_STRINGS(value, ptr) {
+    const char *addr;
     if (_handle_control_cmd(acl, ptr) == 0) {
       continue;
     }
@@ -213,7 +213,7 @@ olsr_acl_validate(const struct cfg_schema_entry *entry,
  */
 int
 olsr_acl_tobin(const struct cfg_schema_entry *s_entry __attribute__((unused)),
-    struct strarray *value, void *reference) {
+    const struct const_strarray *value, void *reference) {
   struct olsr_netaddr_acl *ptr;
 
   ptr = (struct olsr_netaddr_acl *)reference;

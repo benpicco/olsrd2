@@ -56,13 +56,13 @@ OLSR_PLUGIN7 {
 
 /* configuration */
 static struct cfg_schema_section _httptelnet_section = {
-  .t_type = _CFG_SECTION
+  .type = _CFG_SECTION
 };
 
 static struct cfg_schema_entry _httptelnet_entries[] = {
-  CFG_MAP_STRING(olsr_http_handler, site, "/telnet", "Path for http2telnet bridge"),
-  CFG_MAP_ACL(olsr_http_handler, acl, "default_accept", "acl for http2telnet bridge"),
-  CFG_MAP_STRINGLIST(olsr_http_handler, auth, "", "TODO"),
+  CFG_MAP_STRING(olsr_http_handler, site, "site", "/telnet", "Path for http2telnet bridge"),
+  CFG_MAP_ACL(olsr_http_handler, acl, "acl", "default_accept", "acl for http2telnet bridge"),
+  CFG_MAP_STRINGLIST(olsr_http_handler, auth, "auth", "", "TODO"),
 };
 
 static struct cfg_delta_handler _httptelnet_delta_handler = {
