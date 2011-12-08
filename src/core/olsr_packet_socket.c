@@ -101,7 +101,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   memset(pktsocket, 0, sizeof(*pktsocket));
 
   /* Init socket */
-  s = os_net_getsocket(local, OS_SOCKET_UDP, 0, LOG_SOCKET_PACKET);
+  s = os_net_getsocket(local, OS_SOCKET_UDP | OS_SOCKET_MULTICAST, 0, LOG_SOCKET_PACKET);
   if (s < 0) {
     return -1;
   }
@@ -110,6 +110,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   pktsocket->scheduler_entry.process = _cb_packet_event;
   pktsocket->scheduler_entry.event_read = true;
   pktsocket->scheduler_entry.event_write = true;
+  pktsocket->scheduler_entry.data = pktsocket;
 
   olsr_socket_add(&pktsocket->scheduler_entry);
 
@@ -217,7 +218,7 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
     }
   }
 
-  if (event_write && pktsocket->out.len == 0) {
+  if (event_write && pktsocket->out.len > 0) {
     /* handle outgoing data */
 
     /* pointer to remote socket */
