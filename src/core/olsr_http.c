@@ -129,7 +129,7 @@ olsr_http_cleanup(void) {
   if (olsr_subsystem_cleanup(&_http_state))
     return;
 
-  olsr_stream_remove_managed(&_http_managed_socket);
+  olsr_stream_remove_managed(&_http_managed_socket, true);
 
   cfg_delta_remove_handler(olsr_cfg_get_delta(), &_http_handler);
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_http_section);

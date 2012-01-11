@@ -105,6 +105,12 @@ struct olsr_stream_session {
   /* true if session is still waiting for initial handshake to finish */
   bool wait_for_connect;
 
+  /* session event is just busy in scheduler */
+  bool busy;
+
+  /* session has been remove while being busy */
+  bool removed;
+
   enum olsr_stream_session_state state;
 };
 
@@ -164,6 +170,10 @@ struct olsr_stream_socket {
   struct olsr_socket_entry scheduler_entry;
 
   struct olsr_stream_config config;
+
+  bool busy;
+  bool remove;
+  bool remove_when_finished;
 };
 
 struct olsr_stream_managed {
@@ -186,7 +196,7 @@ void olsr_stream_cleanup(void);
 
 EXPORT int olsr_stream_add(struct olsr_stream_socket *,
     union netaddr_socket *local);
-EXPORT void olsr_stream_remove(struct olsr_stream_socket *);
+EXPORT void olsr_stream_remove(struct olsr_stream_socket *, bool force);
 EXPORT struct olsr_stream_session *olsr_stream_connect_to(
     struct olsr_stream_socket *, union netaddr_socket *remote);
 EXPORT void olsr_stream_flush(struct olsr_stream_session *con);
@@ -198,6 +208,6 @@ EXPORT void olsr_stream_close(struct olsr_stream_session *con);
 EXPORT void olsr_stream_add_managed(struct olsr_stream_managed *);
 EXPORT int olsr_stream_apply_managed(struct olsr_stream_managed *,
     struct olsr_stream_managed_config *);
-EXPORT void olsr_stream_remove_managed(struct olsr_stream_managed *);
+EXPORT void olsr_stream_remove_managed(struct olsr_stream_managed *, bool force);
 
 #endif /* OLSR_STREAM_SOCKET_H_ */

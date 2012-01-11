@@ -113,6 +113,7 @@ void
 olsr_socket_remove(struct olsr_socket_entry *entry)
 {
   OLSR_DEBUG(LOG_SOCKET, "Removing socket entry %d\n", entry->fd);
+
   list_remove(&entry->node);
 }
 
@@ -167,6 +168,7 @@ olsr_socket_handle(uint32_t until_time)
       if (entry->process == NULL) {
         continue;
       }
+
       if (entry->event_read) {
         fd_read = true;
         FD_SET((unsigned int)entry->fd, &ibits);        /* And we cast here since we get a warning on Win32 */

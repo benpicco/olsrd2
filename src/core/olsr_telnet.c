@@ -155,7 +155,7 @@ olsr_telnet_cleanup(void) {
   if (olsr_subsystem_cleanup(&_telnet_state))
     return;
 
-  olsr_stream_remove_managed(&_telnet_managed);
+  olsr_stream_remove_managed(&_telnet_managed, true);
 
   cfg_delta_remove_handler(olsr_cfg_get_delta(), &telnet_handler);
   cfg_schema_remove_section(olsr_cfg_get_schema(), &telnet_section);
