@@ -155,7 +155,7 @@ __list_remove(struct list_entity *prev, struct list_entity *next) {
 static INLINE void
 list_remove(struct list_entity *entity) {
   __list_remove(entity->prev, entity->next);
-  entity->prev = entity->next = NULL;
+  list_init_node(entity);
 }
 
 /**
