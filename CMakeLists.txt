@@ -1,8 +1,9 @@
-project(olsrd C)
 cmake_minimum_required(VERSION 2.8)
+include(./CMake.config)
+
+project(${OONF_APP} C)
 
 include(./CMake.os)
-include(./CMake.config)
 
 # create all data inside the build directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
