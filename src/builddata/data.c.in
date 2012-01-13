@@ -7,9 +7,9 @@
 
 #include "builddata/data.h"
 
-static const char olsrd_version[] = "${OLSRD_VERSION}";
-static const char olsrd_git[] = "${OLSRD_SRC_GIT}";
-static const char olsrd_change[] = "${OLSRD_SRC_CHANGE}";
+static const char olsrd_version[] = "${OONF_VERSION}";
+static const char olsrd_git[] = "${OONF_SRC_GIT}";
+static const char olsrd_change[] = "${OONF_SRC_CHANGE}";
 static const char build_date[] = __DATE__" "__TIME__;
 static const char build_host[] = "${CMAKE_SYSTEM}";
 static const char shared_prefix[] = "${CMAKE_SHARED_LIBRARY_PREFIX}";
