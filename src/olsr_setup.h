@@ -8,6 +8,8 @@
 #ifndef OLSR_SETUP_H_
 #define OLSR_SETUP_H_
 
+#include "olsr_logging.h"
+
 /* define the first/last lines of the command line help */
 #define OLSR_SETUP_HELP_HEADER  "Activates OLSR.org routing daemon\n"
 #define OLSR_SETUP_HELP_TRAILER ""
@@ -25,11 +27,12 @@
 
 /* define custom logging levels */
 enum custom_log_source {
-  /* add your custom logging sources here */
-  /* LOG_CUSTOM_1 = LOG_CORESOURCE_COUNT, */
+  /*
+   * add your custom logging sources here, the first source MUST
+   * have the numerical value LOG_CORESOURCE_COUNT
+   */
 
-  /* this must be the last enum of this list */
-  LOG_SOURCE_COUNT
+  LOG_CUSTOM_1 = LOG_CORESOURCE_COUNT,
 };
 
 int olsr_setup_cfginit(void) __attribute__((warn_unused_result));
