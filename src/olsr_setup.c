@@ -16,6 +16,12 @@ static enum log_source _level_1_sources[] = {
   0,
 };
 
+static const char *_CUSTOM_LOG_NAMES[] = {
+  /* add your custom logging names here */
+
+  /* "custom-1", */
+};
+
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(olsr_setupcfg_state);
 OLSR_SUBSYSTEM_STATE(olsr_setup_state);
@@ -63,3 +69,12 @@ olsr_setup_cleanup(void) {
   /* add cleanup for custom services here */
 }
 
+size_t
+olsr_setup_get_logcount(void) {
+  return ARRAYSIZE(_CUSTOM_LOG_NAMES);
+}
+
+const char **
+olsr_setup_get_lognames(void) {
+  return _CUSTOM_LOG_NAMES;
+}

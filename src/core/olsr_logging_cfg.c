@@ -75,17 +75,20 @@ static struct cfg_schema_section logging_section = {
   .type = LOG_SECTION
 };
 
+static const char *_dummy[0];
 static struct cfg_schema_entry logging_entries[] = {
-  CFG_VALIDATE_INT_MINMAX(LOG_LEVEL_ENTRY, "0", "Set debug level template", -2, 3),
+  /* the next three parameters are configured to a different list during runtime */
   CFG_VALIDATE_CHOICE(LOG_DEBUG_ENTRY, "",
       "Set logging sources that display debug, info and warnings",
-      LOG_SOURCE_NAMES, .list = true),
-  CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "",
+      _dummy, .list = true),
+      CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "",
       "Set logging sources that display info and warnings",
-      LOG_SOURCE_NAMES, .list = true),
-  CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "",
+      _dummy, .list = true),
+      CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "",
       "Set logging sources that display warnings",
-      LOG_SOURCE_NAMES, .list = true),
+      _dummy, .list = true),
+
+  CFG_VALIDATE_INT_MINMAX(LOG_LEVEL_ENTRY, "0", "Set debug level template", -2, 3),
   CFG_VALIDATE_BOOL(LOG_STDERR_ENTRY, "false", "Set to true to activate logging to stderr"),
   CFG_VALIDATE_BOOL(LOG_SYSLOG_ENTRY, "false", "Set to true to activate logging to syslog"),
   CFG_VALIDATE_STRING(LOG_FILE_ENTRY, "", "Set a filename to log to a file"),
@@ -100,15 +103,15 @@ static enum log_source *debug_lvl_1 = NULL;
 static size_t debug_lvl_1_count = 0;
 
 /* global logger configuration */
-static struct log_handler_mask logging_cfg;
+static struct log_handler_mask_entry *logging_cfg;
 static struct log_handler_entry stderr_handler = {
-    .handler = olsr_log_stderr, .bitmask_ptr = &logging_cfg
+  .handler = olsr_log_stderr
 };
 static struct log_handler_entry syslog_handler = {
-    .handler = olsr_log_syslog, .bitmask_ptr = &logging_cfg
+  .handler = olsr_log_syslog
 };
 static struct log_handler_entry file_handler = {
-    .handler = olsr_log_file, .bitmask_ptr = &logging_cfg
+  .handler = olsr_log_file
 };
 
 /* remember if initialized or not */
@@ -127,7 +130,10 @@ olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t length) {
   debug_lvl_1 = debug_lvl_1_ptr;
   debug_lvl_1_count = length;
 
-  memset(&logging_cfg, 0, sizeof(logging_cfg));
+  logging_cfg = olsr_log_allocate_mask();
+  stderr_handler.bitmask = logging_cfg;
+  syslog_handler.bitmask = logging_cfg;
+  file_handler.bitmask = logging_cfg;
 
   /* setup delta handler */
   cfg_delta_add_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
@@ -160,6 +166,8 @@ olsr_logcfg_cleanup(void) {
 
     olsr_log_removehandler(&file_handler);
   }
+
+  olsr_log_free_mask(logging_cfg);
 }
 
 /**
@@ -168,6 +176,13 @@ olsr_logcfg_cleanup(void) {
  */
 void
 olsr_logcfg_addschema(struct cfg_schema *schema) {
+  int i;
+
+  for (i=0; i<3; i++) {
+    logging_entries[0].validate_params.p_i1 = olsr_log_get_sourcecount();
+    logging_entries[0].validate_params.p_ptr = LOG_SOURCE_NAMES;
+  }
+
   cfg_schema_add_section(schema, &logging_section);
   cfg_schema_add_entries(&logging_section, logging_entries, ARRAYSIZE(logging_entries));
 }
@@ -186,7 +201,7 @@ olsr_logcfg_apply(struct cfg_db *db) {
   bool activate_syslog, activate_file, activate_stderr;
 
   /* clean up logging mask */
-  memset(&logging_cfg, 0, sizeof(logging_cfg));
+  olsr_log_clear_mask(logging_cfg);
 
   /* first apply debug level */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_LEVEL_ENTRY)->value;
@@ -196,22 +211,22 @@ olsr_logcfg_apply(struct cfg_db *db) {
       break;
     case 0:
       /* only warnings */
-      logging_cfg.mask[SEVERITY_WARN][LOG_ALL] = true;
+      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_WARN] = true;
       break;
     case 1:
       /* warnings and some info */
-      logging_cfg.mask[SEVERITY_WARN][LOG_ALL] = true;
+      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_WARN] = true;
       for (i=0; i<debug_lvl_1_count; i++) {
-        logging_cfg.mask[SEVERITY_INFO][debug_lvl_1[i]] = true;
+        logging_cfg[debug_lvl_1[i]].log_for_severity[SEVERITY_INFO] = true;
       }
       break;
     case 2:
       /* warning and info */
-      logging_cfg.mask[SEVERITY_INFO][LOG_ALL] = true;
+      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_INFO] = true;
       break;
     case 3:
       /* all logging messages */
-      logging_cfg.mask[SEVERITY_DEBUG][LOG_ALL] = true;
+      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_DEBUG] = true;
       break;
     default:
       break;
@@ -311,7 +326,7 @@ _apply_log_setting(struct cfg_named_section *named,
   if (entry) {
     FOR_ALL_STRINGS(&entry->val, ptr) {
       i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, ARRAYSIZE(LOG_SOURCE_NAMES));
-      logging_cfg.mask[severity][i] = true;
+      logging_cfg[i].log_for_severity[severity] = true;
     }
   }
 }
