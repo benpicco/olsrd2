@@ -123,7 +123,8 @@ olsr_plugins_cleanup(void) {
 
 /**
  * This function is called by the constructor of a plugin to
- * insert the plugin into the global list.
+ * insert the plugin into the global list. It will be called before
+ * any subsystem was initialized!
  * @param pl_def pointer to plugin definition
  */
 void
@@ -141,8 +142,6 @@ olsr_plugins_hook(struct olsr_plugin *pl_def) {
   /* hook static plugin into avl tree */
   pl_def->p_node.key = pl_def->name;
   avl_insert(&plugin_tree, &pl_def->p_node);
-
-  OLSR_INFO(LOG_PLUGINLOADER, "Hooked plugin %s", pl_def->name);
 }
 
 /**

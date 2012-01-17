@@ -1,8 +1,7 @@
+project(OONF_APP C)
 cmake_minimum_required(VERSION 2.8)
+
 include(./CMake.config)
-
-project(${OONF_APP} C)
-
 include(./CMake.os)
 
 # create all data inside the build directory
