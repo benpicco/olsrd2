@@ -49,6 +49,7 @@
 #include "common/autobuf.h"
 #include "common/list.h"
 #include "common/string.h"
+#include "builddata/data.h"
 #include "os_time.h"
 #include "os_system.h"
 #include "olsr_logging.h"
@@ -62,7 +63,7 @@ static size_t _total_source_count;
 
 static struct list_entity _handler_list;
 static struct autobuf _logbuffer;
-static const char *_programm_name;
+static const struct olsr_builddata *_builddata;
 
 const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT] = {
   "DEBUG",
@@ -96,14 +97,14 @@ OLSR_SUBSYSTEM_STATE(_logging_state);
 
 /**
  * Initialize logging system
- * @param name programm name to be used for logging output
+ * @param data builddata defined by application
  * @param def_severity default severity level
  * @param lognames array of string pointers with logging labels
  * @param level_count number of custom logging levels
  * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_log_init(const char *name, enum log_severity def_severity,
+olsr_log_init(const struct olsr_builddata *data, enum log_severity def_severity,
     const char **lognames, size_t level_count)
 {
   enum log_severity sev;
@@ -111,6 +112,8 @@ olsr_log_init(const char *name, enum log_severity def_severity,
 
   if (olsr_subsystem_is_initialized(&_logging_state))
     return 0;
+
+  _builddata = data;
 
   _total_source_count = LOG_CORESOURCE_COUNT + level_count;
   log_global_mask = olsr_log_allocate_mask();
@@ -138,7 +141,6 @@ olsr_log_init(const char *name, enum log_severity def_severity,
     }
   }
 
-  _programm_name = name;
   olsr_subsystem_init(&_logging_state);
   return 0;
 }
@@ -190,11 +192,11 @@ olsr_log_removehandler(struct log_handler_entry *h)
 }
 
 /**
- * @return name of this programm for logging purpose
+ * @return pointer to application builddata
  */
-const char *
-olsr_log_get_programm_name(void) {
-  return _programm_name;
+const struct olsr_builddata *
+olsr_log_get_builddata(void) {
+  return _builddata;
 }
 
 /**
@@ -203,6 +205,23 @@ olsr_log_get_programm_name(void) {
 enum log_source
 olsr_log_get_sourcecount(void) {
   return _total_source_count;
+}
+
+/**
+ * Print version string
+ * @param abuf target output buffer
+ */
+void
+olsr_log_printversion(struct autobuf *abuf) {
+  abuf_appendf(abuf," %s version %s (%s)\n"
+            " Built on %s\n"
+            " Git: %s\n"
+            "      %s\n"
+            "%s",
+            _builddata->app_name, _builddata->version,
+            _builddata->builddate, _builddata->buildsystem,
+            _builddata->git_commit, _builddata->git_change,
+            _builddata->versionstring_trailer);
 }
 
 /**

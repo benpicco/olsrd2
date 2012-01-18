@@ -81,10 +81,10 @@ static struct cfg_schema_entry logging_entries[] = {
   CFG_VALIDATE_CHOICE(LOG_DEBUG_ENTRY, "",
       "Set logging sources that display debug, info and warnings",
       _dummy, .list = true),
-      CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "",
+  CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "",
       "Set logging sources that display info and warnings",
       _dummy, .list = true),
-      CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "",
+  CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "",
       "Set logging sources that display warnings",
       _dummy, .list = true),
 
@@ -179,8 +179,8 @@ olsr_logcfg_addschema(struct cfg_schema *schema) {
   int i;
 
   for (i=0; i<3; i++) {
-    logging_entries[0].validate_params.p_i1 = olsr_log_get_sourcecount();
-    logging_entries[0].validate_params.p_ptr = LOG_SOURCE_NAMES;
+    logging_entries[i].validate_params.p_i1 = olsr_log_get_sourcecount();
+    logging_entries[i].validate_params.p_ptr = LOG_SOURCE_NAMES;
   }
 
   cfg_schema_add_section(schema, &logging_section);
@@ -325,7 +325,7 @@ _apply_log_setting(struct cfg_named_section *named,
   entry = cfg_db_get_entry(named, entry_name);
   if (entry) {
     FOR_ALL_STRINGS(&entry->val, ptr) {
-      i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, ARRAYSIZE(LOG_SOURCE_NAMES));
+      i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, olsr_log_get_sourcecount());
       logging_cfg[i].log_for_severity[severity] = true;
     }
   }

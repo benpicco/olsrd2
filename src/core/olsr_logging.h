@@ -48,7 +48,9 @@ struct log_handler_entry;
 #include "string.h"
 
 #include "common/common_types.h"
+#include "common/autobuf.h"
 #include "common/list.h"
+#include "builddata/data.h"
 
 /**
  * defines the severity of a logging event
@@ -172,7 +174,7 @@ struct log_handler_entry {
 EXPORT extern struct log_handler_mask_entry *log_global_mask;
 EXPORT extern const char **LOG_SOURCE_NAMES;
 
-EXPORT int olsr_log_init(const char *, enum log_severity,
+EXPORT int olsr_log_init(const struct olsr_builddata *, enum log_severity,
     const char **lognames, size_t level_count)
   __attribute__((warn_unused_result));
 EXPORT void olsr_log_cleanup(void);
@@ -182,7 +184,8 @@ EXPORT void olsr_log_removehandler(struct log_handler_entry *);
 EXPORT void olsr_log_updatemask(void);
 
 EXPORT enum log_source olsr_log_get_sourcecount(void);
-EXPORT const char *olsr_log_get_programm_name(void);
+EXPORT const struct olsr_builddata *olsr_log_get_builddata(void);
+EXPORT void olsr_log_printversion(struct autobuf *abuf);
 
 EXPORT void olsr_log(enum log_severity, enum log_source, bool, const char *, int, const char *, ...)
   __attribute__ ((format(printf, 6, 7)));

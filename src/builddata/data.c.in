@@ -1,51 +1,66 @@
+
 /*
- * builddata.c
+ * The olsr.org Optimized Link-State Routing daemon(olsrd)
+ * Copyright (c) 2004-2011, the olsr.org team - see HISTORY file
+ * All rights reserved.
  *
- *  Created on: May 10, 2011
- *      Author: rogge
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in
+ *   the documentation and/or other materials provided with the
+ *   distribution.
+ * * Neither the name of olsr.org, olsrd nor the names of its
+ *   contributors may be used to endorse or promote products derived
+ *   from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Visit http://www.olsr.org for more information.
+ *
+ * If you find this software useful feel free to make a donation
+ * to the project. For more information see the website or contact
+ * the copyright holders.
+ *
  */
 
 #include "builddata/data.h"
 
-static const char olsrd_version[] = "${OONF_VERSION}";
-static const char olsrd_git[] = "${OONF_SRC_GIT}";
-static const char olsrd_change[] = "${OONF_SRC_CHANGE}";
-static const char build_date[] = __DATE__" "__TIME__;
-static const char build_host[] = "${CMAKE_SYSTEM}";
-static const char shared_prefix[] = "${CMAKE_SHARED_LIBRARY_PREFIX}";
-static const char shared_suffix[] = "${CMAKE_SHARED_LIBRARY_SUFFIX}";
+static struct olsr_builddata _builddata = {
+  .app_name = "${OONF_APP}",
+  .version = "${OONF_VERSION}",
+  .versionstring_trailer = "${OONF_VERSION_TRAILER}",
+  .help_prefix = "${OONF_HELP_PREFIX}",
+  .help_suffix = "${OONF_HELP_SUFFIX}",
+  
+  .default_config = "${OONF_DEFAULT_CONF}",
+  
+  .git_commit = "${OONF_SRC_GIT}",
+  .git_change = "${OONF_SRC_CHANGE}",
+  
+  .builddate = __DATE__" "__TIME__,
+  .buildsystem = "${CMAKE_SYSTEM}",
+  
+  .sharedlibrary_prefix = "${CMAKE_SHARED_LIBRARY_PREFIX}",
+  .sharedlibrary_postfix = "${CMAKE_SHARED_LIBRARY_SUFFIX}",
+};
 
-const char *
-olsr_builddata_get_version(void) {
-  return olsrd_version;
-}
-
-const char *
-olsr_builddata_get_git_commit(void) {
-  return olsrd_git;
-}
-
-const char *
-olsr_builddata_get_git_change(void) {
-  return olsrd_change;
-}
-
-const char *
-olsr_builddata_get_builddate(void) {
-  return build_date;
-}
-
-const char *
-olsr_builddata_get_buildsystem(void) {
-  return build_host;
-}
-
-const char *
-olsr_builddata_get_sharedlibrary_prefix(void) {
-  return shared_prefix;
-}
-
-const char *
-olsr_builddata_get_sharedlibrary_suffix(void) {
-  return shared_suffix;
+const struct olsr_builddata *
+olsr_builddata_get(void) {
+  return &_builddata;
 }
