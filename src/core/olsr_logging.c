@@ -135,9 +135,9 @@ olsr_log_init(const struct olsr_builddata *data, enum log_severity def_severity,
   }
 
   /* clear global mask */
-  for (sev = 0; sev < LOG_SEVERITY_COUNT; sev++) {
+  for (sev = def_severity; sev < LOG_SEVERITY_COUNT; sev++) {
     for (src = 0; src < _total_source_count; src++) {
-      log_global_mask[src].log_for_severity[sev] = sev >= def_severity;
+      log_global_mask[src].log_for_severity[sev] = true;
     }
   }
 

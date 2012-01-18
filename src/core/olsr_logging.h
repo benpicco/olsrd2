@@ -121,7 +121,7 @@ extern const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT];
  * without allocating more memory.
  */
 
-#define _OLSR_LOG(severity, source, no_header, format, args...) do { if (log_global_mask[source].log_for_severity[severity]) olsr_log(SEVERITY_DEBUG, source, no_header, __FILE__, __LINE__, format, ##args); } while(0)
+#define _OLSR_LOG(severity, source, no_header, format, args...) do { if (log_global_mask[source].log_for_severity[severity]) olsr_log(severity, source, no_header, __FILE__, __LINE__, format, ##args); } while(0)
 
 #ifdef REMOVE_LOG_DEBUG
 #define OLSR_DEBUG(source, format, args...) do { } while(0)

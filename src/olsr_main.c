@@ -195,12 +195,14 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* TODO: check if we are root, otherwise stop */
-  if (0 && geteuid()) {
+  /* check if we are root, otherwise stop */
+#ifdef NEED_ROOT
+  if (geteuid() != 0) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
         olsr_builddata_get()->app_name);
     goto olsrd_cleanup;
   }
+#endif
 
   /* see if we need to fork */
   if (config_global.fork) {
