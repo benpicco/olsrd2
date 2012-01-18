@@ -8,23 +8,6 @@
 #ifndef OLSR_SETUP_H_
 #define OLSR_SETUP_H_
 
-#include "olsr_logging.h"
-
-/* define the first/last lines of the command line help */
-#define OLSR_SETUP_HELP_HEADER  "Activates OLSR.org routing daemon\n"
-#define OLSR_SETUP_HELP_TRAILER ""
-
-/* define program name */
-#define OLSR_SETUP_PROGRAM        "Olsrd"
-
-/* define trailer text to version string */
-#define OLSR_SETUP_VERSION_TRAILER "Visit http://www.olsr.org\n"
-
-/* define default configuration file, might be overwritten by cmake */
-#ifndef OLSRD_GLOBAL_CONF_FILE
-#define OLSRD_GLOBAL_CONF_FILE "/etc/olsrd.conf"
-#endif
-
 /* define custom logging levels */
 enum custom_log_source {
   /*

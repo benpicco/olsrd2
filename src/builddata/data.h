@@ -10,12 +10,25 @@
 
 #include "common/common_types.h"
 
-EXPORT const char *olsr_builddata_get_version(void);
-EXPORT const char *olsr_builddata_get_git_commit(void);
-EXPORT const char *olsr_builddata_get_git_change(void);
-EXPORT const char *olsr_builddata_get_builddate(void);
-EXPORT const char *olsr_builddata_get_buildsystem(void);
-EXPORT const char *olsr_builddata_get_sharedlibrary_prefix(void);
-EXPORT const char *olsr_builddata_get_sharedlibrary_suffix(void);
+struct olsr_builddata {
+  const char *app_name;
+  const char *version;
+  const char *versionstring_trailer;
+  const char *help_prefix;
+  const char *help_suffix;
+
+  const char *default_config;
+
+  const char *git_commit;
+  const char *git_change;
+
+  const char *builddate;
+  const char *buildsystem;
+
+  const char *sharedlibrary_prefix;
+  const char *sharedlibrary_postfix;
+};
+
+EXPORT extern const struct olsr_builddata *olsr_builddata_get(void);
 
 #endif /* BUILDDATA_H_ */

@@ -55,7 +55,6 @@
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
 #include "builddata/plugin_static.h"
-#include "builddata/version.h"
 #include "builddata/data.h"
 #include "os_system.h"
 #include "olsr_cfg.h"
@@ -100,7 +99,6 @@ static struct option olsr_options[] = {
 
 #if !defined(REMOVE_HELPTEXT)
 static const char *help_text =
-    OLSR_SETUP_HELP_HEADER
     "Mandatory arguments to long options are mandatory for short options too.\n"
     "  -h, --help                             Display this help file\n"
     "  -v, --version                          Display the version string and the included static plugins\n"
@@ -125,12 +123,8 @@ static const char *help_text =
     "           =section_type[name].key       Show the value(s) of a key in a named section\n"
     "  -f, --format=FORMAT                    Set the format for loading/saving data\n"
     "                                         (use 'AUTO' for automatic detection of format)\n"
-    OLSR_SETUP_HELP_TRAILER
 ;
 #endif
-
-/* name of default configuration file */
-static const char *DEFAULT_CONFIGFILE = OLSRD_GLOBAL_CONF_FILE;
 
 /* prototype for local statics */
 static void quit_signal_handler(int);
@@ -159,7 +153,7 @@ main(int argc, char **argv) {
   setup_signalhandler();
 
   /* initialize logger */
-  if (olsr_log_init(OLSR_SETUP_PROGRAM, SEVERITY_WARN,
+  if (olsr_log_init(olsr_builddata_get(), SEVERITY_WARN,
       olsr_setup_get_lognames(), olsr_setup_get_logcount())) {
     goto olsrd_cleanup;
   }
@@ -203,7 +197,8 @@ main(int argc, char **argv) {
 
   /* TODO: check if we are root, otherwise stop */
   if (0 && geteuid()) {
-    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run "OLSR_SETUP_PROGRAM"!\n");
+    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
+        olsr_builddata_get()->app_name);
     goto olsrd_cleanup;
   }
 
@@ -349,7 +344,7 @@ mainloop(int argc, char **argv) {
   uint32_t next_interval;
   int exit_code = 0;
 
-  OLSR_INFO(LOG_MAIN, "Starting "OLSR_SETUP_PROGRAM".");
+  OLSR_INFO(LOG_MAIN, "Starting %s.", olsr_log_get_builddata()->app_name);
 
   /* enter main loop */
   while (olsr_is_running()) {
@@ -402,7 +397,7 @@ mainloop(int argc, char **argv) {
     exit_code = 1;
   }
 
-  OLSR_INFO(LOG_MAIN, "Ending "OLSR_SETUP_PROGRAM".");
+  OLSR_INFO(LOG_MAIN, "Ending %s.", olsr_log_get_builddata()->app_name);
   return exit_code;
 }
 
@@ -479,13 +474,16 @@ parse_commandline(int argc, char **argv, bool reload_only) {
     switch (opt) {
       case 'h':
 #if !defined(REMOVE_HELPTEXT)
-        abuf_appendf(&log, "Usage: %s [OPTION]...\n%s", argv[0], help_text);
+        abuf_appendf(&log, "Usage: %s [OPTION]...\n%s%s%s", argv[0],
+            olsr_builddata_get()->help_prefix,
+            help_text,
+            olsr_builddata_get()->help_suffix);
 #endif
         return_code = 0;
         break;
 
       case 'v':
-        olsr_builddata_printversion(&log);
+        olsr_log_printversion(&log);
         OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
           abuf_appendf(&log, " Static plugin: %s\n", plugin->name);
         }
@@ -550,7 +548,8 @@ parse_commandline(int argc, char **argv, bool reload_only) {
 
   if (return_code == -1 && !loaded_file) {
     /* try to load default config file if no other loaded */
-    cfg_cmd_handle_load(olsr_cfg_get_instance(), db, DEFAULT_CONFIGFILE, NULL);
+    cfg_cmd_handle_load(olsr_cfg_get_instance(), db,
+        olsr_builddata_get()->default_config, NULL);
   }
 
   if (return_code == -1) {

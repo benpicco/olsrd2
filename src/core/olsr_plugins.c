@@ -81,6 +81,7 @@ static const char *dlopen_patterns[] = {
   "%LIB%",
 };
 
+static void _init_plugin_tree(void);
 static int _unload_plugin(struct olsr_plugin *plugin, bool cleanup);
 static void *_open_plugin(const char *filename);
 
@@ -95,14 +96,13 @@ olsr_plugins_init(void) {
   if (olsr_subsystem_init(&_plugins_state))
     return;
 
-  avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
-  plugin_tree_initialized = true;
+  _init_plugin_tree();
 
   /* load predefined values for dlopen templates */
   dlopen_values[1] = ".";
-  dlopen_values[2] = olsr_builddata_get_sharedlibrary_prefix();
-  dlopen_values[3] = olsr_builddata_get_sharedlibrary_suffix();
-  dlopen_values[4] = olsr_builddata_get_version();
+  dlopen_values[2] = olsr_log_get_builddata()->sharedlibrary_prefix;
+  dlopen_values[3] = olsr_log_get_builddata()->sharedlibrary_postfix;
+  dlopen_values[4] = olsr_log_get_builddata()->version;
 }
 
 /**
@@ -131,8 +131,8 @@ void
 olsr_plugins_hook(struct olsr_plugin *pl_def) {
   assert (pl_def->name);
 
-  /* make sure plugin system is initialized */
-  olsr_plugins_init();
+  /* make sure plugin tree is initialized */
+  _init_plugin_tree();
 
   /* check if plugin is already in tree */
   if (olsr_plugins_get(pl_def->name)) {
@@ -323,6 +323,18 @@ olsr_plugins_disable(struct olsr_plugin *plugin) {
 int
 olsr_plugins_unload(struct olsr_plugin *plugin) {
   return _unload_plugin(plugin, false);
+}
+
+/**
+ * Initialize plugin tree for early loading of static plugins
+ */
+static void
+_init_plugin_tree(void) {
+  if (plugin_tree_initialized) {
+    return;
+  }
+  avl_init(&plugin_tree, avl_comp_strcasecmp, false, NULL);
+  plugin_tree_initialized = true;
 }
 
 /**

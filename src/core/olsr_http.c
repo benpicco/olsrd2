@@ -393,7 +393,7 @@ _create_http_error(struct olsr_stream_session *session,
     enum olsr_http_result error) {
   abuf_appendf(&session->out, "<html><head><title>%s %s http server</title></head>"
       "<body><h1>HTTP error %d: %s</h1></body></html>",
-      OLSR_SETUP_PROGRAM, olsr_builddata_get_version(),
+      olsr_log_get_builddata()->app_name, olsr_log_get_builddata()->version,
       error, _get_headertype_string(error));
   _create_http_header(session, error, NULL);
 }
@@ -490,8 +490,9 @@ _create_http_header(struct olsr_stream_session *session,
 
   /* Server version */
   abuf_appendf(&buf, "Server: %s %s %s\r\n",
-      olsr_builddata_get_version(), olsr_builddata_get_builddate(),
-      olsr_builddata_get_buildsystem());
+      olsr_log_get_builddata()->version,
+      olsr_log_get_builddata()->builddate,
+      olsr_log_get_builddata()->buildsystem);
 
   /* connection-type */
   abuf_puts(&buf, "Connection: closed\r\n");

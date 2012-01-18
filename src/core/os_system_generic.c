@@ -81,7 +81,7 @@ os_system_openlog(void) {
     return;
   }
 
-  openlog(olsr_log_get_programm_name(), LOG_PID | LOG_ODELAY, LOG_DAEMON);
+  openlog(olsr_log_get_builddata()->app_name, LOG_PID | LOG_ODELAY, LOG_DAEMON);
   setlogmask(LOG_UPTO(LOG_DEBUG));
 
   return;

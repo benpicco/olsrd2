@@ -9,8 +9,6 @@
 #include "common/avl.h"
 #include "common/avl_comp.h"
 
-#include "builddata/version.h"
-
 #include "config/cfg_delta.h"
 #include "config/cfg_schema.h"
 
@@ -669,7 +667,7 @@ _cb_telnet_repeat(struct olsr_telnet_data *data) {
  */
 static enum olsr_telnet_result
 _cb_telnet_version(struct olsr_telnet_data *data) {
-  olsr_builddata_printversion(data->out);
+  olsr_log_printversion(data->out);
   return TELNET_RESULT_ACTIVE;
 }
 

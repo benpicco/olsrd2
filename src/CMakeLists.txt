@@ -38,31 +38,31 @@ IF(WIN32)
 ENDIF(WIN32)
 
 # create executable
-ADD_EXECUTABLE(${OONF_APP} ${OONF_SRCS})
+ADD_EXECUTABLE(${OONF_EXE} ${OONF_SRCS})
 
 # the order of static libraries is important
 # earlier libraries can use the functions of later, not the
 # other way around
 
 # link plugin loader
-TARGET_LINK_LIBRARIES(${OONF_APP} static_pluginloader)
+TARGET_LINK_LIBRARIES(${OONF_EXE} static_pluginloader)
 
 # link static plugins
 FOREACH(plugin ${OONF_STATIC_PLUGINS})
-    TARGET_LINK_LIBRARIES(${OONF_APP} static_${plugin})
+    TARGET_LINK_LIBRARIES(${OONF_EXE} static_${plugin})
 ENDFOREACH(plugin)
 
-TARGET_LINK_LIBRARIES(${OONF_APP} static_config)
-TARGET_LINK_LIBRARIES(${OONF_APP} static_common)
+TARGET_LINK_LIBRARIES(${OONF_EXE} static_config)
+TARGET_LINK_LIBRARIES(${OONF_EXE} static_common)
 
 # link builddata
-TARGET_LINK_LIBRARIES(${OONF_APP} static_builddata)
+TARGET_LINK_LIBRARIES(${OONF_EXE} static_builddata)
 
 # link dlopen() library
-TARGET_LINK_LIBRARIES(${OONF_APP} ${CMAKE_DL_LIBS})
+TARGET_LINK_LIBRARIES(${OONF_EXE} ${CMAKE_DL_LIBS})
 
 # link extra win32 libs
 IF(WIN32)
-    SET_TARGET_PROPERTIES(${OONF_APP} PROPERTIES ENABLE_EXPORTS true)
-    TARGET_LINK_LIBRARIES(${OONF_APP} ws2_32 iphlpapi)
+    SET_TARGET_PROPERTIES(${OONF_EXE} PROPERTIES ENABLE_EXPORTS true)
+    TARGET_LINK_LIBRARIES(${OONF_EXE} ws2_32 iphlpapi)
 ENDIF(WIN32)
