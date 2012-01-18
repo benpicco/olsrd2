@@ -196,7 +196,7 @@ main(int argc, char **argv) {
   }
 
   /* check if we are root, otherwise stop */
-#ifdef NEED_ROOT
+#if NEED_ROOT == 2
   if (geteuid() != 0) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
         olsr_builddata_get()->app_name);
@@ -260,6 +260,15 @@ main(int argc, char **argv) {
     return_code = display_schema();
     goto olsrd_cleanup;
   }
+
+  /* check if we are root, otherwise stop */
+#if NEED_ROOT == 1
+  if (geteuid() != 0) {
+    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
+        olsr_builddata_get()->app_name);
+    goto olsrd_cleanup;
+  }
+#endif
 
   /* apply configuration */
   if (olsr_cfg_apply()) {
