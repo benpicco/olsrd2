@@ -325,7 +325,7 @@ _apply_log_setting(struct cfg_named_section *named,
   entry = cfg_db_get_entry(named, entry_name);
   if (entry) {
     FOR_ALL_STRINGS(&entry->val, ptr) {
-      i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, ARRAYSIZE(LOG_SOURCE_NAMES));
+      i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, olsr_log_get_sourcecount());
       logging_cfg[i].log_for_severity[severity] = true;
     }
   }
