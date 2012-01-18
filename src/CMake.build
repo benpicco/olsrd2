@@ -1,0 +1,35 @@
+# gather sources and static libraries
+add_subdirectory(common)
+add_subdirectory(config)
+add_subdirectory(builddata)
+
+# add source files of core directory
+FILE(GLOB SRCS "core/*.c")    
+set(OONF_SRCS ${OONF_SRCS} ${SRCS})
+
+# add os_specific source files
+IF(WIN32)
+    FILE(GLOB SRCS "os_win32/*.c")    
+    set(OONF_SRCS ${OONF_SRCS} ${SRCS})
+ENDIF(WIN32)
+
+IF(LINUX)
+    FILE(GLOB SRCS "os_linux/*.c")    
+    set(OONF_SRCS ${OONF_SRCS} ${SRCS})
+ENDIF(LINUX)
+
+IF(BSD)
+    FILE(GLOB SRCS "os_bsd/*.c")    
+    set(OONF_SRCS ${OONF_SRCS} ${SRCS})
+ENDIF(BSD)
+
+IF(ANDROID)
+    include_directories(src/android)
+    FILE(GLOB SRCS "android/*.c")    
+    set(OONF_SRCS ${OONF_SRCS} ${SRCS})
+ENDIF(ANDROID)
+
+# activate symbol export for win32
+IF(WIN32)
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--export-all-symbols")
+ENDIF(WIN32)
