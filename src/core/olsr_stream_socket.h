@@ -203,7 +203,7 @@ EXPORT void olsr_stream_flush(struct olsr_stream_session *con);
 
 EXPORT void olsr_stream_set_timeout(
     struct olsr_stream_session *con, uint32_t timeout);
-EXPORT void olsr_stream_close(struct olsr_stream_session *con);
+EXPORT void olsr_stream_close(struct olsr_stream_session *con, bool force);
 
 EXPORT void olsr_stream_add_managed(struct olsr_stream_managed *);
 EXPORT int olsr_stream_apply_managed(struct olsr_stream_managed *,

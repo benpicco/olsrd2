@@ -211,33 +211,32 @@ void
 olsr_stream_remove(struct olsr_stream_socket *stream_socket, bool force) {
   struct olsr_stream_session *session, *ptr;
 
-  if (stream_socket->busy) {
+  if (stream_socket->busy && !force) {
     stream_socket->remove = true;
     return;
   }
 
-  if (list_is_node_added(&stream_socket->node)) {
-    list_for_each_element_safe(&stream_socket->session, session, node, ptr) {
-      if (!force && session->out.len > 0) {
-        stream_socket->remove_when_finished = true;
-      }
-      else {
-        /* close everything that doesn't need to send data anymore */
-        olsr_stream_close(session);
-      }
-    }
+  if (!list_is_node_added(&stream_socket->node)) {
+    return;
+  }
 
-    if (!list_is_empty(&stream_socket->session)) {
-      return;
+  list_for_each_element_safe(&stream_socket->session, session, node, ptr) {
+    if (force || (session->out.len == 0 && !session->busy)) {
+      /* close everything that doesn't need to send data anymore */
+      olsr_stream_close(session, force);
     }
+  }
 
-    list_remove(&stream_socket->node);
+  if (!list_is_empty(&stream_socket->session)) {
+    return;
+  }
 
-    if (stream_socket->scheduler_entry.fd) {
-      /* only for server sockets */
-      os_close(stream_socket->scheduler_entry.fd);
-      olsr_socket_remove(&stream_socket->scheduler_entry);
-    }
+  list_remove(&stream_socket->node);
+
+  if (stream_socket->scheduler_entry.fd) {
+    /* only for server sockets */
+    os_close(stream_socket->scheduler_entry.fd);
+    olsr_socket_remove(&stream_socket->scheduler_entry);
   }
 }
 
@@ -303,15 +302,23 @@ olsr_stream_set_timeout(struct olsr_stream_session *con, uint32_t timeout) {
  * @param session pointer to stream session
  */
 void
-olsr_stream_close(struct olsr_stream_session *session) {
-  if (session->busy) {
+olsr_stream_close(struct olsr_stream_session *session, bool force) {
+  if (session->busy && !force) {
     /* remove the session later */
     session->removed = true;
     return;
   }
 
+  if (!list_is_node_added(&session->node)) {
+    return;
+  }
+
   if (session->comport->config.cleanup) {
     session->comport->config.cleanup(session);
+  }
+
+  if (session->timeout) {
+    olsr_timer_stop(session->timeout);
   }
 
   session->comport->config.allowed_sessions++;
@@ -564,7 +571,7 @@ parse_request_error:
 static void
 _cb_timeout_handler(void *data) {
   struct olsr_stream_session *session = data;
-  olsr_stream_close(session);
+  olsr_stream_close(session, false);
 }
 
 /**
@@ -693,22 +700,16 @@ _cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
   s_sock->busy = false;
 
   /* end of connection ? */
-  if (session->state == STREAM_SESSION_CLEANUP) {
+  if (session->state == STREAM_SESSION_CLEANUP || session->removed) {
     OLSR_DEBUG(LOG_SOCKET_STREAM, "  cleanup\n");
 
     /* clean up connection by calling cleanup directly */
-    olsr_timer_stop(session->timeout);
-    session->timeout = NULL;
-    olsr_stream_close(session);
-  }
-  else if (session->removed) {
-    /* lazy session removal */
-    olsr_stream_close(session);
+    olsr_stream_close(session, session->state == STREAM_SESSION_CLEANUP);
   }
 
   /* lazy socket removal */
   if (s_sock->remove) {
-    olsr_stream_remove(s_sock, !s_sock->remove_when_finished);
+    olsr_stream_remove(s_sock, false);
   }
   return;
 }
