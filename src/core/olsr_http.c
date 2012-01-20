@@ -13,13 +13,12 @@
 #include "config/cfg_schema.h"
 
 #include "builddata/data.h"
+#include "olsr.h"
 #include "olsr_cfg.h"
 #include "olsr_logging.h"
 #include "olsr_netaddr_acl.h"
 #include "olsr_stream_socket.h"
 #include "os_system.h"
-#include "olsr.h"
-#include "olsr_setup.h"
 #include "olsr_http.h"
 
 /* config section */
