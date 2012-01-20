@@ -235,7 +235,7 @@ main(int argc, char **argv) {
   }
 
   /* activate os-specific code */
-  if (0 && os_system_init()) {
+  if (os_system_init()) {
     goto olsrd_cleanup;
   }
 
@@ -252,6 +252,11 @@ main(int argc, char **argv) {
 
   /* activate custom additions to framework */
   if (olsr_setup_init()) {
+    goto olsrd_cleanup;
+  }
+
+  /* preload plugins to show their schemas */
+  if (olsr_cfg_loadplugins()) {
     goto olsrd_cleanup;
   }
 

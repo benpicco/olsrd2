@@ -190,29 +190,15 @@ olsr_cfg_is_commit_set(void) {
 }
 
 /**
- * Applies to content of the raw configuration database into the
- * work database and triggers the change calculation.
- * @return 0 if successful, -1 otherwise
+ * Load all plugins that are not already loaded and remove
+ * the plugins that are not needed anymore.
+ * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_cfg_apply(void) {
+olsr_cfg_loadplugins(void) {
   struct olsr_plugin *plugin, *plugin_it;
-  struct cfg_db *new_db, *old_db;
-  struct autobuf log;
-  bool found;
-  int result;
   char *ptr;
-
-  if (abuf_init(&log, 0)) {
-    OLSR_WARN_OOM(LOG_CONFIG);
-    return -1;
-  }
-
-  OLSR_INFO(LOG_CONFIG, "Apply configuration");
-
-  /*** phase 1: activate all plugins ***/
-  result = -1;
-  old_db = NULL;
+  bool found;
 
   /* load plugins */
   FOR_ALL_STRINGS(&config_global.plugin, ptr) {
@@ -222,7 +208,7 @@ olsr_cfg_apply(void) {
     }
 
     if (olsr_plugins_load(ptr) == NULL && config_global.failfast) {
-      goto apply_failed;
+      return -1;
     }
   }
 
@@ -242,6 +228,35 @@ olsr_cfg_apply(void) {
       /* if not, unload it (if not static) */
       olsr_plugins_unload(plugin);
     }
+  }
+  return 0;
+}
+
+/**
+ * Applies to content of the raw configuration database into the
+ * work database and triggers the change calculation.
+ * @return 0 if successful, -1 otherwise
+ */
+int
+olsr_cfg_apply(void) {
+  struct olsr_plugin *plugin, *plugin_it;
+  struct cfg_db *new_db, *old_db;
+  struct autobuf log;
+  int result;
+
+  if (abuf_init(&log, 0)) {
+    OLSR_WARN_OOM(LOG_CONFIG);
+    return -1;
+  }
+
+  OLSR_INFO(LOG_CONFIG, "Apply configuration");
+
+  /*** phase 1: activate all plugins ***/
+  result = -1;
+  old_db = NULL;
+
+  if (olsr_cfg_loadplugins()) {
+    goto apply_failed;
   }
 
   /*** phase 2: check configuration and apply it ***/
@@ -268,7 +283,9 @@ olsr_cfg_apply(void) {
 
   /* enable all plugins */
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-    if (!plugin->int_enabled && olsr_plugins_enable(plugin) != 0
+    if (plugin->int_enabled)
+      continue;
+    if (olsr_plugins_enable(plugin) != 0
         && config_global.failfast) {
       goto apply_failed;
     }
