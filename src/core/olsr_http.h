@@ -75,6 +75,9 @@ struct olsr_http_handler {
       struct autobuf *out, struct olsr_http_session *);
 };
 
+EXPORT extern const char *HTTP_CONTENTTYPE_HTML;
+EXPORT extern const char *HTTP_CONTENTTYPE_TEXT;
+
 EXPORT void olsr_http_init(void);
 EXPORT void olsr_http_cleanup(void);
 
@@ -83,9 +86,6 @@ EXPORT void olsr_http_remove(struct olsr_http_handler *);
 
 EXPORT const char *olsr_http_lookup_value(char **keys, char **values,
     size_t count, const char *key);
-
-EXPORT const char *HTTP_CONTENTTYPE_HTML;
-EXPORT const char *HTTP_CONTENTTYPE_TEXT;
 
 /**
  * Lookup the value of one http header field.

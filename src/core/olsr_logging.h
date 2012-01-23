@@ -102,8 +102,6 @@ struct log_parameters {
   int prefixLength;
 };
 
-extern const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT];
-
 /**
  * these four macros should be used to generate OLSR logging output
  *

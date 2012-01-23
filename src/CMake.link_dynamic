@@ -1,7 +1,3 @@
-# the order of static libraries is important
-# earlier libraries can use the functions of later, not the
-# other way around
-
 # link plugin loader
 TARGET_LINK_LIBRARIES(${OONF_EXE} static_pluginloader)
 
