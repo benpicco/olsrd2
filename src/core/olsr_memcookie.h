@@ -141,8 +141,8 @@ struct olsr_memory_prefix {
 extern struct avl_tree EXPORT(olsr_cookie_tree);
 
 /* Externals. */
-void olsr_memcookie_init(void);
-void olsr_memcookie_cleanup(void);
+EXPORT void olsr_memcookie_init(void);
+EXPORT void olsr_memcookie_cleanup(void);
 
 EXPORT struct olsr_memcookie_info *olsr_memcookie_add(const char *, size_t size)
     __attribute__((warn_unused_result));

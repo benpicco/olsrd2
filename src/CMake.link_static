@@ -10,6 +10,10 @@ FOREACH(plugin ${OONF_STATIC_PLUGINS})
     TARGET_LINK_LIBRARIES(${OONF_EXE} static_${plugin})
 ENDFOREACH(plugin)
 
+# link core
+TARGET_LINK_LIBRARIES(${OONF_EXE} static_core)
+
+# link config and common API
 TARGET_LINK_LIBRARIES(${OONF_EXE} static_config)
 TARGET_LINK_LIBRARIES(${OONF_EXE} static_common)
 

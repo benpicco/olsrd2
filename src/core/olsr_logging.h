@@ -173,6 +173,7 @@ struct log_handler_entry {
 
 EXPORT extern struct log_handler_mask_entry *log_global_mask;
 EXPORT extern const char **LOG_SOURCE_NAMES;
+EXPORT extern const char *LOG_SEVERITY_NAMES[];
 
 EXPORT int olsr_log_init(const struct olsr_builddata *, enum log_severity,
     const char **lognames, size_t level_count)

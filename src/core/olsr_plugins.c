@@ -155,9 +155,6 @@ olsr_plugins_init_static(void) {
 
   assert(!avl_is_empty(&plugin_tree));
 
-  /* make sure all static plugins are loaded */
-  olsr_plugins_load_static();
-
   OLSR_FOR_ALL_PLUGIN_ENTRIES(p, it) {
     if (olsr_plugins_load(p->name) == NULL) {
       OLSR_WARN(LOG_PLUGINLOADER, "Cannot load plugin '%s'", p->name);

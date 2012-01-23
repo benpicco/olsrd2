@@ -217,8 +217,8 @@ struct cfg_schema_entry {
   size_t t_offset;
 };
 
-EXPORT const char *CFGLIST_BOOL_TRUE[4];
-EXPORT const char *CFGLIST_BOOL[8];
+EXPORT extern const char *CFGLIST_BOOL_TRUE[4];
+EXPORT extern const char *CFGLIST_BOOL[8];
 
 #define CFG_FOR_ALL_SCHEMA_SECTIONS(tmpl, section, iterator) avl_for_each_element_safe(&(tmpl->sections), section, _node, iterator)
 #define CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, iterator) avl_for_each_element_safe(&section->_entries, entry, _node, iterator)

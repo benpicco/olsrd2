@@ -75,8 +75,8 @@ struct olsr_http_handler {
       struct autobuf *out, struct olsr_http_session *);
 };
 
-void olsr_http_init(void);
-void olsr_http_cleanup(void);
+EXPORT void olsr_http_init(void);
+EXPORT void olsr_http_cleanup(void);
 
 EXPORT void olsr_http_add(struct olsr_http_handler *);
 EXPORT void olsr_http_remove(struct olsr_http_handler *);

@@ -96,11 +96,11 @@ struct olsr_plugin {
 #define OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) avl_for_each_element_safe(&plugin_tree, plugin, p_node, iterator)
 EXPORT extern struct avl_tree plugin_tree;
 
-void olsr_plugins_init(void);
-void olsr_plugins_cleanup(void);
+EXPORT void olsr_plugins_init(void);
+EXPORT void olsr_plugins_cleanup(void);
 
 EXPORT void olsr_plugins_hook(struct olsr_plugin *plugin);
-int olsr_plugins_init_static(void) __attribute__((warn_unused_result));
+EXPORT int olsr_plugins_init_static(void) __attribute__((warn_unused_result));
 
 EXPORT struct olsr_plugin *olsr_plugins_get(const char *libname);
 

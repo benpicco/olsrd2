@@ -72,9 +72,9 @@ struct olsr_socket_entry {
 EXPORT extern struct list_entity socket_head;
 #define OLSR_FOR_ALL_SOCKETS(socket, iterator) list_for_each_element_safe(&socket_head, socket, node, iterator)
 
-void olsr_socket_init(void);
-void olsr_socket_cleanup(void);
-int olsr_socket_handle(uint32_t until_time) __attribute__((warn_unused_result));
+EXPORT void olsr_socket_init(void);
+EXPORT void olsr_socket_cleanup(void);
+EXPORT int olsr_socket_handle(uint32_t until_time) __attribute__((warn_unused_result));
 
 EXPORT void olsr_socket_add(struct olsr_socket_entry *);
 EXPORT void olsr_socket_remove(struct olsr_socket_entry *);

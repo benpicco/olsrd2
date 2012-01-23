@@ -62,8 +62,8 @@ struct olsr_packet_socket {
       union netaddr_socket *from, size_t length);
 };
 
-void olsr_packet_init(void);
-void olsr_packet_cleanup(void);
+EXPORT void olsr_packet_init(void);
+EXPORT void olsr_packet_cleanup(void);
 
 EXPORT int olsr_packet_add(struct olsr_packet_socket *,
     union netaddr_socket *local);

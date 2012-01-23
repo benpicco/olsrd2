@@ -59,9 +59,9 @@ struct timeval_buf {
   char buf[sizeof("00:00:00.000000")];
 };
 
-int olsr_clock_init(void) __attribute__((warn_unused_result));
-void olsr_clock_cleanup(void);
-int olsr_clock_update(void) __attribute__((warn_unused_result));
+EXPORT int olsr_clock_init(void) __attribute__((warn_unused_result));
+EXPORT void olsr_clock_cleanup(void);
+EXPORT int olsr_clock_update(void) __attribute__((warn_unused_result));
 
 EXPORT int32_t olsr_clock_getRelative(uint32_t absolute);
 EXPORT bool olsr_clock_isPast(uint32_t s);

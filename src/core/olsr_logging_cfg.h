@@ -48,9 +48,9 @@
 
 #include "olsr_logging.h"
 
-void olsr_logcfg_init(enum log_source *debug_lvl_1, size_t length);
-void olsr_logcfg_cleanup(void);
-void olsr_logcfg_addschema(struct cfg_schema *schema);
-int olsr_logcfg_apply(struct cfg_db *db) __attribute__((warn_unused_result));
+EXPORT void olsr_logcfg_init(enum log_source *debug_lvl_1, size_t length);
+EXPORT void olsr_logcfg_cleanup(void);
+EXPORT void olsr_logcfg_addschema(struct cfg_schema *schema);
+EXPORT int olsr_logcfg_apply(struct cfg_db *db) __attribute__((warn_unused_result));
 
 #endif /* OLSR_LOGGING_CFG_H_ */

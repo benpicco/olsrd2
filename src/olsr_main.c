@@ -175,6 +175,7 @@ main(int argc, char **argv) {
   olsr_plugins_init();
 
   /* load static plugins */
+  olsr_plugins_load_static();
   if (olsr_plugins_init_static()) {
     goto olsrd_cleanup;
   }
