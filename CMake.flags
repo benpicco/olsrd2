@@ -51,9 +51,8 @@ IF (NOT EXISTS ${OONF_DEFAULT_CONF})
     string(REPLACE ".exe" ".conf" OONF_DEFAULT_CONF "${OONF_EXE}")
   ELSE(WIN32)
     # unix default config file is /etc/<executable-name>.conf
-    set (OONF_DEFAULT_CONF "/etc/${OONF_APP}.conf")
+    set (OONF_DEFAULT_CONF "/etc/${OONF_EXE}.conf")
   ENDIF(WIN32)
-    STRING(TOLOWER ${OONF_DEFAULT_CONF} OONF_DEFAULT_CONF)
 ENDIF()
 
 # add some necessary additions for win32
@@ -97,3 +96,11 @@ add_compiler_flag(-Winline)
 add_compiler_flag(-Wdisabled-optimization)
 add_compiler_flag(-Wformat)
 add_compiler_flag(-Wformat-security)
+
+# check for link time optimization
+check_c_compiler_flag("-flto" test_lto)
+if (${test_lto})
+    ADD_DEFINITIONS(-flto -fuse-linker-plugin)
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
+    SET(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -flto")
+endif()
