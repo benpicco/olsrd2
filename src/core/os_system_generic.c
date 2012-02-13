@@ -41,7 +41,7 @@ void os_system_cleanup(void) {
  * @return -1 if an error happened, 0 otherwise
  */
 int
-os_system_init_mesh_if(
+os_routing_init_mesh_if(
     struct olsr_interface *interf __attribute__((unused))) {
   return 0;
 }
@@ -51,7 +51,7 @@ os_system_init_mesh_if(
  * @param interf pointer to interface object
  */
 void
-os_system_cleanup_mesh_if(
+os_routing_cleanup_mesh_if(
     struct olsr_interface *interf __attribute__((unused))) {
 }
 #endif

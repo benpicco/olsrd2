@@ -39,8 +39,8 @@
  *
  */
 
-#ifndef OS_SYSTEM_H_
-#define OS_SYSTEM_H_
+#ifndef OS_ROUTING_H_
+#define OS_ROUTING_H_
 
 #include <stdio.h>
 #include <sys/time.h>
@@ -53,7 +53,7 @@
 #define USEC_PER_MSEC 1000
 
 /*
- * Set one of the following defines in the os specific os_net includes
+ * Set one of the following defines in the os specific os_routing includes
  * to OS_SPECIFIC to define that the os code is implementing the function
  * itself and does not use the generic function
  * Set it to OS_GENERIC to define that the code use the default implementation.
@@ -72,46 +72,24 @@
 #include "os_helper.h"
 
 #ifdef OS_LINUX
-#include "os_linux/os_system_linux.h"
+#include "os_linux/os_routing_linux.h"
 #endif
 
 #ifdef OS_BSD
-#include "os_bsd/os_system_bsd.h"
+#include "os_bsd/os_routing_bsd.h"
 #endif
 
 #ifdef OS_WIN32
-#include "os_win32/os_system_win32.h"
+#include "os_win32/os_routing_win32.h"
 #endif
 
 #undef OS_NET_SPECIFIC_INCLUDE
 
-/* prototypes for all os_system functions */
-EXPORT int os_system_init(void);
-EXPORT void os_system_cleanup(void);
+/* prototypes for all os_routing functions */
+EXPORT void os_routing_init(void);
+EXPORT void os_routing_cleanup(void);
 
-EXPORT int os_system_set_interface_state(const char *dev, bool up);
+EXPORT int os_routing_init_mesh_if(struct olsr_interface *);
+EXPORT void os_routing_cleanup_mesh_if(struct olsr_interface *);
 
-EXPORT void os_system_openlog(void);
-EXPORT void os_system_closelog(void);
-EXPORT void os_system_log(enum log_severity, const char *);
-
-static INLINE int os_system_gettimeofday(struct timeval *);
-
-/*
- * INLINE implementations for generic os_net functions
- */
-
-#if OS_SYSTEM_GETTIMEOFDAY == OS_GENERIC
-/**
- * Inline wrapper around gettimeofday
- * @param tv pointer to target timeval object
- * @return -1 if an error happened, 0 otherwise
- */
-static int
-os_system_gettimeofday(struct timeval *tv) {
-  return gettimeofday(tv, NULL);
-}
-#endif
-
-
-#endif /* OS_SYSTEM_H_ */
+#endif /* OS_ROUTING_H_ */

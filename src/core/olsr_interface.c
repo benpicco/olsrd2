@@ -17,6 +17,7 @@
 #include "olsr.h"
 #include "os_net.h"
 #include "os_system.h"
+#include "os_routing.h"
 
 /* timeinterval to delay change in interface to trigger actions */
 #define OLSR_INTERFACE_CHANGE_INTERVAL 100
@@ -162,7 +163,7 @@ _interface_add(const char *name, bool mesh) {
   interf->usage_counter++;
   if(mesh) {
     if (interf->mesh_counter == 0) {
-      os_system_init_mesh_if(interf);
+      os_routing_init_mesh_if(interf);
     }
     interf->mesh_counter++;
   }
@@ -193,7 +194,7 @@ _interface_remove(const char *name, bool mesh) {
     interf->mesh_counter--;
 
     if (interf->mesh_counter < 1) {
-      os_system_cleanup_mesh_if(interf);
+      os_routing_cleanup_mesh_if(interf);
     }
   }
 

@@ -68,7 +68,6 @@ static struct cfg_schema_section _http_section = {
   .mode = CFG_SSMODE_UNNAMED_OPTIONAL_STARTUP_TRIGGER,
   .help = "Settings for the http interface",
   .cb_delta_handler = _cb_config_changed
-
 };
 
 static struct cfg_schema_entry _http_entries[] = {

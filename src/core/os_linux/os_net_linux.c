@@ -64,13 +64,9 @@ os_net_cleanup(void) {
   if (olsr_subsystem_cleanup(&_os_net_state))
     return;
 
-  if (_ioctl_v4 != -1) {
-    close (_ioctl_v4);
-    _ioctl_v4 = -1;
-  }
+  close (_ioctl_v4);
   if (_ioctl_v6 != -1) {
     close (_ioctl_v6);
-    _ioctl_v6 = -1;
   }
 }
 

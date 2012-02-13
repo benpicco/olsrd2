@@ -56,7 +56,9 @@
 #include "config/cfg_schema.h"
 #include "builddata/plugin_static.h"
 #include "builddata/data.h"
+#include "os_net.h"
 #include "os_system.h"
+#include "os_routing.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_http.h"
@@ -240,8 +242,16 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
+#ifdef NEED_ROUTING
+  os_routing_init();
+#endif
+
+  if (os_net_init()) {
+    goto olsrd_cleanup;
+  }
+
   /* activate interface listening system */
-  if (0 && olsr_interface_init()) {
+  if (olsr_interface_init()) {
     goto olsrd_cleanup;
   }
 
@@ -310,6 +320,10 @@ olsrd_cleanup:
   olsr_http_cleanup();
   olsr_telnet_cleanup();
   olsr_interface_cleanup();
+  os_net_cleanup();
+#ifdef NEED_ROUTING
+  os_routing_cleanup();
+#endif
   os_system_cleanup();
   olsr_stream_cleanup();
   olsr_packet_cleanup();

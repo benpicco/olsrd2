@@ -25,7 +25,8 @@ ENDIF(WIN32)
 IF(LINUX)
     SET(OONF_CORE_SRCS ${OONF_CORE_SRCS}
                        os_linux/os_net_linux.c
-                       os_linux/os_system_linux.c)
+                       os_linux/os_system_linux.c
+                       os_linux/os_routing_linux.c)
 ENDIF(LINUX)
 
 IF(BSD)

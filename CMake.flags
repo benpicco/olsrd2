@@ -32,6 +32,10 @@ IF (${OONF_NEEDS_ROOT} MATCHES "apply")
     ADD_DEFINITIONS(-DNEED_ROOT=1)
 ENDIF (${OONF_NEEDS_ROOT} MATCHES "apply")
 
+IF (OONF_NEEDS_ROUTING)
+    ADD_DEFINITIONS(-DNEED_ROUTING)
+ENDIF(OONF_NEEDS_ROUTING)
+
 # OS-specific settings
 IF(ANDROID OR WIN32)
     # Android and windows don't compile well with c99
