@@ -44,7 +44,6 @@
 
 #include "common/common_types.h"
 #include "config/cfg_schema.h"
-#include "config/cfg_delta.h"
 #include "config/cfg.h"
 
 #include "olsr_logging.h"
@@ -63,7 +62,6 @@ static struct cfg_instance _olsr_cfg_instance;
 static struct cfg_db *_olsr_raw_db = NULL;
 static struct cfg_db *_olsr_work_db = NULL;
 static struct cfg_schema _olsr_schema;
-static struct cfg_delta _olsr_delta;
 static bool _first_apply;
 
 /* remember to trigger reload/commit */
@@ -105,8 +103,8 @@ olsr_cfg_init(void) {
 
   /* initialize schema */
   cfg_schema_add(&_olsr_schema);
-  cfg_schema_add_section(&_olsr_schema, &global_section);
-  cfg_schema_add_entries(&global_section, global_entries, ARRAYSIZE(global_entries));
+  cfg_schema_add_section(&_olsr_schema, &global_section,
+      global_entries, ARRAYSIZE(global_entries));
 
   /* initialize database */
   if ((_olsr_raw_db = cfg_db_add()) == NULL) {
@@ -124,9 +122,6 @@ olsr_cfg_init(void) {
   }
 
   cfg_db_link_schema(_olsr_raw_db, &_olsr_schema);
-
-  /* initialize delta */
-  cfg_delta_add(&_olsr_delta);
 
   /* initialize global config */
   memset(&config_global, 0, sizeof(config_global));
@@ -147,12 +142,9 @@ olsr_cfg_cleanup(void) {
     return;
 
   free(config_global.plugin.value);
-  cfg_delta_remove(&_olsr_delta);
 
   cfg_db_remove(_olsr_raw_db);
   cfg_db_remove(_olsr_work_db);
-
-  cfg_schema_remove(&_olsr_schema);
 
   cfg_remove(&_olsr_cfg_instance);
 }
@@ -295,16 +287,18 @@ olsr_cfg_apply(void) {
   cfg_schema_validate(new_db, true, false, NULL);
 
   if (olsr_cfg_update_globalcfg(false)) {
-
+    /* this should not happen at all */
+    OLSR_WARN(LOG_CONFIG, "Updating global config failed");
+    goto apply_failed;
   }
 
   /* calculate delta and call handlers */
   if (_first_apply) {
-    cfg_delta_trigger_non_optional(&_olsr_delta, _olsr_work_db);
+    cfg_schema_handle_db_startup_changes(_olsr_work_db);
     _first_apply = false;
   }
   else {
-    cfg_delta_calculate(&_olsr_delta, old_db, _olsr_work_db);
+    cfg_schema_handle_db_changes(old_db, _olsr_work_db);
   }
 
   /* success */
@@ -425,14 +419,6 @@ olsr_cfg_get_rawdb(void) {
 struct cfg_schema *
 olsr_cfg_get_schema(void) {
   return &_olsr_schema;
-}
-
-/**
- * @return pointer to olsr configuration delta management
- */
-struct cfg_delta *
-olsr_cfg_get_delta(void) {
-  return &_olsr_delta;
 }
 
 /**

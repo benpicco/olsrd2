@@ -55,20 +55,30 @@
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
 
-static bool _validate_cfg_entry(struct cfg_schema_section *schema_section,
+static bool _validate_cfg_entry(
     struct cfg_db *db, struct cfg_section_type *section,
     struct cfg_named_section *named, struct cfg_entry *entry,
     const char *section_name, bool cleanup, struct autobuf *out);
 static bool
 _check_missing_entries(struct cfg_schema_section *schema_section,
-    struct cfg_db *db, struct cfg_section_type *section,
-    struct cfg_named_section *named,
+    struct cfg_db *db, struct cfg_named_section *named,
     const char *section_name, struct autobuf *out);
+static void _handle_named_section_change(struct cfg_schema_section *s_section,
+    struct cfg_db *pre_change, struct cfg_db *post_change,
+    const char *name, bool startup);
 static bool _extract_netaddr_filter(const struct cfg_schema_entry *entry,
     int *address_family_1, int *address_family_2);
+static int
+_handle_db_changes(struct cfg_db *pre_change, struct cfg_db *post_change, bool startup);
 
 const char *CFGLIST_BOOL_TRUE[] = { "true", "1", "on", "yes" };
 const char *CFGLIST_BOOL[] = { "true", "1", "on", "yes", "false", "0", "off", "no" };
+const char *CFG_SCHEMA_SECTIONMODE[CFG_SSMODE_MAX] = {
+    "unnamed",
+    "unnamed, optional",
+    "named",
+    "named, mandatory"
+};
 
 /**
  * Initialize a schema
@@ -77,41 +87,55 @@ const char *CFGLIST_BOOL[] = { "true", "1", "on", "yes", "false", "0", "off", "n
 void
 cfg_schema_add(struct cfg_schema *schema) {
   avl_init(&schema->sections, cfg_avlcmp_keys, true, NULL);
-}
-
-/**
- * Removes all connected objects of a schema
- * @param schema pointer to schema
- */
-void
-cfg_schema_remove(struct cfg_schema *schema) {
-  struct cfg_schema_section *t_section, *tsec_it;
-
-  /* kill sections of schema */
-  CFG_FOR_ALL_SCHEMA_SECTIONS(schema, t_section, tsec_it) {
-    cfg_schema_remove_section(schema, t_section);
-  }
+  avl_init(&schema->entries, cfg_avlcmp_schemaentries, true, NULL);
+  avl_init(&schema->handlers, avl_comp_uint32, true, NULL);
 }
 
 /**
  * Add a section to a schema
  * @param schema pointer to configuration schema
  * @param section pointer to section
- * @return -1 if an error happened, 0 otherwise
  */
-int
-cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *section) {
-  assert (cfg_is_allowed_key(section->type));
+void
+cfg_schema_add_section(struct cfg_schema *schema,
+    struct cfg_schema_section *section,
+    struct cfg_schema_entry *entries, size_t entry_count) {
+  struct cfg_schema_entry *entry, *entry_it;
+  size_t i;
 
-  section->_node.key = section->type;
-  if (avl_insert(&schema->sections, &section->_node)) {
-    /* name collision */
-    section->_node.key = NULL;
-    return -1;
+  section->_section_node.key = section->type;
+  avl_insert(&schema->sections, &section->_section_node);
+
+  if (section->cb_delta_handler) {
+    section->_delta_node.key = &section->delta_priority;
+    avl_insert(&schema->handlers, &section->_delta_node);
   }
 
-  avl_init(&section->_entries, cfg_avlcmp_keys, false, NULL);
-  return 0;
+  section->_entries = entries;
+  section->_entry_count = entry_count;
+
+  for (i=0; i<entry_count; i++) {
+    entries[i]._parent = section;
+    entries[i].key.type = section->type;
+    entries[i]._node.key = &entries[i].key;
+
+    /* make sure all defaults are the same */
+    avl_for_each_elements_with_key(&schema->entries, entry_it, _node, entry,
+        &entries[i].key) {
+      if (entries[i].def.value == NULL) {
+        /* if we have no default, copy the one from the first existing entry */
+        memcpy(&entries[i].def, &entry->def, sizeof(entry->def));
+        break;
+      }
+      else {
+        /* if we have one, overwrite all existing entries */
+        memcpy(&entry->def, &entries[i].def, sizeof(entry->def));
+
+        // TODO: maybe output some logging that we overwrite the default?
+      }
+    }
+    avl_insert(&schema->entries, &entries[i]._node);
+  }
 }
 
 /**
@@ -121,75 +145,20 @@ cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *sec
  */
 void
 cfg_schema_remove_section(struct cfg_schema *schema, struct cfg_schema_section *section) {
-  struct cfg_schema_entry *entry, *ent_it;
-
-  if (section->_node.key) {
-    /* kill _entries of section_schema */
-    CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, ent_it) {
-      cfg_schema_remove_entry(section, entry);
-    }
-
-    avl_remove(&schema->sections, &section->_node);
-    section->_node.key = NULL;
-  }
-}
-
-/**
- * Adds a series of _entries to a schema section
- * @param section pointer to section
- * @param _entries pointer to array of _entries
- * @param e_cnt number of array _entries
- * @return -1 if an error happened, 0 otherwise
- */
-int
-cfg_schema_add_entries(struct cfg_schema_section *section,
-    struct cfg_schema_entry *entries, size_t e_cnt) {
   size_t i;
 
-  for (i=0; i<e_cnt; i++) {
-    if (cfg_schema_add_entry(section, &entries[i])) {
-      /* error, while adding entry, remove all of them again */
-      cfg_schema_remove_entries(section, entries, e_cnt);
-      return -1;
+  if (section->_section_node.key) {
+    avl_remove(&schema->sections, &section->_section_node);
+    section->_section_node.key = NULL;
+
+    for (i=0; i<section->_entry_count; i++) {
+      avl_remove(&schema->entries, &section->_entries[i]._node);
+      section->_entries[i]._node.key = NULL;
     }
   }
-  return 0;
-}
-
-/**
- * Adds a single entry to a schema section, section must have
- * already be added to the schema.
- * @param section pointer to section
- * @param entry pointer to entry
- * @return -1 if an error happened, 0 otherwise
- */
-int
-cfg_schema_add_entry(struct cfg_schema_section *section, struct cfg_schema_entry *entry) {
-  assert (cfg_is_allowed_key(entry->name));
-  assert (avl_is_node_added(&section->_node));
-
-  entry->_node.key = &entry->name[0];
-  if (avl_insert(&section->_entries, &entry->_node)) {
-    /* name collision */
-    entry->_node.key = NULL;
-    return -1;
-  }
-
-  return 0;
-}
-
-/**
- * Remove an array of _entries from a schema section
- * @param section pointer to section
- * @param _entries pointer to array of _entries
- * @param e_cnt number of array _entries
- */
-void
-cfg_schema_remove_entries(struct cfg_schema_section *section, struct cfg_schema_entry *entries, size_t e_cnt) {
-  size_t i;
-
-  for (i=0; i<e_cnt; i++) {
-    cfg_schema_remove_entry(section, &entries[i]);
+  if (section->_delta_node.key) {
+    avl_remove(&schema->handlers, &section->_delta_node);
+    section->_delta_node.key = NULL;
   }
 }
 
@@ -211,12 +180,12 @@ cfg_schema_validate(struct cfg_db *db,
   struct cfg_named_section *named, *named_it;
   struct cfg_entry *entry, *entry_it;
 
-  struct cfg_schema_section *schema_section, *schema_section_it;
+  struct cfg_schema_section *schema_section;
   struct cfg_schema_section *schema_section_first, *schema_section_last;
 
   bool error = false;
   bool warning = false;
-  bool hasName = false;
+  bool hasName = false, named_schema;
 
   if (db->schema == NULL) {
     return -1;
@@ -225,7 +194,7 @@ cfg_schema_validate(struct cfg_db *db,
   CFG_FOR_ALL_SECTION_TYPES(db, section, section_it) {
     /* check for missing schema sections */
     schema_section_first = avl_find_element(&db->schema->sections, section->type,
-        schema_section_first, _node);
+        schema_section_first, _section_node);
 
     if (schema_section_first == NULL) {
       if (ignore_unknown_sections) {
@@ -244,21 +213,23 @@ cfg_schema_validate(struct cfg_db *db,
     }
 
     schema_section_last = avl_find_le_element(&db->schema->sections, section->type,
-        schema_section_last, _node);
+        schema_section_last, _section_node);
 
     /* iterate over all schema for a certain section type */
-    avl_for_element_range(schema_section_first, schema_section_last, schema_section, _node) {
+    avl_for_element_range(schema_section_first, schema_section_last, schema_section, _section_node) {
       /* check data of named sections in db */
       CFG_FOR_ALL_SECTION_NAMES(section, named, named_it) {
         warning = false;
         hasName = cfg_db_is_named_section(named);
+        named_schema = schema_section->mode == CFG_SSMODE_NAMED
+            || schema_section->mode == CFG_SSMODE_NAMED_MANDATORY;
 
-        if (schema_section->named && !hasName) {
+        if (named_schema && !hasName) {
           cfg_append_printable_line(out, "The section type '%s' demands a name", section->type);
 
           warning = true;
         }
-        else if (!schema_section->named && hasName) {
+        else if (!named_schema && hasName) {
           cfg_append_printable_line(out, "The section type '%s'"
               " has to be used without a name"
               " ('%s' was given as a name)", section->type, named->name);
@@ -291,7 +262,7 @@ cfg_schema_validate(struct cfg_db *db,
 
         /* check for bad values */
         CFG_FOR_ALL_ENTRIES(named, entry, entry_it) {
-          warning = _validate_cfg_entry(schema_section,
+          warning = _validate_cfg_entry(
               db, section, named, entry, section_name,
               cleanup, out);
           error |= warning;
@@ -303,7 +274,7 @@ cfg_schema_validate(struct cfg_db *db,
           }
         }
         /* check for missing values */
-        warning = _check_missing_entries(schema_section, db, section, named, section_name, out);
+        warning = _check_missing_entries(schema_section, db, named, section_name, out);
         error |= warning;
       }
     }
@@ -314,8 +285,8 @@ cfg_schema_validate(struct cfg_db *db,
   }
 
   /* search for missing mandatory sections */
-  CFG_FOR_ALL_SCHEMA_SECTIONS(db->schema, schema_section, schema_section_it) {
-    if (!schema_section->mandatory) {
+  avl_for_each_element(&db->schema->sections, schema_section, _section_node) {
+    if (schema_section->mode != CFG_SSMODE_NAMED_MANDATORY) {
       continue;
     }
 
@@ -361,18 +332,79 @@ cfg_schema_tobin(void *target, struct cfg_named_section *named,
           named->section_type->db,
           named->section_type->type,
           named->name,
-          entries[i].name);
+          entries[i].key.entry);
     }
     else {
       value = &entries[i].def;
     }
 
-    if (entries[i].cb_to_binary(&entries[i], value, ptr + entries[i].t_offset)) {
+    if (entries[i].cb_to_binary(&entries[i], value, ptr + entries[i].bin_offset)) {
       /* error in conversion */
       return -1;
     }
   }
   return 0;
+}
+
+/**
+ * Compare two databases with the same schema and call their change listeners
+ * @param pre_change database before change
+ * @param post_change database after change
+ * @return -1 if databases have different schema, 0 otherwise
+ */
+int
+cfg_schema_handle_db_changes(struct cfg_db *pre_change, struct cfg_db *post_change) {
+  return _handle_db_changes(pre_change, post_change, false);
+}
+
+int
+cfg_schema_handle_db_startup_changes(struct cfg_db *post_db) {
+  struct cfg_db *pre_db;
+  int result;
+
+  pre_db = cfg_db_add();
+  if (pre_db == NULL) {
+    return -1;
+  }
+  cfg_db_link_schema(pre_db, post_db->schema);
+
+  result = _handle_db_changes(pre_db, post_db, true);
+  cfg_db_remove(pre_db);
+  return result;
+}
+
+/**
+ * AVL comparator for two cfg_schema_entry_key entities.
+ * Will compare key.type first, if these are the same it will
+ * compare key.entry. NULL is valid as an entry and is smaller
+ * than all non-NULL entries. NULL is NOT valid as a type.
+ *
+ * @param p1 pointer to first key
+ * @param p2 pointer to second key
+ * @param unused
+ * @return <0 if p1 comes first, 0 if both are the same, >0 otherwise
+ */
+int
+cfg_avlcmp_schemaentries(const void *p1, const void *p2, void *unused) {
+  const struct cfg_schema_entry_key *key1, *key2;
+  int result;
+
+  key1 = p1;
+  key2 = p2;
+
+  result = cfg_avlcmp_keys(key1->type, key2->type, unused);
+  if (result != 0) {
+    return result;
+  }
+
+  if (key1->entry == NULL) {
+    return key2->entry == NULL ? 0 : -1;
+  }
+  if (key2->entry == NULL) {
+    return 1;
+  }
+
+  return cfg_avlcmp_keys(key1->entry, key2->entry, unused);
 }
 
 /**
@@ -390,7 +422,7 @@ cfg_schema_validate_strlen(const struct cfg_schema_entry *entry,
   if ((int)strlen(value) > entry->validate_params.p_i1) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s is longer than %d characters",
-        value, entry->name, section_name, entry->validate_params.p_i1);
+        value, entry->key.entry, section_name, entry->validate_params.p_i1);
     return 1;
   }
   return 0;
@@ -417,7 +449,7 @@ cfg_schema_validate_printable(const struct cfg_schema_entry *entry,
     /* not a printable ascii character */
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s has has non-printable characters",
-        value, entry->name, section_name);
+        value, entry->key.entry, section_name);
     return 1;
 
   }
@@ -447,7 +479,7 @@ cfg_schema_validate_choice(const struct cfg_schema_entry *entry,
 
   cfg_append_printable_line(out, "Unknown value '%s'"
       " for entry '%s' in section %s",
-      value, entry->name, section_name);
+      value, entry->key.entry, section_name);
   return -1;
 }
 
@@ -470,13 +502,13 @@ cfg_schema_validate_int(const struct cfg_schema_entry *entry,
   if (endptr == NULL || *endptr != 0) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s is not an integer",
-        value, entry->name, section_name);
+        value, entry->key.entry, section_name);
     return 1;
   }
   if (i < entry->validate_params.p_i1 || i > entry->validate_params.p_i2) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s' in section %s is "
         "not between %d and %d",
-        value, entry->name, section_name,
+        value, entry->key.entry, section_name,
         entry->validate_params.p_i1, entry->validate_params.p_i2);
     return 1;
   }
@@ -505,7 +537,7 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
   if (netaddr_from_string(&addr, value)) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s is no valid network address",
-        value, entry->name, section_name);
+        value, entry->key.entry, section_name);
     return -1;
   }
 
@@ -515,13 +547,13 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
   if (addr.prefix_len > max_prefix) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s has an illegal prefix length",
-        value, entry->name, section_name);
+        value, entry->key.entry, section_name);
     return -1;
   }
   if (!prefix && addr.prefix_len != max_prefix) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s must be a single address, not a prefix",
-        value, entry->name, section_name);
+        value, entry->key.entry, section_name);
     return -1;
   }
 
@@ -538,7 +570,7 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
   /* at least one condition was set, but no one matched */
   cfg_append_printable_line(out, "Value '%s' for entry '%s'"
       " in section '%s' is wrong address type",
-      value, entry->name, section_name);
+      value, entry->key.entry, section_name);
   return -1;
 }
 
@@ -788,6 +820,62 @@ cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry __attribute__
 }
 
 /**
+ * Compare two sets of databases and trigger delta listeners according to connected
+ * schema.
+ * @param pre_change pre-change database
+ * @param post_change post-change database
+ * @param startup if true, also trigger unnamed sections which don't change, but are
+ *   of type CFG_SSMODE_UNNAMED (and not CFG_SSMODE_UNNAMED_OPTIONAL_STARTUP_TRIGGER).
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_handle_db_changes(struct cfg_db *pre_change, struct cfg_db *post_change, bool startup) {
+  struct cfg_schema_section *s_section;
+  struct cfg_section_type *pre_type, *post_type;
+  struct cfg_named_section *pre_named, *post_named, *named_it;
+
+  if (pre_change->schema == NULL || pre_change->schema != post_change->schema) {
+    /* no valid schema found */
+    return -1;
+  }
+
+  avl_for_each_element(&pre_change->schema->handlers, s_section, _delta_node) {
+    /* look over all schemas in the order of their delta priority */
+
+    pre_type = cfg_db_find_sectiontype(pre_change, s_section->type);
+    post_type = cfg_db_find_sectiontype(post_change, s_section->type);
+
+    if (post_type) {
+      /* handle new sections and changes */
+      pre_named = NULL;
+      CFG_FOR_ALL_SECTION_NAMES(post_type, post_named, named_it) {
+        _handle_named_section_change(s_section,
+            pre_change, post_change, post_named->name, startup);
+      }
+    }
+    if (pre_type) {
+      /* handle removed sections */
+      post_named = NULL;
+      CFG_FOR_ALL_SECTION_NAMES(pre_type, pre_named, named_it) {
+        if (post_type) {
+          post_named = cfg_db_get_named_section(post_type, pre_named->name);
+        }
+
+        if (!post_named) {
+          _handle_named_section_change(s_section,
+              pre_change, post_change, pre_named->name, startup);
+        }
+      }
+    }
+    if (startup && s_section->mode == CFG_SSMODE_UNNAMED
+        && pre_type == NULL && post_type == NULL) {
+      _handle_named_section_change(s_section, pre_change, post_change, NULL, true);
+    }
+  }
+  return 0;
+}
+
+/**
  * Validates on configuration entry.
  * @param schema_section pointer to schema section
  * @param db pointer to database
@@ -800,33 +888,37 @@ cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry __attribute__
  * @return true if an error happened, false otherwise
  */
 static bool
-_validate_cfg_entry(struct cfg_schema_section *schema_section,
-    struct cfg_db *db, struct cfg_section_type *section,
+_validate_cfg_entry(struct cfg_db *db, struct cfg_section_type *section,
     struct cfg_named_section *named, struct cfg_entry *entry,
     const char *section_name, bool cleanup, struct autobuf *out) {
-  struct cfg_schema_entry *schema_entry;
+  struct cfg_schema_entry *schema_entry, *s_entry_it;
+  struct cfg_schema_entry_key key;
   bool warning = false;
   char *ptr1 = NULL;
 
-  schema_entry = cfg_schema_find_entry(schema_section, entry->name);
+  key.type = section->type;
+  key.entry = entry->name;
 
-  if (schema_entry == NULL) {
-    cfg_append_printable_line(out, "Unknown entry '%s'"
-        " for section type '%s'", entry->name, section->type);
-    return true;
-  }
+  avl_for_each_elements_with_key(
+      &db->schema->entries, schema_entry, _node, s_entry_it, &key) {
 
-  if (schema_entry->cb_validate == NULL) {
-    return false;
-  }
-
-  /* now validate syntax */
-  ptr1 = entry->val.value;
-  while (ptr1 < entry->val.value + entry->val.length) {
-    if (schema_entry->cb_validate(schema_entry, section_name, ptr1, out)) {
-      /* warning is generated by the validate callback itself */
-      warning = true;
+    if (schema_entry == NULL) {
+      cfg_append_printable_line(out, "Unknown entry '%s'"
+          " for section type '%s'", entry->name, section->type);
+      return true;
     }
+
+    if (schema_entry->cb_validate == NULL) {
+      continue;
+    }
+
+    /* now validate syntax */
+    ptr1 = entry->val.value;
+    while (ptr1 < entry->val.value + entry->val.length) {
+      if (schema_entry->cb_validate(schema_entry, section_name, ptr1, out)) {
+        /* warning is generated by the validate callback itself */
+        warning = true;
+      }
 
     if (warning && cleanup) {
       /* illegal entry found, remove it */
@@ -847,7 +939,7 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
     /* remove entry */
     cfg_db_remove_entry(db, section->type, named->name, entry->name);
   }
-
+  }
   return warning;
 }
 
@@ -863,30 +955,76 @@ _validate_cfg_entry(struct cfg_schema_section *schema_section,
  */
 static bool
 _check_missing_entries(struct cfg_schema_section *schema_section,
-    struct cfg_db *db, struct cfg_section_type *section,
-    struct cfg_named_section *named,
+    struct cfg_db *db, struct cfg_named_section *named,
     const char *section_name, struct autobuf *out) {
   struct cfg_schema_entry *schema_entry, *schema_entry_it;
+  struct cfg_schema_entry_key key;
   bool warning, error;
 
   warning = false;
   error = false;
 
+  key.type = schema_section->type;
+  key.entry = NULL;
+
   /* check for missing values */
-  CFG_FOR_ALL_SCHEMA_ENTRIES(schema_section, schema_entry, schema_entry_it) {
+  schema_entry = avl_find_ge_element(&db->schema->entries, &key, schema_entry, _node);
+  avl_for_element_to_last(&db->schema->entries, schema_entry, schema_entry_it, _node) {
+    if (cfg_cmp_keys(schema_entry_it->key.type, schema_section->type) != 0)
+      break;
+
     if (!strarray_is_empty_c(&schema_entry->def)) {
       continue;
     }
 
     /* mandatory parameter */
-    warning = !cfg_db_find_entry(db, section->type, named->name, schema_entry->name);
+    warning = !cfg_db_find_entry(db, schema_entry->key.type,
+        named->name, schema_entry->key.entry);
     error |= warning;
     if (warning) {
       cfg_append_printable_line(out, "Missing mandatory value for entry '%s' in section %s",
-          schema_entry->name, section_name);
+          schema_entry->key.entry, section_name);
     }
   }
   return error;
+}
+
+/**
+ * Handle changes in a single named section
+ * @param s_section schema entry for section
+ * @param pre_change pointer to database before changes
+ * @param post_change pointer to database after changes
+ * @param name
+ */
+static void
+_handle_named_section_change(struct cfg_schema_section *s_section,
+    struct cfg_db *pre_change, struct cfg_db *post_change,
+    const char *name, bool startup) {
+  struct cfg_schema_entry *entry;
+  bool changed;
+  size_t i;
+
+  s_section->pre = cfg_db_find_namedsection(pre_change, s_section->type, name);
+  s_section->post = cfg_db_find_namedsection(post_change, s_section->type, name);
+
+  changed = false;
+
+  for (i=0; i<s_section->_entry_count; i++) {
+    entry = &s_section->_entries[i];
+
+    /* read values */
+    entry->pre = cfg_db_get_entry_value(
+        pre_change, s_section->type, name, entry->key.entry);
+    entry->post = cfg_db_get_entry_value(
+        post_change, s_section->type, name, entry->key.entry);
+
+    entry->delta_changed = strarray_cmp_c(entry->pre, entry->post);
+    changed |= entry->delta_changed;
+  }
+
+  if (changed || startup) {
+    s_section->cb_delta_handler();
+  }
 }
 
 /**

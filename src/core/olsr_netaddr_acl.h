@@ -21,13 +21,13 @@
 #define CFG_VALIDATE_ACL_V6(p_name, p_def, p_help, args...)      _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_params = {.p_i1 = -AF_INET6 }, ##args )
 #define CFG_VALIDATE_ACL_V46(p_name, p_def, p_help, args...)     _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_params = {.p_i1 = -AF_INET, .p_i2 = AF_INET6}, ##args )
 
-#define CFG_MAP_ACL(p_reference, p_field, p_name, p_def, p_help, args...)         CFG_VALIDATE_ACL(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_ACL_HWADDR(p_reference, p_field, p_name, p_def, p_help, args...)  CFG_VALIDATE_ACL_HWADDR(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_ACL_MAC48(p_reference, p_field, p_name, p_def, p_help, args...)   CFG_VALIDATE_ACL_MAC48(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_ACL_EUI64(p_reference, p_field, p_name, p_def, p_help, args...)   CFG_VALIDATE_ACL_EUI64(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_ACL_V4(p_reference, p_field, p_name, p_def, p_help, args...)      CFG_VALIDATE_ACL_V4(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_ACL_V6(p_reference, p_field, p_name, p_def, p_help, args...)      CFG_VALIDATE_ACL_V6(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_ACL_V46(p_reference, p_field, p_name, p_def, p_help, args...)     CFG_VALIDATE_ACL_V46(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .t_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_ACL(p_reference, p_field, p_name, p_def, p_help, args...)         CFG_VALIDATE_ACL(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_ACL_HWADDR(p_reference, p_field, p_name, p_def, p_help, args...)  CFG_VALIDATE_ACL_HWADDR(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_ACL_MAC48(p_reference, p_field, p_name, p_def, p_help, args...)   CFG_VALIDATE_ACL_MAC48(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_ACL_EUI64(p_reference, p_field, p_name, p_def, p_help, args...)   CFG_VALIDATE_ACL_EUI64(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_ACL_V4(p_reference, p_field, p_name, p_def, p_help, args...)      CFG_VALIDATE_ACL_V4(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_ACL_V6(p_reference, p_field, p_name, p_def, p_help, args...)      CFG_VALIDATE_ACL_V6(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_ACL_V46(p_reference, p_field, p_name, p_def, p_help, args...)     CFG_VALIDATE_ACL_V46(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
 
 struct olsr_netaddr_acl {
   struct netaddr *accept;

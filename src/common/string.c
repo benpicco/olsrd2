@@ -308,3 +308,34 @@ strarray_get(const struct strarray *array, size_t idx) {
   }
   return NULL;
 }
+
+/**
+ * Compare to stringarrays
+ * @param a1 pointer to array 1
+ * @param a2 pointer to array 2
+ * @return <0 if a1 is 'smaller' than a2, >0 if a1 is 'larger' than a2,
+ *   0 if both are the same.
+ */
+int
+strarray_cmp(const struct strarray *a1, const struct strarray *a2) {
+  int result;
+  size_t min_len;
+
+  if (a1->length > a2->length) {
+    min_len = a2->length;
+  }
+  else {
+    min_len = a1->length;
+  }
+
+  result = memcmp(a1->value, a2->value, min_len);
+  if (result == 0) {
+    if (a1->length > a2->length) {
+      return 1;
+    }
+    if (a1->length < a2->length) {
+      return -1;
+    }
+  }
+  return result;
+}

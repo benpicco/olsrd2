@@ -181,6 +181,8 @@ os_system_cleanup(void) {
 
   close(_rtnetlink_fd);
   close(_ioctl_fd);
+
+  free (_netlink_header);
 }
 
 /**

@@ -351,8 +351,9 @@ cfg_cmd_handle_format(struct cfg_instance *instance, const char *arg) {
 int
 cfg_cmd_handle_schema(struct cfg_db *db,
     const char *arg, struct autobuf *log) {
-  struct cfg_schema_section *s_section, *s_section_it;
-  struct cfg_schema_entry *s_entry, *s_entry_it;
+  struct cfg_schema_section *s_section;
+  struct cfg_schema_entry *s_entry, *s_entry_it, *s_entry_last;
+  struct cfg_schema_entry_key key;
   const char *c_ptr;
   char *copy, *ptr;
   int result;
@@ -365,14 +366,17 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   if (arg == NULL || *arg == 0) {
     abuf_puts(log, "List of section types:\n"
         "(use this command with the types as parameter for more information)\n");
-
-    CFG_FOR_ALL_SCHEMA_SECTIONS(db->schema, s_section, s_section_it) {
-      cfg_append_printable_line(log, "    %s%s%s%s%s",
-          s_section->type,
-          s_section->named ? " (named)" : "",
-          s_section->mandatory ? " (mandatory)" : "",
-          s_section->help ? ": " : "",
-          s_section->help ? s_section->help : "");
+    avl_for_each_element(&db->schema->sections, s_section, _section_node) {
+      if (!s_section->_section_node.follower) {
+        cfg_append_printable_line(log, "    %s %s%s%s",
+            s_section->type,
+            CFG_SCHEMA_SECTIONMODE[s_section->mode],
+            s_section->help ? ": " : "",
+            s_section->help ? s_section->help : "");
+      }
+      if (s_section->help) {
+        cfg_append_printable_line(log, "        %s", s_section->help);
+      }
     }
     return 0;
   }
@@ -388,29 +392,81 @@ cfg_cmd_handle_schema(struct cfg_db *db,
     *ptr++ = 0;
   }
 
-  // TODO: support multiple schema with same section type
-  s_section = avl_find_element(&db->schema->sections, copy, s_section, _node);
-  if (s_section == NULL) {
-    cfg_append_printable_line(log, "Unknown section type '%s'", copy);
-    goto handle_schema_cleanup;
-  }
-
   if (ptr == NULL) {
+    /* show all schema entries for a section */
+    key.type = copy;
+    key.entry = NULL;
+    s_entry = avl_find_ge_element(&db->schema->entries, &key, s_entry, _node);
+    if (s_entry == NULL || cfg_cmp_keys(s_entry->key.type, copy) != 0) {
+      cfg_append_printable_line(log, "Unknown section type '%s'", copy);
+      goto handle_schema_cleanup;
+    }
+
     cfg_append_printable_line(log, "List of entries in section type '%s':", copy);
     abuf_puts(log, "(use this command with 'type.name' as parameter for more information)\n");
-    CFG_FOR_ALL_SCHEMA_ENTRIES(s_section, s_entry, s_entry_it) {
-      cfg_append_printable_line(log, "    %s%s%s%s%s",
-          s_entry->name,
-          strarray_is_empty_c(&s_entry->def) ? " (mandatory)" : "",
-          s_entry->list ? " (list)" : "",
-          s_entry->help ? ": " : "",
-          s_entry->help ? s_entry->help : "");
+
+    s_entry_it = s_entry;
+    avl_for_element_to_last(&db->schema->entries, s_entry, s_entry_it, _node) {
+      if (cfg_cmp_keys(s_entry_it->key.type, copy) != 0) {
+        break;
+      }
+
+      if (!s_entry_it->_node.follower) {
+        cfg_append_printable_line(log, "    %s%s%s",
+            s_entry->key.entry,
+            strarray_is_empty_c(&s_entry->def) ? " (mandatory)" : "",
+            s_entry->list ? " (list)" : "");
+      }
+      if (s_entry_it->help) {
+        cfg_append_printable_line(log, "        %s", s_entry_it->help);
+      }
     }
     result = 0;
-    goto handle_schema_cleanup;
+  }
+  else {
+    /* show all schema entries of a type/entry pair */
+    key.type = copy;
+    key.entry = ptr;
+
+    s_entry_last = NULL;
+
+    avl_for_each_elements_with_key(&db->schema->entries, s_entry_it, _node, s_entry, &key) {
+      if (!s_entry_it->_node.follower) {
+        /* print type/parameter */
+        cfg_append_printable_line(log, "    %s%s%s",
+            s_entry->key.entry,
+            strarray_is_empty_c(&s_entry->def) ? " (mandatory)" : "",
+            s_entry->list ? " (list)" : "");
+
+        /* print defaults */
+        if (!strarray_is_empty_c(&s_entry->def)) {
+          cfg_append_printable_line(log, "    Default value:");
+          FOR_ALL_STRINGS(&s_entry->def, c_ptr) {
+            cfg_append_printable_line(log, "        '%s'", c_ptr);
+          }
+        }
+      }
+
+      if (s_entry_it->cb_valhelp) {
+        /* print validator help if different from last validator */
+        if (s_entry_last == NULL || s_entry_last->cb_valhelp != s_entry_it->cb_valhelp
+            || memcmp(&s_entry_last->validate_params, &s_entry_it->validate_params,
+                sizeof(s_entry_it->validate_params)) != 0) {
+          s_entry_it->cb_valhelp(s_entry_it, log);
+          s_entry_last = s_entry_it;
+        }
+      }
+    }
+    avl_for_each_elements_with_key(&db->schema->entries, s_entry_it, _node, s_entry, &key) {
+      /* print help text */
+      if (s_entry_it->help) {
+        cfg_append_printable_line(log, "        %s", s_entry_it->help);
+      }
+    }
   }
 
-  s_entry = avl_find_element(&s_section->_entries, ptr, s_entry, _node);
+#if 0
+  s_entry = avl_find_element(&s_section->_entries, ptr, s_entry, _section_node);
   if (s_entry == NULL) {
     cfg_append_printable_line(log, "Unknown entry name '%s' in section type '%s'",
         ptr, copy);
@@ -436,7 +492,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
   }
 
   result = 0;
-
+#endif
 handle_schema_cleanup:
   free (copy);
   return result;

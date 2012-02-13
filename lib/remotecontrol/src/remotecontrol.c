@@ -121,16 +121,12 @@ OLSR_PLUGIN7 {
 
 /* configuration */
 static struct cfg_schema_section _remotecontrol_section = {
-  .type = "remotecontrol"
+  .type = "remotecontrol",
+  .cb_delta_handler = _cb_config_changed,
 };
 
 static struct cfg_schema_entry _remotecontrol_entries[] = {
   CFG_MAP_ACL(_remotecontrol_cfg, acl, "acl", "default_accept", "acl for remote control commands"),
-};
-
-static struct cfg_delta_handler _remotecontrol_handler = {
-  .s_type = "remotecontrol",
-  .callback = _cb_config_changed,
 };
 
 static struct _remotecontrol_cfg _remotecontrol_config;
@@ -185,12 +181,8 @@ static struct list_entity _remote_sessions;
 static int
 _cb_plugin_load(void)
 {
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_remotecontrol_section);
-  cfg_schema_add_entries(&_remotecontrol_section,
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_remotecontrol_section,
       _remotecontrol_entries, ARRAYSIZE(_remotecontrol_entries));
-
-  cfg_delta_add_handler(olsr_cfg_get_delta(), &_remotecontrol_handler);
-
   olsr_acl_add(&_remotecontrol_config.acl);
 
   return 0;
@@ -204,8 +196,6 @@ static int
 _cb_plugin_unload(void)
 {
   olsr_acl_remove(&_remotecontrol_config.acl);
-
-  cfg_delta_remove_handler(olsr_cfg_get_delta(), &_remotecontrol_handler);
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_remotecontrol_section);
   return 0;
 }
@@ -563,7 +553,7 @@ _cb_handle_config(struct olsr_telnet_data *data) {
  */
 static void
 _cb_config_changed(void) {
-  if (cfg_schema_tobin(&_remotecontrol_config, _remotecontrol_handler.post,
+  if (cfg_schema_tobin(&_remotecontrol_config, _remotecontrol_section.post,
       _remotecontrol_entries, ARRAYSIZE(_remotecontrol_entries))) {
     OLSR_WARN(LOG_CONFIG, "Could not convert remotecontrol config to bin");
     return;

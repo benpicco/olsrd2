@@ -9,7 +9,6 @@
 #include "common/avl.h"
 #include "common/avl_comp.h"
 
-#include "config/cfg_delta.h"
 #include "config/cfg_schema.h"
 
 #include "builddata/data.h"
@@ -20,9 +19,6 @@
 #include "olsr_stream_socket.h"
 #include "os_system.h"
 #include "olsr_http.h"
-
-/* config section */
-static const char _CFG_HTTP_SECTION[] = "http";
 
 /* Http text constants */
 static const char HTTP_VERSION_1_0[] = "HTTP/1.0";
@@ -68,8 +64,11 @@ static void  _decode_uri(char *src);
 
 /* configuration variables */
 static struct cfg_schema_section _http_section = {
-  .type = _CFG_HTTP_SECTION,
+  .type = "http",
+  .mode = CFG_SSMODE_UNNAMED_OPTIONAL_STARTUP_TRIGGER,
   .help = "Settings for the http interface",
+  .cb_delta_handler = _cb_config_changed
+
 };
 
 static struct cfg_schema_entry _http_entries[] = {
@@ -81,11 +80,6 @@ static struct cfg_schema_entry _http_entries[] = {
       bindto_v6, "bindto_v6", "::1", "Bind http ipv6 socket to this address", false),
   CFG_MAP_INT_MINMAX(olsr_stream_managed_config,
       port, "port", "1978", "Network port for http interface", 1, 65535),
-};
-
-static struct cfg_delta_handler _http_handler = {
-  .s_type = _CFG_HTTP_SECTION,
-  .callback = _cb_config_changed
 };
 
 /* tree of http sites */
@@ -105,10 +99,8 @@ olsr_http_init(void) {
   if (olsr_subsystem_init(&_http_state))
     return;
 
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_http_section);
-  cfg_schema_add_entries(&_http_section, _http_entries, ARRAYSIZE(_http_entries));
-
-  cfg_delta_add_handler(olsr_cfg_get_delta(), &_http_handler);
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_http_section,
+      _http_entries, ARRAYSIZE(_http_entries));
 
   olsr_stream_add_managed(&_http_managed_socket);
   _http_managed_socket.config.session_timeout = 120000; /* 120 seconds */
@@ -130,7 +122,6 @@ olsr_http_cleanup(void) {
 
   olsr_stream_remove_managed(&_http_managed_socket, true);
 
-  cfg_delta_remove_handler(olsr_cfg_get_delta(), &_http_handler);
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_http_section);
 }
 
@@ -189,7 +180,7 @@ _cb_config_changed(void) {
 
   /* generate binary config */
   memset(&config, 0, sizeof(config));
-  if (cfg_schema_tobin(&config, _http_handler.post,
+  if (cfg_schema_tobin(&config, _http_section.post,
       _http_entries, ARRAYSIZE(_http_entries))) {
     /* error in conversion */
     OLSR_WARN(LOG_HTTP, "Cannot map http config to binary data");

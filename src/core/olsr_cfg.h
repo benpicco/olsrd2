@@ -47,7 +47,6 @@
 #include "common/list.h"
 #include "common/netaddr.h"
 #include "config/cfg_schema.h"
-#include "config/cfg_delta.h"
 
 struct olsr_config_global {
   struct strarray plugin;
@@ -82,6 +81,5 @@ EXPORT struct cfg_instance *olsr_cfg_get_instance(void);
 EXPORT struct cfg_db *olsr_cfg_get_db(void);
 EXPORT struct cfg_db *olsr_cfg_get_rawdb(void);
 EXPORT struct cfg_schema *olsr_cfg_get_schema(void);
-EXPORT struct cfg_delta *olsr_cfg_get_delta(void);
 
 #endif /* OLSR_CFG_H_ */

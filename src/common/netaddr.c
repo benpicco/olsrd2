@@ -235,6 +235,7 @@ netaddr_create_host_bin(struct netaddr *host, const struct netaddr *netmask,
   size_t host_index, number_index;
   uint8_t host_part_length;
   const uint8_t *number_byte;
+  uint8_t mask;
 
   number_byte = number;
 
@@ -264,8 +265,10 @@ netaddr_create_host_bin(struct netaddr *host, const struct netaddr *netmask,
 
     /* copy bit masked part */
     if ((netmask->prefix_len & 7) != 0) {
-      host->addr[host_index++] |=
-          (number_byte[number_index++]) & (255 >> (netmask->prefix_len & 7));
+      mask = (255 >> (netmask->prefix_len & 7));
+      host->addr[host_index] &= (~mask);
+      host->addr[host_index] |= (number_byte[number_index++]) & mask;
+      host_index++;
     }
   }
 

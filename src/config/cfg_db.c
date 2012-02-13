@@ -363,27 +363,33 @@ cfg_db_remove_entry(struct cfg_db *db, const char *section_type,
 const struct const_strarray *
 cfg_db_get_entry_value(struct cfg_db *db, const char *section_type,
     const char *section_name, const char *entry_name) {
-  struct cfg_entry *entry;
-  struct cfg_schema_section *s_section;
+  struct cfg_schema_entry_key key;
   struct cfg_schema_entry *s_entry;
+  struct cfg_entry *entry;
 
   entry = cfg_db_find_entry(db, section_type, section_name, entry_name);
   if (entry != NULL) {
     return (const struct const_strarray *)&entry->val;
   }
 
+  /* look for value of default section */
+  if (section_name != NULL) {
+    entry = cfg_db_find_entry(db, section_type, NULL, entry_name);
+    if (entry != NULL) {
+      return (const struct const_strarray *)&entry->val;
+    }
+  }
+
+  /* look for schema default value */
   if (db->schema == NULL) {
     return NULL;
   }
 
-  /* look for default value */
-  s_section = cfg_schema_find_section(db->schema, section_type);
-  if (s_section == NULL) {
-    return NULL;
-  }
+  key.type = section_type;
+  key.entry = entry_name;
 
-  s_entry = cfg_schema_find_entry(s_section, entry_name);
-  if (s_entry) {
+  s_entry = avl_find_element(&db->schema->entries, &key, s_entry, _node);
+  if (s_entry != NULL && s_entry->def.value != NULL) {
     return &s_entry->def;
   }
   return NULL;

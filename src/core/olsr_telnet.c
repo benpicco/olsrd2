@@ -9,7 +9,6 @@
 #include "common/avl.h"
 #include "common/avl_comp.h"
 
-#include "config/cfg_delta.h"
 #include "config/cfg_schema.h"
 
 #include "olsr_cfg.h"
@@ -21,8 +20,6 @@
 #include "olsr_timer.h"
 #include "olsr.h"
 #include "olsr_telnet.h"
-
-#define _CFG_TELNET_SECTION "telnet"
 
 /* static function prototypes */
 static void _cb_config_changed(void);
@@ -49,8 +46,10 @@ static enum olsr_telnet_result _cb_telnet_plugin(struct olsr_telnet_data *data);
 
 /* global and static variables */
 static struct cfg_schema_section telnet_section = {
-  .type = _CFG_TELNET_SECTION,
+  .type = "telnet",
+  .mode = CFG_SSMODE_UNNAMED_OPTIONAL_STARTUP_TRIGGER,
   .help = "Settings for the telnet interface",
+  .cb_delta_handler = _cb_config_changed,
 };
 
 static struct cfg_schema_entry telnet_entries[] = {
@@ -62,11 +61,6 @@ static struct cfg_schema_entry telnet_entries[] = {
       bindto_v6, "bindto_v6", "::1", "Bind telnet ipv6 socket to this address", false),
   CFG_MAP_INT_MINMAX(olsr_stream_managed_config,
       port, "port", "2006", "Network port for telnet interface", 1, 65535),
-};
-
-static struct cfg_delta_handler telnet_handler = {
-  .s_type = _CFG_TELNET_SECTION,
-  .callback = _cb_config_changed
 };
 
 /* built-in telnet commands */
@@ -120,10 +114,8 @@ olsr_telnet_init(void) {
     return -1;
   }
 
-  cfg_schema_add_section(olsr_cfg_get_schema(), &telnet_section);
-  cfg_schema_add_entries(&telnet_section, telnet_entries, ARRAYSIZE(telnet_entries));
-
-  cfg_delta_add_handler(olsr_cfg_get_delta(), &telnet_handler);
+  cfg_schema_add_section(olsr_cfg_get_schema(), &telnet_section,
+      telnet_entries, ARRAYSIZE(telnet_entries));
 
   olsr_stream_add_managed(&_telnet_managed);
   _telnet_managed.config.session_timeout = 120000; /* 120 seconds */
@@ -154,10 +146,7 @@ olsr_telnet_cleanup(void) {
     return;
 
   olsr_stream_remove_managed(&_telnet_managed, true);
-
-  cfg_delta_remove_handler(olsr_cfg_get_delta(), &telnet_handler);
   cfg_schema_remove_section(olsr_cfg_get_schema(), &telnet_section);
-
   olsr_memcookie_remove(_telnet_memcookie);
 }
 
@@ -226,7 +215,7 @@ _cb_config_changed(void) {
 
   /* generate binary config */
   memset(&config, 0, sizeof(config));
-  if (cfg_schema_tobin(&config, telnet_handler.post,
+  if (cfg_schema_tobin(&config, telnet_section.post,
       telnet_entries, ARRAYSIZE(telnet_entries))) {
     /* error in conversion */
     OLSR_WARN(LOG_TELNET, "Cannot map telnet config to binary data");

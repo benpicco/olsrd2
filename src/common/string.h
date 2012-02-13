@@ -89,6 +89,8 @@ EXPORT void strarray_remove_ext(struct strarray *, char *, bool);
 EXPORT char *strarray_get(const struct strarray *array, size_t idx);
 EXPORT size_t strarray_get_count(const struct strarray *array);
 
+EXPORT int strarray_cmp(const struct strarray *a1, const struct strarray *a2);
+
 static INLINE int
 strarray_copy_c(struct strarray *dst, const struct const_strarray *src) {
   return strarray_copy(dst, (const struct strarray *)src);
@@ -205,6 +207,18 @@ strarray_get_next_safe_c(const struct const_strarray *array,
     return NULL;
   }
   return next;
+}
+
+/**
+ * Compare two constant stringarrays
+ * @param a1 pointer to array 1
+ * @param a2 pointer to array 2
+ * @return <0 if a1 is 'smaller' than a2, >0 if a1 is 'larger' than a2,
+ *   0 if both are the same.
+ */
+static INLINE int
+strarray_cmp_c(const struct const_strarray *a1, const struct const_strarray *a2) {
+  return strarray_cmp((const struct strarray *)a1, (const struct strarray *)a2);
 }
 
 /**

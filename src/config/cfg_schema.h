@@ -63,9 +63,9 @@ struct cfg_schema_entry;
 #include "config/cfg_db.h"
 
 #if !defined(REMOVE_HELPTEXT)
-#define _CFG_VALIDATE(p_name, p_def, p_help,args...)                         { .name = (p_name), .def = { .value = (p_def), .length = sizeof(p_def)}, .help = (p_help), ##args }
+#define _CFG_VALIDATE(p_name, p_def, p_help,args...)                         { .key.entry = (p_name), .def = { .value = (p_def), .length = sizeof(p_def)}, .help = (p_help), ##args }
 #else
-#define _CFG_VALIDATE(p_name, p_def, p_help,args...)                         { .name = (p_name), .def = { .value = (p_def), .length = sizeof(p_def)}, ##args }
+#define _CFG_VALIDATE(p_name, p_def, p_help,args...)                         { .key.entry = (p_name), .def = { .value = (p_def), .length = sizeof(p_def)}, ##args }
 #endif
 
 #define CFG_VALIDATE_STRING(p_name, p_def, p_help, args...)                  _CFG_VALIDATE(p_name, p_def, p_help, ##args)
@@ -85,38 +85,38 @@ struct cfg_schema_entry;
 
 #define CFG_VALIDATE_BOOL(p_name, p_def, p_help, args...)                    CFG_VALIDATE_CHOICE(p_name, p_def, p_help, CFGLIST_BOOL, ##args)
 
-#define CFG_MAP_STRING(p_reference, p_field, p_name, p_def, p_help, args...)                  _CFG_VALIDATE(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct p_reference, p_field), ##args )
-#define CFG_MAP_STRING_LEN(p_reference, p_field, p_name, p_def, p_help, maxlen, args...)      CFG_VALIDATE_STRING_LEN(p_name, p_def, p_help, maxlen, .cb_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_STRING_ARRAY(p_reference, p_field, p_name, p_def, p_help, maxlen, args...)    _CFG_VALIDATE(p_name, p_def, p_help, .validate_params = {.p_i1 = (maxlen) }, .cb_to_binary = cfg_schema_tobin_strarray, .t_offset = offsetof(struct p_reference, p_field), ##args )
-#define CFG_MAP_PRINTABLE(p_reference, p_field, p_name, p_def, p_help, args...)               CFG_VALIDATE_PRINTABLE(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_PRINTABLE_LEN(p_reference, p_field, p_name, p_def, p_help, args...)           CFG_VALIDATE_PRINTABLE_LEN(p_name, p_def, p_help, maxlen, .cb_to_binary = cfg_schema_tobin_strptr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_PRINTABLE_ARRAY(p_reference, p_field, p_name, p_def, p_help, maxlen, args...) CFG_VALIDATE_PRINTABLE_LEN(p_name, p_def, p_help, maxlen, .cb_to_binary = cfg_schema_tobin_strarray, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_CHOICE(p_reference, p_field, p_name, p_def, p_help, p_list, args...)          CFG_VALIDATE_CHOICE(p_name, p_def, p_help, p_list, .cb_to_binary = cfg_schema_tobin_choice, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_INT(p_reference, p_field, p_name, p_def, p_help, args...)                     CFG_VALIDATE_INT(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_int, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_INT_MINMAX(p_reference, p_field, p_name, p_def, p_help, min, max, args...)    CFG_VALIDATE_INT_MINMAX(p_name, p_def, p_help, min, max, .cb_to_binary = cfg_schema_tobin_int, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_NETADDR(p_reference, p_field, p_name, p_def, p_help, prefix, args...)         CFG_VALIDATE_NETADDR(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_NETADDR_HWADDR(p_reference, p_field, p_name, p_def, p_help, prefix, args...)  CFG_VALIDATE_NETADDR_HWADDR(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_NETADDR_MAC48(p_reference, p_field, p_name, p_def, p_help, prefix, args...)   CFG_VALIDATE_NETADDR_MAC48(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_NETADDR_EUI64(p_reference, p_field, p_name, p_def, p_help, prefix, args...)   CFG_VALIDATE_NETADDR_EUI64(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_NETADDR_V4(p_reference, p_field, p_name, p_def, p_help, prefix, args...)      CFG_VALIDATE_NETADDR_V4(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_NETADDR_V6(p_reference, p_field, p_name, p_def, p_help, prefix, args...)      CFG_VALIDATE_NETADDR_V6(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_NETADDR_V46(p_reference, p_field, p_name, p_def, p_help, prefix, args...)     CFG_VALIDATE_NETADDR_V46(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .t_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_STRING(p_reference, p_field, p_name, p_def, p_help, args...)                  _CFG_VALIDATE(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_strptr, .bin_offset = offsetof(struct p_reference, p_field), ##args )
+#define CFG_MAP_STRING_LEN(p_reference, p_field, p_name, p_def, p_help, maxlen, args...)      CFG_VALIDATE_STRING_LEN(p_name, p_def, p_help, maxlen, .cb_to_binary = cfg_schema_tobin_strptr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_STRING_ARRAY(p_reference, p_field, p_name, p_def, p_help, maxlen, args...)    _CFG_VALIDATE(p_name, p_def, p_help, .validate_params = {.p_i1 = (maxlen) }, .cb_to_binary = cfg_schema_tobin_strarray, .bin_offset = offsetof(struct p_reference, p_field), ##args )
+#define CFG_MAP_PRINTABLE(p_reference, p_field, p_name, p_def, p_help, args...)               CFG_VALIDATE_PRINTABLE(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_strptr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_PRINTABLE_LEN(p_reference, p_field, p_name, p_def, p_help, args...)           CFG_VALIDATE_PRINTABLE_LEN(p_name, p_def, p_help, maxlen, .cb_to_binary = cfg_schema_tobin_strptr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_PRINTABLE_ARRAY(p_reference, p_field, p_name, p_def, p_help, maxlen, args...) CFG_VALIDATE_PRINTABLE_LEN(p_name, p_def, p_help, maxlen, .cb_to_binary = cfg_schema_tobin_strarray, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_CHOICE(p_reference, p_field, p_name, p_def, p_help, p_list, args...)          CFG_VALIDATE_CHOICE(p_name, p_def, p_help, p_list, .cb_to_binary = cfg_schema_tobin_choice, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_INT(p_reference, p_field, p_name, p_def, p_help, args...)                     CFG_VALIDATE_INT(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_int, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_INT_MINMAX(p_reference, p_field, p_name, p_def, p_help, min, max, args...)    CFG_VALIDATE_INT_MINMAX(p_name, p_def, p_help, min, max, .cb_to_binary = cfg_schema_tobin_int, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_NETADDR(p_reference, p_field, p_name, p_def, p_help, prefix, args...)         CFG_VALIDATE_NETADDR(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_NETADDR_HWADDR(p_reference, p_field, p_name, p_def, p_help, prefix, args...)  CFG_VALIDATE_NETADDR_HWADDR(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_NETADDR_MAC48(p_reference, p_field, p_name, p_def, p_help, prefix, args...)   CFG_VALIDATE_NETADDR_MAC48(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_NETADDR_EUI64(p_reference, p_field, p_name, p_def, p_help, prefix, args...)   CFG_VALIDATE_NETADDR_EUI64(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_NETADDR_V4(p_reference, p_field, p_name, p_def, p_help, prefix, args...)      CFG_VALIDATE_NETADDR_V4(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_NETADDR_V6(p_reference, p_field, p_name, p_def, p_help, prefix, args...)      CFG_VALIDATE_NETADDR_V6(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_NETADDR_V46(p_reference, p_field, p_name, p_def, p_help, prefix, args...)     CFG_VALIDATE_NETADDR_V46(p_name, p_def, p_help, prefix, .cb_to_binary = cfg_schema_tobin_netaddr, .bin_offset = offsetof(struct p_reference, p_field), ##args)
 
-#define CFG_MAP_BOOL(p_reference, p_field, p_name, p_def, p_help, args...)                    CFG_VALIDATE_BOOL(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_bool, .t_offset = offsetof(struct p_reference, p_field), ##args)
-#define CFG_MAP_STRINGLIST(p_reference, p_field, p_name, p_def, p_help, args...)              _CFG_VALIDATE(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_stringlist, .t_offset = offsetof(struct p_reference, p_field), .list = true, ##args )
+#define CFG_MAP_BOOL(p_reference, p_field, p_name, p_def, p_help, args...)                    CFG_VALIDATE_BOOL(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_bool, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_STRINGLIST(p_reference, p_field, p_name, p_def, p_help, args...)              _CFG_VALIDATE(p_name, p_def, p_help, .cb_to_binary = cfg_schema_tobin_stringlist, .bin_offset = offsetof(struct p_reference, p_field), .list = true, ##args )
 
 /*
  * Example of a section schema definition
  *
- * struct cfg_schema_section test_section = {
- *   .type = "plugin", .named = true
+ * static struct cfg_schema_section section =
+ * {
+ *     .type = "testsection",
+ *     .mode = CFG_SSMODE_NAMED
  * };
  *
- * struct cfg_schema_entry test_entries[] = {
- *   CFG_VALIDATE_BOOL("enable", "true", "boolean help text"),
- *   CFG_VALIDATE_PRINTABLE("logfile", "/tmp/test",
- *     "printable helptext", .list = true),
- *   CFG_VALIDATE_INT_MINMAX("value", "0", "int helptext", 0, 20),
+ * static struct cfg_schema_entry entries[] = {
+ *     CFG_VALIDATE_PRINTABLE("text", "defaulttext", "help for text parameter"),
+ *     CFG_VALIDATE_INT_MINMAX("number", "0", "help for number parameter", 0, 10),
  * };
  */
 
@@ -124,26 +124,61 @@ struct cfg_schema_entry;
  * Example of a section schema definition with binary mapping
  *
  * struct bin_data {
- *   bool enable;
- *   char *logfile;
+ *   char *string;
  *   int int_value;
  * };
  *
- * struct cfg_schema_section test_section = {
- *   .type = "plugin", .named = true
+ * static struct cfg_schema_section section =
+ * {
+ *     .type = "testsection",
+ *     .mode = CFG_SSMODE_NAMED
  * };
  *
- * struct cfg_schema_entry test_entries[] = {
- *   CFG_MAP_BOOL(bin_data, enable, "enable", "boolean help text"),
- *   CFG_MAP_PRINTABLE(bin_data, logfile, "logfile", "/tmp/test",
- *     "printable helptext", .list = true),
- *   CFG_MAP_INT_MINMAX(bin_data, int_value, "value", "0", "int helptext", 0, 20),
+ * static struct cfg_schema_entry entries[] = {
+ *     CFG_MAP_PRINTABLE(bin_data, string, "text", "defaulttext", "help for text parameter"),
+ *     CFG_MAP_INT_MINMAX(bin_data, int_value, "number", "0", "help for number parameter", 0, 10),
  * };
  */
 
 struct cfg_schema {
   /* tree of sections of this schema */
   struct avl_tree sections;
+
+  /* tree of schema entries of this schema */
+  struct avl_tree entries;
+
+  /* tree of delta handlers of this schema */
+  struct avl_tree handlers;
+};
+
+enum cfg_schema_section_mode {
+  /*
+   * normal unnamed section, delta handlers will be triggered at
+   * startup even it does not exist in the configuration file
+   *
+   * default setting
+   */
+  CFG_SSMODE_UNNAMED = 0,
+
+  /*
+   * unnamed section, delta handler will only trigger if one value
+   * is set to a non-default value
+   */
+  CFG_SSMODE_UNNAMED_OPTIONAL_STARTUP_TRIGGER,
+
+  /*
+   * named section, delta handlers will always trigger for this
+   */
+  CFG_SSMODE_NAMED,
+
+  /*
+   * named section, configuration demands at least one existing
+   * section of this type to be valid.
+   */
+  CFG_SSMODE_NAMED_MANDATORY,
+
+  /* always last */
+  CFG_SSMODE_MAX,
 };
 
 /*
@@ -151,23 +186,15 @@ struct cfg_schema {
  * a certain type
  */
 struct cfg_schema_section {
-  /* node for tree in schema, initialized by schema_add() */
-  struct avl_node _node;
 
-  /* name of section type */
+  /* node for global section tree, initialized by schema_add() */
+  struct avl_node _section_node;
+
+  /* name of section type, key for section_node */
   const char *type;
 
-  /* true if sections of this  schema have a name */
-  bool named;
-
-  /* true if at least one section of this type must exist */
-  bool mandatory;
-
-  /*
-   * true if delta listeners should NOT be triggered for
-   * this section on a cfg_delta_trigger_non_optional() call.
-   */
-  bool optional;
+  /* mode of this section, see above */
+  enum cfg_schema_section_mode mode;
 
   /* help text for section */
   const char *help;
@@ -176,20 +203,41 @@ struct cfg_schema_section {
   int (*cb_validate)(struct cfg_schema_section *, const char *section_name,
       struct cfg_named_section *, struct autobuf *);
 
+  /* node for global delta handler tree, initialized by delta_add() */
+  struct avl_node _delta_node;
+
+  /* priority for delta handling, key for delta_node */
+  uint32_t delta_priority;
+
+  /* callback for delta handling, NULL if not interested */
+  void (*cb_delta_handler)(void);
+
+  /*
+   * pointer to former and later version of changed section, only valid
+   * during call of cb_delta_handler
+   */
+  struct cfg_named_section *pre, *post;
+
   /* list of entries in section */
-  struct avl_tree _entries;
+  struct cfg_schema_entry *_entries;
+  size_t _entry_count;
+};
+
+struct cfg_schema_entry_key {
+  const char *type, *entry;
 };
 
 /* Represents the schema of a configuration entry */
 struct cfg_schema_entry {
-  /* node for tree in section schema */
+  /* node for global section tree */
   struct avl_node _node;
+  struct cfg_schema_section *_parent;
 
   /* name of entry */
-  const char *name;
+  struct cfg_schema_entry_key key;
 
   /* default value */
-  const struct const_strarray def;
+  struct const_strarray def;
 
   /* help text for entry */
   const char *help;
@@ -214,30 +262,33 @@ struct cfg_schema_entry {
       const struct const_strarray *value, void *ptr);
 
   /* offset of current binary data compared to reference pointer */
-  size_t t_offset;
+  size_t bin_offset;
+
+  /* return values for delta comparision */
+  const struct const_strarray *pre, *post;
+  bool delta_changed;
 };
 
-EXPORT extern const char *CFGLIST_BOOL_TRUE[4];
-EXPORT extern const char *CFGLIST_BOOL[8];
-
-#define CFG_FOR_ALL_SCHEMA_SECTIONS(tmpl, section, iterator) avl_for_each_element_safe(&(tmpl->sections), section, _node, iterator)
-#define CFG_FOR_ALL_SCHEMA_ENTRIES(section, entry, iterator) avl_for_each_element_safe(&section->_entries, entry, _node, iterator)
+EXPORT const char *CFGLIST_BOOL_TRUE[4];
+EXPORT const char *CFGLIST_BOOL[8];
+EXPORT const char *CFG_SCHEMA_SECTIONMODE[CFG_SSMODE_MAX];
 
 EXPORT void cfg_schema_add(struct cfg_schema *schema);
-EXPORT void cfg_schema_remove(struct cfg_schema *schema);
 
-EXPORT int cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *section);
+EXPORT void cfg_schema_add_section(struct cfg_schema *schema, struct cfg_schema_section *section,
+    struct cfg_schema_entry *entries, size_t entry_count);
 EXPORT void cfg_schema_remove_section(struct cfg_schema *schema, struct cfg_schema_section *section);
-
-EXPORT int cfg_schema_add_entries(struct cfg_schema_section *section, struct cfg_schema_entry *entries, size_t e_cnt);
-EXPORT int cfg_schema_add_entry(struct cfg_schema_section *, struct cfg_schema_entry *entry);
-EXPORT void cfg_schema_remove_entries(struct cfg_schema_section *, struct cfg_schema_entry *entries, size_t e_cnt);
 
 EXPORT int cfg_schema_validate(struct cfg_db *db,
     bool cleanup, bool ignore_unknown_sections, struct autobuf *out);
 
 EXPORT int cfg_schema_tobin(void *target, struct cfg_named_section *named,
     const struct cfg_schema_entry *entries, size_t count);
+
+EXPORT int cfg_schema_handle_db_changes(struct cfg_db *pre_change, struct cfg_db *post_change);
+EXPORT int cfg_schema_handle_db_startup_changes(struct cfg_db *db);
+
+EXPORT int cfg_avlcmp_schemaentries(const void *p1, const void *p2, void *unused);
 
 EXPORT int cfg_schema_validate_printable(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out);
@@ -277,18 +328,6 @@ EXPORT int cfg_schema_tobin_stringlist(const struct cfg_schema_entry *s_entry,
     const struct const_strarray *value, void *reference);
 
 /**
- * Remove a single entry from a schema section
- * @param section pointer to section
- * @param entry pointer to entry
- */
-static INLINE void
-cfg_schema_remove_entry(struct cfg_schema_section *section,
-    struct cfg_schema_entry *entry) {
-  avl_remove(&section->_entries, &entry->_node);
-  entry->_node.key = NULL;
-}
-
-/**
  * Finds a section in a schema
  * @param schema pointer to schema
  * @param type type of section
@@ -298,7 +337,7 @@ static INLINE struct cfg_schema_section *
 cfg_schema_find_section(struct cfg_schema *schema, const char *type) {
   struct cfg_schema_section *section;
 
-  return avl_find_element(&schema->sections, type, section, _node);
+  return avl_find_element(&schema->sections, type, section, _section_node);
 }
 
 /**
@@ -308,10 +347,15 @@ cfg_schema_find_section(struct cfg_schema *schema, const char *type) {
  * @return pointer of entry, NULL if not found
  */
 static INLINE struct cfg_schema_entry *
-cfg_schema_find_entry(struct cfg_schema_section *section, const char *name) {
-  struct cfg_schema_entry *entry;
+cfg_schema_find_section_entry(struct cfg_schema_section *section, const char *name) {
+  size_t i;
 
-  return avl_find_element(&section->_entries, name, entry, _node);
+  for (i=0; i<section->_entry_count; i++) {
+    if (strcmp(section->_entries[i].key.entry, name) == 0) {
+      return &section->_entries[i];
+    }
+  }
+  return NULL;
 }
 
 #endif /* CFG_SCHEMA_H_ */

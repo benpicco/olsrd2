@@ -47,7 +47,6 @@
 #include "common/common_types.h"
 #include "config/cfg_schema.h"
 #include "config/cfg_db.h"
-#include "config/cfg_delta.h"
 #include "config/cfg.h"
 
 #include "olsr_logging.h"
@@ -72,7 +71,8 @@ static void _apply_log_setting(struct cfg_named_section *named,
 
 /* define logging configuration template */
 static struct cfg_schema_section logging_section = {
-  .type = LOG_SECTION
+  .type = LOG_SECTION,
+  .cb_delta_handler = _cb_logcfg_apply,
 };
 
 static const char *_dummy[0];
@@ -92,11 +92,6 @@ static struct cfg_schema_entry logging_entries[] = {
   CFG_VALIDATE_BOOL(LOG_STDERR_ENTRY, "false", "Set to true to activate logging to stderr"),
   CFG_VALIDATE_BOOL(LOG_SYSLOG_ENTRY, "false", "Set to true to activate logging to syslog"),
   CFG_VALIDATE_STRING(LOG_FILE_ENTRY, "", "Set a filename to log to a file"),
-};
-
-static struct cfg_delta_handler logcfg_delta_handler = {
-  .s_type = LOG_SECTION,
-  .callback = _cb_logcfg_apply,
 };
 
 static enum log_source *debug_lvl_1 = NULL;
@@ -134,9 +129,6 @@ olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t length) {
   stderr_handler.bitmask = logging_cfg;
   syslog_handler.bitmask = logging_cfg;
   file_handler.bitmask = logging_cfg;
-
-  /* setup delta handler */
-  cfg_delta_add_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
 }
 
 /**
@@ -146,9 +138,6 @@ void
 olsr_logcfg_cleanup(void) {
   if (olsr_subsystem_cleanup(&_logcfg_state))
     return;
-
-  /* cleanup delta handler */
-  cfg_delta_remove_handler(olsr_cfg_get_delta(), &logcfg_delta_handler);
 
   /* clean up former handlers */
   if (list_is_node_added(&stderr_handler.node)) {
@@ -183,8 +172,8 @@ olsr_logcfg_addschema(struct cfg_schema *schema) {
     logging_entries[i].validate_params.p_ptr = LOG_SOURCE_NAMES;
   }
 
-  cfg_schema_add_section(schema, &logging_section);
-  cfg_schema_add_entries(&logging_section, logging_entries, ARRAYSIZE(logging_entries));
+  cfg_schema_add_section(schema, &logging_section,
+      logging_entries, ARRAYSIZE(logging_entries));
 }
 
 /**

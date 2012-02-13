@@ -6,13 +6,9 @@
  */
 
 #include "common/common_types.h"
-
-#include "olsr_http.h"
-#include "olsr_telnet.h"
-
-#include "common/common_types.h"
 #include "common/autobuf.h"
 
+#include "config/cfg_schema.h"
 #include "olsr_cfg.h"
 #include "olsr_http.h"
 #include "olsr_logging.h"
@@ -56,18 +52,14 @@ OLSR_PLUGIN7 {
 
 /* configuration */
 static struct cfg_schema_section _httptelnet_section = {
-  .type = _CFG_SECTION
+  .type = _CFG_SECTION,
+  .cb_delta_handler = _cb_config_changed,
 };
 
 static struct cfg_schema_entry _httptelnet_entries[] = {
   CFG_MAP_STRING(olsr_http_handler, site, "site", "/telnet", "Path for http2telnet bridge"),
   CFG_MAP_ACL(olsr_http_handler, acl, "acl", "default_accept", "acl for http2telnet bridge"),
   CFG_MAP_STRINGLIST(olsr_http_handler, auth, "auth", "", "TODO"),
-};
-
-static struct cfg_delta_handler _httptelnet_delta_handler = {
-  .s_type = _CFG_SECTION,
-  .callback = _cb_config_changed,
 };
 
 static const char *_last_site;
@@ -85,11 +77,8 @@ _cb_plugin_load(void) {
 
   _last_site = _http_site_handler.site;
 
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_httptelnet_section);
-  cfg_schema_add_entries(&_httptelnet_section,
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_httptelnet_section,
       _httptelnet_entries, ARRAYSIZE(_httptelnet_entries));
-
-  cfg_delta_add_handler(olsr_cfg_get_delta(), &_httptelnet_delta_handler);
 
   olsr_acl_add(&_http_site_handler.acl);
   strarray_init(&_http_site_handler.auth);
@@ -107,7 +96,6 @@ _cb_plugin_unload(void) {
   olsr_acl_remove(&_http_site_handler.acl);
   free((char *)_http_site_handler.site);
 
-  cfg_delta_remove_handler(olsr_cfg_get_delta(), &_httptelnet_delta_handler);
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_httptelnet_section);
   return 0;
 }
@@ -169,7 +157,7 @@ _cb_generate_site(struct autobuf *out, struct olsr_http_session *session) {
  */
 static void
 _cb_config_changed(void) {
-  if (cfg_schema_tobin(&_http_site_handler, _httptelnet_delta_handler.post,
+  if (cfg_schema_tobin(&_http_site_handler, _httptelnet_section.post,
       _httptelnet_entries, ARRAYSIZE(_httptelnet_entries))) {
     OLSR_WARN(LOG_CONFIG, "Could not convert httptelnet config to bin");
     return;
