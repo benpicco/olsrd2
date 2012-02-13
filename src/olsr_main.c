@@ -189,6 +189,17 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
+  /* preload plugins to show their schemas */
+  if (olsr_cfg_loadplugins()) {
+    goto olsrd_cleanup;
+  }
+
+  /* show schema if necessary */
+  if (_display_schema) {
+    return_code = display_schema();
+    goto olsrd_cleanup;
+  }
+
   /* prepare for an error during initialization */
   return_code = 1;
 
@@ -199,7 +210,7 @@ main(int argc, char **argv) {
   }
 
   /* check if we are root, otherwise stop */
-#if NEED_ROOT == 2
+#ifdef NEED_ROOT
   if (geteuid() != 0) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
         olsr_builddata_get()->app_name);
@@ -265,26 +276,6 @@ main(int argc, char **argv) {
   if (olsr_setup_init()) {
     goto olsrd_cleanup;
   }
-
-  /* preload plugins to show their schemas */
-  if (olsr_cfg_loadplugins()) {
-    goto olsrd_cleanup;
-  }
-
-  /* show schema if necessary */
-  if (_display_schema) {
-    return_code = display_schema();
-    goto olsrd_cleanup;
-  }
-
-  /* check if we are root, otherwise stop */
-#if NEED_ROOT == 1
-  if (geteuid() != 0) {
-    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
-        olsr_builddata_get()->app_name);
-    goto olsrd_cleanup;
-  }
-#endif
 
   /* apply configuration */
   if (olsr_cfg_apply()) {

@@ -368,7 +368,7 @@ cfg_cmd_handle_schema(struct cfg_db *db,
         "(use this command with the types as parameter for more information)\n");
     avl_for_each_element(&db->schema->sections, s_section, _section_node) {
       if (!s_section->_section_node.follower) {
-        cfg_append_printable_line(log, "    %s %s%s%s",
+        cfg_append_printable_line(log, "    %s (%s)%s%s",
             s_section->type,
             CFG_SCHEMA_SECTIONMODE[s_section->mode],
             s_section->help ? ": " : "",
