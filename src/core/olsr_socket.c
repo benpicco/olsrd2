@@ -97,7 +97,7 @@ olsr_socket_cleanup(void)
 void
 olsr_socket_add(struct olsr_socket_entry *entry)
 {
-  assert (entry->fd);
+  assert (entry->fd >= 0);
   assert (entry->process);
 
   OLSR_DEBUG(LOG_SOCKET, "Adding socket entry %d to scheduler\n", entry->fd);
