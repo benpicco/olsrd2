@@ -47,10 +47,10 @@
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
-#include <regex.h>
+#include "regex/regex.h"
 
-#include "utils.h"
-#include "regex2.h"
+#include "regex/utils.h"
+#include "regex/regex2.h"
 
 /* macros for manipulating states, small version */
 #define	states	long
@@ -153,7 +153,7 @@ regexec(const regex_t *preg, const char *string, size_t nmatch,
 		return(REG_BADPAT);
 	eflags = GOODFLAGS(eflags);
 
-	if (g->nstates <= CHAR_BIT*sizeof(states1) && !(eflags&REG_LARGE))
+	if (g->nstates <= (ssize_t)(CHAR_BIT*sizeof(states1)) && !(eflags&REG_LARGE))
 		return(smatcher(g, (char *)string, nmatch, pmatch, eflags));
 	else
 		return(lmatcher(g, (char *)string, nmatch, pmatch, eflags));

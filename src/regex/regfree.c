@@ -1,5 +1,4 @@
-/*	$OpenBSD: utils.h,v 1.4 2003/06/02 20:18:36 millert Exp $	*/
-
+/*	$OpenBSD: regfree.c,v 1.7 2005/08/05 13:03:00 espie Exp $ */
 /*-
  * Copyright (c) 1992, 1993, 1994 Henry Spencer.
  * Copyright (c) 1992, 1993, 1994
@@ -32,24 +31,42 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	@(#)utils.h	8.3 (Berkeley) 3/20/94
+ *	@(#)regfree.c	8.3 (Berkeley) 3/20/94
  */
 
-/* utility definitions */
-#define	DUPMAX		_POSIX2_RE_DUP_MAX	/* xxx is this right? */
-#define	INFINITY	(DUPMAX + 1)
-#define	NC		(CHAR_MAX - CHAR_MIN + 1)
-typedef unsigned char uch;
+#include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
 
-/* switch off assertions (if not already off) if no REDEBUG */
-#ifndef REDEBUG
-#ifndef NDEBUG
-#define	NDEBUG	/* no assertions please */
-#endif
-#endif
-#include <assert.h>
+#include "regex/regex.h"
+#include "regex/utils.h"
+#include "regex/regex2.h"
 
-/* for old systems with bcopy() but no memmove() */
-#ifdef USEBCOPY
-#define	memmove(d, s, c)	bcopy(s, d, c)
-#endif
+/*
+ - regfree - free everything
+ */
+void
+regfree(regex_t *preg)
+{
+	struct re_guts *g;
+
+	if (preg->re_magic != MAGIC1)	/* oops */
+		return;			/* nice to complain, but hard */
+
+	g = preg->re_g;
+	if (g == NULL || g->magic != MAGIC2)	/* oops again */
+		return;
+	preg->re_magic = 0;		/* mark it invalid */
+	g->magic = 0;			/* mark it invalid */
+
+	if (g->strip != NULL)
+		free((char *)g->strip);
+	if (g->sets != NULL)
+		free((char *)g->sets);
+	if (g->setbits != NULL)
+		free((char *)g->setbits);
+	if (g->must != NULL)
+		free(g->must);
+	free((char *)g);
+}

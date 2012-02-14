@@ -39,12 +39,12 @@
  *
  */
 
-#include <regex.h>
 #include <stdlib.h>
 #include <strings.h>
 
 #include "common/autobuf.h"
 #include "common/common_types.h"
+#include "regex/regex.h"
 #include "config/cfg_io.h"
 #include "config/cfg_cmd.h"
 
@@ -125,6 +125,8 @@ cfg_cmd_handle_set(struct cfg_instance *instance, struct cfg_db *db,
     cfg_append_printable_line(log, "Cannot create section: '%s'\n", arg);
     goto handle_set_cleanup;
   }
+  result = 0;
+
 handle_set_cleanup:
   free(ptr);
   return result;

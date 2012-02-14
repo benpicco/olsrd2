@@ -3,6 +3,9 @@ add_subdirectory(common)
 add_subdirectory(config)
 add_subdirectory(builddata)
 add_subdirectory(core)
+IF (WIN32 OR ANDROID)
+    add_subdirectory(regex)
+ENDIF(WIN32 OR ANDROID)
 
 # add main program
 set(OONF_SRCS ${OONF_SRCS} olsr_main.c olsr_setup.c)

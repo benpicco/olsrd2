@@ -69,17 +69,49 @@
  * visual studio, because microsoft does not support C99
  */
 
+/* printf size_t modifiers*/
+
+#if defined(WIN32)
+  #define PRINTF_SIZE_T_SPECIFIER    "%Iu"
+  #define PRINTF_SSIZE_T_SPECIFIER   "%Id"
+  #define PRINTF_PTRDIFF_T_SPECIFIER "%Id"
+#elif defined(__GNUC__)
+  #define PRINTF_SIZE_T_SPECIFIER    "%zu"
+  #define PRINTF_SSIZE_T_SPECIFIER   "%zd"
+  #define PRINTF_PTRDIFF_T_SPECIFIER "%zd"
+#else
+  // TODO figure out which to use.
+  #error Please implement size_t modifiers
+#endif
+
 /* types */
-#ifdef _MSC_VER
+#if defined(WIN32)
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 typedef signed char int8_t;
 typedef signed short int16_t;
 typedef signed int int32_t;
+
+/* Minimum of signed integral types.  */
+# define INT8_MIN   (-128)
+# define INT16_MIN    (-32767-1)
+# define INT32_MIN    (-2147483647-1)
+
+/* Maximum of signed integral types.  */
+# define INT8_MAX   (127)
+# define INT16_MAX    (32767)
+# define INT32_MAX    (2147483647)
+
+/* Maximum of unsigned integral types.  */
+# define UINT8_MAX    (255)
+# define UINT16_MAX   (65535)
+# define UINT32_MAX   (4294967295U)
 #else
 #include <inttypes.h>
 #endif
+
+#include <limits.h>
 
 #if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
 
@@ -95,7 +127,7 @@ typedef signed int int32_t;
 #endif
 
 /* add some safe-gaurds */
-#ifndef _MSC_VER
+#ifndef WIN32
 #if !defined bool || !defined true || !defined false || !defined __bool_true_false_are_defined
 #error You have no C99-like boolean types. Please extend src/olsr_type.h!
 #endif

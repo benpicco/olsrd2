@@ -52,7 +52,7 @@
 #define	print	sprint
 #define	at	sat
 #define	match	smat
-#define	nope	snope
+#define	nope
 #endif
 #ifdef LNAMES
 #define	matcher	lmatcher
@@ -129,7 +129,7 @@ matcher(struct re_guts *g, char *string, size_t nmatch, regmatch_t pmatch[],
     int eflags)
 {
 	char *endp;
-	int i;
+	size_t i;
 	struct match mv;
 	struct match *m = &mv;
 	char *dp;
@@ -302,7 +302,9 @@ dissect(struct match *m, char *start, char *stop, sopno startst, sopno stopst)
 	char *ssp;	/* start of string matched by subsubRE */
 	char *sep;	/* end of string matched by subsubRE */
 	char *oldssp;	/* previous ssp */
+#ifndef NDEBUG
 	char *dp;
+#endif
 
 	AT("diss", start, stop, startst, stopst);
 	sp = start;
@@ -361,8 +363,12 @@ dissect(struct match *m, char *start, char *stop, sopno startst, sopno stopst)
 			esub = es - 1;
 			/* did innards match? */
 			if (slow(m, sp, rest, ssub, esub) != NULL) {
+#ifndef NDEBUG
 				dp = dissect(m, sp, rest, ssub, esub);
-				assert(dp == rest);
+        assert(dp == rest);
+#else
+        dissect(m, sp, rest, ssub, esub);
+#endif
 			} else		/* no */
 				assert(sp == rest);
 			sp = rest;
@@ -399,8 +405,12 @@ dissect(struct match *m, char *start, char *stop, sopno startst, sopno stopst)
 			}
 			assert(sep == rest);	/* must exhaust substring */
 			assert(slow(m, ssp, sep, ssub, esub) == rest);
+#ifndef NDEBUG
 			dp = dissect(m, ssp, sep, ssub, esub);
-			assert(dp == sep);
+      assert(dp == sep);
+#else
+      dissect(m, ssp, sep, ssub, esub);
+#endif
 			sp = rest;
 			break;
 		case OCH_:
@@ -434,8 +444,12 @@ dissect(struct match *m, char *start, char *stop, sopno startst, sopno stopst)
 				else
 					assert(OP(m->g->strip[esub]) == O_CH);
 			}
+#ifndef NDEBUG
 			dp = dissect(m, sp, rest, ssub, esub);
-			assert(dp == rest);
+      assert(dp == rest);
+#else
+      dissect(m, sp, rest, ssub, esub);
+#endif
 			sp = rest;
 			break;
 		case O_PLUS:
@@ -662,6 +676,7 @@ backref(struct match *m, char *start, char *stop, sopno startst, sopno stopst,
 	/* "can't happen" */
 	assert(nope);
 	/* NOTREACHED */
+	return NULL;
 }
 
 /*
@@ -696,12 +711,12 @@ fast(struct match *m, char *start, char *stop, sopno startst, sopno stopst)
 		/* is there an EOL and/or BOL between lastc and c? */
 		flagch = '\0';
 		i = 0;
-		if ( (lastc == '\n' && m->g->cflags&REG_NEWLINE) ||
+		if ( (lastc == '\n' && (m->g->cflags&REG_NEWLINE)) ||
 				(lastc == OUT && !(m->eflags&REG_NOTBOL)) ) {
 			flagch = BOL;
 			i = m->g->nbol;
 		}
-		if ( (c == '\n' && m->g->cflags&REG_NEWLINE) ||
+		if ( (c == '\n' && (m->g->cflags&REG_NEWLINE)) ||
 				(c == OUT && !(m->eflags&REG_NOTEOL)) ) {
 			flagch = (flagch == BOL) ? BOLEOL : EOL;
 			i += m->g->neol;
@@ -778,12 +793,12 @@ slow(struct match *m, char *start, char *stop, sopno startst, sopno stopst)
 		/* is there an EOL and/or BOL between lastc and c? */
 		flagch = '\0';
 		i = 0;
-		if ( (lastc == '\n' && m->g->cflags&REG_NEWLINE) ||
+		if ( (lastc == '\n' && (m->g->cflags&REG_NEWLINE)) ||
 				(lastc == OUT && !(m->eflags&REG_NOTBOL)) ) {
 			flagch = BOL;
 			i = m->g->nbol;
 		}
-		if ( (c == '\n' && m->g->cflags&REG_NEWLINE) ||
+		if ( (c == '\n' && (m->g->cflags&REG_NEWLINE)) ||
 				(c == OUT && !(m->eflags&REG_NOTEOL)) ) {
 			flagch = (flagch == BOL) ? BOLEOL : EOL;
 			i += m->g->neol;

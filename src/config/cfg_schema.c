@@ -357,6 +357,12 @@ cfg_schema_handle_db_changes(struct cfg_db *pre_change, struct cfg_db *post_chan
   return _handle_db_changes(pre_change, post_change, false);
 }
 
+/**
+ * Handle trigger of delta callbacks on program startup. Call every trigger
+ * except for CFG_SSMODE_UNNAMED_OPTIONAL_STARTUP_TRIGGER mode.
+ * @param post_db pointer to new configuration database
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 cfg_schema_handle_db_startup_changes(struct cfg_db *post_db) {
   struct cfg_db *pre_db;

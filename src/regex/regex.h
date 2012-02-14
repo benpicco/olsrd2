@@ -42,6 +42,9 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
+#if !defined(WIN32) && !defined(ANDROID)
+#include <regex.h>
+#else
 /* types */
 typedef off_t regoff_t;
 
@@ -101,5 +104,6 @@ size_t	regerror(int, const regex_t *, char *, size_t);
 int	regexec(const regex_t *, const char *, size_t, regmatch_t [], int);
 void	regfree(regex_t *);
 __END_DECLS
+#endif
 
 #endif /* !_REGEX_H_ */

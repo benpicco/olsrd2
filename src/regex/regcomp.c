@@ -40,13 +40,17 @@
 #include <ctype.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <regex.h>
 
-#include "utils.h"
-#include "regex2.h"
+#include "common/common_types.h"
+#include "common/string.h"
 
-#include "cclass.h"
-#include "cname.h"
+#include "regex/regex.h"
+
+#include "regex/utils.h"
+#include "regex/regex2.h"
+
+#include "regex/cclass.h"
+#include "regex/cname.h"
 
 /*
  * parse structure, passed up and down to avoid global variables and
@@ -89,7 +93,7 @@ static void freeset(struct parse *, cset *);
 static int freezeset(struct parse *, cset *);
 static int firstch(struct parse *, cset *);
 static int nch(struct parse *, cset *);
-static void mcadd(struct parse *, cset *, char *);
+static void mcadd(struct parse *, cset *, const char *);
 static void mcinvert(struct parse *, cset *);
 static void mccase(struct parse *, cset *);
 static int isinsets(struct re_guts *, int);
@@ -123,9 +127,9 @@ static char nuls[10];		/* place to point scanner in event of error */
 #define	NEXTn(n)	(p->next += (n))
 #define	GETNEXT()	(*p->next++)
 #define	SETERROR(e)	seterr(p, (e))
-#define	REQUIRE(co, e)	((co) || SETERROR(e))
-#define	MUSTSEE(c, e)	(REQUIRE(MORE() && PEEK() == (c), e))
-#define	MUSTEAT(c, e)	(REQUIRE(MORE() && GETNEXT() == (c), e))
+#define	REQUIRE(co, e)	do { if(!(co)) { SETERROR(e);} } while (0)
+#define	MUSTSEE(c, e)	REQUIRE(MORE() && PEEK() == (c), e)
+#define	MUSTEAT(c, e)	REQUIRE(MORE() && GETNEXT() == (c), e)
 #define	MUSTNOTSEE(c, e)	(REQUIRE(!MORE() || PEEK() != (c), e))
 #define	EMIT(op, sopnd)	doemit(p, (sop)(op), (size_t)(sopnd))
 #define	INSERT(op, pos)	doinsert(p, (sop)(op), HERE()-(pos)+1, pos)
@@ -366,7 +370,7 @@ p_ere_exp(struct parse *p)
 		break;
 	case '{':		/* okay as ordinary except if digit follows */
 		REQUIRE(!MORE() || !isdigit((uch)PEEK()), REG_BADRPT);
-		/* FALLTHROUGH */
+		/* no break */
 	default:
 		ordinary(p, c);
 		break;
@@ -562,7 +566,7 @@ p_simp_re(struct parse *p,
 		break;
 	case '*':
 		REQUIRE(starordinary, REG_BADRPT);
-		/* FALLTHROUGH */
+		/* no break */
 	default:
 		ordinary(p, (char)c);
 		break;
@@ -769,7 +773,7 @@ p_b_cclass(struct parse *p, cset *cs)
 	char *sp = p->next;
 	struct cclass *cp;
 	size_t len;
-	char *u;
+	const char *u;
 	char c;
 
 	while (MORE() && isalpha(PEEK()))
@@ -1080,7 +1084,7 @@ nomem:
 static void
 freeset(struct parse *p, cset *cs)
 {
-	int i;
+	size_t i;
 	cset *top = &p->g->sets[p->g->ncsets];
 	size_t css = (size_t)p->g->csetsize;
 
@@ -1103,7 +1107,7 @@ static int			/* set number */
 freezeset(struct parse *p, cset *cs)
 {
 	uch h = cs->hash;
-	int i;
+	size_t i;
 	cset *top = &p->g->sets[p->g->ncsets];
 	cset *cs2;
 	size_t css = (size_t)p->g->csetsize;
@@ -1133,7 +1137,7 @@ freezeset(struct parse *p, cset *cs)
 static int			/* character; there is no "none" value */
 firstch(struct parse *p, cset *cs)
 {
-	int i;
+	size_t i;
 	size_t css = (size_t)p->g->csetsize;
 
 	for (i = 0; i < css; i++)
@@ -1149,7 +1153,7 @@ firstch(struct parse *p, cset *cs)
 static int
 nch(struct parse *p, cset *cs)
 {
-	int i;
+	size_t i;
 	size_t css = (size_t)p->g->csetsize;
 	int n = 0;
 
@@ -1163,7 +1167,7 @@ nch(struct parse *p, cset *cs)
  - mcadd - add a collating element to a cset
  */
 static void
-mcadd( struct parse *p, cset *cs, char *cp)
+mcadd( struct parse *p, cset *cs, const char *cp)
 {
 	size_t oldend = cs->smultis;
 	void *np;
@@ -1179,7 +1183,7 @@ mcadd( struct parse *p, cset *cs, char *cp)
 	}
 	cs->multis = np;
 
-	strlcpy(cs->multis + oldend - 1, cp, cs->smultis - oldend + 1);
+	strscpy(cs->multis + oldend - 1, cp, cs->smultis - oldend + 1);
 }
 
 /*
@@ -1190,7 +1194,8 @@ mcadd( struct parse *p, cset *cs, char *cp)
  */
 /* ARGSUSED */
 static void
-mcinvert(struct parse *p, cset *cs)
+mcinvert(struct parse *p __attribute__((unused)),
+    cset *cs __attribute__((unused)))
 {
 	assert(cs->multis == NULL);	/* xxx */
 }
@@ -1203,7 +1208,8 @@ mcinvert(struct parse *p, cset *cs)
  */
 /* ARGSUSED */
 static void
-mccase(struct parse *p, cset *cs)
+mccase(struct parse *p __attribute__((unused)),
+    cset *cs __attribute__((unused)))
 {
 	assert(cs->multis == NULL);	/* xxx */
 }
@@ -1451,7 +1457,7 @@ findmust(struct parse *p, struct re_guts *g)
 					return;
 				}
 			} while (OP(s) != O_QUEST && OP(s) != O_CH);
-			/* fallthrough */
+			/* no break */
 		default:		/* things that break a sequence */
 			if (newlen > g->mlen) {		/* ends one */
 				start = newstart;

@@ -40,16 +40,19 @@
 #include <ctype.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <regex.h>
 
-#include "utils.h"
+#include "common/common_types.h"
+#include "common/string.h"
 
-static char *regatoi(const regex_t *, char *, int);
+#include "regex/regex.h"
+#include "regex/utils.h"
+
+static const char *regatoi(const regex_t *, char *, int);
 
 static struct rerr {
 	int code;
-	char *name;
-	char *explain;
+	const char *name;
+	const char *explain;
 } rerrs[] = {
 	{ REG_NOMATCH,	"REG_NOMATCH",	"regexec() failed to match" },
 	{ REG_BADPAT,	"REG_BADPAT",	"invalid regular expression" },
@@ -81,7 +84,7 @@ regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size)
 	struct rerr *r;
 	size_t len;
 	int target = errcode &~ REG_ITOA;
-	char *s;
+	const char *s;
 	char convbuf[50];
 
 	if (errcode == REG_ATOI)
@@ -94,7 +97,7 @@ regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size)
 		if (errcode&REG_ITOA) {
 			if (r->code != 0) {
 				assert(strlen(r->name) < sizeof(convbuf));
-				(void) strlcpy(convbuf, r->name, sizeof convbuf);
+				strscpy(convbuf, r->name, sizeof convbuf);
 			} else
 				(void)snprintf(convbuf, sizeof convbuf,
 				    "REG_0x%x", target);
@@ -105,7 +108,7 @@ regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size)
 
 	len = strlen(s) + 1;
 	if (errbuf_size > 0) {
-		strlcpy(errbuf, s, errbuf_size);
+		strscpy(errbuf, s, errbuf_size);
 	}
 
 	return(len);
@@ -114,7 +117,7 @@ regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size)
 /*
  - regatoi - internal routine to implement REG_ATOI
  */
-static char *
+static const char *
 regatoi(const regex_t *preg, char *localbuf, int localbufsize)
 {
 	struct rerr *r;
