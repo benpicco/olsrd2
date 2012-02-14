@@ -194,12 +194,6 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* show schema if necessary */
-  if (_display_schema) {
-    return_code = display_schema();
-    goto olsrd_cleanup;
-  }
-
   /* prepare for an error during initialization */
   return_code = 1;
 
@@ -274,6 +268,12 @@ main(int argc, char **argv) {
 
   /* activate custom additions to framework */
   if (olsr_setup_init()) {
+    goto olsrd_cleanup;
+  }
+
+  /* show schema if necessary */
+  if (_display_schema) {
+    return_code = display_schema();
     goto olsrd_cleanup;
   }
 
