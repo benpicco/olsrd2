@@ -52,10 +52,10 @@ enum custom_log_source {
   LOG_CUSTOM_1 = LOG_CORESOURCE_COUNT,
 };
 
-int olsr_setup_cfginit(void) __attribute__((warn_unused_result));
 int olsr_setup_init(void) __attribute__((warn_unused_result));
 void olsr_setup_cleanup(void);
-void olsr_setup_cfgcleanup(void);
+size_t olsr_setup_get_level1count(void);
+enum log_source *olsr_setup_get_level1_logs(void);
 size_t olsr_setup_get_logcount(void);
 const char **olsr_setup_get_lognames(void);
 

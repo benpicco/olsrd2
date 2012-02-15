@@ -47,7 +47,6 @@
 /* define the logging sources that are part of debug level 1 */
 static enum log_source _level_1_sources[] = {
   LOG_MAIN,
-  0,
 };
 
 static const char *_CUSTOM_LOG_NAMES[] = {
@@ -57,57 +56,63 @@ static const char *_CUSTOM_LOG_NAMES[] = {
 };
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_setupcfg_state);
-OLSR_SUBSYSTEM_STATE(olsr_setup_state);
+OLSR_SUBSYSTEM_STATE(_setup_state);
 
-int
-olsr_setup_cfginit(void) {
-  if (olsr_subsystem_init(&olsr_setupcfg_state))
-    return 0;
-
-  /* initialize logging configuration first */
-  olsr_logcfg_init(_level_1_sources, ARRAYSIZE(_level_1_sources));
-
-  /* add custom configuration setup here */
-
-
-  /* no error happened */
-  return 0;
-}
-
-void
-olsr_setup_cfgcleanup(void) {
-  if (olsr_subsystem_cleanup(&olsr_setupcfg_state))
-    return;
-
-  /* add cleanup for custom configuration setup here */
-}
-
+/**
+ * Allocate resources for the user of the framework
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_setup_init(void) {
-  if (olsr_subsystem_init(&olsr_setup_state))
+  if (olsr_subsystem_is_initialized(&_setup_state))
     return 0;
 
   /* add custom service setup here */
 
 
   /* no error happened */
+  olsr_subsystem_init(&_setup_state);
   return 0;
 }
 
+/**
+ * Cleanup all resources allocated by setup initialization
+ */
 void
 olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&olsr_setup_state))
+  if (olsr_subsystem_cleanup(&_setup_state))
     return;
 
   /* add cleanup for custom services here */
 }
 
+/**
+ * @return number of logging sources for debug level 1
+ */
+size_t
+olsr_setup_get_level1count(void) {
+  return ARRAYSIZE(_level_1_sources);
+}
+
+/**
+ * @return array of logging sources for debug level 1
+ */
+enum log_source *
+olsr_setup_get_level1_logs(void) {
+  return _level_1_sources;
+}
+
+/**
+ * @return number of custom logging sources
+ */
 size_t
 olsr_setup_get_logcount(void) {
   return ARRAYSIZE(_CUSTOM_LOG_NAMES);
 }
 
+/**
+ * @return array of cutom logging source names
+ */
 const char **
 olsr_setup_get_lognames(void) {
   return _CUSTOM_LOG_NAMES;

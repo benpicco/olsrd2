@@ -166,9 +166,7 @@ main(int argc, char **argv) {
   }
 
   /* add custom configuration definitions */
-  if (olsr_setup_cfginit()) {
-    goto olsrd_cleanup;
-  }
+  olsr_logcfg_init(olsr_setup_get_level1_logs(), olsr_setup_get_level1count());
 
   /* initialize logging schema */
   olsr_logcfg_addschema(olsr_cfg_get_schema());
@@ -325,7 +323,6 @@ olsrd_cleanup:
   olsr_logcfg_cleanup();
 
   /* free configuration resources */
-  olsr_setup_cfgcleanup();
   olsr_cfg_cleanup();
 
   /* free logger resources */
