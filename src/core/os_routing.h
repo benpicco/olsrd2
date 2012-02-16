@@ -86,10 +86,14 @@
 #undef OS_NET_SPECIFIC_INCLUDE
 
 /* prototypes for all os_routing functions */
-EXPORT void os_routing_init(void);
+EXPORT int os_routing_init(void);
 EXPORT void os_routing_cleanup(void);
 
 EXPORT int os_routing_init_mesh_if(struct olsr_interface *);
 EXPORT void os_routing_cleanup_mesh_if(struct olsr_interface *);
+
+EXPORT int os_routing_set(int rttable, int if_index, int metric, int protocol,
+    const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
+    bool set, bool del_similar);
 
 #endif /* OS_ROUTING_H_ */

@@ -133,6 +133,11 @@ str_trim (char *ptr) {
  */
 const char *
 str_hasnextword (const char *buffer, const char *word) {
+  /* sanity check */
+  if (buffer == NULL) {
+    return NULL;
+  }
+
   /* skip whitespace prefix */
   while (isblank(*buffer)) {
     buffer++;
@@ -153,6 +158,43 @@ str_hasnextword (const char *buffer, const char *word) {
   return NULL;
 }
 
+const char *
+str_cpynextword (char *dst, const char *buffer, size_t len) {
+  size_t i;
+
+  /* sanity check */
+  if (buffer == NULL) {
+    *dst = 0;
+    return NULL;
+  }
+
+  /* skip whitespace prefix */
+  while (isblank(*buffer)) {
+    buffer++;
+  }
+
+  /* copy next word */
+  i = 0;
+  while (*buffer != 0 && !isblank(*buffer) && i < len-1) {
+    dst[i++] = *buffer++;
+  }
+
+  /* terminate */
+  dst[i] = 0;
+
+  /* skip ahead in buffer */
+  while (isblank(*buffer)) {
+    buffer++;
+  }
+
+  if (*buffer) {
+    /* return next word */
+    return buffer;
+  }
+
+  /* end of buffer */
+  return NULL;
+}
 /**
  * Copy a string array into another array. This overwrites
  * all data in the original array.

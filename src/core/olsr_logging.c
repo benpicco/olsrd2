@@ -50,7 +50,6 @@
 #include "common/list.h"
 #include "common/string.h"
 #include "builddata/data.h"
-#include "os_time.h"
 #include "os_system.h"
 #include "olsr_logging.h"
 #include "olsr.h"

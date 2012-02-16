@@ -36,8 +36,8 @@
  *	@(#)regex.h	8.1 (Berkeley) 6/2/93
  */
 
-#ifndef _REGEX_H_
-#define	_REGEX_H_
+#ifndef _REGEX_REGEX_H_
+#define	_REGEX_REGEX_H_
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
@@ -106,4 +106,4 @@ void	regfree(regex_t *);
 __END_DECLS
 #endif
 
-#endif /* !_REGEX_H_ */
+#endif /* !_REGEX_REGEX_H_ */

@@ -64,6 +64,7 @@
 #include "olsr_telnet.h"
 #include "olsr_timer.h"
 #include "olsr.h"
+#include "os_routing.h"
 
 /* variable definitions */
 struct _remotecontrol_cfg {
@@ -84,6 +85,7 @@ static int _cb_plugin_enable(void);
 static int _cb_plugin_disable(void);
 
 static enum olsr_telnet_result _cb_handle_resource(struct olsr_telnet_data *data);
+static enum olsr_telnet_result _cb_handle_route(struct olsr_telnet_data *data);
 static enum olsr_telnet_result _cb_handle_log(struct olsr_telnet_data *data);
 static enum olsr_telnet_result _cb_handle_config(struct olsr_telnet_data *data);
 static enum olsr_telnet_result _update_logfilter(struct olsr_telnet_data *data,
@@ -126,7 +128,7 @@ static struct cfg_schema_section _remotecontrol_section = {
 };
 
 static struct cfg_schema_entry _remotecontrol_entries[] = {
-  CFG_MAP_ACL(_remotecontrol_cfg, acl, "acl", "default_accept", "acl for remote control commands"),
+  CFG_MAP_ACL(_remotecontrol_cfg, acl, "acl", "+127.0.0.1\0+::1\0default_reject", "acl for remote control commands"),
 };
 
 static struct _remotecontrol_cfg _remotecontrol_config;
@@ -165,6 +167,14 @@ static struct olsr_telnet_command _telnet_cmds[] = {
       "\"config get <section_type>[<name>].<key>\":         Show the value(s) of a key in a named section\n"
       "\"config format <FORMAT>\":                          Set the format for loading/saving data\n"
       "\"config format AUTO\":                              Set the format to automatic detection\n",
+      .acl = &_remotecontrol_config.acl),
+  TELNET_CMD("route", _cb_handle_route,
+      "\"route set [src <src-ip>] [gw <gateway ip>] [dst <destination prefix>] [table <table-id>]\n"
+      "            [proto <protocol-id>] [metric <metric>] interface <if-name>\n"
+      "                                                     Set a route in the kernel routing table\n"
+      "\"route remove [src <src-ip>] [gw <gateway ip>] [dst <destination prefix>] [table <table-id>]\n"
+      "               [proto <protocol-id>] [metric <metric>] interface <if-name>\n"
+      "                                                     Remove a route in the kernel routing table\n",
       .acl = &_remotecontrol_config.acl),
 };
 
@@ -434,9 +444,7 @@ _start_logging(struct olsr_telnet_data *data,
 
 /**
  * Handle resource command
- * @param con pointer to telnet telnet
- * @param cmd name of command (should be "resource")
- * @param param parameters
+ * @param data pointer to telnet data
  * @return telnet result constant
  */
 static enum olsr_telnet_result
@@ -491,9 +499,7 @@ _cb_handle_log(struct olsr_telnet_data *data) {
 
 /**
  * Handle config command
- * @param con pointer to telnet data
- * @param cmd name of command (should be "resource")
- * @param param parameters
+ * @param data pointer to telnet data
  * @return telnet result constant
  */
 static enum olsr_telnet_result
@@ -546,6 +552,97 @@ _cb_handle_config(struct olsr_telnet_data *data) {
   }
 
   return TELNET_RESULT_ACTIVE;
+}
+
+/**
+ * Handle the route command
+ * @param data pointer to telnet data
+ * @return telnet result constant
+ */
+static enum olsr_telnet_result
+_cb_handle_route(struct olsr_telnet_data *data) {
+  struct netaddr_str buf;
+  const char *ptr = NULL, *next = NULL;
+  struct netaddr src, gw, dst;
+  int table = 0, protocol = 4, metric = -1, if_index = 0;
+  bool set;
+
+  memset (&src, 0, sizeof(src));
+  memset (&gw, 0, sizeof(gw));
+  memset (&dst, 0, sizeof(dst));
+
+  if ((next = str_hasnextword(data->parameter, "set")) != NULL
+      || (next = str_hasnextword(data->parameter, "remove")) != NULL) {
+    set = strncasecmp(data->parameter, "set", 3) == 0;
+
+    ptr = next;
+    while (ptr) {
+      if ((next = str_hasnextword(ptr, "src"))) {
+        ptr = str_cpynextword(buf.buf, next, sizeof(buf));
+        if (netaddr_from_string(&src, buf.buf)) {
+          abuf_appendf(data->out, "Error, illegal source: %s", buf.buf);
+          return TELNET_RESULT_ACTIVE;
+        }
+      }
+      else if ((next = str_hasnextword(ptr, "gw"))) {
+        ptr = str_cpynextword(buf.buf, next, sizeof(buf));
+        if (netaddr_from_string(&gw, buf.buf)) {
+          abuf_appendf(data->out, "Error, illegal gateway: %s", buf.buf);
+          return TELNET_RESULT_ACTIVE;
+        }
+      }
+      else if ((next = str_hasnextword(ptr, "dst"))) {
+        ptr = str_cpynextword(buf.buf, next, sizeof(buf));
+        if (netaddr_from_string(&dst, buf.buf)) {
+          abuf_appendf(data->out, "Error, illegal destination: %s", buf.buf);
+          return TELNET_RESULT_ACTIVE;
+        }
+      }
+      else if ((next = str_hasnextword(ptr, "table"))) {
+        ptr = str_cpynextword(buf.buf, next, sizeof(buf));
+        table = atoi(buf.buf);
+      }
+      else if ((next = str_hasnextword(ptr, "proto"))) {
+        ptr = str_cpynextword(buf.buf, next, sizeof(buf));
+        protocol = atoi(buf.buf);
+      }
+      else if ((next = str_hasnextword(ptr, "metric"))) {
+        ptr = str_cpynextword(buf.buf, next, sizeof(buf));
+        table = atoi(buf.buf);
+      }
+      else if ((next = str_hasnextword(ptr, "interface"))) {
+        ptr = str_cpynextword(buf.buf, next, sizeof(buf));
+        if_index = if_nametoindex(buf.buf);
+      }
+      else {
+        abuf_appendf(data->out, "Cannot parse remainder of parameter string: %s", ptr);
+        return TELNET_RESULT_ACTIVE;
+      }
+    }
+    if (if_index == 0) {
+      abuf_appendf(data->out, "Missing or unknown interface");
+      return TELNET_RESULT_ACTIVE;
+    }
+    if (dst.type != AF_INET && dst.type != AF_INET6) {
+      abuf_appendf(data->out, "Error, IPv4 or IPv6 destination mandatory");
+      return TELNET_RESULT_ACTIVE;
+    }
+    if (src.type != 0 && src.type != dst.type) {
+      abuf_appendf(data->out, "Error, illegal address type of source ip");
+      return TELNET_RESULT_ACTIVE;
+    }
+    if (gw.type == 0 || gw.type != dst.type) {
+      abuf_appendf(data->out, "Error, illegal or missing gateway ip");
+      return TELNET_RESULT_ACTIVE;
+    }
+
+    abuf_appendf(data->out, "set route: %d",
+        os_routing_set(table, if_index, metric, protocol,
+            src.type == 0 ? NULL: &src, &gw, &dst, set, true));
+    return TELNET_RESULT_ACTIVE;
+  }
+
+  return TELNET_RESULT_UNKNOWN_COMMAND;
 }
 
 /**

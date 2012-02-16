@@ -415,9 +415,9 @@ cfg_cmd_handle_schema(struct cfg_db *db,
 
       if (!s_entry_it->_node.follower) {
         cfg_append_printable_line(log, "    %s%s%s",
-            s_entry->key.entry,
-            strarray_is_empty_c(&s_entry->def) ? " (mandatory)" : "",
-            s_entry->list ? " (list)" : "");
+            s_entry_it->key.entry,
+            strarray_is_empty_c(&s_entry_it->def) ? " (mandatory)" : "",
+                s_entry_it->list ? " (list)" : "");
       }
       if (s_entry_it->help) {
         cfg_append_printable_line(log, "        %s", s_entry_it->help);

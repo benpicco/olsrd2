@@ -80,6 +80,7 @@ EXPORT char *strscpy (char *dest, const char *src, size_t size);
 EXPORT char *strscat (char *dest, const char *src, size_t size);
 EXPORT char *str_trim (char *ptr);
 EXPORT const char *str_hasnextword (const char *buffer, const char *word);
+EXPORT const char *str_cpynextword (char *dst, const char *buffer, size_t len);
 
 EXPORT int strarray_copy(struct strarray *dst, const struct strarray *src);
 EXPORT int strarray_append(struct strarray *, const char *);

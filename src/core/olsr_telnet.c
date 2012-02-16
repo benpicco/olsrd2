@@ -511,7 +511,7 @@ _cb_telnet_help(struct olsr_telnet_data *data) {
       ptr->help_handler(data);
     }
     else {
-      if (abuf_appendf(data->out, "%s\n", ptr->help) < 0) {
+      if (abuf_appendf(data->out, "%s", ptr->help) < 0) {
         return TELNET_RESULT_INTERNAL_ERROR;
       }
     }
