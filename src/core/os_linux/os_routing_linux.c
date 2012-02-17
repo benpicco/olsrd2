@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "common/common_types.h"
+#include "olsr_timer.h"
 #include "olsr.h"
 #include "os_routing.h"
 #include "os_system.h"
@@ -40,6 +41,7 @@ static int _os_linux_writeToProc(const char *file, char *old, char value);
 static char _original_rp_filter;
 static char _original_icmp_redirect;
 
+/* buffer for outgoing rtnetlink messages */
 static struct nlmsghdr *_rtnetlink_buffer;
 
 OLSR_SUBSYSTEM_STATE(_os_routing_state);
@@ -173,22 +175,22 @@ os_routing_cleanup_mesh_if(struct olsr_interface *interf) {
  * Update an entry of the kernel routing table. This call will only trigger
  * the change, the real change will be done as soon as the netlink socket is
  * writable.
+ * @param src source address of route (NULL if source ip not set)
+ * @param gw gateway of route (NULL if direct connection)
+ * @param dst destination prefix of route
  * @param rttable routing table
  * @param if_index interface index
  * @param metric routing metric
  * @param protocol routing protocol
- * @param src source address of route (NULL if source ip not set)
- * @param gw gateway of route (NULL if direct connection)
- * @param dst destination prefix of route
  * @param set true if route should be set, false if it should be removed
  * @param del_similar true if similar routes that block this one should be
  *   removed.
  * @return -1 if an error happened, rtnetlink sequence number otherwise
  */
 int
-os_routing_set(int rttable, int if_index, int metric, int protocol,
+os_routing_set(struct olsr_system_feedback *feedback,
     const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
-    bool set, bool del_similar) {
+    int rttable, int if_index, int metric, int protocol, bool set, bool del_similar) {
   struct rtmsg *rt_msg;
 
   assert(olsr_subsystem_is_initialized(&_os_routing_state));
@@ -212,7 +214,7 @@ os_routing_set(int rttable, int if_index, int metric, int protocol,
   rt_msg->rtm_table = rttable;
 
   _rtnetlink_buffer->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
-  _rtnetlink_buffer->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+  _rtnetlink_buffer->nlmsg_flags = NLM_F_REQUEST;
 
   if (set) {
     _rtnetlink_buffer->nlmsg_flags |= NLM_F_CREATE | NLM_F_REPLACE;
@@ -276,7 +278,7 @@ os_routing_set(int rttable, int if_index, int metric, int protocol,
    /* add destination */
   os_system_netlink_addnetaddr(_rtnetlink_buffer, RTA_DST, dst);
 
-  return os_system_netlink_async_send(_rtnetlink_buffer);
+  return os_system_netlink_async_send(feedback, _rtnetlink_buffer);
 }
 
 /**

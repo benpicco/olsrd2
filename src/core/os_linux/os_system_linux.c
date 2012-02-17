@@ -24,23 +24,24 @@
 #include "olsr.h"
 #include "os_system.h"
 
+#define OS_SYSTEM_NETLINK_TIMEOUT 100
+
+static void _cb_handle_feedback_timerout(void *);
 static void _netlink_handler(int fd, void *data,
     bool event_read, bool event_write);
 static void _handle_nl_link(struct nlmsghdr *);
 static void _handle_nl_addr(struct nlmsghdr *);
 static void _handle_nl_err(struct nlmsghdr *);
 
-/* global procfile state before initialization */
-static char _original_rp_filter;
-static char _original_icmp_redirect;
-
-/* rtnetlink sockets */
+/* rtnetlink data */
 static int _rtnetlink_async_fd = -1;
 static int _rtnetlink_sync_fd = -1;
 static struct olsr_socket_entry _rtnetlink_socket = {
   .process = _netlink_handler,
   .event_read = true,
 };
+
+static uint32_t _async_seq = 0;
 
 /* ioctl socket */
 static int _ioctl_fd = -1;
@@ -83,6 +84,10 @@ struct nlmsghdr *_netlink_recv_buffer;
 /* buffer for outgoing netlink messages */
 struct autobuf _netlink_send_buffer;
 
+/* rtnetlink feedback handling */
+static struct list_entity _feedback_handlers;
+static struct olsr_timer_info *_feedback_timer;
+
 OLSR_SUBSYSTEM_STATE(_os_system_state);
 
 /**
@@ -97,15 +102,23 @@ os_system_init(void) {
     return 0;
   }
 
+  _ioctl_fd = -1;
   _rtnetlink_sync_fd = -1;
   _rtnetlink_async_fd = -1;
   _netlink_recv_buffer = NULL;
+
+  if ((_feedback_timer =
+      olsr_timer_add("rtnetlink feedback timer", _cb_handle_feedback_timerout, false)) != NULL) {
+    return -1;
+  }
+
+  list_init_head(&_feedback_handlers);
 
   _ioctl_fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (_ioctl_fd == -1) {
     OLSR_WARN(LOG_OS_SYSTEM, "Cannot open ioctl socket: %s (%d)",
         strerror(errno), errno);
-    return -1;
+    goto os_system_init_failed;
   }
 
   if (abuf_init(&_netlink_send_buffer, UIO_MAXIOV)) {
@@ -164,10 +177,6 @@ os_system_init(void) {
   _rtnetlink_socket.fd = _rtnetlink_async_fd;
   olsr_socket_add(&_rtnetlink_socket);
 
-  /* mark both flags non-used */
-  _original_icmp_redirect = 0;
-  _original_rp_filter = 0;
-
   olsr_subsystem_init(&_os_system_state);
   return 0;
 os_system_init_failed:
@@ -186,8 +195,18 @@ os_system_init_failed:
  */
 void
 os_system_cleanup(void) {
+  struct olsr_system_feedback *fb, *it;
   if (olsr_subsystem_cleanup(&_os_system_state))
     return;
+
+  /* call timeout for all routing ack timers still left */
+  list_for_each_element_safe(&_feedback_handlers, fb, _node, it) {
+    olsr_timer_stop(fb->timeout);
+    fb->cb_timeout(fb);
+    list_remove(&fb->_node);
+  }
+
+  olsr_timer_remove(_feedback_timer);
 
   close (_rtnetlink_sync_fd);
   close(_rtnetlink_async_fd);
@@ -342,22 +361,64 @@ os_system_netlink_sync_send(struct nlmsghdr *nl_hdr)
  * @return sequence number of buffered netlink message
  */
 int
-os_system_netlink_async_send(struct nlmsghdr *nl_hdr) {
-  static int nl_seq = 0;
+os_system_netlink_async_send(struct olsr_system_feedback *fb, struct nlmsghdr *nl_hdr) {
+  if (fb) {
+    if (fb->seq_max > 0 && fb->seq_max != _async_seq) {
+      return -1;
+    }
+    _async_seq++;
 
-  if (nl_seq < 0) {
-    nl_seq = 0;
+    if (fb->outstanding_fb == 0) {
+      olsr_timer_start(OS_SYSTEM_NETLINK_TIMEOUT, 0, fb, _feedback_timer);
+      fb->seq_min = _async_seq;
+      fb->seq_max = _async_seq;
+    }
+    fb->seq_max++;
+    fb->outstanding_fb++;
+
+    nl_hdr->nlmsg_seq = _async_seq;
+    nl_hdr->nlmsg_flags |= NLM_F_ACK;
   }
-  nl_seq++;
+  else {
+    nl_hdr->nlmsg_seq = 0;
+  }
 
-  nl_hdr->nlmsg_seq = nl_seq;
   nl_hdr->nlmsg_flags |= NLM_F_MULTI;
 
   abuf_memcpy(&_netlink_send_buffer, nl_hdr, nl_hdr->nlmsg_len);
 
   /* trigger write */
   olsr_socket_set_write(&_rtnetlink_socket, true);
-  return nl_seq;
+  return _async_seq;
+}
+
+void
+os_system_feedback_add(struct olsr_system_feedback *feedback) {
+  feedback->outstanding_fb = 0;
+  feedback->timeout = NULL;
+
+  list_init_node(&feedback->_node);
+}
+
+void
+os_system_feedback_remove(struct olsr_system_feedback *feedback) {
+  if (feedback->timeout) {
+    olsr_timer_stop(feedback->timeout);
+  }
+
+  list_remove(&feedback->_node);
+}
+
+static void
+_cb_handle_feedback_timerout(void *ptr) {
+  struct olsr_system_feedback *fb = ptr;
+
+  fb->timeout = NULL;
+  list_remove(&fb->_node);
+
+  fb->cb_timeout(fb);
+
+
 }
 
 static void
@@ -502,6 +563,7 @@ _handle_nl_addr(struct nlmsghdr *nl) {
 
 static void
 _handle_nl_err(struct nlmsghdr *nl) {
+  struct olsr_system_feedback *fb;
   struct nlmsgerr *err;
 
   err = (struct nlmsgerr *) NLMSG_DATA(nl);
@@ -509,5 +571,26 @@ _handle_nl_err(struct nlmsghdr *nl) {
   if (err->msg.nlmsg_type == RTM_NEWROUTE
       || err->msg.nlmsg_type == RTM_DELROUTE) {
     OLSR_DEBUG(LOG_OS_SYSTEM, "Got feedback for routing seq %d: %d", nl->nlmsg_seq, err->error);
+  }
+
+  if (err->msg.nlmsg_seq != 0) {
+    /* handle counting of outstanding feedback */
+    list_for_each_element(&_feedback_handlers, fb, _node) {
+      if (err->msg.nlmsg_seq >= fb->seq_min && err->msg.nlmsg_seq <= fb->seq_max) {
+        fb->outstanding_fb--;
+
+        if (fb->outstanding_fb == 0) {
+          olsr_timer_stop(fb->timeout);
+          fb->timeout = NULL;
+          list_remove(&fb->_node);
+        }
+
+        fb->cb_ack(fb, err->msg.nlmsg_seq, err->error);
+        break;
+      }
+    }
+    if (list_is_empty(&_feedback_handlers)) {
+      _async_seq = 0;
+    }
   }
 }

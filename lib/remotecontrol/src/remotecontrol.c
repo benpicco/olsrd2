@@ -637,8 +637,8 @@ _cb_handle_route(struct olsr_telnet_data *data) {
     }
 
     abuf_appendf(data->out, "set route: %d",
-        os_routing_set(table, if_index, metric, protocol,
-            src.type == 0 ? NULL: &src, &gw, &dst, set, true));
+        os_routing_set(NULL, src.type == 0 ? NULL: &src, &gw, &dst,
+            table, if_index, metric, protocol, set, true));
     return TELNET_RESULT_ACTIVE;
   }
 

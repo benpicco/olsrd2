@@ -46,11 +46,11 @@
 #include <sys/time.h>
 
 #include "common/common_types.h"
-#include "olsr_logging.h"
+#include "common/list.h"
 #include "olsr_interface.h"
-
-#define MSEC_PER_SEC 1000
-#define USEC_PER_MSEC 1000
+#include "olsr_logging.h"
+#include "olsr_timer.h"
+#include "os_system.h"
 
 /*
  * Set one of the following defines in the os specific os_routing includes
@@ -92,8 +92,8 @@ EXPORT void os_routing_cleanup(void);
 EXPORT int os_routing_init_mesh_if(struct olsr_interface *);
 EXPORT void os_routing_cleanup_mesh_if(struct olsr_interface *);
 
-EXPORT int os_routing_set(int rttable, int if_index, int metric, int protocol,
+EXPORT int os_routing_set(struct olsr_system_feedback *fb,
     const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
-    bool set, bool del_similar);
+    int rttable, int if_index, int metric, int protocol, bool set, bool del_similar);
 
 #endif /* OS_ROUTING_H_ */

@@ -27,7 +27,8 @@
 int os_system_netlink_addreq(struct nlmsghdr *n,
     int type, const void *data, int len);
 int os_system_netlink_sync_send(struct nlmsghdr *nl_hdr);
-int os_system_netlink_async_send(struct nlmsghdr *nl_hdr);
+int os_system_netlink_async_send(struct olsr_system_feedback *fd,
+    struct nlmsghdr *nl_hdr);
 
 static INLINE int
 os_system_netlink_addnetaddr(struct nlmsghdr *n,
