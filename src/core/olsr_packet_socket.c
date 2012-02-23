@@ -114,7 +114,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
 
   olsr_socket_add(&pktsocket->scheduler_entry);
 
-  abuf_init(&pktsocket->out, 2048);
+  abuf_init(&pktsocket->out);
   list_add_tail(&packet_sockets, &pktsocket->node);
   memcpy(&pktsocket->local_socket, local, sizeof(pktsocket->local_socket));
 

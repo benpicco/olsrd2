@@ -246,7 +246,9 @@ main(int argc, char **argv) {
   }
 
 #ifdef NEED_ROUTING
-  os_routing_init();
+  if (os_routing_init()) {
+    goto olsrd_cleanup;
+  }
 #endif
 
   if (os_net_init()) {
@@ -478,7 +480,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   opt_idx = -1;
   optind = 1;
 
-  abuf_init(&log, 1024);
+  abuf_init(&log);
   cfg_cmd_clear_state(olsr_cfg_get_instance());
 
   if (reload_only) {
@@ -604,7 +606,7 @@ display_schema(void) {
 
   return_code = 0;
 
-  abuf_init(&log, 1024);
+  abuf_init(&log);
   cfg_cmd_clear_state(olsr_cfg_get_instance());
 
   if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), _schema_name, &log)) {

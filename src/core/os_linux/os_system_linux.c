@@ -1,8 +1,42 @@
+
 /*
- * os_netlink.c
+ * The olsr.org Optimized Link-State Routing daemon(olsrd)
+ * Copyright (c) 2004-2011, the olsr.org team - see HISTORY file
+ * All rights reserved.
  *
- *  Created on: Oct 19, 2011
- *      Author: rogge
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in
+ *   the documentation and/or other materials provided with the
+ *   distribution.
+ * * Neither the name of olsr.org, olsrd nor the names of its
+ *   contributors may be used to endorse or promote products derived
+ *   from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Visit http://www.olsr.org for more information.
+ *
+ * If you find this software useful feel free to make a donation
+ * to the project. For more information see the website or contact
+ * the copyright holders.
+ *
  */
 
 /* must be first because of a problem with linux/rtnetlink.h */
@@ -26,22 +60,12 @@
 
 #define OS_SYSTEM_NETLINK_TIMEOUT 100
 
-static void _cb_handle_feedback_timerout(void *);
+static void _cb_handle_netlink_timerout(void *);
 static void _netlink_handler(int fd, void *data,
     bool event_read, bool event_write);
-static void _handle_nl_link(struct nlmsghdr *);
-static void _handle_nl_addr(struct nlmsghdr *);
-static void _handle_nl_err(struct nlmsghdr *);
+static void _handle_rtnetlink(struct nlmsghdr *hdr);
 
-/* rtnetlink data */
-static int _rtnetlink_async_fd = -1;
-static int _rtnetlink_sync_fd = -1;
-static struct olsr_socket_entry _rtnetlink_socket = {
-  .process = _netlink_handler,
-  .event_read = true,
-};
-
-static uint32_t _async_seq = 0;
+static void _handle_nl_err(struct os_system_netlink *, struct nlmsghdr *);
 
 /* ioctl socket */
 static int _ioctl_fd = -1;
@@ -62,31 +86,31 @@ static struct msghdr _netlink_rcv_msg = {
   0
 };
 
-static struct iovec _netlink_send_iov;
-static struct msghdr _netlink_send_msg = {
-  &_netlink_nladdr,
-  sizeof(_netlink_nladdr),
-  &_netlink_send_iov,
-  1,
-  NULL,
-  0,
-  0
-};
-
 static struct nlmsghdr _netlink_hdr_done = {
   .nlmsg_len = sizeof(struct nlmsghdr),
   .nlmsg_type = NLMSG_DONE
 };
 
-/* buffer for incoming netlink messages */
-struct nlmsghdr *_netlink_recv_buffer;
+static struct iovec _netlink_send_iov[2] = {
+    { NULL, 0 },
+    { &_netlink_hdr_done, sizeof(_netlink_hdr_done) },
+};
 
-/* buffer for outgoing netlink messages */
-struct autobuf _netlink_send_buffer;
+static struct msghdr _netlink_send_msg = {
+  &_netlink_nladdr,
+  sizeof(_netlink_nladdr),
+  &_netlink_send_iov[0],
+  2,
+  NULL,
+  0,
+  0
+};
 
-/* rtnetlink feedback handling */
-static struct list_entity _feedback_handlers;
-static struct olsr_timer_info *_feedback_timer;
+/* netlink timeout handling */
+static struct olsr_timer_info *_netlink_timer;
+
+/* built in rtnetlink multicast receiver */
+static struct os_system_netlink _rtnetlink_receiver;
 
 OLSR_SUBSYSTEM_STATE(_os_system_state);
 
@@ -96,98 +120,33 @@ OLSR_SUBSYSTEM_STATE(_os_system_state);
  */
 int
 os_system_init(void) {
-  struct sockaddr_nl addr;
-
   if (olsr_subsystem_is_initialized(&_os_system_state)) {
     return 0;
   }
 
-  _ioctl_fd = -1;
-  _rtnetlink_sync_fd = -1;
-  _rtnetlink_async_fd = -1;
-  _netlink_recv_buffer = NULL;
-
-  if ((_feedback_timer =
-      olsr_timer_add("rtnetlink feedback timer", _cb_handle_feedback_timerout, false)) != NULL) {
+  if ((_netlink_timer =
+      olsr_timer_add("rtnetlink feedback timer", _cb_handle_netlink_timerout, false)) == NULL) {
+    OLSR_WARN(LOG_OS_SYSTEM, "Cannot allocate timer class for netlink timeout");
     return -1;
   }
-
-  list_init_head(&_feedback_handlers);
 
   _ioctl_fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (_ioctl_fd == -1) {
     OLSR_WARN(LOG_OS_SYSTEM, "Cannot open ioctl socket: %s (%d)",
         strerror(errno), errno);
-    goto os_system_init_failed;
+    olsr_timer_remove(_netlink_timer);
+    return -1;
   }
 
-  if (abuf_init(&_netlink_send_buffer, UIO_MAXIOV)) {
-    OLSR_WARN_OOM(LOG_OS_SYSTEM);
-    goto os_system_init_failed;
+  if (os_system_netlink_add(&_rtnetlink_receiver, NETLINK_ROUTE,
+      RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR)) {
+    olsr_timer_remove(_netlink_timer);
+    close(_ioctl_fd);
+    return -1;
   }
-
-  _netlink_recv_buffer = calloc(UIO_MAXIOV, 1);
-  if (_netlink_recv_buffer == NULL) {
-    OLSR_WARN_OOM(LOG_OS_SYSTEM);
-    goto os_system_init_failed;
-  }
-  _netlink_rcv_iov.iov_base = _netlink_recv_buffer;
-  _netlink_rcv_iov.iov_len = UIO_MAXIOV;
-
-  _rtnetlink_async_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-  if (_rtnetlink_async_fd < 0) {
-    OLSR_WARN(LOG_OS_SYSTEM, "Cannot open async rtnetlink socket: %s (%d)",
-        strerror(errno), errno);
-    goto os_system_init_failed;
-  }
-
-  _rtnetlink_sync_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-  if (_rtnetlink_sync_fd < 0) {
-    OLSR_WARN(LOG_OS_SYSTEM, "Cannot open sync rtnetlink socket: %s (%d)",
-        strerror(errno), errno);
-    goto os_system_init_failed;
-  }
-
-  memset(&addr, 0, sizeof(addr));
-  addr.nl_family = AF_NETLINK;
-  addr.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR;
-
-  /* kernel will assign appropriate number instead of pid */
-  /* addr.nl_pid = 0; */
-
-  if (bind(_rtnetlink_async_fd, (struct sockaddr *)&addr, sizeof(addr))<0) {
-    OLSR_WARN(LOG_OS_SYSTEM, "Could not bind async rtnetlink socket: %s (%d)",
-        strerror(errno), errno);
-    goto os_system_init_failed;
-  }
-
-  memset(&addr, 0, sizeof(addr));
-  addr.nl_family = AF_NETLINK;
-
-  /* kernel will assign appropriate number instead of pid */
-  /* addr.nl_pid = 0; */
-
-  if (bind(_rtnetlink_sync_fd, (struct sockaddr *)&addr, sizeof(addr))<0) {
-    OLSR_WARN(LOG_OS_SYSTEM, "Could not bind sync rtnetlink socket: %s (%d)",
-        strerror(errno), errno);
-    goto os_system_init_failed;
-  }
-
-  /* add socket listener */
-  _rtnetlink_socket.fd = _rtnetlink_async_fd;
-  olsr_socket_add(&_rtnetlink_socket);
-
+  _rtnetlink_receiver.cb_message = _handle_rtnetlink;
   olsr_subsystem_init(&_os_system_state);
   return 0;
-os_system_init_failed:
-  if (_rtnetlink_sync_fd != -1)
-    close (_rtnetlink_sync_fd);
-  if (_rtnetlink_async_fd != -1)
-    close (_rtnetlink_async_fd);
-  free(_netlink_recv_buffer);
-  abuf_free(&_netlink_send_buffer);
-  close(_ioctl_fd);
-  return -1;
 }
 
 /**
@@ -195,25 +154,12 @@ os_system_init_failed:
  */
 void
 os_system_cleanup(void) {
-  struct olsr_system_feedback *fb, *it;
   if (olsr_subsystem_cleanup(&_os_system_state))
     return;
 
-  /* call timeout for all routing ack timers still left */
-  list_for_each_element_safe(&_feedback_handlers, fb, _node, it) {
-    olsr_timer_stop(fb->timeout);
-    fb->cb_timeout(fb);
-    list_remove(&fb->_node);
-  }
-
-  olsr_timer_remove(_feedback_timer);
-
-  close (_rtnetlink_sync_fd);
-  close(_rtnetlink_async_fd);
+  os_system_netlink_remove(&_rtnetlink_receiver);
+  olsr_timer_remove(_netlink_timer);
   close(_ioctl_fd);
-
-  abuf_free(&_netlink_send_buffer);
-  free (_netlink_recv_buffer);
 }
 
 /**
@@ -260,6 +206,99 @@ os_system_set_interface_state(const char *dev, bool up) {
 }
 
 /**
+ * Open a new bidirectional netlink socket
+ * @param nl pointer to uninitialized netlink socket handler
+ * @param protocol protocol id (NETLINK_ROUTING for example)
+ * @param multicast multicast groups this socket should listen to
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multicast) {
+  struct sockaddr_nl addr;
+
+  memset(nl, 0, sizeof(*nl));
+
+  nl->socket.fd = socket(PF_NETLINK, SOCK_RAW, protocol);
+  if (nl->socket.fd < 0) {
+    OLSR_WARN(LOG_OS_SYSTEM, "Cannot open sync rtnetlink socket: %s (%d)",
+        strerror(errno), errno);
+    goto os_add_netlink_fail;
+  }
+
+  if (abuf_init(&nl->out)) {
+    OLSR_WARN_OOM(LOG_OS_SYSTEM);
+    goto os_add_netlink_fail;
+  }
+
+  nl->in = calloc(1, UIO_MAXIOV);
+  if (nl->in == NULL) {
+    OLSR_WARN_OOM(LOG_OS_SYSTEM);
+    goto os_add_netlink_fail;
+  }
+
+
+  memset(&addr, 0, sizeof(addr));
+  addr.nl_family = AF_NETLINK;
+  addr.nl_groups = multicast;
+
+  /* kernel will assign appropriate number instead of pid */
+  /* addr.nl_pid = 0; */
+
+  if (bind(nl->socket.fd, (struct sockaddr *)&addr, sizeof(addr))<0) {
+    OLSR_WARN(LOG_OS_SYSTEM, "Could not bind netlink socket: %s (%d)",
+        strerror(errno), errno);
+    goto os_add_netlink_fail;
+  }
+
+  nl->socket.process = _netlink_handler;
+  nl->socket.event_read = true;
+  nl->socket.data = nl;
+  olsr_socket_add(&nl->socket);
+
+  return 0;
+
+os_add_netlink_fail:
+  if (nl->socket.fd != -1) {
+    close(nl->socket.fd);
+  }
+  free (nl->in);
+  abuf_free(&nl->out);
+  return -1;
+}
+
+/**
+ * Close a netlink socket handler
+ * @param nl pointer to handler
+ */
+void
+os_system_netlink_remove(struct os_system_netlink *nl) {
+  olsr_socket_remove(&nl->socket);
+
+  close(nl->socket.fd);
+  free (nl->in);
+  abuf_free(&nl->out);
+}
+
+/**
+ * Add a netlink message to the outgoign queue of a handler
+ * @param nl pointer to netlink handler
+ * @param nl_hdr pointer to netlink message
+ */
+void
+os_system_netlink_send(struct os_system_netlink *nl,
+    struct nlmsghdr *nl_hdr) {
+  nl->seq_used++;
+
+  nl_hdr->nlmsg_seq = nl->seq_used;
+  nl_hdr->nlmsg_flags |= NLM_F_ACK | NLM_F_MULTI;
+
+  abuf_memcpy(&nl->out, nl_hdr, nl_hdr->nlmsg_len);
+
+  /* trigger write */
+  olsr_socket_set_write(&nl->socket, true);
+}
+
+/**
  * Add an attribute to a netlink message
  * @param n pointer to netlink header
  * @param type type of netlink attribute
@@ -293,156 +332,51 @@ os_system_netlink_addreq(struct nlmsghdr *n,
 }
 
 /**
- * Sends a single netlink message to the kernel, blocks until it receives the
- * answer and checks the error code. The answer must only contain a single
- * NLMSG_ERROR message.
- * @param nl_hdr pointer to netlink header
- * @return negative if an error happened, 0 if everything was okay.
+ * Handle timeout of netlink acks
+ * @param ptr pointer to netlink handler
  */
-int
-os_system_netlink_sync_send(struct nlmsghdr *nl_hdr)
-{
-  struct nlmsgerr *l_err;
-  int ret;
+static void
+_cb_handle_netlink_timerout(void *ptr) {
+  struct os_system_netlink *nl = ptr;
 
-  _netlink_send_iov.iov_base = nl_hdr;
-  _netlink_send_iov.iov_len = nl_hdr->nlmsg_len;
+  nl->timeout = NULL;
 
-  if (sendmsg(_rtnetlink_sync_fd, &_netlink_send_msg, 0) <= 0) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Cannot send data to netlink socket (%d: %s)",
-        errno, strerror(errno));
-    return -1;
+  if (nl->cb_timeout) {
+    nl->cb_timeout();
   }
 
-  ret = recvmsg(_rtnetlink_sync_fd, &_netlink_rcv_msg, 0);
-  if (ret <= 0) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Error while reading answer to netlink message (%d: %s)",
-        errno, strerror(errno));
-    return -1;
-  }
-
-  if (!NLMSG_OK(_netlink_recv_buffer, (unsigned int)ret)) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Received netlink message was malformed (ret=%d, %u)",
-        ret, _netlink_recv_buffer->nlmsg_len);
-    return -1;
-  }
-
-  if (_netlink_recv_buffer->nlmsg_type != NLMSG_ERROR) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Received unknown netlink response: %u bytes, type %u (not %u) with seqnr %u and flags %u from %u",
-        _netlink_recv_buffer->nlmsg_len, _netlink_recv_buffer->nlmsg_type,
-        NLMSG_ERROR, _netlink_recv_buffer->nlmsg_seq, _netlink_recv_buffer->nlmsg_flags, _netlink_recv_buffer->nlmsg_pid);
-    return -1;
-  }
-  if (NLMSG_LENGTH(sizeof(struct nlmsgerr)) > _netlink_recv_buffer->nlmsg_len) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Received invalid netlink message size %zu != %u",
-        sizeof(struct nlmsgerr), _netlink_recv_buffer->nlmsg_len);
-    return -1;
-  }
-
-  l_err = (struct nlmsgerr *)NLMSG_DATA(_netlink_recv_buffer);
-
-  if (l_err->error) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Received netlink error code %s (%d)",
-        strerror(-l_err->error), l_err->error);
-  }
-  return -l_err->error;
+  nl->seq_used = 0;
 }
 
 /**
- * Sends a single netlink message to the kernel. The answer will be delivered
- * to the netlink listener.
- * @param nl_hdr pointer to netlink header
- * @return sequence number of buffered netlink message
+ * Send all netlink messages in the outgoing queue to the kernel
+ * @param nl pointer to netlink handler
  */
-int
-os_system_netlink_async_send(struct olsr_system_feedback *fb, struct nlmsghdr *nl_hdr) {
-  if (fb) {
-    if (fb->seq_max > 0 && fb->seq_max != _async_seq) {
-      return -1;
-    }
-    _async_seq++;
-
-    if (fb->outstanding_fb == 0) {
-      olsr_timer_start(OS_SYSTEM_NETLINK_TIMEOUT, 0, fb, _feedback_timer);
-      fb->seq_min = _async_seq;
-      fb->seq_max = _async_seq;
-    }
-    fb->seq_max++;
-    fb->outstanding_fb++;
-
-    nl_hdr->nlmsg_seq = _async_seq;
-    nl_hdr->nlmsg_flags |= NLM_F_ACK;
-  }
-  else {
-    nl_hdr->nlmsg_seq = 0;
-  }
-
-  nl_hdr->nlmsg_flags |= NLM_F_MULTI;
-
-  abuf_memcpy(&_netlink_send_buffer, nl_hdr, nl_hdr->nlmsg_len);
-
-  /* trigger write */
-  olsr_socket_set_write(&_rtnetlink_socket, true);
-  return _async_seq;
-}
-
-void
-os_system_feedback_add(struct olsr_system_feedback *feedback) {
-  feedback->outstanding_fb = 0;
-  feedback->timeout = NULL;
-
-  list_init_node(&feedback->_node);
-}
-
-void
-os_system_feedback_remove(struct olsr_system_feedback *feedback) {
-  if (feedback->timeout) {
-    olsr_timer_stop(feedback->timeout);
-  }
-
-  list_remove(&feedback->_node);
-}
-
 static void
-_cb_handle_feedback_timerout(void *ptr) {
-  struct olsr_system_feedback *fb = ptr;
-
-  fb->timeout = NULL;
-  list_remove(&fb->_node);
-
-  fb->cb_timeout(fb);
-
-
-}
-
-static void
-_flush_netlink_buffer(void) {
+_flush_netlink_buffer(struct os_system_netlink *nl) {
   ssize_t ret;
 
-  /* add DONE message */
-  abuf_memcpy(&_netlink_send_buffer, &_netlink_hdr_done, sizeof(_netlink_hdr_done));
+  /* start feedback timer */
+  olsr_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT*10, 0, nl, _netlink_timer);
 
   /* send outgoing message */
-  _netlink_send_iov.iov_base = _netlink_send_buffer.buf;
-  _netlink_send_iov.iov_len = _netlink_send_buffer.len;
+  _netlink_send_iov[0].iov_base = nl->out.buf;
+  _netlink_send_iov[0].iov_len = nl->out.len;
 
-  if ((ret = sendmsg(_rtnetlink_async_fd, &_netlink_send_msg, 0)) <= 0) {
+  if ((ret = sendmsg(nl->socket.fd, &_netlink_send_msg, 0)) <= 0) {
     OLSR_WARN(LOG_OS_SYSTEM,
         "Cannot send data to netlink socket (%d: %s)",
         errno, strerror(errno));
   }
   else {
-    abuf_clear(&_netlink_send_buffer);
+    OLSR_DEBUG(LOG_OS_SYSTEM, "Sent %zd/%zu bytes for netlink seqno: %d",
+        ret, nl->out.len, nl->seq_used);
+    nl->seq_sent = nl->seq_used;
+    abuf_clear(&nl->out);
   }
 
-  if (_netlink_send_buffer.len == 0) {
-    olsr_socket_set_write(&_rtnetlink_socket, false);
+  if (nl->out.len == 0) {
+    olsr_socket_set_write(&nl->socket, false);
   }
 }
 
@@ -454,16 +388,16 @@ _flush_netlink_buffer(void) {
  * @param event_write
  */
 static void
-_netlink_handler(int fd,
-    void *data __attribute__((unused)),
-    bool event_read,
-    bool event_write) {
+_netlink_handler(int fd, void *data, bool event_read, bool event_write) {
+  struct os_system_netlink *nl;
+  struct nlmsghdr *nh;
   ssize_t ret;
   size_t len;
-  struct nlmsghdr *nh;
 
+  OLSR_DEBUG(LOG_OS_SYSTEM, "Got netlink message (%d/%d)", event_read, event_write);
+  nl = data;
   if (event_write) {
-    _flush_netlink_buffer();
+    _flush_netlink_buffer(nl);
   }
 
   if (!event_read) {
@@ -471,6 +405,8 @@ _netlink_handler(int fd,
   }
 
   /* handle incoming messages */
+  _netlink_rcv_iov.iov_base = nl->in;
+  _netlink_rcv_iov.iov_len = UIO_MAXIOV;
   if ((ret = recvmsg(fd, &_netlink_rcv_msg, MSG_DONTWAIT)) < 0) {
     if (errno != EAGAIN) {
       OLSR_WARN(LOG_OS_SYSTEM,"netlink recvmsg error: %s (%d)\n",
@@ -481,11 +417,9 @@ _netlink_handler(int fd,
 
   /* loop through netlink headers */
   len = (size_t) ret;
-  for (nh = _netlink_recv_buffer; NLMSG_OK (nh, len);
-       nh = NLMSG_NEXT (nh, len)) {
-
+  for (nh = nl->in; NLMSG_OK (nh, len); nh = NLMSG_NEXT (nh, len)) {
     OLSR_DEBUG(LOG_OS_SYSTEM,
-        "Netlink message received: type %d\n", _netlink_recv_buffer->nlmsg_type);
+        "Netlink message received: type %d\n", nl->in->nlmsg_type);
 
     switch (nh->nlmsg_type) {
       case NLMSG_NOOP:
@@ -497,100 +431,76 @@ _netlink_handler(int fd,
 
       case NLMSG_ERROR:
         /* Feedback for async netlink message */
-        _handle_nl_err(nh);
-        break;
-
-      case RTM_NEWLINK:
-      case RTM_DELLINK:
-        /* link up/down */
-        _handle_nl_link(nh);
-        break;
-
-      case RTM_NEWADDR:
-      case RTM_DELADDR:
-        /* address added/removed */
-        _handle_nl_addr(nh);
+        _handle_nl_err(nl, nh);
         break;
 
       default:
+        if (nl->cb_message) {
+          nl->cb_message(nh);
+        }
         break;
     }
   }
 }
 
 /**
- * Handle incoming RTM_NEWLINK/RTM_DELLINK netlink messages
- * @param nl pointer to netlink message header
+ * Handle incoming rtnetlink multicast messages for interface listeners
+ * @param hdr pointer to netlink message
  */
 static void
-_handle_nl_link(struct nlmsghdr *nl) {
+_handle_rtnetlink(struct nlmsghdr *hdr) {
   struct ifinfomsg *ifi;
-  char if_name[IF_NAMESIZE];
-
-  ifi = (struct ifinfomsg *) NLMSG_DATA(nl);
-
-  if (if_indextoname(ifi->ifi_index, if_name) == NULL) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Failed to convert if-index to name: %d", ifi->ifi_index);
-    return;
-  }
-
-  OLSR_DEBUG(LOG_OS_SYSTEM, "Linkstatus of interface '%s' changed", if_name);
-  olsr_interface_trigger_change(if_name);
-}
-
-/**
- * Handle incoming RTM_NEWADDR/RTM_DELADDR netlink messages
- * @param nl pointer to netlink message header
- */
-static void
-_handle_nl_addr(struct nlmsghdr *nl) {
   struct ifaddrmsg *ifa;
 
   char if_name[IF_NAMESIZE];
 
-  ifa = (struct ifaddrmsg *) NLMSG_DATA(nl);
+  if (hdr->nlmsg_type == RTM_NEWLINK || hdr->nlmsg_type == RTM_DELLINK) {
+    ifi = (struct ifinfomsg *) NLMSG_DATA(hdr);
 
-  if (if_indextoname(ifa->ifa_index, if_name) == NULL) {
-    OLSR_WARN(LOG_OS_SYSTEM,
-        "Failed to convert if-index to name: %d", ifa->ifa_index);
-    return;
+    if (if_indextoname(ifi->ifi_index, if_name) == NULL) {
+      OLSR_WARN(LOG_OS_SYSTEM,
+          "Failed to convert if-index to name: %d", ifi->ifi_index);
+      return;
+    }
+
+    OLSR_DEBUG(LOG_OS_SYSTEM, "Linkstatus of interface '%s' changed", if_name);
+    olsr_interface_trigger_change(if_name);
   }
 
-  OLSR_DEBUG(LOG_OS_SYSTEM, "Address of interface '%s' changed", if_name);
-  olsr_interface_trigger_change(if_name);
+  else if (hdr->nlmsg_type == RTM_NEWADDR || hdr->nlmsg_type == RTM_DELADDR) {
+    ifa = (struct ifaddrmsg *) NLMSG_DATA(hdr);
+
+    if (if_indextoname(ifa->ifa_index, if_name) == NULL) {
+      OLSR_WARN(LOG_OS_SYSTEM,
+          "Failed to convert if-index to name: %d", ifa->ifa_index);
+      return;
+    }
+
+    OLSR_DEBUG(LOG_OS_SYSTEM, "Address of interface '%s' changed", if_name);
+    olsr_interface_trigger_change(if_name);
+  }
 }
 
+/**
+ * Handle result code in netlink message
+ * @param nl pointer to netlink handler
+ * @param nh pointer to netlink message
+ */
 static void
-_handle_nl_err(struct nlmsghdr *nl) {
-  struct olsr_system_feedback *fb;
+_handle_nl_err(struct os_system_netlink *nl, struct nlmsghdr *nh) {
   struct nlmsgerr *err;
 
-  err = (struct nlmsgerr *) NLMSG_DATA(nl);
+  err = (struct nlmsgerr *) NLMSG_DATA(nh);
 
-  if (err->msg.nlmsg_type == RTM_NEWROUTE
-      || err->msg.nlmsg_type == RTM_DELROUTE) {
-    OLSR_DEBUG(LOG_OS_SYSTEM, "Got feedback for routing seq %d: %d", nl->nlmsg_seq, err->error);
+  if (nl->cb_feedback) {
+    nl->cb_feedback(err->msg.nlmsg_seq, err->error);
   }
-
-  if (err->msg.nlmsg_seq != 0) {
-    /* handle counting of outstanding feedback */
-    list_for_each_element(&_feedback_handlers, fb, _node) {
-      if (err->msg.nlmsg_seq >= fb->seq_min && err->msg.nlmsg_seq <= fb->seq_max) {
-        fb->outstanding_fb--;
-
-        if (fb->outstanding_fb == 0) {
-          olsr_timer_stop(fb->timeout);
-          fb->timeout = NULL;
-          list_remove(&fb->_node);
-        }
-
-        fb->cb_ack(fb, err->msg.nlmsg_seq, err->error);
-        break;
-      }
-    }
-    if (list_is_empty(&_feedback_handlers)) {
-      _async_seq = 0;
-    }
+  if (nl->msg_in_transit > 0) {
+    nl->msg_in_transit--;
+  }
+  if (nl->msg_in_transit == 0) {
+    olsr_timer_stop(nl->timeout);
+    nl->timeout= NULL;
+    nl->seq_used = 0;
   }
 }

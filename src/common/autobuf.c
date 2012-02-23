@@ -88,19 +88,13 @@ abuf_set_memory_handler(
 /**
  * Initialize an autobuffer and allocate a chunk of memory
  * @param autobuf pointer to autobuf object
- * @param initial_size size of allocated memory, might be 0
  * @return -1 if an out-of-memory error happened, 0 otherwise
  */
 int
-abuf_init(struct autobuf *autobuf, size_t initial_size)
+abuf_init(struct autobuf *autobuf)
 {
   autobuf->len = 0;
-  if (initial_size <= 0) {
-    autobuf->size = AUTOBUFCHUNK;
-  }
-  else {
-    autobuf->size = ROUND_UP_TO_POWER_OF_2(initial_size, AUTOBUFCHUNK);
-  }
+  autobuf->size = AUTOBUFCHUNK;
   autobuf->buf = autobuf_malloc(autobuf->size);
   if (autobuf->buf == NULL) {
     autobuf->size = 0;

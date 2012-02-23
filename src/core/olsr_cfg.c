@@ -236,7 +236,7 @@ olsr_cfg_apply(void) {
   struct autobuf log;
   int result;
 
-  if (abuf_init(&log, 0)) {
+  if (abuf_init(&log)) {
     OLSR_WARN_OOM(LOG_CONFIG);
     return -1;
   }

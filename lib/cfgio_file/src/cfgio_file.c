@@ -134,7 +134,7 @@ _cb_file_load(struct cfg_instance *instance,
   }
 
   bytes = 1;
-  if (abuf_init(&dst, 4096)) {
+  if (abuf_init(&dst)) {
     cfg_append_printable_line(log,
         "Out of memory error while allocating io buffer");
     close (fd);
@@ -188,7 +188,7 @@ _cb_file_save(struct cfg_instance *instance,
   size_t total;
   struct autobuf abuf;
 
-  if (abuf_init(&abuf, 4096)) {
+  if (abuf_init(&abuf)) {
     cfg_append_printable_line(log,
         "Out of memory error while allocating io buffer");
     return -1;

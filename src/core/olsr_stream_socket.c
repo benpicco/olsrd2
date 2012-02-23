@@ -507,11 +507,11 @@ _create_session(struct olsr_stream_socket *stream_socket,
     goto parse_request_error;
   }
 
-  if (abuf_init(&session->in, 1024)) {
+  if (abuf_init(&session->in)) {
     OLSR_WARN(LOG_SOCKET_STREAM, "Cannot allocate memory for comport session");
     goto parse_request_error;
   }
-  if (abuf_init(&session->out, 0)) {
+  if (abuf_init(&session->out)) {
     OLSR_WARN(LOG_SOCKET_STREAM, "Cannot allocate memory for comport session");
     goto parse_request_error;
   }

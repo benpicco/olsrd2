@@ -39,10 +39,6 @@
  *
  */
 
-/*
- * Dynamic linked library for the olsr.org olsr daemon
- */
-
 #include <stdlib.h>
 
 #include "common/common_types.h"
@@ -637,7 +633,7 @@ _cb_handle_route(struct olsr_telnet_data *data) {
     }
 
     abuf_appendf(data->out, "set route: %d",
-        os_routing_set(NULL, src.type == 0 ? NULL: &src, &gw, &dst,
+        os_routing_set(src.type == 0 ? NULL: &src, &gw, &dst,
             table, if_index, metric, protocol, set, true));
     return TELNET_RESULT_ACTIVE;
   }

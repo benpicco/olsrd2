@@ -70,7 +70,7 @@ EXPORT void abuf_set_memory_handler(
     void *(*custom_realloc)(void *, size_t),
     void (*custom_free)(void *));
 
-EXPORT int abuf_init(struct autobuf *autobuf, size_t initial_size);
+EXPORT int abuf_init(struct autobuf *autobuf);
 EXPORT void abuf_free(struct autobuf *autobuf);
 EXPORT int abuf_vappendf(struct autobuf *autobuf, const char *fmt,
     va_list ap) __attribute__ ((format(printf, 2, 0)));

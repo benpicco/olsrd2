@@ -4,7 +4,7 @@
 #	ipv4		yes
 #	ipv6		yes
 
-#[telnet]
+[telnet]
 #	acl		127.0.0.1/8
 #	acl		default_reject
 #	bindto_v4	11.0.0.1
@@ -16,9 +16,12 @@
 #	bindto_v4	11.0.0.1
 #	port		8080
 
-[httptelnet]
+#[httptelnet]
 #	acl		127.0.0.1/8
 #	acl		default_reject
 #       site		/telnet
 #       Example name/password "wiki"/"pedia"
 #       auth		d2lraTpwZWRpYQ==
+
+[remotecontrol]
+#	acl          accept_default

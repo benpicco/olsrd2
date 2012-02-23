@@ -158,6 +158,10 @@ olsr_timer_add(const char *name, timer_cb_func callback, bool periodic) {
   struct olsr_timer_info *ti;
 
   ti = olsr_memcookie_malloc(timerinfo_cookie);
+  if (ti == NULL) {
+    OLSR_WARN_OOM(LOG_MEMCOOKIE);
+    return NULL;
+  }
   ti->name = strdup(name);
   ti->callback = callback;
   ti->periodic = periodic;

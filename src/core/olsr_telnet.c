@@ -558,7 +558,12 @@ _cb_telnet_echo(struct olsr_telnet_data *data) {
  */
 static enum olsr_telnet_result
 _cb_telnet_timeout(struct olsr_telnet_data *data) {
-  data->timeout_value = (uint32_t)strtoul(data->parameter, NULL, 10) * 1000;
+  if (data->parameter == NULL) {
+    data->timeout_value = 0;
+  }
+  else {
+    data->timeout_value = (uint32_t)strtoul(data->parameter, NULL, 10) * 1000;
+  }
   return TELNET_RESULT_ACTIVE;
 }
 

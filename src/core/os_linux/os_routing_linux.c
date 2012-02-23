@@ -1,8 +1,42 @@
+
 /*
- * os_routing_linux.c
+ * The olsr.org Optimized Link-State Routing daemon(olsrd)
+ * Copyright (c) 2004-2011, the olsr.org team - see HISTORY file
+ * All rights reserved.
  *
- *  Created on: Feb 13, 2012
- *      Author: rogge
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in
+ *   the documentation and/or other materials provided with the
+ *   distribution.
+ * * Neither the name of olsr.org, olsrd nor the names of its
+ *   contributors may be used to endorse or promote products derived
+ *   from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Visit http://www.olsr.org for more information.
+ *
+ * If you find this software useful feel free to make a donation
+ * to the project. For more information see the website or contact
+ * the copyright holders.
+ *
  */
 
 /* must be first because of a problem with linux/rtnetlink.h */
@@ -37,25 +71,33 @@
 static bool _is_at_least_linuxkernel_2_6_31(void);
 static int _os_linux_writeToProc(const char *file, char *old, char value);
 
+static void _cb_rtnetlink_feedback(uint32_t seq, int error);
+static void _cb_rtnetlink_timeout(void);
+
 /* global procfile state before initialization */
 static char _original_rp_filter;
 static char _original_icmp_redirect;
 
-/* buffer for outgoing rtnetlink messages */
-static struct nlmsghdr *_rtnetlink_buffer;
+/* netlink socket for route set/get commands */
+struct os_system_netlink _rtnetlink_socket;
 
 OLSR_SUBSYSTEM_STATE(_os_routing_state);
 
+/**
+ * Initialize routing subsystem
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 os_routing_init(void) {
   if (olsr_subsystem_is_initialized(&_os_routing_state))
     return 0;
 
-  _rtnetlink_buffer = calloc(UIO_MAXIOV, 1);
-  if (_rtnetlink_buffer == NULL) {
-    OLSR_WARN_OOM(LOG_OS_SYSTEM);
+  if (os_system_netlink_add(&_rtnetlink_socket, NETLINK_ROUTE, 0)) {
     return -1;
   }
+
+  _rtnetlink_socket.cb_feedback = _cb_rtnetlink_feedback;
+  _rtnetlink_socket.cb_timeout = _cb_rtnetlink_timeout;
 
   if (_os_linux_writeToProc(PROC_ALL_REDIRECT, &_original_icmp_redirect, '0')) {
     OLSR_WARN(LOG_OS_SYSTEM, "WARNING! Could not disable ICMP redirects! "
@@ -75,6 +117,9 @@ os_routing_init(void) {
   return 0;
 }
 
+/**
+ * Cleanup all resources allocated by the routing subsystem
+ */
 void
 os_routing_cleanup(void) {
   if (olsr_subsystem_cleanup(&_os_routing_state))
@@ -94,7 +139,7 @@ os_routing_cleanup(void) {
         PROC_ALL_SPOOF, _original_rp_filter);
   }
 
-  free (_rtnetlink_buffer);
+  os_system_netlink_remove(&_rtnetlink_socket);
 }
 
 /**
@@ -188,12 +233,13 @@ os_routing_cleanup_mesh_if(struct olsr_interface *interf) {
  * @return -1 if an error happened, rtnetlink sequence number otherwise
  */
 int
-os_routing_set(struct olsr_system_feedback *feedback,
-    const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
+os_routing_set(const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
     int rttable, int if_index, int metric, int protocol, bool set, bool del_similar) {
+  uint8_t buffer[UIO_MAXIOV];
+  struct nlmsghdr *msg;
   struct rtmsg *rt_msg;
 
-  assert(olsr_subsystem_is_initialized(&_os_routing_state));
+  msg = (void *)&buffer[0];
 
   /* consistency check */
   if (dst == NULL || (dst->type != AF_INET && dst->type != AF_INET6)) {
@@ -204,23 +250,21 @@ os_routing_set(struct olsr_system_feedback *feedback,
     return -1;
   }
 
-  memset(_rtnetlink_buffer, 0, sizeof(*_rtnetlink_buffer));
+  memset(buffer, 0, sizeof(buffer));
 
-  rt_msg = NLMSG_DATA(_rtnetlink_buffer);
-  memset(rt_msg, 0, sizeof(*rt_msg));
-
+  rt_msg = NLMSG_DATA(buffer);
   rt_msg->rtm_flags = RTNH_F_ONLINK;
   rt_msg->rtm_family = dst->type;
   rt_msg->rtm_table = rttable;
 
-  _rtnetlink_buffer->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
-  _rtnetlink_buffer->nlmsg_flags = NLM_F_REQUEST;
+  msg->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
+  msg->nlmsg_flags = NLM_F_REQUEST;
 
   if (set) {
-    _rtnetlink_buffer->nlmsg_flags |= NLM_F_CREATE | NLM_F_REPLACE;
-    _rtnetlink_buffer->nlmsg_type = RTM_NEWROUTE;
+    msg->nlmsg_flags |= NLM_F_CREATE | NLM_F_REPLACE;
+    msg->nlmsg_type = RTM_NEWROUTE;
   } else {
-    _rtnetlink_buffer->nlmsg_type = RTM_DELROUTE;
+    msg->nlmsg_type = RTM_DELROUTE;
   }
 
   /* RTN_UNSPEC would be the wildcard, but blackhole broadcast or nat roules should usually not conflict */
@@ -246,26 +290,36 @@ os_routing_set(struct olsr_system_feedback *feedback,
 
   if (set || !del_similar) {
     /* add interface*/
-    os_system_netlink_addreq(_rtnetlink_buffer, RTA_OIF, &if_index, sizeof(if_index));
+    if (os_system_netlink_addreq(msg, RTA_OIF, &if_index, sizeof(if_index))) {
+      return -1;
+    }
   }
 
   if (set && src != NULL) {
     /* add src-ip */
-    os_system_netlink_addnetaddr(_rtnetlink_buffer, RTA_PREFSRC, src);
+    if (os_system_netlink_addnetaddr(msg, RTA_PREFSRC, src)) {
+      return -1;
+    }
   }
 
   if (metric != -1) {
     /* add metric */
-    os_system_netlink_addreq(_rtnetlink_buffer, RTA_PRIORITY, &metric, sizeof(metric));
+    if (os_system_netlink_addreq(msg, RTA_PRIORITY, &metric, sizeof(metric))) {
+      return -1;
+    }
   }
 
   if (gw) {
     /* add gateway */
-    os_system_netlink_addnetaddr(_rtnetlink_buffer, RTA_GATEWAY, gw);
+    if (os_system_netlink_addnetaddr(msg, RTA_GATEWAY, gw)) {
+      return -1;
+    }
   }
-  else if ( dst->prefix_len == 32 ) {
+  else if (dst->prefix_len == netaddr_get_maxprefix(dst)) {
     /* use destination as gateway, to 'force' linux kernel to do proper source address selection */
-    os_system_netlink_addnetaddr(_rtnetlink_buffer, RTA_GATEWAY, dst);
+    if (os_system_netlink_addnetaddr(msg, RTA_GATEWAY, dst)) {
+      return -1;
+    }
   }
   else {
     /*
@@ -276,9 +330,29 @@ os_routing_set(struct olsr_system_feedback *feedback,
   }
 
    /* add destination */
-  os_system_netlink_addnetaddr(_rtnetlink_buffer, RTA_DST, dst);
+  if (os_system_netlink_addnetaddr(msg, RTA_DST, dst)) {
+    return -1;
+  }
 
-  return os_system_netlink_async_send(feedback, _rtnetlink_buffer);
+  os_system_netlink_send(&_rtnetlink_socket, msg);
+  return 0;
+}
+/**
+ * TODO: Handle feedback from netlink socket
+ * @param seq
+ * @param error
+ */
+static void
+_cb_rtnetlink_feedback(uint32_t seq, int error) {
+  OLSR_INFO(LOG_OS_ROUTING, "Got feedback: %d %d", seq, error);
+}
+
+/**
+ * TODO: Handle ack timeout from netlink socket
+ */
+static void
+_cb_rtnetlink_timeout(void) {
+  OLSR_INFO(LOG_OS_ROUTING, "Got timeout");
 }
 
 /**
@@ -331,6 +405,9 @@ writetoproc_error:
   return -1;
 }
 
+/**
+ * @return true if linux kernel is at least 2.6.31
+ */
 static bool
 _is_at_least_linuxkernel_2_6_31(void) {
   struct utsname uts;

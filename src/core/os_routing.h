@@ -1,7 +1,7 @@
 
 /*
  * The olsr.org Optimized Link-State Routing daemon(olsrd)
- * Copyright (c) 2004-2011, the olsr.org team - see HISTORY file
+ * Copyright (c) 2004-2009, the olsr.org team - see HISTORY file
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -92,8 +92,7 @@ EXPORT void os_routing_cleanup(void);
 EXPORT int os_routing_init_mesh_if(struct olsr_interface *);
 EXPORT void os_routing_cleanup_mesh_if(struct olsr_interface *);
 
-EXPORT int os_routing_set(struct olsr_system_feedback *fb,
-    const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
+EXPORT int os_routing_set(const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
     int rttable, int if_index, int metric, int protocol, bool set, bool del_similar);
 
 #endif /* OS_ROUTING_H_ */

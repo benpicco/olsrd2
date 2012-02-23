@@ -85,6 +85,7 @@ static const char *_LOG_SOURCE_NAMES[LOG_CORESOURCE_COUNT] = {
   "interface",
   "os-net",
   "os-system",
+  "os-routing",
   "plugin-loader",
   "telnet",
   "plugins",
@@ -128,7 +129,7 @@ olsr_log_init(const struct olsr_builddata *data, enum log_severity def_severity,
 
   list_init_head(&_handler_list);
 
-  if (abuf_init(&_logbuffer, 4096)) {
+  if (abuf_init(&_logbuffer)) {
     fputs("Not enough memory for logging buffer\n", stderr);
     return -1;
   }

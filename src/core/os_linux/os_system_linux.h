@@ -15,6 +15,7 @@
 #include <linux/netlink.h>
 
 #include "common/netaddr.h"
+#include "olsr_socket.h"
 #include "os_helper.h"
 
 /* Linux os_system runs on "all default" except for init/cleanup */
@@ -24,11 +25,31 @@
 #define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
 #define OS_SYSTEM_LOG          OS_GENERIC
 
+struct os_system_netlink {
+  struct olsr_socket_entry socket;
+  struct autobuf out;
+  struct nlmsghdr *in;
+
+  int seq_used;
+  int seq_sent;
+
+  int msg_in_transit;
+
+  void (*cb_message)(struct nlmsghdr *hdr);
+  void (*cb_feedback)(uint32_t seq, int error);
+  void (*cb_timeout)(void);
+
+  struct olsr_timer_entry *timeout;
+};
+
+int os_system_netlink_add(struct os_system_netlink *,
+    int protocol, uint32_t multicast);
+void os_system_netlink_remove(struct os_system_netlink *);
+void os_system_netlink_send(struct os_system_netlink *fd,
+    struct nlmsghdr *nl_hdr);
+
 int os_system_netlink_addreq(struct nlmsghdr *n,
     int type, const void *data, int len);
-int os_system_netlink_sync_send(struct nlmsghdr *nl_hdr);
-int os_system_netlink_async_send(struct olsr_system_feedback *fd,
-    struct nlmsghdr *nl_hdr);
 
 static INLINE int
 os_system_netlink_addnetaddr(struct nlmsghdr *n,

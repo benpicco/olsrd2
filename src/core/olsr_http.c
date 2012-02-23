@@ -469,7 +469,7 @@ _create_http_header(struct olsr_stream_session *session,
   struct autobuf buf;
   struct timeval currtime;
 
-  abuf_init(&buf, 1024);
+  abuf_init(&buf);
 
   abuf_appendf(&buf, "%s %d %s\r\n", HTTP_VERSION_1_0, code, _get_headertype_string(code));
 
