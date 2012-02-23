@@ -580,12 +580,12 @@ parse_commandline(int argc, char **argv, bool reload_only) {
     }
   }
 
-  if (log.len > 0) {
+  if (abuf_getlen(&log) > 0) {
     if (reload_only) {
-      OLSR_WARN(LOG_MAIN, "Cannot reload configuration.\n%s", log.buf);
+      OLSR_WARN(LOG_MAIN, "Cannot reload configuration.\n%s", abuf_getptr(&log));
     }
     else {
-      fputs(log.buf, return_code == 0 ? stdout : stderr);
+      fputs(abuf_getptr(&log), return_code == 0 ? stdout : stderr);
     }
   }
 
@@ -613,8 +613,8 @@ display_schema(void) {
     return_code = -1;
   }
 
-  if (log.len > 0) {
-    fputs(log.buf, stdout);
+  if (abuf_getlen(&log) > 0) {
+    fputs(abuf_getptr(&log), stdout);
   }
 
   abuf_free(&log);

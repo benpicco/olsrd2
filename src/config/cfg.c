@@ -98,8 +98,8 @@ cfg_append_printable_line(struct autobuf *autobuf, const char *fmt, ...) {
 
   if (autobuf == NULL) return 0;
 
-  _value = (unsigned char *)autobuf->buf + autobuf->len;
-  len = autobuf->len;
+  _value = (unsigned char *)abuf_getptr(autobuf) + abuf_getlen(autobuf);
+  len = abuf_getlen(autobuf);
 
   va_start(ap, fmt);
   rv = abuf_vappendf(autobuf, fmt, ap);
@@ -110,7 +110,7 @@ cfg_append_printable_line(struct autobuf *autobuf, const char *fmt, ...) {
   }
 
   /* convert everything non-printable to '.' */
-  while (*_value && len++ < autobuf->len) {
+  while (*_value && len++ < abuf_getlen(autobuf)) {
     if (*_value < 32 || *_value == 127 || *_value == 255) {
       *_value = '.';
     }

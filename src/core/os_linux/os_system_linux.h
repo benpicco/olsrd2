@@ -42,13 +42,13 @@ struct os_system_netlink {
   struct olsr_timer_entry *timeout;
 };
 
-int os_system_netlink_add(struct os_system_netlink *,
+EXPORT int os_system_netlink_add(struct os_system_netlink *,
     int protocol, uint32_t multicast);
-void os_system_netlink_remove(struct os_system_netlink *);
-void os_system_netlink_send(struct os_system_netlink *fd,
+EXPORT void os_system_netlink_remove(struct os_system_netlink *);
+EXPORT int os_system_netlink_send(struct os_system_netlink *fd,
     struct nlmsghdr *nl_hdr);
 
-int os_system_netlink_addreq(struct nlmsghdr *n,
+EXPORT int os_system_netlink_addreq(struct nlmsghdr *n,
     int type, const void *data, int len);
 
 static INLINE int

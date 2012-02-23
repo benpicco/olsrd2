@@ -331,8 +331,8 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   p3 = abuf_vappendf(&_logbuffer, format, ap);
 
   /* remove \n at the end of the line if necessary */
-  if (_logbuffer.buf[p1 + p2 + p3 - 1] == '\n') {
-    _logbuffer.buf[p1 + p2 + p3 - 1] = 0;
+  if (abuf_getptr(&_logbuffer)[p1 + p2 + p3 - 1] == '\n') {
+    abuf_getptr(&_logbuffer)[p1 + p2 + p3 - 1] = 0;
     p3--;
   }
 
@@ -341,7 +341,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   param.no_header = no_header;
   param.file = file;
   param.line = line;
-  param.buffer = _logbuffer.buf;
+  param.buffer = abuf_getptr(&_logbuffer);
   param.timeLength = p1;
   param.prefixLength = p2;
 
@@ -377,6 +377,7 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
   struct log_handler_entry *h, *iterator;
   struct log_parameters param;
   int i,j;
+  char *ptr;
 
   /* test if event is consumed by any log handler */
   if (!log_global_mask[source].log_for_severity[severity]) {
@@ -385,31 +386,32 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
   }
 
   /* generate OOM log string */
-  _logbuffer.buf[0] = 0;
-  strscat(_logbuffer.buf, LOG_SEVERITY_NAMES[severity], _logbuffer.size);
-  strscat(_logbuffer.buf, " ", _logbuffer.size);
-  strscat(_logbuffer.buf, LOG_SOURCE_NAMES[source], _logbuffer.size);
-  strscat(_logbuffer.buf, " ", _logbuffer.size);
-  strscat(_logbuffer.buf, file, _logbuffer.size);
-  strscat(_logbuffer.buf, " ", _logbuffer.size);
+  ptr = abuf_getptr(&_logbuffer);
+  ptr[0] = 0;
+  strscat(ptr, LOG_SEVERITY_NAMES[severity], abuf_getmax(&_logbuffer));
+  strscat(ptr, " ", abuf_getmax(&_logbuffer));
+  strscat(ptr, LOG_SOURCE_NAMES[source], abuf_getmax(&_logbuffer));
+  strscat(ptr, " ", abuf_getmax(&_logbuffer));
+  strscat(ptr, file, abuf_getmax(&_logbuffer));
+  strscat(ptr, " ", abuf_getmax(&_logbuffer));
 
-  j = strlen(_logbuffer.buf) + 4;
+  j = strlen(ptr) + 4;
 
   for (i=0; i < 5; i++) {
-    _logbuffer.buf[j-i] = '0' + (line % 10);
+    ptr[j-i] = '0' + (line % 10);
     line /= 10;
   }
-  _logbuffer.buf[++j] = ' ';
-  _logbuffer.buf[++j] = 0;
+  ptr[++j] = ' ';
+  ptr[++j] = 0;
 
-  strscat(_logbuffer.buf, OUT_OF_MEMORY_ERROR, _logbuffer.size);
+  strscat(ptr, OUT_OF_MEMORY_ERROR, abuf_getmax(&_logbuffer));
 
   param.severity = severity;
   param.source = source;
   param.no_header = true;
   param.file = file;
   param.line = line;
-  param.buffer = _logbuffer.buf;
+  param.buffer = ptr;
   param.timeLength = 0;
   param.prefixLength = 0;
 

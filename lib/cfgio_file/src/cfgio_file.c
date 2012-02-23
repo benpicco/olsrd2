@@ -164,7 +164,7 @@ _cb_file_load(struct cfg_instance *instance,
     parser = cfg_parser_find(instance, &dst, param, NULL);
   }
 
-  db = cfg_parser_parse_buffer(instance, parser, dst.buf, dst.len, log);
+  db = cfg_parser_parse_buffer(instance, parser, abuf_getptr(&dst), abuf_getlen(&dst), log);
   abuf_free(&dst);
   return db;
 }
@@ -211,8 +211,8 @@ _cb_file_save(struct cfg_instance *instance,
   }
 
   total = 0;
-  while (total < abuf.len) {
-    bytes = write(fd, &abuf.buf[total], abuf.len - total);
+  while (total < abuf_getlen(&abuf)) {
+    bytes = write(fd, abuf_getptr(&abuf) + total, abuf_getlen(&abuf) - total);
     if (bytes <= 0 && errno != EINTR) {
       cfg_append_printable_line(log,
           "Error while writing to file '%s': %s (%d)",

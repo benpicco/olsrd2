@@ -211,10 +211,10 @@ _cb_receive_data(struct olsr_stream_session *session) {
   size_t len;
 
   /* search for end of http header */
-  if ((first_header = strstr(session->in.buf, "\r\n\r\n"))) {
+  if ((first_header = strstr(abuf_getptr(&session->in), "\r\n\r\n"))) {
     first_header += 4;
   }
-  else if ((first_header = strstr(session->in.buf, "\n\n"))) {
+  else if ((first_header = strstr(abuf_getptr(&session->in), "\n\n"))) {
     first_header += 2;
   }
   else {
@@ -222,7 +222,7 @@ _cb_receive_data(struct olsr_stream_session *session) {
     return STREAM_SESSION_ACTIVE;
   }
 
-  if (_parse_http_header(session->in.buf, session->in.len, &header)) {
+  if (_parse_http_header(abuf_getptr(&session->in), abuf_getlen(&session->in), &header)) {
     OLSR_INFO(LOG_HTTP, "Error, malformed HTTP header.\n");
     _create_http_error(session, HTTP_400_BAD_REQ);
     return STREAM_SESSION_SEND_AND_QUIT;
@@ -259,7 +259,7 @@ _cb_receive_data(struct olsr_stream_session *session) {
       return STREAM_SESSION_SEND_AND_QUIT;
     }
 
-    if (strtoul(content_length, NULL, 10) > session->in.len) {
+    if (strtoul(content_length, NULL, 10) > abuf_getlen(&session->in)) {
       /* header not complete */
       return STREAM_SESSION_ACTIVE;;
     }
@@ -493,8 +493,8 @@ _create_http_header(struct olsr_stream_session *session,
   abuf_appendf(&buf, "Content-type: %s\r\n", content_type);
 
   /* Content length */
-  if (session->out.len > 0) {
-    abuf_appendf(&buf, "Content-length: %zu\r\n", session->out.len);
+  if (abuf_getlen(&session->out) > 0) {
+    abuf_appendf(&buf, "Content-length: %zu\r\n", abuf_getlen(&session->out));
   }
 
   if (code == HTTP_401_UNAUTHORIZED) {
@@ -510,8 +510,8 @@ _create_http_header(struct olsr_stream_session *session,
   /* End header */
   abuf_puts(&buf, "\r\n");
 
-  abuf_memcpy_prepend(&session->out, buf.buf, buf.len);
-  OLSR_DEBUG(LOG_HTTP, "Generated Http-Header:\n%s", buf.buf);
+  abuf_memcpy_prepend(&session->out, abuf_getptr(&buf), abuf_getlen(&buf));
+  OLSR_DEBUG(LOG_HTTP, "Generated Http-Header:\n%s", abuf_getptr(&buf));
 
   abuf_free(&buf);
 }

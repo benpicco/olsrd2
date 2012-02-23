@@ -64,11 +64,6 @@
 #endif
 #endif
 
-/*
- * This include file creates stdint/stdbool datatypes for
- * visual studio, because microsoft does not support C99
- */
-
 /* printf size_t modifiers*/
 
 #if defined(WIN32)
@@ -84,8 +79,19 @@
   #error Please implement size_t modifiers
 #endif
 
-/* types */
-#if defined(WIN32)
+#include <limits.h>
+
+/* we have C99 ? */
+#if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
+#include <inttypes.h>
+#include <stdbool.h>
+#else
+
+/*
+ * This include file creates stdint/stdbool datatypes for
+ * visual studio, because microsoft does not support C99
+ */
+
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
@@ -107,30 +113,17 @@ typedef signed int int32_t;
 # define UINT8_MAX    (255)
 # define UINT16_MAX   (65535)
 # define UINT32_MAX   (4294967295U)
-#else
-#include <inttypes.h>
-#endif
 
-#include <limits.h>
-
-#if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
-
-/* we have a C99 environment */
-#include <stdbool.h>
-#elif defined __GNUC__
-
+#ifdef __GNUC__
 /* we simulate a C99 environment */
 #define bool _Bool
 #define true 1
 #define false 0
 #define __bool_true_false_are_defined 1
-#endif
+#else
+#error No boolean available, please extende common/common_types.h
+#endif /* __GNUC__ */
 
-/* add some safe-gaurds */
-#ifndef WIN32
-#if !defined bool || !defined true || !defined false || !defined __bool_true_false_are_defined
-#error You have no C99-like boolean types. Please extend src/olsr_type.h!
-#endif
-#endif
+#endif /* __STDC_VERSION__ && __STDC_VERSION__ >= 199901L */
 
 #endif /* COMMON_TYPES_H_ */

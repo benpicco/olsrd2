@@ -155,7 +155,7 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
   struct netaddr_str buf;
 #endif
 
-  if (pktsocket->out.len == 0) {
+  if (abuf_getlen(&pktsocket->out) == 0) {
     /* no backlog of outgoing packets, try to send directly */
     result = os_sendto(pktsocket->scheduler_entry.fd, data, length, remote);
     if (result > 0) {
@@ -218,7 +218,7 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
     }
   }
 
-  if (event_write && pktsocket->out.len > 0) {
+  if (event_write && abuf_getlen(&pktsocket->out) > 0) {
     /* handle outgoing data */
 
     /* pointer to remote socket */
@@ -248,7 +248,7 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
     abuf_pull(&pktsocket->out, sizeof(*skt) + 2 + length);
   }
 
-  if (pktsocket->out.len == 0) {
+  if (abuf_getlen(&pktsocket->out) == 0) {
     /* nothing left to send, disable outgoing events */
     olsr_socket_set_write(&pktsocket->scheduler_entry, false);
   }

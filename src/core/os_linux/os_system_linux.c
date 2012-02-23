@@ -283,8 +283,9 @@ os_system_netlink_remove(struct os_system_netlink *nl) {
  * Add a netlink message to the outgoign queue of a handler
  * @param nl pointer to netlink handler
  * @param nl_hdr pointer to netlink message
+ * @return sequence number used for message
  */
-void
+int
 os_system_netlink_send(struct os_system_netlink *nl,
     struct nlmsghdr *nl_hdr) {
   nl->seq_used++;
@@ -296,6 +297,7 @@ os_system_netlink_send(struct os_system_netlink *nl,
 
   /* trigger write */
   olsr_socket_set_write(&nl->socket, true);
+  return nl->seq_used;
 }
 
 /**
@@ -360,8 +362,8 @@ _flush_netlink_buffer(struct os_system_netlink *nl) {
   olsr_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT*10, 0, nl, _netlink_timer);
 
   /* send outgoing message */
-  _netlink_send_iov[0].iov_base = nl->out.buf;
-  _netlink_send_iov[0].iov_len = nl->out.len;
+  _netlink_send_iov[0].iov_base = abuf_getptr(&nl->out);
+  _netlink_send_iov[0].iov_len = abuf_getlen(&nl->out);
 
   if ((ret = sendmsg(nl->socket.fd, &_netlink_send_msg, 0)) <= 0) {
     OLSR_WARN(LOG_OS_SYSTEM,
@@ -370,12 +372,10 @@ _flush_netlink_buffer(struct os_system_netlink *nl) {
   }
   else {
     OLSR_DEBUG(LOG_OS_SYSTEM, "Sent %zd/%zu bytes for netlink seqno: %d",
-        ret, nl->out.len, nl->seq_used);
+        ret, abuf_getlen(&nl->out), nl->seq_used);
     nl->seq_sent = nl->seq_used;
     abuf_clear(&nl->out);
-  }
 
-  if (nl->out.len == 0) {
     olsr_socket_set_write(&nl->socket, false);
   }
 }

@@ -221,7 +221,7 @@ olsr_stream_remove(struct olsr_stream_socket *stream_socket, bool force) {
   }
 
   list_for_each_element_safe(&stream_socket->session, session, node, ptr) {
-    if (force || (session->out.len == 0 && !session->busy)) {
+    if (force || (abuf_getlen(&session->out) == 0 && !session->busy)) {
       /* close everything that doesn't need to send data anymore */
       olsr_stream_close(session, force);
     }
@@ -638,7 +638,7 @@ _cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
         /* out of memory */
         OLSR_WARN(LOG_SOCKET_STREAM, "Out of memory for comport session input buffer");
         session->state = STREAM_SESSION_CLEANUP;
-      } else if (session->in.len > s_sock->config.maximum_input_buffer) {
+      } else if (abuf_getlen(&session->in) > s_sock->config.maximum_input_buffer) {
         /* input buffer overflow */
         if (s_sock->config.create_error) {
           s_sock->config.create_error(session, STREAM_REQUEST_TOO_LARGE);
@@ -661,15 +661,15 @@ _cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
   }
 
   if (session->state == STREAM_SESSION_ACTIVE && s_sock->config.receive_data != NULL
-      && (session->in.len > 0 || session->send_first)) {
+      && (abuf_getlen(&session->in) > 0 || session->send_first)) {
     session->state = s_sock->config.receive_data(session);
     session->send_first = false;
   }
 
   /* send data if necessary */
-  if (session->state != STREAM_SESSION_CLEANUP && session->out.len > 0) {
+  if (session->state != STREAM_SESSION_CLEANUP && abuf_getlen(&session->out) > 0) {
     if (event_write) {
-      len = send(fd, session->out.buf, session->out.len, 0);
+      len = send(fd, abuf_getptr(&session->out), abuf_getlen(&session->out), 0);
 
       if (len > 0) {
         OLSR_DEBUG(LOG_SOCKET_STREAM, "  send returned %d\n", len);
@@ -687,7 +687,7 @@ _cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
     }
   }
 
-  if (session->out.len == 0) {
+  if (abuf_getlen(&session->out) == 0) {
     /* nothing to send anymore */
     OLSR_DEBUG(LOG_SOCKET_STREAM, "  deactivating output in scheduler\n");
     olsr_socket_set_write(&session->scheduler_entry, false);

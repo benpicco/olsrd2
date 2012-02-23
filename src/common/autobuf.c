@@ -63,27 +63,6 @@ ROUND_UP_TO_POWER_OF_2(size_t val, size_t pow2) {
 }
 
 static int _autobuf_enlarge(struct autobuf *autobuf, size_t new_size);
-static void *_malloc(size_t size);
-
-static void *(*autobuf_malloc)(size_t) = _malloc;
-static void *(*autobuf_realloc)(void *, size_t) = realloc;
-static void (*autobuf_free)(void *) = free;
-
-/**
- * Allows to overwrite the memory handler functions for autobufs
- * @param custom_malloc overwrites malloc handler, NULL restores default one
- * @param custom_realloc overwrites realloc handler, NULL restores default one
- * @param custom_free overwrites free handler, NULL restores default one
- */
-void
-abuf_set_memory_handler(
-    void *(*custom_malloc)(size_t),
-    void *(*custom_realloc)(void *, size_t),
-    void (*custom_free)(void *)) {
-  autobuf_malloc = custom_malloc ? custom_malloc : _malloc;
-  autobuf_realloc = custom_realloc ? custom_realloc : realloc;
-  autobuf_free = custom_free ? custom_free : free;
-}
 
 /**
  * Initialize an autobuffer and allocate a chunk of memory
@@ -93,14 +72,14 @@ abuf_set_memory_handler(
 int
 abuf_init(struct autobuf *autobuf)
 {
-  autobuf->len = 0;
-  autobuf->size = AUTOBUFCHUNK;
-  autobuf->buf = autobuf_malloc(autobuf->size);
-  if (autobuf->buf == NULL) {
-    autobuf->size = 0;
+  autobuf->_len = 0;
+  autobuf->_total = AUTOBUFCHUNK;
+  autobuf->_buf = calloc(1, autobuf->_total);
+  if (autobuf->_buf == NULL) {
+    autobuf->_total = 0;
     return -1;
   }
-  *autobuf->buf = '\0';
+  *autobuf->_buf = '\0';
   return 0;
 }
 
@@ -112,10 +91,10 @@ abuf_init(struct autobuf *autobuf)
 void
 abuf_free(struct autobuf *autobuf)
 {
-  autobuf_free(autobuf->buf);
-  autobuf->buf = NULL;
-  autobuf->len = 0;
-  autobuf->size = 0;
+  free(autobuf->_buf);
+  autobuf->_buf = NULL;
+  autobuf->_len = 0;
+  autobuf->_total = 0;
 }
 
 /**
@@ -138,18 +117,18 @@ abuf_vappendf(struct autobuf *autobuf,
   if (autobuf == NULL) return 0;
 
   va_copy(ap2, ap);
-  rc = vsnprintf(autobuf->buf + autobuf->len, autobuf->size - autobuf->len, format, ap);
+  rc = vsnprintf(autobuf->_buf + autobuf->_len, autobuf->_total - autobuf->_len, format, ap);
   va_end(ap);
-  min_size = autobuf->len + (size_t)rc;
-  if (min_size >= autobuf->size) {
+  min_size = autobuf->_len + (size_t)rc;
+  if (min_size >= autobuf->_total) {
     if (_autobuf_enlarge(autobuf, min_size) < 0) {
-      autobuf->buf[autobuf->len] = '\0';
+      autobuf->_buf[autobuf->_len] = '\0';
       return -1;
     }
-    vsnprintf(autobuf->buf + autobuf->len, autobuf->size - autobuf->len, format, ap2);
+    vsnprintf(autobuf->_buf + autobuf->_len, autobuf->_total - autobuf->_len, format, ap2);
   }
   va_end(ap2);
-  autobuf->len = min_size;
+  autobuf->_len = min_size;
   return rc;
 }
 
@@ -189,11 +168,11 @@ abuf_puts(struct autobuf *autobuf, const char *s)
   if (autobuf == NULL) return 0;
 
   len  = strlen(s);
-  if (_autobuf_enlarge(autobuf, autobuf->len + len + 1) < 0) {
+  if (_autobuf_enlarge(autobuf, autobuf->_len + len + 1) < 0) {
     return -1;
   }
-  strcpy(autobuf->buf + autobuf->len, s);
-  autobuf->len += len;
+  strcpy(autobuf->_buf + autobuf->_len, s);
+  autobuf->_len += len;
   return 0;
 }
 
@@ -211,16 +190,16 @@ abuf_strftime(struct autobuf *autobuf, const char *format, const struct tm *tm)
 
   if (autobuf == NULL) return 0;
 
-  rc = strftime(autobuf->buf + autobuf->len, autobuf->size - autobuf->len, format, tm);
+  rc = strftime(autobuf->_buf + autobuf->_len, autobuf->_total - autobuf->_len, format, tm);
   if (rc == 0) {
     /* we had an error! Probably the buffer too small. So we add some bytes. */
-    if (_autobuf_enlarge(autobuf, autobuf->size + AUTOBUFCHUNK) < 0) {
-      autobuf->buf[autobuf->len] = '\0';
+    if (_autobuf_enlarge(autobuf, autobuf->_total + AUTOBUFCHUNK) < 0) {
+      autobuf->_buf[autobuf->_len] = '\0';
       return -1;
     }
-    rc = strftime(autobuf->buf + autobuf->len, autobuf->size - autobuf->len, format, tm);
+    rc = strftime(autobuf->_buf + autobuf->_len, autobuf->_total - autobuf->_len, format, tm);
   }
-  autobuf->len += rc;
+  autobuf->_len += rc;
   return rc == 0 ? -1 : 0;
 }
 
@@ -236,14 +215,14 @@ abuf_memcpy(struct autobuf *autobuf, const void *p, const size_t len)
 {
   if (autobuf == NULL) return 0;
 
-  if (_autobuf_enlarge(autobuf, autobuf->len + len) < 0) {
+  if (_autobuf_enlarge(autobuf, autobuf->_len + len) < 0) {
     return -1;
   }
-  memcpy(autobuf->buf + autobuf->len, p, len);
-  autobuf->len += len;
+  memcpy(autobuf->_buf + autobuf->_len, p, len);
+  autobuf->_len += len;
 
   /* null-terminate autobuf */
-  autobuf->buf[autobuf->len] = 0;
+  autobuf->_buf[autobuf->_len] = 0;
 
   return 0;
 }
@@ -261,15 +240,15 @@ abuf_memcpy_prepend(struct autobuf *autobuf,
 {
   if (autobuf == NULL) return 0;
 
-  if (_autobuf_enlarge(autobuf, autobuf->len + len) < 0) {
+  if (_autobuf_enlarge(autobuf, autobuf->_len + len) < 0) {
     return -1;
   }
-  memmove(&autobuf->buf[len], autobuf->buf, autobuf->len);
-  memcpy(autobuf->buf, p, len);
-  autobuf->len += len;
+  memmove(&autobuf->_buf[len], autobuf->_buf, autobuf->_len);
+  memcpy(autobuf->_buf, p, len);
+  autobuf->_len += len;
 
   /* null-terminate autobuf */
-  autobuf->buf[autobuf->len] = 0;
+  autobuf->_buf[autobuf->_len] = 0;
 
   return 0;
 }
@@ -287,25 +266,25 @@ abuf_pull(struct autobuf * autobuf, size_t len) {
 
   if (autobuf == NULL) return;
 
-  if (len != autobuf->len) {
-    memmove(autobuf->buf, &autobuf->buf[len], autobuf->len - len);
+  if (len != autobuf->_len) {
+    memmove(autobuf->_buf, &autobuf->_buf[len], autobuf->_len - len);
   }
-  autobuf->len -= len;
+  autobuf->_len -= len;
 
-  newsize = ROUND_UP_TO_POWER_OF_2(autobuf->len + 1, AUTOBUFCHUNK);
-  if (newsize + 2*AUTOBUFCHUNK >= autobuf->size) {
+  newsize = ROUND_UP_TO_POWER_OF_2(autobuf->_len + 1, AUTOBUFCHUNK);
+  if (newsize + 2*AUTOBUFCHUNK >= autobuf->_total) {
     /* only reduce buffer size if difference is larger than two chunks */
     return;
   }
 
   /* generate smaller buffer */
-  p = autobuf_realloc(autobuf->buf, newsize);
+  p = realloc(autobuf->_buf, newsize);
   if (p == NULL) {
     /* keep the longer buffer if we cannot get a smaller one */
     return;
   }
-  autobuf->buf = p;
-  autobuf->size = newsize;
+  autobuf->_buf = p;
+  autobuf->_total = newsize;
   return;
 }
 
@@ -323,9 +302,9 @@ _autobuf_enlarge(struct autobuf *autobuf, size_t new_size)
   size_t roundUpSize;
 
   new_size++;
-  if (new_size > autobuf->size) {
+  if (new_size > autobuf->_total) {
     roundUpSize = ROUND_UP_TO_POWER_OF_2(new_size+1, AUTOBUFCHUNK);
-    p = autobuf_realloc(autobuf->buf, roundUpSize);
+    p = realloc(autobuf->_buf, roundUpSize);
     if (p == NULL) {
 #ifdef WIN32
       WSASetLastError(ENOMEM);
@@ -334,21 +313,10 @@ _autobuf_enlarge(struct autobuf *autobuf, size_t new_size)
 #endif
       return -1;
     }
-    autobuf->buf = p;
+    autobuf->_buf = p;
 
-    memset(&autobuf->buf[autobuf->size], 0, roundUpSize - autobuf->size);
-    autobuf->size = roundUpSize;
+    memset(&autobuf->_buf[autobuf->_total], 0, roundUpSize - autobuf->_total);
+    autobuf->_total = roundUpSize;
   }
   return 0;
-}
-
-/**
- * Internal implementation of malloc that clears buffer.
- * Maps to calloc(size, 1).
- * @param size number of bytes to be allocated
- * @return pointer to allocated memory, NULL if out of memory
- */
-static void *
-_malloc(size_t size) {
-  return calloc(size, 1);
 }

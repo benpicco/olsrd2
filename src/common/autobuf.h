@@ -56,19 +56,14 @@ static const size_t AUTOBUFCHUNK = 4096;
  */
 struct autobuf {
   /* total number of bytes allocated in the buffer */
-  size_t size;
+  size_t _total;
 
   /* currently number of used bytes */
-  size_t len;
+  size_t _len;
 
   /* pointer to allocated memory */
-  char *buf;
+  char *_buf;
 };
-
-EXPORT void abuf_set_memory_handler(
-    void *(*custom_malloc)(size_t),
-    void *(*custom_realloc)(void *, size_t),
-    void (*custom_free)(void *));
 
 EXPORT int abuf_init(struct autobuf *autobuf);
 EXPORT void abuf_free(struct autobuf *autobuf);
@@ -91,8 +86,48 @@ EXPORT void abuf_pull(struct autobuf * autobuf, size_t len);
  */
 static INLINE void
 abuf_clear(struct autobuf *autobuf) {
-  autobuf->len = 0;
-  memset(autobuf->buf, 0, autobuf->size);
+  autobuf->_len = 0;
+  memset(autobuf->_buf, 0, autobuf->_total);
+}
+
+/**
+ * @param autobuf pointer to autobuf
+ * @return pointer to internal bufffer memory
+ */
+static INLINE char *
+abuf_getptr(struct autobuf *autobuf) {
+  return autobuf->_buf;
+}
+
+/**
+ * @param autobuf pointer to autobuf
+ * @return number of bytes stored in autobuf
+ */
+static INLINE size_t
+abuf_getlen(struct autobuf *autobuf) {
+  return autobuf->_len;
+}
+
+/**
+ * @param autobuf pointer to autobuf
+ * @return number of bytes allocated in buffer
+ */
+static INLINE size_t
+abuf_getmax(struct autobuf *autobuf) {
+  return autobuf->_total;
+}
+
+/**
+ *
+ * @param autobuf
+ * @param len
+ */
+static INLINE void
+abuf_setlen(struct autobuf * autobuf, size_t len) {
+  if (autobuf->_total > len) {
+    autobuf->_len = len;
+  }
+  autobuf->_buf[len] = 0;
 }
 
 /**

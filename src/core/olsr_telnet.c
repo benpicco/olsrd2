@@ -321,25 +321,25 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
   telnet_session = (struct olsr_telnet_session *)session;
 
   /* loop over input */
-  while (session->in.len > 0) {
+  while (abuf_getlen(&session->in) > 0) {
     char *para = NULL, *cmd = NULL, *next = NULL;
 
     /* search for end of line */
-    eol = memchr(session->in.buf, '\n', session->in.len);
+    eol = memchr(abuf_getptr(&session->in), '\n', abuf_getlen(&session->in));
 
     if (eol == NULL) {
       break;
     }
 
     /* terminate line with a 0 */
-    if (eol != session->in.buf && eol[-1] == '\r') {
+    if (eol != abuf_getptr(&session->in) && eol[-1] == '\r') {
       eol[-1] = 0;
     }
     *eol++ = 0;
 
     /* handle line */
-    OLSR_DEBUG(LOG_TELNET, "Interactive console: %s\n", session->in.buf);
-    cmd = &session->in.buf[0];
+    OLSR_DEBUG(LOG_TELNET, "Interactive console: %s\n", abuf_getptr(&session->in));
+    cmd = abuf_getptr(&session->in);
     processedCommand = true;
 
     /* apply default command */
@@ -353,7 +353,7 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
       chainCommands = true;
     }
     while (cmd) {
-      len = session->out.len;
+      len = abuf_getlen(&session->out);
 
       /* handle difference between multicommand and singlecommand mode */
       if (chainCommands) {
@@ -386,12 +386,12 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
           case TELNET_RESULT_CONTINOUS:
             break;
           case TELNET_RESULT_INTERNAL_ERROR:
-            session->out.len = len;
+            abuf_setlen(&session->out, len);
             abuf_appendf(&session->out,
                 "Error in autobuffer during command '%s'.\n", cmd);
             break;
           case TELNET_RESULT_UNKNOWN_COMMAND:
-            session->out.len = len;
+            abuf_setlen(&session->out, len);
             abuf_appendf(&session->out, "Error, unknown command '%s'\n", cmd);
             break;
           case TELNET_RESULT_QUIT:
@@ -406,9 +406,9 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
     }
 
     /* remove line from input buffer */
-    abuf_pull(&session->in, eol - session->in.buf);
+    abuf_pull(&session->in, eol - abuf_getptr(&session->in));
 
-    if (session->in.buf[0] == '/') {
+    if (abuf_getptr(&session->in)[0] == '/') {
       /* end of multiple command line */
       return STREAM_SESSION_SEND_AND_QUIT;
     }

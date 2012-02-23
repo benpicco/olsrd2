@@ -405,14 +405,14 @@ _open_plugin(const char *filename) {
     abuf_clear(&abuf);
     abuf_templatef(&abuf, dlopen_patterns[i], dlopen_values, table, indexCount);
 
-    OLSR_DEBUG(LOG_PLUGINLOADER, "Trying to load library: %s", abuf.buf);
-    result = dlopen(abuf.buf, RTLD_NOW);
+    OLSR_DEBUG(LOG_PLUGINLOADER, "Trying to load library: %s", abuf_getptr(&abuf));
+    result = dlopen(abuf_getptr(&abuf), RTLD_NOW);
   }
   if (result == NULL) {
     OLSR_WARN(LOG_PLUGINLOADER, "Loading of plugin %s failed.\n", filename);
   }
   else {
-    OLSR_INFO(LOG_PLUGINLOADER, "Loading plugin %s from %s\n", filename, abuf.buf);
+    OLSR_INFO(LOG_PLUGINLOADER, "Loading plugin %s from %s\n", filename, abuf_getptr(&abuf));
   }
 
   abuf_free(&abuf);
