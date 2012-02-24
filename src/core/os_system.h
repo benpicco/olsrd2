@@ -67,8 +67,6 @@
  * #define OS_SYSTEM_LOG          OS_GENERIC
  */
 
-struct olsr_system_feedback;
-
 /* set the guard macro so we can include the os specific settings */
 #define OS_NET_SPECIFIC_INCLUDE
 #include "os_helper.h"
@@ -87,20 +85,6 @@ struct olsr_system_feedback;
 
 #undef OS_NET_SPECIFIC_INCLUDE
 
-struct olsr_system_feedback {
-  struct list_entity _node;
-
-  uint32_t seq_min, seq_max;
-  int outstanding_fb;
-
-  void (*cb_ack)(struct olsr_system_feedback *, uint32_t seq, int error);
-  void (*cb_timeout)(struct olsr_system_feedback *);
-
-  struct olsr_timer_entry *timeout;
-
-  void *custom;
-};
-
 /* prototypes for all os_system functions */
 EXPORT int os_system_init(void);
 EXPORT void os_system_cleanup(void);
@@ -110,9 +94,6 @@ EXPORT int os_system_set_interface_state(const char *dev, bool up);
 EXPORT void os_system_openlog(void);
 EXPORT void os_system_closelog(void);
 EXPORT void os_system_log(enum log_severity, const char *);
-
-EXPORT void os_system_feedback_add(struct olsr_system_feedback *feedback);
-EXPORT void os_system_feedback_remove(struct olsr_system_feedback *feedback);
 
 /*
  * INLINE implementations for generic os_net functions

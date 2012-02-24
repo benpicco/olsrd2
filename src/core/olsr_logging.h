@@ -135,7 +135,7 @@ struct log_parameters {
 #define OLSR_INFO_NH(source, format, args...) do { } while(0)
 #else
 #define OLSR_INFO(source, format, args...) _OLSR_LOG(SEVERITY_INFO, source, false, format, ##args)
-#define OLSR_INFO_NH(source, format, args...) _OLSR_LOG(SEVERITY_WARN, source, true, format, ##args)
+#define OLSR_INFO_NH(source, format, args...) _OLSR_LOG(SEVERITY_INFO, source, true, format, ##args)
 #endif
 
 #ifdef REMOVE_LOG_WARN

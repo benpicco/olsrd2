@@ -68,10 +68,15 @@
 #define PROC_IF_SPOOF "/proc/sys/net/ipv4/conf/%s/rp_filter"
 #define PROC_ALL_SPOOF "/proc/sys/net/ipv4/conf/all/rp_filter"
 
+static int _routing_set(struct nlmsghdr *msg, struct os_route *route,
+    unsigned char rt_type, unsigned char rt_scope);
+
 static bool _is_at_least_linuxkernel_2_6_31(void);
 static int _os_linux_writeToProc(const char *file, char *old, char value);
 
-static void _cb_rtnetlink_feedback(uint32_t seq, int error);
+static void _cb_rtnetlink_message(struct nlmsghdr *);
+static void _cb_rtnetlink_error(uint32_t seq, int error);
+static void _cb_rtnetlink_done(uint32_t seq);
 static void _cb_rtnetlink_timeout(void);
 
 /* global procfile state before initialization */
@@ -80,8 +85,21 @@ static char _original_icmp_redirect;
 
 /* netlink socket for route set/get commands */
 struct os_system_netlink _rtnetlink_socket;
+struct list_entity _rtnetlink_feedback;
 
 OLSR_SUBSYSTEM_STATE(_os_routing_state);
+
+/* default wildcard route */
+const struct os_route OS_ROUTE_WILDCARD = {
+  .family = AF_UNSPEC,
+  .src = { .type = AF_UNSPEC },
+  .gw = { .type = AF_UNSPEC },
+  .dst = { .type = AF_UNSPEC },
+  .table = RT_TABLE_UNSPEC,
+  .metric = -1,
+  .protocol = RTPROT_UNSPEC,
+  .if_index = 0
+};
 
 /**
  * Initialize routing subsystem
@@ -96,7 +114,9 @@ os_routing_init(void) {
     return -1;
   }
 
-  _rtnetlink_socket.cb_feedback = _cb_rtnetlink_feedback;
+  _rtnetlink_socket.cb_message = _cb_rtnetlink_message;
+  _rtnetlink_socket.cb_error = _cb_rtnetlink_error;
+  _rtnetlink_socket.cb_done = _cb_rtnetlink_done;
   _rtnetlink_socket.cb_timeout = _cb_rtnetlink_timeout;
 
   if (_os_linux_writeToProc(PROC_ALL_REDIRECT, &_original_icmp_redirect, '0')) {
@@ -113,6 +133,8 @@ os_routing_init(void) {
     }
   }
 
+  list_init_head(&_rtnetlink_feedback);
+
   olsr_subsystem_init(&_os_routing_state);
   return 0;
 }
@@ -122,8 +144,15 @@ os_routing_init(void) {
  */
 void
 os_routing_cleanup(void) {
+  struct os_route *rt, *rt_it;
+
   if (olsr_subsystem_cleanup(&_os_routing_state))
     return;
+
+  list_for_each_element_safe(&_rtnetlink_feedback, rt, _internal._node, rt_it) {
+    rt->cb_finished(rt, true);
+    list_remove(&rt->_internal._node);
+  }
 
   if (_original_icmp_redirect != 0
       && _os_linux_writeToProc(PROC_ALL_REDIRECT, &_original_icmp_redirect, '0') != 0) {
@@ -216,35 +245,26 @@ os_routing_cleanup_mesh_if(struct olsr_interface *interf) {
   return;
 }
 
-static int
-_routing_set(struct nlmsghdr *msg,
-    const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
-    int rttable, int if_index, int metric, int protocol, unsigned char scope);
-
 /**
  * Update an entry of the kernel routing table. This call will only trigger
  * the change, the real change will be done as soon as the netlink socket is
  * writable.
- * @param src source address of route (NULL if source ip not set)
- * @param gw gateway of route (NULL if direct connection)
- * @param dst destination prefix of route
- * @param rttable routing table
- * @param if_index interface index
- * @param metric routing metric
- * @param protocol routing protocol
+ * @param route data of route to be set/removed
  * @param set true if route should be set, false if it should be removed
  * @param del_similar true if similar routes that block this one should be
  *   removed.
- * @return -1 if an error happened, rtnetlink sequence number otherwise
+ * @return -1 if an error happened, 0 otherwise
  */
 int
-os_routing_set(const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
-    int rttable, int if_index, int metric, int protocol, bool set, bool del_similar) {
+os_routing_set(struct os_route *route, bool set, bool del_similar) {
   uint8_t buffer[UIO_MAXIOV];
   struct nlmsghdr *msg;
   unsigned char scope;
+  struct os_route os_rt;
+  int seq;
 
   memset(buffer, 0, sizeof(buffer));
+  memcpy(&os_rt, route, sizeof(os_rt));
 
   /* get pointers for netlink message */
   msg = (void *)&buffer[0];
@@ -263,153 +283,328 @@ os_routing_set(const struct netaddr *src, const struct netaddr *gw, const struct
   } else {
     msg->nlmsg_type = RTM_DELROUTE;
 
-    protocol = -1;
-    src = NULL;
+    os_rt.protocol = -1;
+    os_rt.src.type = AF_UNSPEC;
 
     if (del_similar) {
       /* no interface necessary */
-      if_index = -1;
+      os_rt.if_index = -1;
 
       /* as wildcard for fuzzy deletion */
       scope = RT_SCOPE_NOWHERE;
     }
   }
 
-  if (gw == NULL && dst->prefix_len == netaddr_get_maxprefix(dst)) {
+  if (os_rt.gw.type == AF_UNSPEC
+      && os_rt.dst.prefix_len == netaddr_get_maxprefix(&os_rt.dst)) {
     /* use destination as gateway, to 'force' linux kernel to do proper source address selection */
-    gw = dst;
+    os_rt.gw = os_rt.dst;
   }
 
-  if (_routing_set(msg, src, gw, dst, rttable, if_index, metric, protocol, scope)) {
+  if (_routing_set(msg, &os_rt, RTN_UNICAST, scope)) {
     return -1;
   }
 
-  return os_system_netlink_send(&_rtnetlink_socket, msg);
+  seq = os_system_netlink_send(&_rtnetlink_socket, msg);
+  if (seq < 0) {
+    return -1;
+  }
+
+  if (route->cb_finished) {
+    list_add_tail(&_rtnetlink_feedback, &route->_internal._node);
+    route->_internal.nl_seq = seq;
+  }
+  return 0;
+}
+
+/**
+ * Request all routing dataof a certain address family
+ * @param af AF_INET or AF_INET6
+ * @return -1 if an error happened, rtnetlink sequence number otherwise
+ */
+int
+os_routing_get(struct os_route *route) {
+  uint8_t buffer[UIO_MAXIOV];
+  struct nlmsghdr *msg;
+  struct rtgenmsg *rt_gen;
+  int seq;
+
+  assert (route->cb_finished != NULL && route->cb_get != NULL);
+  memset(buffer, 0, sizeof(buffer));
+
+  /* get pointers for netlink message */
+  msg = (void *)&buffer[0];
+  rt_gen = NLMSG_DATA(msg);
+
+  msg->nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+
+  /* set length of netlink message with rtmsg payload */
+  msg->nlmsg_len = NLMSG_LENGTH(sizeof(*rt_gen));
+
+  msg->nlmsg_type = RTM_GETROUTE;
+  rt_gen->rtgen_family = route->family;
+
+  seq = os_system_netlink_send(&_rtnetlink_socket, msg);
+  if (seq < 0) {
+    return -1;
+  }
+
+  list_add_tail(&_rtnetlink_feedback, &route->_internal._node);
+  route->_internal.nl_seq = seq;
+  return 0;
 }
 
 /**
  * Initiatize the an netlink routing message
  * @param msg pointer to netlink message header
- * @param src source address of route (NULL if not set)
- * @param gw gateway of route (NULL if not set)
- * @param dst destination prefix of route (NULL if not set)
- * @param rttable routing table (mandatory)
- * @param if_index interface index, -1 if not set
- * @param metric routing metric, -1 if not set
- * @param protocol routing protocol, -1 if not set
+ * @param route data to be added to the netlink message
  * @param scope scope of route to be set/removed
  * @return -1 if an error happened, 0 otherwise
  */
 static int
-_routing_set(struct nlmsghdr *msg,
-    const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
-    int rttable, int if_index, int metric, int protocol, unsigned char scope) {
+_routing_set(struct nlmsghdr *msg, struct os_route *route,
+    unsigned char rt_type, unsigned char rt_scope) {
   struct rtmsg *rt_msg;
-  int type = -1;
 
-  /* calculate address type */
-  if (dst) {
-    type = dst->type;
+  /* calculate address af_type */
+  if (route->dst.type != AF_UNSPEC) {
+    route->family = route->dst.type;
   }
-  if (gw) {
-    if (type != -1 && type != gw->type) {
+  if (route->gw.type != AF_UNSPEC) {
+    if (route->family  != AF_UNSPEC && route->family  != route->gw.type) {
       return -1;
     }
-    type = gw->type;
+    route->family  = route->gw.type;
   }
-  if (src) {
-    if (type != -1 && type != src->type) {
+  if (route->src.type != AF_UNSPEC) {
+    if (route->family  != AF_UNSPEC && route->family  != route->src.type) {
       return -1;
     }
-    type = gw->type;
+    route->family  = route->src.type;
   }
 
-  /* and do a consistency check */
-  assert (type == AF_INET || type == AF_INET6);
+  if (route->family  == AF_UNSPEC) {
+    route->family  = AF_INET;
+  }
 
   /* initialize rtmsg payload */
   rt_msg = NLMSG_DATA(msg);
 
-  rt_msg->rtm_family = type;
-  rt_msg->rtm_scope = scope;
-
-  /*
-   * RTN_UNSPEC would be the wildcard,
-   * but blackhole, broadcast or NAT rules should usually not conflict
-   */
-  /* -> olsr only adds deletes unicast routes at the moment */
-  rt_msg->rtm_type = RTN_UNICAST;
-
-  if (protocol != -1) {
-    /* set protocol */
-    rt_msg->rtm_protocol = protocol;
-  }
-
-  if (rttable != -1) {
-    /* set routing table */
-    rt_msg->rtm_table = rttable;
-  }
+  rt_msg->rtm_family = route->family ;
+  rt_msg->rtm_scope = rt_scope;
+  rt_msg->rtm_type = rt_type;
+  rt_msg->rtm_protocol = route->protocol;
+  rt_msg->rtm_table = route->table;
 
   /* add attributes */
-  if (src != NULL) {
-    rt_msg->rtm_src_len = src->prefix_len;
+  if (route->src.type != AF_UNSPEC) {
+    rt_msg->rtm_src_len = route->src.prefix_len;
 
     /* add src-ip */
-    if (os_system_netlink_addnetaddr(msg, RTA_PREFSRC, src)) {
+    if (os_system_netlink_addnetaddr(msg, RTA_PREFSRC, &route->src)) {
       return -1;
     }
   }
 
-  if (gw != NULL) {
+  if (route->gw.type != AF_UNSPEC) {
     rt_msg->rtm_flags = RTNH_F_ONLINK;
 
     /* add gateway */
-    if (os_system_netlink_addnetaddr(msg, RTA_GATEWAY, gw)) {
+    if (os_system_netlink_addnetaddr(msg, RTA_GATEWAY, &route->gw)) {
       return -1;
     }
   }
 
-  if (dst != 0) {
-    rt_msg->rtm_dst_len = dst->prefix_len;
+  if (route->dst.type != AF_UNSPEC) {
+    rt_msg->rtm_dst_len = route->dst.prefix_len;
 
     /* add destination */
-    if (os_system_netlink_addnetaddr(msg, RTA_DST, dst)) {
+    if (os_system_netlink_addnetaddr(msg, RTA_DST, &route->dst)) {
       return -1;
     }
   }
 
-  if (metric != -1) {
+  if (route->metric != -1) {
     /* add metric */
-    if (os_system_netlink_addreq(msg, RTA_PRIORITY, &metric, sizeof(metric))) {
+    if (os_system_netlink_addreq(msg, RTA_PRIORITY, &route->metric, sizeof(route->metric))) {
       return -1;
     }
   }
 
-  if (if_index != -1) {
+  if (route->if_index) {
     /* add interface*/
-    if (os_system_netlink_addreq(msg, RTA_OIF, &if_index, sizeof(if_index))) {
+    if (os_system_netlink_addreq(msg, RTA_OIF, &route->if_index, sizeof(route->if_index))) {
       return -1;
     }
   }
   return 0;
 }
 
+static int
+_routing_parse_nlmsg(struct os_route *route, struct nlmsghdr *msg) {
+  struct rtmsg *rt_msg;
+  struct rtattr *rt_attr;
+  int rt_len;
+
+  rt_msg = NLMSG_DATA(msg);
+  rt_attr = (struct rtattr *) RTM_RTA(rt_msg);
+  rt_len = RTM_PAYLOAD(msg);
+
+  memcpy(route, &OS_ROUTE_WILDCARD, sizeof(*route));
+
+  route->protocol = rt_msg->rtm_protocol;
+  route->table = rt_msg->rtm_table;
+  route->family = rt_msg->rtm_family;
+
+  if (route->family != AF_INET && route->family != AF_INET6) {
+    return -1;
+  }
+
+  for(; RTA_OK(rt_attr, rt_len); rt_attr = RTA_NEXT(rt_attr,rt_len)) {
+    switch(rt_attr->rta_type) {
+      case RTA_SRC:
+        netaddr_from_binary(&route->src, RTA_DATA(rt_attr), RTA_PAYLOAD(rt_attr), rt_msg->rtm_family);
+        route->src.prefix_len = rt_msg->rtm_src_len;
+        break;
+      case RTA_GATEWAY:
+        netaddr_from_binary(&route->gw, RTA_DATA(rt_attr), RTA_PAYLOAD(rt_attr), rt_msg->rtm_family);
+        break;
+      case RTA_DST:
+        netaddr_from_binary(&route->dst, RTA_DATA(rt_attr), RTA_PAYLOAD(rt_attr), rt_msg->rtm_family);
+        route->dst.prefix_len = rt_msg->rtm_dst_len;
+        break;
+      case RTA_PRIORITY:
+        memcpy(&route->metric, RTA_DATA(rt_attr), sizeof(route->metric));
+        break;
+      case RTA_OIF:
+        memcpy(&route->if_index, RTA_DATA(rt_attr), sizeof(route->if_index));
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (route->dst.type == AF_UNSPEC) {
+    route->dst = route->family == AF_INET ? NETADDR_IPV4_ANY : NETADDR_IPV6_ANY;
+    route->dst.prefix_len = rt_msg->rtm_dst_len;
+  }
+  return 0;
+}
+
+static bool
+_match_routes(struct os_route *filter, struct os_route *route) {
+  if (filter->family != route->family) {
+    return false;
+  }
+  if (filter->src.type != AF_UNSPEC
+      && memcmp(&filter->src, &route->src, sizeof(filter->src)) != 0) {
+    return false;
+  }
+  if (filter->gw.type != AF_UNSPEC
+      && memcmp(&filter->gw, &route->gw, sizeof(filter->gw)) != 0) {
+    return false;
+  }
+  if (filter->dst.type != AF_UNSPEC
+      && memcmp(&filter->dst, &route->dst, sizeof(filter->dst)) != 0) {
+    return false;
+  }
+  if (filter->metric != -1 && filter->metric != route->metric) {
+    return false;
+  }
+  if (filter->table != RT_TABLE_UNSPEC && filter->table != route->table) {
+    return false;
+  }
+  if (filter->protocol != RTPROT_UNSPEC && filter->protocol != route->protocol) {
+    return false;
+  }
+  return filter->if_index == 0 || filter->if_index == route->if_index;
+}
+
+static void
+_cb_rtnetlink_message(struct nlmsghdr *msg) {
+  struct os_route *filter;
+  struct os_route rt;
+
+  OLSR_DEBUG(LOG_OS_ROUTING, "Got message: %d %d", msg->nlmsg_seq, msg->nlmsg_type);
+
+  if (msg->nlmsg_type != RTM_NEWROUTE && msg->nlmsg_type != RTM_DELROUTE) {
+    return;
+  }
+
+  if (_routing_parse_nlmsg(&rt, msg)) {
+    OLSR_WARN(LOG_OS_ROUTING, "Error while processing route reply");
+    return;
+  }
+
+  list_for_each_element(&_rtnetlink_feedback, filter, _internal._node) {
+    OLSR_DEBUG_NH(LOG_OS_ROUTING, "  Compare with seq: %d", filter->_internal.nl_seq);
+    if (msg->nlmsg_seq == filter->_internal.nl_seq) {
+      if (filter->cb_get != NULL && _match_routes(filter, &rt)) {
+        filter->cb_get(filter, &rt);
+      }
+      break;
+    }
+  }
+}
+
 /**
- * TODO: Handle feedback from netlink socket
+ * Handle feedback from netlink socket
  * @param seq
  * @param error
  */
 static void
-_cb_rtnetlink_feedback(uint32_t seq, int error) {
-  OLSR_INFO(LOG_OS_ROUTING, "Got feedback: %d %d", seq, error);
+_cb_rtnetlink_error(uint32_t seq, int error) {
+  struct os_route *route;
+
+  OLSR_DEBUG(LOG_OS_ROUTING, "Got feedback: %d %d", seq, error);
+
+  list_for_each_element(&_rtnetlink_feedback, route, _internal._node) {
+    if (seq == route->_internal.nl_seq) {
+      if (route->cb_finished) {
+        route->cb_finished(route, error);
+      }
+      list_remove(&route->_internal._node);
+      break;
+    }
+  }
 }
 
 /**
- * TODO: Handle ack timeout from netlink socket
+ * Handle ack timeout from netlink socket
  */
 static void
 _cb_rtnetlink_timeout(void) {
-  OLSR_INFO(LOG_OS_ROUTING, "Got timeout");
+  struct os_route *route, *rt_it;
+
+  OLSR_DEBUG(LOG_OS_ROUTING, "Got timeout");
+
+  list_for_each_element_safe(&_rtnetlink_feedback, route, _internal._node, rt_it) {
+    if (route->cb_finished) {
+      route->cb_finished(route, true);
+    }
+    list_remove(&route->_internal._node);
+  }
+}
+
+/**
+ * Handle done from multipart netlink messages
+ * @param seq
+ */
+static void
+_cb_rtnetlink_done(uint32_t seq) {
+  struct os_route *route;
+
+  OLSR_DEBUG(LOG_OS_ROUTING, "Got done: %u", seq);
+
+  list_for_each_element(&_rtnetlink_feedback, route, _internal._node) {
+    if (seq == route->_internal.nl_seq) {
+      if (route->cb_finished) {
+        route->cb_finished(route, false);
+      }
+      list_remove(&route->_internal._node);
+      break;
+    }
+  }
 }
 
 /**

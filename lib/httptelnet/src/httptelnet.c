@@ -144,7 +144,7 @@ _cb_generate_site(struct autobuf *out, struct olsr_http_session *session) {
       session->content_type = HTTP_CONTENTTYPE_TEXT;
       return HTTP_200_OK;
 
-    case TELNET_RESULT_UNKNOWN_COMMAND:
+    case _TELNET_RESULT_UNKNOWN_COMMAND:
       return HTTP_404_NOT_FOUND;
 
     default:

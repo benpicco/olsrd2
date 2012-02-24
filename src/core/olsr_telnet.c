@@ -179,6 +179,9 @@ olsr_telnet_stop(struct olsr_telnet_data *data) {
     data->stop_handler(data);
     data->stop_handler = NULL;
   }
+  data->show_echo = true;
+  abuf_puts(data->out, "> ");
+  olsr_telnet_flush_session(data);
 }
 
 /**
@@ -384,13 +387,14 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
           case TELNET_RESULT_ACTIVE:
             break;
           case TELNET_RESULT_CONTINOUS:
+            telnet_session->data.show_echo = false;
             break;
           case TELNET_RESULT_INTERNAL_ERROR:
             abuf_setlen(&session->out, len);
             abuf_appendf(&session->out,
                 "Error in autobuffer during command '%s'.\n", cmd);
             break;
-          case TELNET_RESULT_UNKNOWN_COMMAND:
+          case _TELNET_RESULT_UNKNOWN_COMMAND:
             abuf_setlen(&session->out, len);
             abuf_appendf(&session->out, "Error, unknown command '%s'\n", cmd);
             break;
@@ -439,7 +443,7 @@ _telnet_handle_command(struct olsr_telnet_data *data) {
 #endif
   cmd = _check_telnet_command(data, data->command, NULL);
   if (cmd == NULL) {
-    return TELNET_RESULT_UNKNOWN_COMMAND;
+    return _TELNET_RESULT_UNKNOWN_COMMAND;
   }
 
   OLSR_INFO(LOG_TELNET, "Executing command from %s: %s %s",

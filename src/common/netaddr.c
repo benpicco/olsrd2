@@ -94,6 +94,7 @@ netaddr_from_binary(struct netaddr *dst, const void *binary,
   }
   else {
     /* unknown address type */
+    dst->type = AF_UNSPEC;
     return -1;
   }
 
@@ -157,6 +158,7 @@ netaddr_from_socket(struct netaddr *dst, const union netaddr_socket *src) {
   }
   else {
     /* unknown address type */
+    dst->type = AF_UNSPEC;
     return -1;
   }
   dst->type = (uint8_t)src->std.sa_family;
@@ -431,6 +433,7 @@ netaddr_from_string(struct netaddr *dst, const char *src) {
 
     if (*ptr2 == 0) {
       /* prefixlength is missing */
+      dst->type = AF_UNSPEC;
       return -1;
     }
 
@@ -479,19 +482,21 @@ netaddr_from_string(struct netaddr *dst, const char *src) {
 
   /* stop if an error happened */
   if (result) {
+    dst->type = AF_UNSPEC;
     return -1;
   }
 
   if (*ptr2) {
     if (prefix_len < 0 || prefix_len > dst->prefix_len) {
       /* prefix is too long */
+      dst->type = AF_UNSPEC;
       return -1;
     }
 
     /* store real prefix length */
     dst->prefix_len = (uint8_t)prefix_len;
   }
-  return result;
+  return 0;
 }
 
 /**

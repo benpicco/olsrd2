@@ -72,6 +72,8 @@ struct _remotecontrol_session {
   struct olsr_telnet_cleanup cleanup;
 
   struct log_handler_mask_entry *mask;
+
+  struct os_route route;
 };
 
 /* prototypes */
@@ -97,11 +99,14 @@ static void _stop_logging(struct olsr_telnet_data *data);
 static void _cb_print_log(struct log_handler_entry *,
     struct log_parameters *);
 
+static void _cb_route_finished(struct os_route *, int error);
+static void _cb_route_get(struct os_route *filter, struct os_route *route);
 
 static void _cb_config_changed(void);
 static struct _remotecontrol_session *
     _get_remotecontrol_session(struct olsr_telnet_data *data);
 static void _cb_handle_session_cleanup(struct olsr_telnet_cleanup *cleanup);
+
 
 
 /* plugin declaration */
@@ -165,12 +170,15 @@ static struct olsr_telnet_command _telnet_cmds[] = {
       "\"config format AUTO\":                              Set the format to automatic detection\n",
       .acl = &_remotecontrol_config.acl),
   TELNET_CMD("route", _cb_handle_route,
-      "\"route set [src <src-ip>] [gw <gateway ip>] [dst <destination prefix>] [table <table-id>]\n"
-      "            [proto <protocol-id>] [metric <metric>] interface <if-name>\n"
+      "\"route add [src <src-ip>] [gw <gateway ip>] dst <destination prefix> [table <table-id>]\n"
+      "            [proto <protocol-id>] [metric <metric>] if <if-name>\n"
       "                                                     Set a route in the kernel routing table\n"
-      "\"route remove [src <src-ip>] [gw <gateway ip>] [dst <destination prefix>] [table <table-id>]\n"
-      "               [proto <protocol-id>] [metric <metric>] interface <if-name>\n"
-      "                                                     Remove a route in the kernel routing table\n",
+      "\"route del [src <src-ip>] [gw <gateway ip>] dst <destination prefix> [table <table-id>]\n"
+      "               [proto <protocol-id>] [metric <metric>] if <if-name>\n"
+      "                                                     Remove a route in the kernel routing table\n"
+      "\"route get [src <src-ip>] [gw <gateway ip>] [dst <destination prefix>] [table <table-id>]\n"
+      "               [proto <protocol-id>] [metric <metric>] [if <if-name>] [ipv6]\n"
+      "                                                     Lists all known kernel routes matching a set of data\n",
       .acl = &_remotecontrol_config.acl),
 };
 
@@ -387,13 +395,13 @@ _update_logfilter(struct olsr_telnet_data *data,
 static void
 _cb_print_log(struct log_handler_entry *h __attribute__((unused)),
     struct log_parameters *param) {
-  struct olsr_telnet_session *telnet = h->custom;
+  struct olsr_telnet_data *data = h->custom;
 
-  abuf_puts(&telnet->session.out, param->buffer);
-  abuf_puts(&telnet->session.out, "\n");
+  abuf_puts(data->out, param->buffer);
+  abuf_puts(data->out, "\n");
 
   /* This might trigger logging output in olsr_socket_stream ! */
-  olsr_stream_flush(&telnet->session);
+  olsr_telnet_flush_session(data);
 }
 
 /**
@@ -490,7 +498,9 @@ _cb_handle_log(struct olsr_telnet_data *data) {
     return _update_logfilter(data, rc_session->mask, next, false);
   }
 
-  return TELNET_RESULT_UNKNOWN_COMMAND;
+  abuf_appendf(data->out, "Error, unknown subcommand for %s: %s",
+      data->command, data->parameter);
+  return TELNET_RESULT_ACTIVE;
 }
 
 /**
@@ -544,10 +554,80 @@ _cb_handle_config(struct olsr_telnet_data *data) {
         olsr_cfg_get_rawdb(), next, data->out);
   }
   else {
-    return TELNET_RESULT_UNKNOWN_COMMAND;
+    abuf_appendf(data->out, "Error, unknown subcommand for %s: %s",
+        data->command, data->parameter);
   }
 
   return TELNET_RESULT_ACTIVE;
+}
+
+static void
+_stop_route_feedback(struct olsr_telnet_data *session) {
+  struct os_route *route;
+
+  route = session->stop_data[0];
+  if (route->cb_finished) {
+    route->cb_finished(route, -1);
+  }
+}
+
+static void
+_cb_route_finished(struct os_route *rt, int error) {
+  struct _remotecontrol_session *session;
+
+  session = container_of(rt, struct _remotecontrol_session, route);
+
+  if (error) {
+    abuf_appendf(session->cleanup.data->out, "Command failed: %s (%d)\n",
+        strerror(error), error);
+  }
+  else {
+    abuf_puts(session->cleanup.data->out, "Command successful\n");
+  }
+  olsr_telnet_flush_session(session->cleanup.data);
+  olsr_telnet_stop(session->cleanup.data);
+}
+
+static void
+_cb_route_get(struct os_route *filter, struct os_route *route) {
+  struct _remotecontrol_session *session;
+  struct autobuf *out;
+  struct netaddr_str buf;
+  char if_buf[IF_NAMESIZE];
+
+  session = container_of(filter, struct _remotecontrol_session, route);
+  out = session->cleanup.data->out;
+
+  if (route->dst.type != AF_UNSPEC) {
+    abuf_appendf(out, "%s ", netaddr_to_string(&buf, &route->dst));
+  }
+  if (route->gw.type != AF_UNSPEC) {
+    abuf_appendf(out, "via %s ", netaddr_to_string(&buf, &route->gw));
+  }
+  if (route->src.type != AF_UNSPEC) {
+    abuf_appendf(out, "src %s ", netaddr_to_string(&buf, &route->src));
+  }
+  if (route->dst.type == AF_UNSPEC
+      && route->gw.type == AF_UNSPEC
+      && route->src.type == AF_UNSPEC) {
+    abuf_appendf(out, "%s ", route->family == AF_INET ? "ipv4" : "ipv6");
+  }
+
+  if (route->if_index) {
+    abuf_appendf(out, "dev %s (%d) ",
+        if_indextoname(route->if_index, if_buf), route->if_index);
+  }
+  if (route->protocol != RTPROT_UNSPEC) {
+    abuf_appendf(out, "prot %d ", route->protocol);
+  }
+  if (route->metric != -1) {
+    abuf_appendf(out, "metric %d ", route->metric);
+  }
+  if (route->table != RT_TABLE_UNSPEC) {
+    abuf_appendf(out, "table %d ", route->table);
+  }
+  abuf_puts(out, "\n");
+  olsr_telnet_flush_session(session->cleanup.data);
 }
 
 /**
@@ -557,88 +637,129 @@ _cb_handle_config(struct olsr_telnet_data *data) {
  */
 static enum olsr_telnet_result
 _cb_handle_route(struct olsr_telnet_data *data) {
-  struct netaddr_str buf;
+  bool add  = false, del = false, get = false;
   const char *ptr = NULL, *next = NULL;
-  struct netaddr src, gw, dst;
-  int table = 0, protocol = 4, metric = -1, if_index = 0;
-  bool set;
+  struct _remotecontrol_session *session;
+  struct netaddr_str buf;
+  struct os_route route;
+  int result;
 
-  memset (&src, 0, sizeof(src));
-  memset (&gw, 0, sizeof(gw));
-  memset (&dst, 0, sizeof(dst));
+  memcpy(&route, &OS_ROUTE_WILDCARD, sizeof(route));
 
-  if ((next = str_hasnextword(data->parameter, "set")) != NULL
-      || (next = str_hasnextword(data->parameter, "remove")) != NULL) {
-    set = strncasecmp(data->parameter, "set", 3) == 0;
+  if ((next = str_hasnextword(data->parameter, "add")) != NULL) {
+    add = true;
+  }
+  else if ((next = str_hasnextword(data->parameter, "del")) != NULL) {
+    del = true;
+  }
+  else if ((next = str_hasnextword(data->parameter, "get")) != NULL) {
+    get = true;
+  }
 
+  if (add || del || get) {
     ptr = next;
-    while (ptr) {
+    while (ptr && *ptr) {
       if ((next = str_hasnextword(ptr, "src"))) {
         ptr = str_cpynextword(buf.buf, next, sizeof(buf));
-        if (netaddr_from_string(&src, buf.buf)) {
+        if (netaddr_from_string(&route.src, buf.buf) != 0
+            || (route.src.type != AF_INET && route.src.type != AF_INET6)) {
           abuf_appendf(data->out, "Error, illegal source: %s", buf.buf);
           return TELNET_RESULT_ACTIVE;
         }
+        route.family = route.src.type;
       }
       else if ((next = str_hasnextword(ptr, "gw"))) {
         ptr = str_cpynextword(buf.buf, next, sizeof(buf));
-        if (netaddr_from_string(&gw, buf.buf)) {
+        if (netaddr_from_string(&route.gw, buf.buf) != 0
+            || (route.gw.type != AF_INET && route.gw.type != AF_INET6)) {
           abuf_appendf(data->out, "Error, illegal gateway: %s", buf.buf);
           return TELNET_RESULT_ACTIVE;
         }
+        route.family = route.gw.type;
       }
       else if ((next = str_hasnextword(ptr, "dst"))) {
         ptr = str_cpynextword(buf.buf, next, sizeof(buf));
-        if (netaddr_from_string(&dst, buf.buf)) {
+        if (netaddr_from_string(&route.dst, buf.buf) != 0
+            || (route.dst.type != AF_INET && route.dst.type != AF_INET6)) {
           abuf_appendf(data->out, "Error, illegal destination: %s", buf.buf);
           return TELNET_RESULT_ACTIVE;
         }
+        route.family = route.dst.type;
       }
       else if ((next = str_hasnextword(ptr, "table"))) {
         ptr = str_cpynextword(buf.buf, next, sizeof(buf));
-        table = atoi(buf.buf);
+        route.table = atoi(buf.buf);
       }
       else if ((next = str_hasnextword(ptr, "proto"))) {
         ptr = str_cpynextword(buf.buf, next, sizeof(buf));
-        protocol = atoi(buf.buf);
+        route.protocol = atoi(buf.buf);
       }
       else if ((next = str_hasnextword(ptr, "metric"))) {
         ptr = str_cpynextword(buf.buf, next, sizeof(buf));
-        table = atoi(buf.buf);
+        route.table = atoi(buf.buf);
       }
-      else if ((next = str_hasnextword(ptr, "interface"))) {
+      else if ((next = str_hasnextword(ptr, "if"))) {
         ptr = str_cpynextword(buf.buf, next, sizeof(buf));
-        if_index = if_nametoindex(buf.buf);
+        route.if_index = if_nametoindex(buf.buf);
+      }
+      else if ((next = str_hasnextword(ptr, "ipv6"))) {
+        route.family = AF_INET6;
+        ptr = next;
       }
       else {
         abuf_appendf(data->out, "Cannot parse remainder of parameter string: %s", ptr);
         return TELNET_RESULT_ACTIVE;
       }
     }
-    if (if_index == 0) {
+    if ((add||del) && route.if_index == 0) {
       abuf_appendf(data->out, "Missing or unknown interface");
       return TELNET_RESULT_ACTIVE;
     }
-    if (dst.type != AF_INET && dst.type != AF_INET6) {
-      abuf_appendf(data->out, "Error, IPv4 or IPv6 destination mandatory");
+    if ((add||del) && route.dst.type == AF_UNSPEC) {
+      abuf_appendf(data->out, "Error, IPv4 or IPv6 destination mandatory for add/del");
       return TELNET_RESULT_ACTIVE;
     }
-    if (src.type != 0 && src.type != dst.type) {
-      abuf_appendf(data->out, "Error, illegal address type of source ip");
-      return TELNET_RESULT_ACTIVE;
-    }
-    if (gw.type == 0 || gw.type != dst.type) {
-      abuf_appendf(data->out, "Error, illegal or missing gateway ip");
+    if ((route.src.type != AF_UNSPEC && route.src.type != route.family)
+        || (route.gw.type != AF_UNSPEC && route.gw.type != route.family)
+        || (route.dst.type != AF_UNSPEC && route.dst.type != route.family)) {
+      abuf_appendf(data->out, "Error, IP address types do not match");
       return TELNET_RESULT_ACTIVE;
     }
 
-    abuf_appendf(data->out, "set route: %d",
-        os_routing_set(src.type == 0 ? NULL: &src, &gw, &dst,
-            table, if_index, metric, protocol, set, true));
-    return TELNET_RESULT_ACTIVE;
+    if (route.family == AF_UNSPEC) {
+      route.family = AF_INET;
+    }
+
+    /* allocate permanent route datastructure for continous output */
+    session = _get_remotecontrol_session(data);
+    if (session == NULL) {
+      OLSR_WARN_OOM(LOG_PLUGINS);
+      return TELNET_RESULT_INTERNAL_ERROR;
+    }
+    memcpy(&session->route, &route, sizeof(route));
+
+    session->route.cb_finished = _cb_route_finished;
+    session->route.cb_get = _cb_route_get;
+
+    if (add || del) {
+      result = os_routing_set(&session->route, add, true);
+    }
+    else {
+      result = os_routing_get(&session->route);
+    }
+
+    if (result) {
+      abuf_puts(data->out, "Error while preparing netlink command");
+      return TELNET_RESULT_ACTIVE;
+    }
+
+    data->stop_handler = _stop_route_feedback;
+    data->stop_data[0] = session;
+    return TELNET_RESULT_CONTINOUS;
   }
-
-  return TELNET_RESULT_UNKNOWN_COMMAND;
+  abuf_appendf(data->out, "Error, unknown subcommand for %s: %s",
+      data->command, data->parameter);
+  return TELNET_RESULT_ACTIVE;
 }
 
 /**

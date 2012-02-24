@@ -288,7 +288,7 @@ os_system_netlink_remove(struct os_system_netlink *nl) {
 int
 os_system_netlink_send(struct os_system_netlink *nl,
     struct nlmsghdr *nl_hdr) {
-  nl->seq_used++;
+  nl->seq_used = (nl->seq_used + 1) & INT32_MAX;
 
   nl_hdr->nlmsg_seq = nl->seq_used;
   nl_hdr->nlmsg_flags |= NLM_F_ACK | NLM_F_MULTI;
@@ -380,6 +380,18 @@ _flush_netlink_buffer(struct os_system_netlink *nl) {
   }
 }
 
+static void
+_netlink_job_finished(struct os_system_netlink *nl) {
+  if (nl->msg_in_transit > 0) {
+    nl->msg_in_transit--;
+  }
+  if (nl->msg_in_transit == 0) {
+    olsr_timer_stop(nl->timeout);
+    nl->timeout= NULL;
+    nl->seq_used = 0;
+  }
+}
+
 /**
  * Handler for incoming async netlink messages
  * @param fd
@@ -426,6 +438,11 @@ _netlink_handler(int fd, void *data, bool event_read, bool event_write) {
         break;
 
       case NLMSG_DONE:
+        OLSR_DEBUG(LOG_OS_SYSTEM, "Netlink message done: %d", nh->nlmsg_seq);
+        if (nl->cb_done) {
+          nl->cb_done(nh->nlmsg_seq);
+        }
+        _netlink_job_finished(nl);
         /* End of a multipart netlink message reached */
         return;
 
@@ -492,18 +509,11 @@ _handle_nl_err(struct os_system_netlink *nl, struct nlmsghdr *nh) {
 
   err = (struct nlmsgerr *) NLMSG_DATA(nh);
 
-  OLSR_DEBUG(LOG_OS_SYSTEM, "Received netlink feedback (%u bytes): %d",
-      nh->nlmsg_len, err->error);
+  OLSR_DEBUG(LOG_OS_SYSTEM, "Received netlink feedback (%u bytes): %s (%d)",
+      nh->nlmsg_len, strerror(-err->error), err->error);
 
-  if (nl->cb_feedback) {
-    nl->cb_feedback(err->msg.nlmsg_seq, err->error);
+  if (nl->cb_error) {
+    nl->cb_error(err->msg.nlmsg_seq, err->error);
   }
-  if (nl->msg_in_transit > 0) {
-    nl->msg_in_transit--;
-  }
-  if (nl->msg_in_transit == 0) {
-    olsr_timer_stop(nl->timeout);
-    nl->timeout= NULL;
-    nl->seq_used = 0;
-  }
+  _netlink_job_finished(nl);
 }

@@ -19,7 +19,12 @@ enum olsr_telnet_result {
   TELNET_RESULT_CONTINOUS,
   TELNET_RESULT_INTERNAL_ERROR,
   TELNET_RESULT_QUIT,
-  TELNET_RESULT_UNKNOWN_COMMAND,
+
+  /*
+   * this one is used internally for the telnet API,
+   * it should not be returned by a command handler
+   */
+  _TELNET_RESULT_UNKNOWN_COMMAND,
 };
 
 struct olsr_telnet_cleanup {
@@ -114,6 +119,19 @@ olsr_telnet_add_cleanup(struct olsr_telnet_data *data,
 static INLINE void
 olsr_telnet_remove_cleanup(struct olsr_telnet_cleanup *cleanup) {
   list_remove(&cleanup->node);
+}
+
+/**
+ * Flushs the output stream of a telnet session. This will be only
+ * necessary for continous output.
+ * @param data pointer to telnet data
+ */
+static INLINE void
+olsr_telnet_flush_session(struct olsr_telnet_data *data) {
+  struct olsr_telnet_session *session;
+
+  session = container_of(data, struct olsr_telnet_session, data);
+  olsr_stream_flush(&session->session);
 }
 
 #endif /* OLSR_TELNET_H_ */

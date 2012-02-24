@@ -85,6 +85,47 @@
 
 #undef OS_NET_SPECIFIC_INCLUDE
 
+/* make sure default values for routing are there */
+#ifndef RTPROT_UNSPEC
+#define RTPROT_UNSPEC 0
+#endif
+#ifndef RT_TABLE_UNSPEC
+#define RT_TABLE_UNSPEC 0
+#endif
+
+struct os_route_callbacks;
+
+struct os_route {
+  /* used for delivering feedback about netlink commands */
+  struct os_route_internal _internal;
+
+  /* address family */
+  unsigned char family;
+
+  /* source, gateway and destination */
+  struct netaddr src, gw, dst;
+
+  /* metric of the route */
+  int metric;
+
+  /* routing table and routing protocol */
+  unsigned char table, protocol;
+
+  /* index of outgoing interface */
+  unsigned int if_index;
+
+  /* callback when operation is finished */
+  void (*cb_finished)(struct os_route *, int error);
+
+  /* callback for os_routing_get() */
+  void (*cb_get)(struct os_route *filter, struct os_route *route);
+};
+
+struct os_route_callbacks {
+};
+
+EXPORT extern const struct os_route OS_ROUTE_WILDCARD;
+
 /* prototypes for all os_routing functions */
 EXPORT int os_routing_init(void);
 EXPORT void os_routing_cleanup(void);
@@ -92,7 +133,7 @@ EXPORT void os_routing_cleanup(void);
 EXPORT int os_routing_init_mesh_if(struct olsr_interface *);
 EXPORT void os_routing_cleanup_mesh_if(struct olsr_interface *);
 
-EXPORT int os_routing_set(const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
-    int rttable, int if_index, int metric, int protocol, bool set, bool del_similar);
+EXPORT int os_routing_set(struct os_route *, bool set, bool del_similar);
+EXPORT int os_routing_get(struct os_route *);
 
 #endif /* OS_ROUTING_H_ */

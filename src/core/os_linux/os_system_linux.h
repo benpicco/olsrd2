@@ -30,14 +30,15 @@ struct os_system_netlink {
   struct autobuf out;
   struct nlmsghdr *in;
 
-  int seq_used;
-  int seq_sent;
+  uint32_t seq_used;
+  uint32_t seq_sent;
 
   int msg_in_transit;
 
   void (*cb_message)(struct nlmsghdr *hdr);
-  void (*cb_feedback)(uint32_t seq, int error);
+  void (*cb_error)(uint32_t seq, int error);
   void (*cb_timeout)(void);
+  void (*cb_done)(uint32_t seq);
 
   struct olsr_timer_entry *timeout;
 };
