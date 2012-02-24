@@ -22,6 +22,7 @@
 #include "olsr_telnet.h"
 
 /* static function prototypes */
+static void _call_stop_handler(struct olsr_telnet_data *data);
 static void _cb_config_changed(void);
 static int _cb_telnet_init(struct olsr_stream_session *);
 static void _cb_telnet_cleanup(struct olsr_stream_session *);
@@ -175,10 +176,7 @@ olsr_telnet_remove(struct olsr_telnet_command *command) {
 
 void
 olsr_telnet_stop(struct olsr_telnet_data *data) {
-  if (data->stop_handler) {
-    data->stop_handler(data);
-    data->stop_handler = NULL;
-  }
+  _call_stop_handler(data);
   data->show_echo = true;
   abuf_puts(data->out, "> ");
   olsr_telnet_flush_session(data);
@@ -304,6 +302,18 @@ _cb_telnet_create_error(struct olsr_stream_session *session,
   }
 }
 
+/* handle clean call of stop handler */
+static void
+_call_stop_handler(struct olsr_telnet_data *data) {
+  void (*stop_handler)(struct olsr_telnet_data *);
+
+  if (data->stop_handler) {
+    stop_handler = data->stop_handler;
+    data->stop_handler = NULL;
+    stop_handler(data);
+  }
+}
+
 /**
  * Handler for receiving data from telnet session
  * @param session pointer to TCP session
@@ -371,10 +381,7 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
       }
 
       /* if we are doing continous output, stop it ! */
-      if (telnet_session->data.stop_handler) {
-        telnet_session->data.stop_handler(&telnet_session->data);
-        telnet_session->data.stop_handler = NULL;
-      }
+      _call_stop_handler(&telnet_session->data);
 
       if (strlen(cmd) != 0) {
         OLSR_DEBUG(LOG_TELNET, "Processing telnet command: '%s' '%s'",
@@ -600,7 +607,7 @@ _cb_telnet_repeat_timer(void *ptr) {
   telnet_data->parameter = telnet_data->stop_data[2];
 
   if (_telnet_handle_command(telnet_data) != TELNET_RESULT_ACTIVE) {
-    telnet_data->stop_handler(telnet_data);
+    _call_stop_handler(telnet_data);
   }
 
   /* reconstruct original session pointer */
@@ -652,7 +659,7 @@ _cb_telnet_repeat(struct olsr_telnet_data *data) {
   data->parameter = data->stop_data[2];
 
   if (_telnet_handle_command(data) != TELNET_RESULT_ACTIVE) {
-    data->stop_handler(data);
+    _call_stop_handler(data);
   }
 
   return TELNET_RESULT_CONTINOUS;

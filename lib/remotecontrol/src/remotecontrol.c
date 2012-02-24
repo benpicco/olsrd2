@@ -566,11 +566,11 @@ _cb_handle_config(struct olsr_telnet_data *data) {
  * @param session
  */
 static void
-_stop_route_feedback(struct olsr_telnet_data *session) {
-  struct os_route *route;
+_cb_route_stophandler(struct olsr_telnet_data *data) {
+  struct _remotecontrol_session *session;
 
-  route = session->stop_data[0];
-  os_routing_interrupt(route);
+  session = data->stop_data[0];
+  os_routing_interrupt(&session->route);
 }
 
 /**
@@ -591,7 +591,8 @@ _cb_route_finished(struct os_route *rt, int error) {
   else {
     abuf_puts(session->cleanup.data->out, "Command successful\n");
   }
-  olsr_telnet_flush_session(session->cleanup.data);
+
+  session->route.cb_finished = NULL;
   olsr_telnet_stop(session->cleanup.data);
 }
 
@@ -765,7 +766,7 @@ _cb_handle_route(struct olsr_telnet_data *data) {
       return TELNET_RESULT_ACTIVE;
     }
 
-    data->stop_handler = _stop_route_feedback;
+    data->stop_handler = _cb_route_stophandler;
     data->stop_data[0] = session;
     return TELNET_RESULT_CONTINOUS;
   }

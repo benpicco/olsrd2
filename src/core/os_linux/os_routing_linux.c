@@ -74,7 +74,7 @@ static int _routing_set(struct nlmsghdr *msg, struct os_route *route,
 static bool _is_at_least_linuxkernel_2_6_31(void);
 static int _os_linux_writeToProc(const char *file, char *old, char value);
 
-static void _routing_interrupt(struct os_route *route, int error);
+static void _routing_finished(struct os_route *route, int error);
 static void _cb_rtnetlink_message(struct nlmsghdr *);
 static void _cb_rtnetlink_error(uint32_t seq, int error);
 static void _cb_rtnetlink_done(uint32_t seq);
@@ -361,7 +361,7 @@ os_routing_query(struct os_route *route) {
  */
 void
 os_routing_interrupt(struct os_route *route) {
-  _routing_interrupt(route, -1);
+  _routing_finished(route, -1);
 }
 
 /**
@@ -371,11 +371,19 @@ os_routing_interrupt(struct os_route *route) {
  * @param error error code, 0 if no error
  */
 static void
-_routing_interrupt(struct os_route *route, int error) {
+_routing_finished(struct os_route *route, int error) {
   if (route->cb_finished) {
-    route->cb_finished(route, error);
+    void (*cb_finished)(struct os_route *, int error);
+
+    cb_finished = route->cb_finished;
+    route->cb_finished = NULL;
+
+    cb_finished(route, error);
   }
-  list_remove(&route->_internal._node);
+
+  if (list_is_node_added(&route->_internal._node)) {
+    list_remove(&route->_internal._node);
+  }
 }
 
 /**
@@ -601,7 +609,7 @@ _cb_rtnetlink_error(uint32_t seq, int error) {
 
   list_for_each_element(&_rtnetlink_feedback, route, _internal._node) {
     if (seq == route->_internal.nl_seq) {
-      _routing_interrupt(route, error);
+      _routing_finished(route, error);
       break;
     }
   }
@@ -617,7 +625,7 @@ _cb_rtnetlink_timeout(void) {
   OLSR_DEBUG(LOG_OS_ROUTING, "Got timeout");
 
   list_for_each_element_safe(&_rtnetlink_feedback, route, _internal._node, rt_it) {
-    _routing_interrupt(route, -1);
+    _routing_finished(route, -1);
   }
 }
 
@@ -633,7 +641,7 @@ _cb_rtnetlink_done(uint32_t seq) {
 
   list_for_each_element(&_rtnetlink_feedback, route, _internal._node) {
     if (seq == route->_internal.nl_seq) {
-      _routing_interrupt(route, 0);
+      _routing_finished(route, 0);
       break;
     }
   }
