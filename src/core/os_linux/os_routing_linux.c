@@ -216,6 +216,11 @@ os_routing_cleanup_mesh_if(struct olsr_interface *interf) {
   return;
 }
 
+static int
+_routing_set(struct nlmsghdr *msg,
+    const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
+    int rttable, int if_index, int metric, int protocol, unsigned char scope);
+
 /**
  * Update an entry of the kernel routing table. This call will only trigger
  * the change, the real change will be done as soon as the netlink socket is
@@ -237,67 +242,138 @@ os_routing_set(const struct netaddr *src, const struct netaddr *gw, const struct
     int rttable, int if_index, int metric, int protocol, bool set, bool del_similar) {
   uint8_t buffer[UIO_MAXIOV];
   struct nlmsghdr *msg;
-  struct rtmsg *rt_msg;
-
-  msg = (void *)&buffer[0];
-
-  /* consistency check */
-  if (dst == NULL || (dst->type != AF_INET && dst->type != AF_INET6)) {
-    return -1;
-  }
-  if ((src != NULL && src->type != dst->type)
-      || (gw != NULL && gw->type != dst->type)) {
-    return -1;
-  }
+  unsigned char scope;
 
   memset(buffer, 0, sizeof(buffer));
 
-  rt_msg = NLMSG_DATA(buffer);
-  rt_msg->rtm_flags = RTNH_F_ONLINK;
-  rt_msg->rtm_family = dst->type;
-  rt_msg->rtm_table = rttable;
+  /* get pointers for netlink message */
+  msg = (void *)&buffer[0];
 
-  msg->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
   msg->nlmsg_flags = NLM_F_REQUEST;
+
+  /* set length of netlink message with rtmsg payload */
+  msg->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
+
+  /* normally all routing operations are UNIVERSE scope */
+  scope = RT_SCOPE_UNIVERSE;
 
   if (set) {
     msg->nlmsg_flags |= NLM_F_CREATE | NLM_F_REPLACE;
     msg->nlmsg_type = RTM_NEWROUTE;
   } else {
     msg->nlmsg_type = RTM_DELROUTE;
+
+    protocol = -1;
+    src = NULL;
+
+    if (del_similar) {
+      /* no interface necessary */
+      if_index = -1;
+
+      /* as wildcard for fuzzy deletion */
+      scope = RT_SCOPE_NOWHERE;
+    }
   }
 
-  /* RTN_UNSPEC would be the wildcard, but blackhole broadcast or nat roules should usually not conflict */
-  /* -> olsr only adds deletes unicast routes */
+  if (gw == NULL && dst->prefix_len == netaddr_get_maxprefix(dst)) {
+    /* use destination as gateway, to 'force' linux kernel to do proper source address selection */
+    gw = dst;
+  }
+
+  if (_routing_set(msg, src, gw, dst, rttable, if_index, metric, protocol, scope)) {
+    return -1;
+  }
+
+  return os_system_netlink_send(&_rtnetlink_socket, msg);
+}
+
+/**
+ * Initiatize the an netlink routing message
+ * @param msg pointer to netlink message header
+ * @param src source address of route (NULL if not set)
+ * @param gw gateway of route (NULL if not set)
+ * @param dst destination prefix of route (NULL if not set)
+ * @param rttable routing table (mandatory)
+ * @param if_index interface index, -1 if not set
+ * @param metric routing metric, -1 if not set
+ * @param protocol routing protocol, -1 if not set
+ * @param scope scope of route to be set/removed
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_routing_set(struct nlmsghdr *msg,
+    const struct netaddr *src, const struct netaddr *gw, const struct netaddr *dst,
+    int rttable, int if_index, int metric, int protocol, unsigned char scope) {
+  struct rtmsg *rt_msg;
+  int type = -1;
+
+  /* calculate address type */
+  if (dst) {
+    type = dst->type;
+  }
+  if (gw) {
+    if (type != -1 && type != gw->type) {
+      return -1;
+    }
+    type = gw->type;
+  }
+  if (src) {
+    if (type != -1 && type != src->type) {
+      return -1;
+    }
+    type = gw->type;
+  }
+
+  /* and do a consistency check */
+  assert (type == AF_INET || type == AF_INET6);
+
+  /* initialize rtmsg payload */
+  rt_msg = NLMSG_DATA(msg);
+
+  rt_msg->rtm_family = type;
+  rt_msg->rtm_scope = scope;
+
+  /*
+   * RTN_UNSPEC would be the wildcard,
+   * but blackhole, broadcast or NAT rules should usually not conflict
+   */
+  /* -> olsr only adds deletes unicast routes at the moment */
   rt_msg->rtm_type = RTN_UNICAST;
 
-  rt_msg->rtm_dst_len = dst->prefix_len;
-
-  if (set) {
-    /* add protocol for setting a route */
+  if (protocol != -1) {
+    /* set protocol */
     rt_msg->rtm_protocol = protocol;
   }
 
-  /* calculate scope of operation */
-  if (!set && del_similar) {
-    /* as wildcard for fuzzy deletion */
-    rt_msg->rtm_scope = RT_SCOPE_NOWHERE;
-  }
-  else {
-    /* for all our routes */
-    rt_msg->rtm_scope = RT_SCOPE_UNIVERSE;
+  if (rttable != -1) {
+    /* set routing table */
+    rt_msg->rtm_table = rttable;
   }
 
-  if (set || !del_similar) {
-    /* add interface*/
-    if (os_system_netlink_addreq(msg, RTA_OIF, &if_index, sizeof(if_index))) {
+  /* add attributes */
+  if (src != NULL) {
+    rt_msg->rtm_src_len = src->prefix_len;
+
+    /* add src-ip */
+    if (os_system_netlink_addnetaddr(msg, RTA_PREFSRC, src)) {
       return -1;
     }
   }
 
-  if (set && src != NULL) {
-    /* add src-ip */
-    if (os_system_netlink_addnetaddr(msg, RTA_PREFSRC, src)) {
+  if (gw != NULL) {
+    rt_msg->rtm_flags = RTNH_F_ONLINK;
+
+    /* add gateway */
+    if (os_system_netlink_addnetaddr(msg, RTA_GATEWAY, gw)) {
+      return -1;
+    }
+  }
+
+  if (dst != 0) {
+    rt_msg->rtm_dst_len = dst->prefix_len;
+
+    /* add destination */
+    if (os_system_netlink_addnetaddr(msg, RTA_DST, dst)) {
       return -1;
     }
   }
@@ -309,34 +385,15 @@ os_routing_set(const struct netaddr *src, const struct netaddr *gw, const struct
     }
   }
 
-  if (gw) {
-    /* add gateway */
-    if (os_system_netlink_addnetaddr(msg, RTA_GATEWAY, gw)) {
+  if (if_index != -1) {
+    /* add interface*/
+    if (os_system_netlink_addreq(msg, RTA_OIF, &if_index, sizeof(if_index))) {
       return -1;
     }
   }
-  else if (dst->prefix_len == netaddr_get_maxprefix(dst)) {
-    /* use destination as gateway, to 'force' linux kernel to do proper source address selection */
-    if (os_system_netlink_addnetaddr(msg, RTA_GATEWAY, dst)) {
-      return -1;
-    }
-  }
-  else {
-    /*
-     * do not use onlink on such routes(no gateway, but no hostroute aswell)
-     * e.g. smartgateway default route over an ptp tunnel interface
-     */
-    rt_msg->rtm_flags &= (~RTNH_F_ONLINK);
-  }
-
-   /* add destination */
-  if (os_system_netlink_addnetaddr(msg, RTA_DST, dst)) {
-    return -1;
-  }
-
-  os_system_netlink_send(&_rtnetlink_socket, msg);
   return 0;
 }
+
 /**
  * TODO: Handle feedback from netlink socket
  * @param seq

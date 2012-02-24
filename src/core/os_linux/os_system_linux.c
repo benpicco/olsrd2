@@ -492,6 +492,9 @@ _handle_nl_err(struct os_system_netlink *nl, struct nlmsghdr *nh) {
 
   err = (struct nlmsgerr *) NLMSG_DATA(nh);
 
+  OLSR_DEBUG(LOG_OS_SYSTEM, "Received netlink feedback (%u bytes): %d",
+      nh->nlmsg_len, err->error);
+
   if (nl->cb_feedback) {
     nl->cb_feedback(err->msg.nlmsg_seq, err->error);
   }
