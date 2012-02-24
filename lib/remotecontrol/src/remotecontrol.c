@@ -561,16 +561,23 @@ _cb_handle_config(struct olsr_telnet_data *data) {
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Handle interrupt from user console during route output
+ * @param session
+ */
 static void
 _stop_route_feedback(struct olsr_telnet_data *session) {
   struct os_route *route;
 
   route = session->stop_data[0];
-  if (route->cb_finished) {
-    route->cb_finished(route, -1);
-  }
+  os_routing_interrupt(route);
 }
 
+/**
+ * Handle end of incoming route data
+ * @param rt pointer to os_route object
+ * @param error error code, 0 if 0 error
+ */
 static void
 _cb_route_finished(struct os_route *rt, int error) {
   struct _remotecontrol_session *session;
@@ -588,6 +595,11 @@ _cb_route_finished(struct os_route *rt, int error) {
   olsr_telnet_stop(session->cleanup.data);
 }
 
+/**
+ * Handle incoming route data
+ * @param filter pointer to filter for route data
+ * @param route pointer to route data
+ */
 static void
 _cb_route_get(struct os_route *filter, struct os_route *route) {
   struct _remotecontrol_session *session;
@@ -745,7 +757,7 @@ _cb_handle_route(struct olsr_telnet_data *data) {
       result = os_routing_set(&session->route, add, true);
     }
     else {
-      result = os_routing_get(&session->route);
+      result = os_routing_query(&session->route);
     }
 
     if (result) {

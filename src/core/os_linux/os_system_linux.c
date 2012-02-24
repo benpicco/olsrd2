@@ -380,6 +380,11 @@ _flush_netlink_buffer(struct os_system_netlink *nl) {
   }
 }
 
+/**
+ * Cleanup netlink handler because all outstanding jobs
+ * are finished
+ * @param nl pointer to os_system_netlink handler
+ */
 static void
 _netlink_job_finished(struct os_system_netlink *nl) {
   if (nl->msg_in_transit > 0) {
@@ -393,7 +398,7 @@ _netlink_job_finished(struct os_system_netlink *nl) {
 }
 
 /**
- * Handler for incoming async netlink messages
+ * Handler for incoming netlink messages
  * @param fd
  * @param data
  * @param event_read

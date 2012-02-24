@@ -74,6 +74,7 @@ static int _routing_set(struct nlmsghdr *msg, struct os_route *route,
 static bool _is_at_least_linuxkernel_2_6_31(void);
 static int _os_linux_writeToProc(const char *file, char *old, char value);
 
+static void _routing_interrupt(struct os_route *route, int error);
 static void _cb_rtnetlink_message(struct nlmsghdr *);
 static void _cb_rtnetlink_error(uint32_t seq, int error);
 static void _cb_rtnetlink_done(uint32_t seq);
@@ -323,7 +324,7 @@ os_routing_set(struct os_route *route, bool set, bool del_similar) {
  * @return -1 if an error happened, rtnetlink sequence number otherwise
  */
 int
-os_routing_get(struct os_route *route) {
+os_routing_query(struct os_route *route) {
   uint8_t buffer[UIO_MAXIOV];
   struct nlmsghdr *msg;
   struct rtgenmsg *rt_gen;
@@ -352,6 +353,29 @@ os_routing_get(struct os_route *route) {
   list_add_tail(&_rtnetlink_feedback, &route->_internal._node);
   route->_internal.nl_seq = seq;
   return 0;
+}
+
+/**
+ * Stop processing of a routing command
+ * @param route pointer to os_route
+ */
+void
+os_routing_interrupt(struct os_route *route) {
+  _routing_interrupt(route, -1);
+}
+
+/**
+ * Stop processing of a routing command and set error code
+ * for callback
+ * @param route pointer to os_route
+ * @param error error code, 0 if no error
+ */
+static void
+_routing_interrupt(struct os_route *route, int error) {
+  if (route->cb_finished) {
+    route->cb_finished(route, error);
+  }
+  list_remove(&route->_internal._node);
 }
 
 /**
@@ -440,6 +464,13 @@ _routing_set(struct nlmsghdr *msg, struct os_route *route,
   return 0;
 }
 
+/**
+ * Parse a rtnetlink header into a os_route object
+ * @param route pointer to target os_route
+ * @param msg pointer to rtnetlink message header
+ * @return -1 if address family of rtnetlink is unknown,
+ *   0 otherwise
+ */
 static int
 _routing_parse_nlmsg(struct os_route *route, struct nlmsghdr *msg) {
   struct rtmsg *rt_msg;
@@ -491,6 +522,12 @@ _routing_parse_nlmsg(struct os_route *route, struct nlmsghdr *msg) {
   return 0;
 }
 
+/**
+ * Checks if a os_route object matches a routing filter
+ * @param filter pointer to filter
+ * @param route pointer to route object
+ * @return true if route matches the filter, false otherwise
+ */
 static bool
 _match_routes(struct os_route *filter, struct os_route *route) {
   if (filter->family != route->family) {
@@ -520,6 +557,10 @@ _match_routes(struct os_route *filter, struct os_route *route) {
   return filter->if_index == 0 || filter->if_index == route->if_index;
 }
 
+/**
+ * Handle incoming rtnetlink messages
+ * @param msg
+ */
 static void
 _cb_rtnetlink_message(struct nlmsghdr *msg) {
   struct os_route *filter;
@@ -560,10 +601,7 @@ _cb_rtnetlink_error(uint32_t seq, int error) {
 
   list_for_each_element(&_rtnetlink_feedback, route, _internal._node) {
     if (seq == route->_internal.nl_seq) {
-      if (route->cb_finished) {
-        route->cb_finished(route, error);
-      }
-      list_remove(&route->_internal._node);
+      _routing_interrupt(route, error);
       break;
     }
   }
@@ -579,10 +617,7 @@ _cb_rtnetlink_timeout(void) {
   OLSR_DEBUG(LOG_OS_ROUTING, "Got timeout");
 
   list_for_each_element_safe(&_rtnetlink_feedback, route, _internal._node, rt_it) {
-    if (route->cb_finished) {
-      route->cb_finished(route, true);
-    }
-    list_remove(&route->_internal._node);
+    _routing_interrupt(route, -1);
   }
 }
 
@@ -598,10 +633,7 @@ _cb_rtnetlink_done(uint32_t seq) {
 
   list_for_each_element(&_rtnetlink_feedback, route, _internal._node) {
     if (seq == route->_internal.nl_seq) {
-      if (route->cb_finished) {
-        route->cb_finished(route, false);
-      }
-      list_remove(&route->_internal._node);
+      _routing_interrupt(route, 0);
       break;
     }
   }
