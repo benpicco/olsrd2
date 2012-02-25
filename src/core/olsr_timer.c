@@ -53,12 +53,12 @@
 #include "olsr.h"
 
 /* Hashed root of all timers */
-static struct list_entity timer_wheel[TIMER_WHEEL_SLOTS];
-static uint32_t timer_last_run;        /* remember the last timeslot walk */
+static struct list_entity _timer_wheel[TIMER_WHEEL_SLOTS];
+static uint32_t _timer_last_run;        /* remember the last timeslot walk */
 
 /* Memory cookie for the timer manager */
 struct list_entity timerinfo_list;
-static struct olsr_memcookie_info *timer_mem_cookie = NULL;
+static struct olsr_memcookie_info *_timer_mem_cookie = NULL;
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_timer_state);
@@ -82,17 +82,17 @@ olsr_timer_init(void)
 
   /* init lists */
   for (idx = 0; idx < TIMER_WHEEL_SLOTS; idx++) {
-    list_init_head(&timer_wheel[idx]);
+    list_init_head(&_timer_wheel[idx]);
   }
 
   /*
    * Reset the last timer run.
    */
-  timer_last_run = olsr_clock_getNow();
+  _timer_last_run = olsr_clock_getNow();
 
   /* Allocate a cookie for the block based memory manager. */
-  timer_mem_cookie = olsr_memcookie_add("timer_entry", sizeof(struct olsr_timer_entry));
-  if (timer_mem_cookie == NULL) {
+  _timer_mem_cookie = olsr_memcookie_add("timer_entry", sizeof(struct olsr_timer_entry));
+  if (_timer_mem_cookie == NULL) {
     OLSR_WARN_OOM(LOG_SOCKET);
     return -1;
   }
@@ -117,7 +117,7 @@ olsr_timer_cleanup(void)
     return;
 
   for (wheel_slot = 0; wheel_slot < TIMER_WHEEL_SLOTS; wheel_slot++) {
-    timer_head_node = &timer_wheel[wheel_slot & TIMER_WHEEL_MASK];
+    timer_head_node = &_timer_wheel[wheel_slot & TIMER_WHEEL_MASK];
 
     /* Kill all entries hanging off this hash bucket. */
     while (!list_is_empty(timer_head_node)) {
@@ -134,7 +134,7 @@ olsr_timer_cleanup(void)
   }
 
   /* release memory cookie for timers */
-  olsr_memcookie_remove(timer_mem_cookie);
+  olsr_memcookie_remove(_timer_mem_cookie);
 }
 
 /**
@@ -157,7 +157,7 @@ olsr_timer_remove(struct olsr_timer_info *info) {
   int slot;
 
   for (slot=0; slot < TIMER_WHEEL_SLOTS; slot++) {
-    list_for_each_element_safe(&timer_wheel[slot], timer, timer_list, iterator) {
+    list_for_each_element_safe(&_timer_wheel[slot], timer, timer_list, iterator) {
       /* remove all timers of this timer_info */
       if (timer->timer_info == info) {
         olsr_timer_stop(timer);
@@ -189,7 +189,7 @@ olsr_timer_start(unsigned int rel_time,
   assert(rel_time);
   assert(jitter_pct <= 100);
 
-  timer = olsr_memcookie_malloc(timer_mem_cookie);
+  timer = olsr_memcookie_malloc(_timer_mem_cookie);
 
   /*
    * Compute random numbers only once.
@@ -213,9 +213,9 @@ olsr_timer_start(unsigned int rel_time,
   timer->timer_period = ti->periodic ? rel_time : 0;
 
   /*
-   * Now insert in the respective timer_wheel slot.
+   * Now insert in the respective _timer_wheel slot.
    */
-  list_add_before(&timer_wheel[timer->timer_clock & TIMER_WHEEL_MASK], &timer->timer_list);
+  list_add_before(&_timer_wheel[timer->timer_clock & TIMER_WHEEL_MASK], &timer->timer_list);
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: start %s timer %p firing in %s, ctx %p\n",
              ti->name, timer, olsr_clock_toClockString(&timebuf, timer->timer_clock), context);
@@ -251,7 +251,7 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
   timer->timer_info->changes++;
 
   if (!timer->timer_in_callback) {
-    olsr_memcookie_free(timer_mem_cookie, timer);
+    olsr_memcookie_free(_timer_mem_cookie, timer);
   }
 }
 
@@ -282,11 +282,11 @@ olsr_timer_change(struct olsr_timer_entry *timer, unsigned int rel_time, uint8_t
   timer->timer_jitter_pct = jitter_pct;
 
   /*
-   * Changes are easy: Remove timer from the exisiting timer_wheel slot
+   * Changes are easy: Remove timer from the exisiting _timer_wheel slot
    * and reinsert into the new slot.
    */
   list_remove(&timer->timer_list);
-  list_add_before(&timer_wheel[timer->timer_clock & TIMER_WHEEL_MASK], &timer->timer_list);
+  list_add_before(&_timer_wheel[timer->timer_clock & TIMER_WHEEL_MASK], &timer->timer_list);
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: change %s timer %p, firing to %s, ctx %p\n",
              timer->timer_info->name, timer,
@@ -339,7 +339,7 @@ olsr_timer_walk(void)
    * or check *all* the wheel slots, whatever is less work.
    * The latter is meant as a safety belt if the scheduler falls behind.
    */
-  while ((timer_last_run <= olsr_clock_getNow()) && (wheel_slot_walks < TIMER_WHEEL_SLOTS)) {
+  while ((_timer_last_run <= olsr_clock_getNow()) && (wheel_slot_walks < TIMER_WHEEL_SLOTS)) {
     struct list_entity tmp_head_node;
     /* keep some statistics */
     unsigned int timers_walked = 0, timers_fired = 0;
@@ -347,7 +347,7 @@ olsr_timer_walk(void)
     /* Get the hash slot for this clocktick */
     struct list_entity *timer_head_node;
 
-    timer_head_node = &timer_wheel[timer_last_run & TIMER_WHEEL_MASK];
+    timer_head_node = &_timer_wheel[_timer_last_run & TIMER_WHEEL_MASK];
 
     /* Walk all entries hanging off this hash bucket. We treat this basically as a stack
      * so that we always know if and where the next element is.
@@ -376,7 +376,7 @@ olsr_timer_walk(void)
         OLSR_DEBUG(LOG_TIMER, "TIMER: fire %s timer %p, ctx %p, "
                    "at clocktick %u (%s)\n",
                    timer->timer_info->name,
-                   timer, timer->timer_cb_context, timer_last_run,
+                   timer, timer->timer_cb_context, _timer_last_run,
                    olsr_clock_getWallclockString(&timebuf));
 
         /* This timer is expired, call into the provided callback function */
@@ -402,7 +402,7 @@ olsr_timer_walk(void)
         }
         else {
           /* free memory */
-          olsr_memcookie_free(timer_mem_cookie, timer);
+          olsr_memcookie_free(_timer_mem_cookie, timer);
         }
 
         timers_fired++;
@@ -419,19 +419,19 @@ olsr_timer_walk(void)
     total_timers_fired += timers_fired;
 
     /* Increment the time slot and wheel slot walk iteration */
-    timer_last_run++;
+    _timer_last_run++;
     wheel_slot_walks++;
   }
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: processed %4u/%d clockwheel slots, "
              "timers walked %4u/%u, timers fired %u\n",
-             wheel_slot_walks, TIMER_WHEEL_SLOTS, total_timers_walked, timer_mem_cookie->ci_usage, total_timers_fired);
+             wheel_slot_walks, TIMER_WHEEL_SLOTS, total_timers_walked, _timer_mem_cookie->ci_usage, total_timers_fired);
 
   /*
    * If the scheduler has slipped and we have walked all wheel slots,
    * reset the last timer run.
    */
-  timer_last_run = olsr_clock_getNow();
+  _timer_last_run = olsr_clock_getNow();
 }
 
 /**
