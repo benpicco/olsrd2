@@ -54,7 +54,7 @@
 
 /* Hashed root of all timers */
 static struct list_entity _timer_wheel[TIMER_WHEEL_SLOTS];
-static uint32_t _timer_last_run;        /* remember the last timeslot walk */
+static uint64_t _timer_last_run;        /* remember the last timeslot walk */
 
 /* Memory cookie for the timer manager */
 struct list_entity timerinfo_list;
@@ -64,7 +64,7 @@ static struct olsr_memcookie_info *_timer_mem_cookie = NULL;
 OLSR_SUBSYSTEM_STATE(_timer_state);
 
 /* Prototypes */
-static uint32_t calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val);
+static uint64_t calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val);
 
 /**
  * Initialize timer scheduler subsystem
@@ -177,7 +177,7 @@ olsr_timer_remove(struct olsr_timer_info *info) {
  * @return a pointer to the created entry
  */
 struct olsr_timer_entry *
-olsr_timer_start(unsigned int rel_time,
+olsr_timer_start(uint64_t rel_time,
     uint8_t jitter_pct, void *context, struct olsr_timer_info *ti)
 {
   struct olsr_timer_entry *timer;
@@ -262,7 +262,7 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
  * @param jitter_pct new jitter expressed in percent.
  */
 void
-olsr_timer_change(struct olsr_timer_entry *timer, unsigned int rel_time, uint8_t jitter_pct)
+olsr_timer_change(struct olsr_timer_entry *timer, uint64_t rel_time, uint8_t jitter_pct)
 {
 #if !defined(REMOVE_LOG_DEBUG)
   struct timeval_buf timebuf;
@@ -306,7 +306,7 @@ olsr_timer_change(struct olsr_timer_entry *timer, unsigned int rel_time, uint8_t
  */
 void
 olsr_timer_set(struct olsr_timer_entry **timer_ptr,
-               unsigned int rel_time,
+               uint64_t rel_time,
                uint8_t jitter_pct, void *context, struct olsr_timer_info *ti)
 {
   assert(ti);          /* we want timer cookies everywhere */
@@ -331,8 +331,8 @@ olsr_timer_set(struct olsr_timer_entry **timer_ptr,
 void
 olsr_timer_walk(void)
 {
-  unsigned int total_timers_walked = 0, total_timers_fired = 0;
-  unsigned int wheel_slot_walks = 0;
+  int total_timers_walked = 0, total_timers_fired = 0;
+  int wheel_slot_walks = 0;
 
   /*
    * Check the required wheel slots since the last time a timer walk was invoked,
@@ -374,7 +374,7 @@ olsr_timer_walk(void)
   struct timeval_buf timebuf;
 #endif
         OLSR_DEBUG(LOG_TIMER, "TIMER: fire %s timer %p, ctx %p, "
-                   "at clocktick %u (%s)\n",
+                   "at clocktick %" PRIu64 " (%s)\n",
                    timer->timer_info->name,
                    timer, timer->timer_cb_context, _timer_last_run,
                    olsr_clock_getWallclockString(&timebuf));
@@ -441,10 +441,10 @@ olsr_timer_walk(void)
  * @param random_val cached random variable to calculate jitter
  * @return the absolute time when timer will fire
  */
-static uint32_t
-calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val)
+static uint64_t
+calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val)
 {
-  unsigned int jitter_time;
+  uint64_t jitter_time;
 
   /*
    * No jitter or, jitter larger than 99% does not make sense.
@@ -460,7 +460,8 @@ calc_jitter(unsigned int rel_time, uint8_t jitter_pct, unsigned int random_val)
   jitter_time = (jitter_pct * rel_time) / 100;
   jitter_time = random_val / (1 + RAND_MAX / (jitter_time + 1));
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %ums to %ums\n", jitter_pct, rel_time, rel_time - jitter_time);
+  OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %" PRIu64 "ms to %" PRIu64 "ms\n",
+      jitter_pct, rel_time, rel_time - jitter_time);
 
   return olsr_clock_get_absolute(rel_time - jitter_time);
 }

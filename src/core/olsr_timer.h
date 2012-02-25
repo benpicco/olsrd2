@@ -92,10 +92,10 @@ struct olsr_timer_entry {
   struct olsr_timer_info *timer_info;
 
   /* when timer shall fire (absolute internal timerstamp) */
-  uint32_t timer_clock;
+  uint64_t timer_clock;
 
   /* timeperiod between two timer events for periodical timers */
-  uint32_t timer_period;
+  uint64_t timer_period;
 
   /* the jitter expressed in percent */
   uint8_t timer_jitter_pct;
@@ -124,11 +124,11 @@ EXPORT void olsr_timer_walk(void);
 EXPORT void olsr_timer_add(struct olsr_timer_info *ti);
 EXPORT void olsr_timer_remove(struct olsr_timer_info *);
 
-EXPORT void olsr_timer_set(struct olsr_timer_entry **, uint32_t, uint8_t,
+EXPORT void olsr_timer_set(struct olsr_timer_entry **, uint64_t, uint8_t,
     void *, struct olsr_timer_info *);
-EXPORT struct olsr_timer_entry *olsr_timer_start(uint32_t, uint8_t,
+EXPORT struct olsr_timer_entry *olsr_timer_start(uint64_t, uint8_t,
     void *, struct olsr_timer_info *);
-EXPORT void olsr_timer_change(struct olsr_timer_entry *, uint32_t, uint8_t);
+EXPORT void olsr_timer_change(struct olsr_timer_entry *, uint64_t, uint8_t);
 EXPORT void olsr_timer_stop(struct olsr_timer_entry *);
 
 #endif /* OLSR_TIMER_H_ */

@@ -89,6 +89,8 @@
 EXPORT int os_system_init(void);
 EXPORT void os_system_cleanup(void);
 
+EXPORT int os_system_gettime64(uint64_t *t64);
+
 EXPORT int os_system_set_interface_state(const char *dev, bool up);
 
 EXPORT void os_system_openlog(void);

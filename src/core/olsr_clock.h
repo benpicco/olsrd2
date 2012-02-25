@@ -63,9 +63,7 @@ EXPORT int olsr_clock_init(void) __attribute__((warn_unused_result));
 EXPORT void olsr_clock_cleanup(void);
 EXPORT int olsr_clock_update(void) __attribute__((warn_unused_result));
 
-EXPORT int32_t olsr_clock_getRelative(uint32_t absolute);
-EXPORT bool olsr_clock_isPast(uint32_t s);
-EXPORT uint32_t olsr_clock_getNow(void);
+EXPORT uint64_t olsr_clock_getNow(void);
 
 EXPORT uint32_t olsr_clock_decode_olsrv1(const uint8_t);
 EXPORT uint8_t olsr_clock_encode_olsrv1(const uint32_t);
@@ -81,10 +79,33 @@ EXPORT const char *olsr_clock_getWallclockString(struct timeval_buf *);
  * @param s milliseconds until timestamp
  * @return absolute time when event will happen
  */
-static inline uint32_t
-olsr_clock_get_absolute(uint32_t relative)
+static INLINE uint64_t
+olsr_clock_get_absolute(uint64_t relative)
 {
   return olsr_clock_getNow() + relative;
+}
+
+/**
+ * Returns the number of milliseconds until the timestamp will happen
+ * @param absolute timestamp
+ * @return milliseconds until event will happen, negative if it already
+ *   happened.
+ */
+static INLINE int64_t
+olsr_clock_getRelative(uint64_t absolute)
+{
+  return (int64_t)absolute - (int64_t)olsr_clock_getNow();
+}
+
+/**
+ * Checks if a timestamp has already happened
+ * @param absolute timestamp
+ * @return true if the event already happened, false otherwise
+ */
+static INLINE bool
+olsr_clock_isPast(uint64_t absolute)
+{
+  return absolute < olsr_clock_getNow();
 }
 
 #endif

@@ -50,15 +50,13 @@
 #include "olsr_clock.h"
 #include "olsr.h"
 
+static int olsr_get_timezone(void);
+
 /* Timer data */
-static uint32_t now_times;             /* relative time compared to startup (in milliseconds */
-static struct timeval first_tv;        /* timevalue during startup */
-static struct timeval last_tv;         /* timevalue used for last olsr_times() calculation */
+static uint64_t now_times;             /* relative time compared to startup (in milliseconds */
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_clock_state);
-
-static int olsr_get_timezone(void);
 
 /**
  * Initialize olsr clock system
@@ -68,13 +66,6 @@ int
 olsr_clock_init(void) {
   if (olsr_subsystem_is_initialized(&_clock_state))
     return 0;
-
-  /* Grab initial timestamp */
-  if (os_system_gettimeofday(&first_tv)) {
-    OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
-    return -1;
-  }
-  last_tv = first_tv;
 
   if (olsr_clock_update()) {
     return -1;
@@ -99,36 +90,11 @@ olsr_clock_cleanup(void) {
 int
 olsr_clock_update(void)
 {
-  struct timeval tv;
-  uint32_t t;
 
-  if (os_system_gettimeofday(&tv) != 0) {
+  if (os_system_gettime64(&now_times)) {
     OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
     return -1;
   }
-
-  /* test if time jumped backward or more than 60 seconds forward */
-  if (tv.tv_sec < last_tv.tv_sec || (tv.tv_sec == last_tv.tv_sec && tv.tv_usec < last_tv.tv_usec)
-      || tv.tv_sec - last_tv.tv_sec > 60) {
-    OLSR_WARN(LOG_TIMER, "Time jump (%d.%06d to %d.%06d)\n",
-              (int32_t) (last_tv.tv_sec), (int32_t) (last_tv.tv_usec), (int32_t) (tv.tv_sec), (int32_t) (tv.tv_usec));
-
-    t = (last_tv.tv_sec - first_tv.tv_sec) * 1000 + (last_tv.tv_usec - first_tv.tv_usec) / 1000;
-    t++;                        /* advance time by one millisecond */
-
-    first_tv = tv;
-    first_tv.tv_sec -= (t / 1000);
-    first_tv.tv_usec -= ((t % 1000) * 1000);
-
-    if (first_tv.tv_usec < 0) {
-      first_tv.tv_sec--;
-      first_tv.tv_usec += 1000000;
-    }
-    last_tv = tv;
-    now_times =  t;
-  }
-  last_tv = tv;
-  now_times = (tv.tv_sec - first_tv.tv_sec) * 1000 + (tv.tv_usec - first_tv.tv_usec) / 1000;
   return 0;
 }
 
@@ -136,52 +102,9 @@ olsr_clock_update(void)
  * Calculates the current time in the internal OLSR representation
  * @return current time
  */
-uint32_t
+uint64_t
 olsr_clock_getNow(void) {
   return now_times;
-}
-
-/**
- * Returns the number of milliseconds until the timestamp will happen
- * @param absolute timestamp
- * @return milliseconds until event will happen, negative if it already
- *   happened.
- */
-int32_t
-olsr_clock_getRelative(uint32_t absolute)
-{
-  uint32_t diff;
-  if (absolute > now_times) {
-    diff = absolute - now_times;
-
-    /* overflow ? */
-    if (diff > (1u << 31)) {
-      return -(int32_t) (0xffffffff - diff);
-    }
-    return (int32_t) (diff);
-  }
-
-  diff = now_times - absolute;
-  /* overflow ? */
-  if (diff > (1u << 31)) {
-    return (int32_t) (0xffffffff - diff);
-  }
-  return -(int32_t) (diff);
-}
-
-/**
- * Checks if a timestamp has already happened
- * @param absolute timestamp
- * @return true if the event already happened, false otherwise
- */
-bool
-olsr_clock_isPast(uint32_t absolute)
-{
-  if (absolute > now_times) {
-    return absolute - now_times > (1u << 31);
-  }
-
-  return now_times - absolute <= (1u << 31);
 }
 
 /**
