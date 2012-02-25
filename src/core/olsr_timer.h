@@ -61,7 +61,7 @@ struct olsr_timer_info {
   struct list_entity node;
 
   /* name of this timer class */
-  char *name;
+  const char *name;
 
   /* callback function */
   timer_cb_func callback;
@@ -121,8 +121,7 @@ EXPORT int olsr_timer_init(void) __attribute__((warn_unused_result));
 EXPORT void olsr_timer_cleanup(void);
 EXPORT void olsr_timer_walk(void);
 
-EXPORT struct olsr_timer_info *olsr_timer_add(
-    const char *name, timer_cb_func callback, bool periodic) __attribute__((warn_unused_result));
+EXPORT void olsr_timer_add(struct olsr_timer_info *ti);
 EXPORT void olsr_timer_remove(struct olsr_timer_info *);
 
 EXPORT void olsr_timer_set(struct olsr_timer_entry **, uint32_t, uint8_t,

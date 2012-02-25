@@ -88,7 +88,11 @@ OLSR_SUBSYSTEM_STATE(_telnet_state);
 /* telnet session handling */
 static struct olsr_memcookie_info *_telnet_memcookie;
 static struct olsr_stream_managed _telnet_managed;
-static struct olsr_timer_info *_telnet_repeat_timerinfo;
+static struct olsr_timer_info _telnet_repeat_timerinfo = {
+  .name = "txt repeat timer",
+  .callback = _cb_telnet_repeat_timer,
+  .periodic = true,
+};
 
 struct avl_tree telnet_cmd_tree;
 
@@ -109,11 +113,7 @@ olsr_telnet_init(void) {
     return -1;
   }
 
-  _telnet_repeat_timerinfo = olsr_timer_add("txt repeat timer", _cb_telnet_repeat_timer, true);
-  if (_telnet_repeat_timerinfo == NULL) {
-    olsr_subsystem_cleanup(&_telnet_state);
-    return -1;
-  }
+  olsr_timer_add(&_telnet_repeat_timerinfo );
 
   cfg_schema_add_section(olsr_cfg_get_schema(), &telnet_section,
       telnet_entries, ARRAYSIZE(telnet_entries));
@@ -640,7 +640,7 @@ _cb_telnet_repeat(struct olsr_telnet_data *data) {
 
   interval = atoi(data->parameter);
 
-  timer = olsr_timer_start(interval * 1000, 0, data, _telnet_repeat_timerinfo);
+  timer = olsr_timer_start(interval * 1000, 0, data, &_telnet_repeat_timerinfo);
   data->stop_handler = _cb_telnet_repeat_stophandler;
   data->stop_data[0] = timer;
   data->stop_data[1] = strdup(ptr);

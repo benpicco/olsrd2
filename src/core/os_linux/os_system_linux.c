@@ -107,7 +107,10 @@ static struct msghdr _netlink_send_msg = {
 };
 
 /* netlink timeout handling */
-static struct olsr_timer_info *_netlink_timer;
+static struct olsr_timer_info _netlink_timer= {
+  .name = "rtnetlink feedback timer",
+  .callback = _cb_handle_netlink_timerout,
+};
 
 /* built in rtnetlink multicast receiver */
 static struct os_system_netlink _rtnetlink_receiver;
@@ -124,27 +127,22 @@ os_system_init(void) {
     return 0;
   }
 
-  if ((_netlink_timer =
-      olsr_timer_add("rtnetlink feedback timer", _cb_handle_netlink_timerout, false)) == NULL) {
-    OLSR_WARN(LOG_OS_SYSTEM, "Cannot allocate timer class for netlink timeout");
-    return -1;
-  }
-
   _ioctl_fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (_ioctl_fd == -1) {
     OLSR_WARN(LOG_OS_SYSTEM, "Cannot open ioctl socket: %s (%d)",
         strerror(errno), errno);
-    olsr_timer_remove(_netlink_timer);
     return -1;
   }
 
   if (os_system_netlink_add(&_rtnetlink_receiver, NETLINK_ROUTE,
       RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR)) {
-    olsr_timer_remove(_netlink_timer);
     close(_ioctl_fd);
     return -1;
   }
   _rtnetlink_receiver.cb_message = _handle_rtnetlink;
+
+  olsr_timer_add(&_netlink_timer);
+
   olsr_subsystem_init(&_os_system_state);
   return 0;
 }
@@ -157,8 +155,8 @@ os_system_cleanup(void) {
   if (olsr_subsystem_cleanup(&_os_system_state))
     return;
 
+  olsr_timer_remove(&_netlink_timer);
   os_system_netlink_remove(&_rtnetlink_receiver);
-  olsr_timer_remove(_netlink_timer);
   close(_ioctl_fd);
 }
 
@@ -359,7 +357,7 @@ _flush_netlink_buffer(struct os_system_netlink *nl) {
   ssize_t ret;
 
   /* start feedback timer */
-  olsr_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT*10, 0, nl, _netlink_timer);
+  olsr_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT, 0, nl, &_netlink_timer);
 
   /* send outgoing message */
   _netlink_send_iov[0].iov_base = abuf_getptr(&nl->out);

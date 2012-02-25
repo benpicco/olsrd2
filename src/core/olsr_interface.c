@@ -34,7 +34,10 @@ struct avl_tree olsr_interface_tree;
 OLSR_SUBSYSTEM_STATE(_interface_state);
 
 static struct list_entity _interface_listener;
-static struct olsr_timer_info *_change_timer_info;
+static struct olsr_timer_info _change_timer_info = {
+  .name = "Interface change",
+  .callback = _cb_change_handler,
+};
 
 /**
  * Initialize interface subsystem
@@ -45,11 +48,7 @@ olsr_interface_init(void) {
   if (olsr_subsystem_is_initialized(&_interface_state))
     return 0;
 
-  _change_timer_info = olsr_timer_add(
-      "Interface change", _cb_change_handler, false);
-  if (_change_timer_info == NULL) {
-    return -1;
-  }
+  olsr_timer_add(&_change_timer_info);
 
   avl_init(&olsr_interface_tree, avl_comp_strcasecmp, false, NULL);
   list_init_head(&_interface_listener);
@@ -72,7 +71,7 @@ olsr_interface_cleanup(void) {
     olsr_interface_remove_listener(listener);
   }
 
-  olsr_timer_remove(_change_timer_info);
+  olsr_timer_remove(&_change_timer_info);
 }
 
 /**
@@ -252,5 +251,5 @@ _cb_change_handler(void *ptr) {
 static void
 _trigger_change_timer(struct olsr_interface *interf) {
   olsr_timer_set(&interf->change_timer,
-      OLSR_INTERFACE_CHANGE_INTERVAL, 0, interf, _change_timer_info);
+      OLSR_INTERFACE_CHANGE_INTERVAL, 0, interf, &_change_timer_info);
 }

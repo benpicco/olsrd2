@@ -59,15 +59,6 @@
 #include "olsr.h"
 #include "olsr_stream_socket.h"
 
-struct list_entity olsr_stream_head;
-
-/* server socket */
-static struct olsr_memcookie_info *connection_cookie;
-static struct olsr_timer_info *connection_timeout;
-
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_stream_state);
-
 static int _apply_managed_socket(struct olsr_stream_managed *managed,
     struct olsr_stream_socket *stream, struct netaddr *bindto, uint16_t port);
 static void _cb_parse_request(int fd, void *data, bool, bool);
@@ -76,6 +67,19 @@ static struct olsr_stream_session *_create_session(
 static void _cb_parse_connection(int fd, void *data, bool r,bool w);
 
 static void _cb_timeout_handler(void *);
+
+/* list of olsr stream sockets */
+struct list_entity olsr_stream_head;
+
+/* server socket */
+static struct olsr_memcookie_info *connection_cookie;
+static struct olsr_timer_info connection_timeout = {
+  .name = "stream socket timout",
+  .callback = _cb_timeout_handler,
+};
+
+/* remember if initialized or not */
+OLSR_SUBSYSTEM_STATE(_stream_state);
 
 /**
  * Initialize the stream socket handlers
@@ -93,13 +97,7 @@ olsr_stream_init(void) {
     return -1;
   }
 
-  connection_timeout = olsr_timer_add("stream socket timout",
-      &_cb_timeout_handler, false);
-  if (connection_timeout == NULL) {
-    OLSR_WARN_OOM(LOG_SOCKET_STREAM);
-    olsr_memcookie_remove(connection_cookie);
-    return -1;
-  }
+  olsr_timer_add(&connection_timeout);
 
   list_init_head(&olsr_stream_head);
   olsr_subsystem_init(&_stream_state);
@@ -123,7 +121,7 @@ olsr_stream_cleanup(void) {
   }
 
   olsr_memcookie_remove(connection_cookie);
-  olsr_timer_remove(connection_timeout);
+  olsr_timer_remove(&connection_timeout);
 }
 
 /**
@@ -294,7 +292,7 @@ connect_to_error:
  */
 void
 olsr_stream_set_timeout(struct olsr_stream_session *con, uint32_t timeout) {
-  olsr_timer_set(&con->timeout, timeout, 0, con, connection_timeout);
+  olsr_timer_set(&con->timeout, timeout, 0, con, &connection_timeout);
 }
 
 /**
@@ -541,7 +539,7 @@ _create_session(struct olsr_stream_socket *stream_socket,
 
   if (stream_socket->config.session_timeout) {
     session->timeout = olsr_timer_start(
-        stream_socket->config.session_timeout, 0, session, connection_timeout);
+        stream_socket->config.session_timeout, 0, session, &connection_timeout);
   }
 
   if (stream_socket->config.init) {

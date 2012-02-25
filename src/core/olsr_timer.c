@@ -59,7 +59,6 @@ static uint32_t timer_last_run;        /* remember the last timeslot walk */
 /* Memory cookie for the timer manager */
 struct list_entity timerinfo_list;
 static struct olsr_memcookie_info *timer_mem_cookie = NULL;
-static struct olsr_memcookie_info *timerinfo_cookie = NULL;
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_timer_state);
@@ -99,11 +98,6 @@ olsr_timer_init(void)
   }
 
   list_init_head(&timerinfo_list);
-  timerinfo_cookie = olsr_memcookie_add("timerinfo", sizeof(struct olsr_timer_info));
-  if (timerinfo_cookie == NULL) {
-    olsr_memcookie_remove(timer_mem_cookie);
-    return -1;
-  }
 
   olsr_subsystem_init(&_timer_state);
   return 0;
@@ -136,38 +130,20 @@ olsr_timer_cleanup(void)
 
   /* free all timerinfos */
   OLSR_FOR_ALL_TIMERS(ti, iterator) {
-    list_remove(&ti->node);
-    free(ti->name);
-    olsr_memcookie_free(timerinfo_cookie, ti);
+    olsr_timer_remove(ti);
   }
 
   /* release memory cookie for timers */
-  olsr_memcookie_remove(timerinfo_cookie);
+  olsr_memcookie_remove(timer_mem_cookie);
 }
 
-// TODO: remove malloc by using pointer to initialized timer_info?
 /**
  * Add a new group of timers to the scheduler
- * @param name name of timer
- * @param callback timer event function
- * @param periodic true if the timer is periodic, false otherwise
- * @return new timer info
+ * @param ti pointer to uninitialized timer info
  */
-struct olsr_timer_info *
-olsr_timer_add(const char *name, timer_cb_func callback, bool periodic) {
-  struct olsr_timer_info *ti;
-
-  ti = olsr_memcookie_malloc(timerinfo_cookie);
-  if (ti == NULL) {
-    OLSR_WARN_OOM(LOG_MEMCOOKIE);
-    return NULL;
-  }
-  ti->name = strdup(name);
-  ti->callback = callback;
-  ti->periodic = periodic;
-
+void
+olsr_timer_add(struct olsr_timer_info *ti) {
   list_add_tail(&timerinfo_list, &ti->node);
-  return ti;
 }
 
 /**
@@ -190,9 +166,6 @@ olsr_timer_remove(struct olsr_timer_info *info) {
   }
 
   list_remove(&info->node);
-  free (info->name);
-
-  olsr_memcookie_free(timerinfo_cookie, info);
 }
 
 /**
