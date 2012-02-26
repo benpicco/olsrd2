@@ -115,8 +115,8 @@ olsr_clock_getNow(void) {
  * @return pointer to time string
  */
 char *
-olsr_clock_to_string(struct millitxt_buf *buffer, uint32_t t) {
-  sprintf(buffer->buf, "%u.%03u", t/1000, t%1000);
+olsr_clock_to_string(struct millitxt_buf *buffer, uint64_t t) {
+  sprintf(buffer->buf, "%"PRIu64".%03"PRIu64, t/1000, t%1000);
   return buffer->buf;
 }
 
@@ -186,13 +186,14 @@ olsr_clock_getWallclockString(struct timeval_buf *buf)
  * @return buffer to a formatted system time string.
  */
 const char *
-olsr_clock_toClockString(struct timeval_buf *buf, uint32_t clk)
+olsr_clock_toClockString(struct timeval_buf *buf, uint64_t clk)
 {
-  unsigned int msec = clk % MSEC_PER_SEC;
-  unsigned int sec = clk / MSEC_PER_SEC;
+  uint64_t msec = clk % MSEC_PER_SEC;
+  uint64_t sec = clk / MSEC_PER_SEC;
 
   snprintf(buf->buf, sizeof(buf),
-      "%02u:%02u:%02u.%03u", sec / 3600, (sec % 3600) / 60, (sec % 60), msec);
+      "%02"PRIu64":%02"PRIu64":%02"PRIu64".%03"PRIu64"",
+      sec / 3600, (sec % 3600) / 60, (sec % 60), msec);
 
   return buf->buf;
 }
