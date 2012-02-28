@@ -118,7 +118,9 @@ static struct olsr_timer_info _netlink_timer= {
 static struct os_system_netlink _rtnetlink_receiver;
 
 /* type of clock source to be used */
+#if defined(CLOCK_MONOTONIC_RAW) || defined (CLOCK_MONOTONIC)
 static int _clock_source = 0;
+#endif
 
 OLSR_SUBSYSTEM_STATE(_os_system_state);
 
@@ -186,8 +188,10 @@ os_system_cleanup(void) {
 int
 os_system_gettime64(uint64_t *t64) {
   static time_t offset = 0, last_sec = 0;
+  struct timeval tv;
   int error;
 
+#if defined(CLOCK_MONOTONIC_RAW) || defined (CLOCK_MONOTONIC)
   if (_clock_source) {
     struct timespec ts;
 
@@ -198,23 +202,20 @@ os_system_gettime64(uint64_t *t64) {
     *t64 = 1000ull * ts.tv_sec + ts.tv_nsec / 1000000ull;
     return 0;
   }
-  else {
-    struct timeval tv;
-
-    if ((error = gettimeofday(&tv, NULL)) != 0) {
-      return error;
-    }
-
-    tv.tv_sec += offset;
-    if (tv.tv_sec < last_sec || tv.tv_sec > last_sec + 60) {
-      offset += last_sec - tv.tv_sec;
-      tv.tv_sec = last_sec;
-    }
-    last_sec = tv.tv_sec;
-
-    *t64 = 1000ull * tv.tv_sec + tv.tv_usec/ 1000ull;
-    return 0;
+#endif
+  if ((error = gettimeofday(&tv, NULL)) != 0) {
+    return error;
   }
+
+  tv.tv_sec += offset;
+  if (tv.tv_sec < last_sec || tv.tv_sec > last_sec + 60) {
+    offset += last_sec - tv.tv_sec;
+    tv.tv_sec = last_sec;
+  }
+  last_sec = tv.tv_sec;
+
+  *t64 = 1000ull * tv.tv_sec + tv.tv_usec/ 1000ull;
+  return 0;
 }
 
 /**
