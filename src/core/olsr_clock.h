@@ -56,7 +56,7 @@ struct millitxt_buf {
 
 /* buffer for displaying absolute timestamps */
 struct timeval_buf {
-  char buf[sizeof("00:00:00.000000")];
+  char buf[sizeof("00:00:00.000")];
 };
 
 EXPORT int olsr_clock_init(void) __attribute__((warn_unused_result));
@@ -72,7 +72,6 @@ EXPORT char *olsr_clock_to_string(struct millitxt_buf *buffer, uint64_t t);
 EXPORT uint32_t olsr_clock_parse_string(char *txt);
 
 EXPORT const char *olsr_clock_toClockString(struct timeval_buf *, uint64_t);
-EXPORT const char *olsr_clock_getWallclockString(struct timeval_buf *);
 
 /**
  * Returns a timestamp s seconds in the future

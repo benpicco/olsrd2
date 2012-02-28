@@ -370,14 +370,10 @@ olsr_timer_walk(void)
 
       /* Ready to fire ? */
       if (olsr_clock_isPast(timer->timer_clock)) {
-#if !defined(REMOVE_LOG_DEBUG)
-  struct timeval_buf timebuf;
-#endif
         OLSR_DEBUG(LOG_TIMER, "TIMER: fire %s timer %p, ctx %p, "
-                   "at clocktick %" PRIu64 " (%s)\n",
+                   "at clocktick %" PRIu64 "\n",
                    timer->timer_info->name,
-                   timer, timer->timer_cb_context, _timer_last_run,
-                   olsr_clock_getWallclockString(&timebuf));
+                   timer, timer->timer_cb_context, _timer_last_run);
 
         /* This timer is expired, call into the provided callback function */
         timer->timer_in_callback = true;

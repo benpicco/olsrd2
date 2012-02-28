@@ -50,10 +50,11 @@
 #include "olsr_clock.h"
 #include "olsr.h"
 
-static int olsr_get_timezone(void);
+/* absolute monotonic clock measured in milliseconds compared to start time */
+static uint64_t now_times;
 
-/* Timer data */
-static uint64_t now_times;             /* relative time compared to startup (in milliseconds */
+/* arbitrary timestamp that represents the time olsr_clock_init() was called */
+static uint64_t start_time;
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_clock_state);
@@ -67,7 +68,8 @@ olsr_clock_init(void) {
   if (olsr_subsystem_is_initialized(&_clock_state))
     return 0;
 
-  if (olsr_clock_update()) {
+  if (os_system_gettime64(&start_time)) {
+    OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
     return -1;
   }
 
@@ -90,11 +92,13 @@ olsr_clock_cleanup(void) {
 int
 olsr_clock_update(void)
 {
-
-  if (os_system_gettime64(&now_times)) {
+  uint64_t now;
+  if (os_system_gettime64(&now)) {
     OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
     return -1;
   }
+
+  now_times = now - start_time;
   return 0;
 }
 
@@ -153,30 +157,6 @@ uint32_t olsr_clock_parse_string(char *txt) {
   return t;
 }
 
-
-/**
- * Format an absolute wallclock system time string.
- * May be called upto 4 times in a single printf() statement.
- * Displays microsecond resolution.
- * @param buf pointer to timeval buffer
- * @return buffer to a formatted system time string.
- */
-const char *
-olsr_clock_getWallclockString(struct timeval_buf *buf)
-{
-  struct timeval now;
-  int sec = 0, usec = 0;
-
-  if (os_system_gettimeofday(&now) == 0) {
-    sec = (int)now.tv_sec + olsr_get_timezone();
-    usec = (int)now.tv_usec;
-  }
-  snprintf(buf->buf, sizeof(buf), "%02d:%02d:%02d.%06d",
-      (sec % 86400) / 3600, (sec % 3600) / 60, sec % 60, usec);
-
-  return buf->buf;
-}
-
 /**
  * Format an relative non-wallclock system time string.
  * Displays millisecond resolution.
@@ -196,48 +176,4 @@ olsr_clock_toClockString(struct timeval_buf *buf, uint64_t clk)
       sec / 3600, (sec % 3600) / 60, (sec % 60), msec);
 
   return buf->buf;
-}
-
-/**
- * Use gmtime() and localtime() to keep things simple.
- * taken and modified from www.tcpdump.org.
- *
- * @return difference between gmt and local time in seconds.
- */
-static int
-olsr_get_timezone(void)
-{
-#define OLSR_TIMEZONE_UNINITIALIZED -1
-  static int time_diff = OLSR_TIMEZONE_UNINITIALIZED;
-  if (time_diff == OLSR_TIMEZONE_UNINITIALIZED) {
-    int dir;
-    struct timeval tv;
-    time_t t;
-    struct tm gmt;
-    struct tm *loc;
-
-    if (os_system_gettimeofday(&tv)) {
-      OLSR_WARN(LOG_TIMER, "Cannot read internal clock: %s (%d)",
-          strerror(errno), errno);
-      return 0;
-    }
-
-    t = tv.tv_sec;
-    gmt = *gmtime(&t);
-    loc = localtime(&t);
-    time_diff = (loc->tm_hour - gmt.tm_hour) * 60 * 60 + (loc->tm_min - gmt.tm_min) * 60;
-
-    /*
-     * If the year or julian day is different, we span 00:00 GMT
-     * and must add or subtract a day. Check the year first to
-     * avoid problems when the julian day wraps.
-     */
-    dir = loc->tm_year - gmt.tm_year;
-    if (!dir) {
-      dir = loc->tm_yday - gmt.tm_yday;
-    }
-
-    time_diff += dir * 24 * 60 * 60;
-  }
-  return time_diff;
 }

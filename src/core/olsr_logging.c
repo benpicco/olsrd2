@@ -277,6 +277,26 @@ olsr_log_updatemask(void)
   }
 }
 
+const char *
+olsr_log_get_walltime(void) {
+  static char buf[sizeof("00:00:00.000")];
+  struct timeval now;
+  struct tm *tm;
+
+  if (os_system_gettimeofday(&now)) {
+    return NULL;
+  }
+
+  tm = localtime(&now.tv_sec);
+  if (tm == NULL) {
+    return NULL;
+  }
+  snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%03ld",
+      tm->tm_hour, tm->tm_min, tm->tm_sec, now.tv_usec / 1000);
+
+  return buf;
+}
+
 /**
  * This function should not be called directly, use the macros OLSR_{DEBUG,INFO,WARN} !
  *
@@ -309,31 +329,15 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   /* generate log string */
   abuf_clear(&_logbuffer);
   if (!no_header) {
-    struct tm *tm_ptr;
-    struct timeval timeval;
-
-    /* calculate local time */
-    if (os_system_gettimeofday(&timeval)) {
-      p1 = abuf_appendf(&_logbuffer, "gettimeofday-error ");
-    }
-    else {
-      /* there is no localtime_r in win32 */
-      tm_ptr = localtime((time_t *) & timeval.tv_sec);
-
-      p1 = abuf_appendf(&_logbuffer, "%d:%02d:%02d.%03ld ",
-          tm_ptr->tm_hour, tm_ptr->tm_min, tm_ptr->tm_sec,
-          (long)(timeval.tv_usec / 1000));
-    }
-
+    p1 = abuf_appendf(&_logbuffer, "%s ", olsr_log_get_walltime());
     p2 = abuf_appendf(&_logbuffer, "%s(%s) %s %d: ",
-          LOG_SEVERITY_NAMES[severity], LOG_SOURCE_NAMES[source], file, line);
+        LOG_SEVERITY_NAMES[severity], LOG_SOURCE_NAMES[source], file, line);
   }
   p3 = abuf_vappendf(&_logbuffer, format, ap);
 
   /* remove \n at the end of the line if necessary */
   if (abuf_getptr(&_logbuffer)[p1 + p2 + p3 - 1] == '\n') {
     abuf_getptr(&_logbuffer)[p1 + p2 + p3 - 1] = 0;
-    p3--;
   }
 
   param.severity = severity;

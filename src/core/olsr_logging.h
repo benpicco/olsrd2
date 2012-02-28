@@ -187,6 +187,8 @@ EXPORT enum log_source olsr_log_get_sourcecount(void);
 EXPORT const struct olsr_builddata *olsr_log_get_builddata(void);
 EXPORT void olsr_log_printversion(struct autobuf *abuf);
 
+EXPORT const char *olsr_log_get_walltime(void);
+
 EXPORT void olsr_log(enum log_severity, enum log_source, bool, const char *, int, const char *, ...)
   __attribute__ ((format(printf, 6, 7)));
 
