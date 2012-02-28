@@ -65,9 +65,6 @@ EXPORT int olsr_clock_update(void) __attribute__((warn_unused_result));
 
 EXPORT uint64_t olsr_clock_getNow(void);
 
-EXPORT uint32_t olsr_clock_decode_olsrv1(uint8_t);
-EXPORT uint8_t olsr_clock_encode_olsrv1(uint64_t);
-
 EXPORT char *olsr_clock_to_string(struct millitxt_buf *buffer, uint64_t t);
 EXPORT uint32_t olsr_clock_parse_string(char *txt);
 
