@@ -58,7 +58,10 @@ static uint64_t _timer_last_run;        /* remember the last timeslot walk */
 
 /* Memory cookie for the timer manager */
 struct list_entity timerinfo_list;
-static struct olsr_memcookie_info *_timer_mem_cookie = NULL;
+static struct olsr_memcookie_info _timer_mem_cookie = {
+  .name = "timer entry",
+  .size = sizeof(struct olsr_timer_entry),
+};
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_timer_state);
@@ -70,13 +73,13 @@ static uint64_t calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int 
  * Initialize timer scheduler subsystem
  * @return -1 if an error happened, 0 otherwise
  */
-int
+void
 olsr_timer_init(void)
 {
   int idx;
 
-  if (olsr_subsystem_is_initialized(&_timer_state))
-    return 0;
+  if (olsr_subsystem_init(&_timer_state))
+    return;
 
   OLSR_INFO(LOG_SOCKET, "Initializing scheduler.\n");
 
@@ -90,17 +93,10 @@ olsr_timer_init(void)
    */
   _timer_last_run = olsr_clock_getNow();
 
-  /* Allocate a cookie for the block based memory manager. */
-  _timer_mem_cookie = olsr_memcookie_add("timer_entry", sizeof(struct olsr_timer_entry));
-  if (_timer_mem_cookie == NULL) {
-    OLSR_WARN_OOM(LOG_SOCKET);
-    return -1;
-  }
+  /* initialize a cookie for the block based memory manager. */
+  olsr_memcookie_add(&_timer_mem_cookie);
 
   list_init_head(&timerinfo_list);
-
-  olsr_subsystem_init(&_timer_state);
-  return 0;
 }
 
 /**
@@ -134,7 +130,7 @@ olsr_timer_cleanup(void)
   }
 
   /* release memory cookie for timers */
-  olsr_memcookie_remove(_timer_mem_cookie);
+  olsr_memcookie_remove(&_timer_mem_cookie);
 }
 
 /**
@@ -189,7 +185,7 @@ olsr_timer_start(uint64_t rel_time,
   assert(rel_time);
   assert(jitter_pct <= 100);
 
-  timer = olsr_memcookie_malloc(_timer_mem_cookie);
+  timer = olsr_memcookie_malloc(&_timer_mem_cookie);
 
   /*
    * Compute random numbers only once.
@@ -251,7 +247,7 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
   timer->timer_info->changes++;
 
   if (!timer->timer_in_callback) {
-    olsr_memcookie_free(_timer_mem_cookie, timer);
+    olsr_memcookie_free(&_timer_mem_cookie, timer);
   }
 }
 
@@ -331,7 +327,7 @@ olsr_timer_set(struct olsr_timer_entry **timer_ptr,
 void
 olsr_timer_walk(void)
 {
-  int total_timers_walked = 0, total_timers_fired = 0;
+  int timers_walked = 0, timers_fired = 0;
   int wheel_slot_walks = 0;
 
   /*
@@ -341,8 +337,6 @@ olsr_timer_walk(void)
    */
   while ((_timer_last_run <= olsr_clock_getNow()) && (wheel_slot_walks < TIMER_WHEEL_SLOTS)) {
     struct list_entity tmp_head_node;
-    /* keep some statistics */
-    unsigned int timers_walked = 0, timers_fired = 0;
 
     /* Get the hash slot for this clocktick */
     struct list_entity *timer_head_node;
@@ -398,7 +392,7 @@ olsr_timer_walk(void)
         }
         else {
           /* free memory */
-          olsr_memcookie_free(_timer_mem_cookie, timer);
+          olsr_memcookie_free(&_timer_mem_cookie, timer);
         }
 
         timers_fired++;
@@ -410,18 +404,15 @@ olsr_timer_walk(void)
      */
     list_merge(timer_head_node, &tmp_head_node);
 
-    /* keep some statistics */
-    total_timers_walked += timers_walked;
-    total_timers_fired += timers_fired;
-
     /* Increment the time slot and wheel slot walk iteration */
     _timer_last_run++;
     wheel_slot_walks++;
   }
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: processed %4u/%d clockwheel slots, "
-             "timers walked %4u/%u, timers fired %u\n",
-             wheel_slot_walks, TIMER_WHEEL_SLOTS, total_timers_walked, _timer_mem_cookie->ci_usage, total_timers_fired);
+             "timers walked %u, timers fired %u\n",
+             wheel_slot_walks, TIMER_WHEEL_SLOTS,
+             timers_walked, timers_fired);
 
   /*
    * If the scheduler has slipped and we have walked all wheel slots,

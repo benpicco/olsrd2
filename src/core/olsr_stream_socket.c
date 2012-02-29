@@ -72,7 +72,11 @@ static void _cb_timeout_handler(void *);
 struct list_entity olsr_stream_head;
 
 /* server socket */
-static struct olsr_memcookie_info *connection_cookie;
+static struct olsr_memcookie_info connection_cookie = {
+  .name = "stream socket connection",
+  .size = sizeof(struct olsr_stream_session)
+};
+
 static struct olsr_timer_info connection_timeout = {
   .name = "stream socket timout",
   .callback = _cb_timeout_handler,
@@ -83,25 +87,15 @@ OLSR_SUBSYSTEM_STATE(_stream_state);
 
 /**
  * Initialize the stream socket handlers
- * @return -1 if an error happened, 0 otherwise.
  */
-int
+void
 olsr_stream_init(void) {
-  if (olsr_subsystem_is_initialized(&_stream_state))
-    return 0;
+  if (olsr_subsystem_init(&_stream_state))
+    return;
 
-  connection_cookie = olsr_memcookie_add("stream socket connections",
-      sizeof(struct olsr_stream_session));
-  if (connection_cookie == NULL) {
-    OLSR_WARN_OOM(LOG_SOCKET_STREAM);
-    return -1;
-  }
-
+  olsr_memcookie_add(&connection_cookie);
   olsr_timer_add(&connection_timeout);
-
   list_init_head(&olsr_stream_head);
-  olsr_subsystem_init(&_stream_state);
-  return 0;
 }
 
 /**
@@ -120,7 +114,7 @@ olsr_stream_cleanup(void) {
     olsr_stream_remove(comport, true);
   }
 
-  olsr_memcookie_remove(connection_cookie);
+  olsr_memcookie_remove(&connection_cookie);
   olsr_timer_remove(&connection_timeout);
 }
 
@@ -175,7 +169,7 @@ olsr_stream_add(struct olsr_stream_socket *stream_socket,
   memcpy(&stream_socket->local_socket, local, sizeof(stream_socket->local_socket));
 
   if (stream_socket->config.memcookie == NULL) {
-    stream_socket->config.memcookie = connection_cookie;
+    stream_socket->config.memcookie = &connection_cookie;
   }
   if (stream_socket->config.allowed_sessions == 0) {
     stream_socket->config.allowed_sessions = 10;
@@ -427,7 +421,7 @@ _apply_managed_socket(struct olsr_stream_managed *managed,
   /* copy configuration */
   memcpy(&stream->config, &managed->config, sizeof(stream->config));
   if (stream->config.memcookie == NULL) {
-    stream->config.memcookie = connection_cookie;
+    stream->config.memcookie = &connection_cookie;
   }
   return 0;
 }

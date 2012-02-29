@@ -117,7 +117,7 @@ struct olsr_timer_entry {
 EXPORT extern struct list_entity timerinfo_list;
 #define OLSR_FOR_ALL_TIMERS(ti, iterator) list_for_each_element_safe(&timerinfo_list, ti, node, iterator)
 
-EXPORT int olsr_timer_init(void) __attribute__((warn_unused_result));
+EXPORT void olsr_timer_init(void);
 EXPORT void olsr_timer_cleanup(void);
 EXPORT void olsr_timer_walk(void);
 

@@ -40,70 +40,27 @@
  */
 
 #include <assert.h>
-#include <errno.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "common/list.h"
-#include "common/avl.h"
-#include "common/avl_comp.h"
 #include "olsr_memcookie.h"
 #include "olsr_logging.h"
 #include "olsr.h"
 
-struct avl_tree olsr_cookie_tree;
+struct list_entity olsr_cookies;
 
 /* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(olsr_memcookie_state);
-
-/**
- * Align a byte size correctly to "two size_t" units
- * @param size number of bytes for an unaligned block
- * @return number of bytes including padding for alignment
- */
-static inline size_t
-_calc_aligned_size(size_t size) {
-  static const size_t add = sizeof(size_t) * 2 - 1;
-  static const size_t mask = ~(sizeof(size_t)*2 - 1);
-
-  return (size + add) & mask;
-}
-
-/**
- * Increment usage state for a given cookie.
- * @param ci pointer to memcookie info
- */
-static inline void
-_usage_incr(struct olsr_memcookie_info *ci)
-{
-  ci->ci_usage++;
-  ci->ci_changes++;
-}
-
-/**
- * Decrement usage state for a given cookie.
- * @param ci pointer to memcookie info
- */
-static inline void
-_usage_decr(struct olsr_memcookie_info *ci)
-{
-  ci->ci_usage--;
-  ci->ci_changes++;
-}
+OLSR_SUBSYSTEM_STATE(_memcookie_state);
 
 /**
  * Initialize the memory cookie system
  */
 void
 olsr_memcookie_init(void) {
-  /* check size of memory prefix */
-  assert (sizeof(struct olsr_memory_prefix)
-      == _calc_aligned_size(sizeof(struct olsr_memory_prefix)));
-
-  if (olsr_subsystem_init(&olsr_memcookie_state))
+  if (olsr_subsystem_init(&_memcookie_state))
     return;
 
-  avl_init(&olsr_cookie_tree, &avl_comp_strcasecmp, false, NULL);
+  list_init_head(&olsr_cookies);
 }
 
 /**
@@ -114,7 +71,7 @@ olsr_memcookie_cleanup(void)
 {
   struct olsr_memcookie_info *info, *iterator;
 
-  if (olsr_subsystem_cleanup(&olsr_memcookie_state))
+  if (olsr_subsystem_cleanup(&_memcookie_state))
     return;
 
   /*
@@ -127,70 +84,39 @@ olsr_memcookie_cleanup(void)
 
 /**
  * Allocate a new memcookie.
- * @param cookie_name id of the cookie
- * @param size number of bytes to allocate for each cookie
- * @return memcookie_info pointer
+ * @param ci initialized memcookie
  */
-struct olsr_memcookie_info *
-olsr_memcookie_add(const char *cookie_name, size_t size)
+void
+olsr_memcookie_add(struct olsr_memcookie_info *ci)
 {
-  struct olsr_memcookie_info *ci;
-
-  assert (cookie_name);
-  ci = calloc(sizeof(struct olsr_memcookie_info), 1);
-  if (ci == NULL) {
-    return NULL;
-  }
-
-  /* Now populate the cookie info */
-  ci->ci_name = cookie_name;
-  ci->ci_node.key = ci->ci_name;
-  ci->ci_size = size;
-  ci->ci_custom_offset = sizeof(struct olsr_memory_prefix) + _calc_aligned_size(size);
-  ci->ci_min_free_count = COOKIE_FREE_LIST_THRESHOLD;
-
-  /* no custom data at this point */
-  ci->ci_total_size = ci->ci_custom_offset;
+  assert (ci->name);
+  assert (ci->size > 0);
 
   /* Init the free list */
-  list_init_head(&ci->ci_free_list);
-  list_init_head(&ci->ci_used_list);
-  list_init_head(&ci->ci_custom_list);
+  list_init_head(&ci->_free_list);
 
-  avl_insert(&olsr_cookie_tree, &ci->ci_node);
-  return ci;
+  list_add_tail(&olsr_cookies, &ci->_node);
 }
 
 /**
- * Delete a memcookie and all attached memory
+ * Delete a memcookie and all memory in the free list
  * @param ci pointer to memcookie
  */
 void
 olsr_memcookie_remove(struct olsr_memcookie_info *ci)
 {
-  struct olsr_memory_prefix *memory_entity, *iterator;
+  struct list_entity *item;
 
-  /* remove from tree */
-  avl_remove(&olsr_cookie_tree, &ci->ci_node);
-
-  /* Flush all the memory on the free list */
-  /*
-   * First make all items accessible,
-   * such that valgrind does not complain at shutdown.
-   */
+  /* remove memcookie from tree */
+  list_remove(&ci->_node);
 
   /* remove all free memory blocks */
-  OLSR_FOR_ALL_FREE_MEM(ci, memory_entity, iterator) {
-    free(memory_entity);
-  }
+  while (!list_is_empty(&ci->_free_list)) {
+    item = ci->_free_list.next;
 
-  /* free all used memory blocks */
-  OLSR_FOR_ALL_USED_MEM(ci, memory_entity, iterator) {
-    free(memory_entity->custom);
-    free(memory_entity);
+    list_remove(item);
+    free(item);
   }
-
-  free(ci);
 }
 
 /**
@@ -201,8 +127,8 @@ olsr_memcookie_remove(struct olsr_memcookie_info *ci)
 void *
 olsr_memcookie_malloc(struct olsr_memcookie_info *ci)
 {
-  struct olsr_memory_prefix *mem;
-  struct olsr_memcookie_custom *custom, *iterator;
+  struct list_entity *entity;
+  void *ptr;
 
 #if !defined REMOVE_LOG_DEBUG
   bool reuse = false;
@@ -211,52 +137,39 @@ olsr_memcookie_malloc(struct olsr_memcookie_info *ci)
   /*
    * Check first if we have reusable memory.
    */
-  if (list_is_empty(&ci->ci_free_list)) {
+  if (list_is_empty(&ci->_free_list)) {
     /*
      * No reusable memory block on the free_list.
      * Allocate a fresh one.
      */
-    mem = calloc(ci->ci_total_size, 1);
-    if (mem == NULL) {
+    ptr = calloc(1, ci->size);
+    if (ptr == NULL) {
       return NULL;
     }
+    ci->_allocated++;
   } else {
     /*
      * There is a memory block on the free list.
      * Carve it out of the list, and clean.
      */
-    mem = list_first_element(&ci->ci_free_list, mem, node);
-    list_remove(&mem->node);
+    entity = ci->_free_list.next;
+    list_remove(entity);
 
-    memset(mem, 0, ci->ci_total_size);
+    memset(entity, 0, ci->size);
 
-    ci->ci_free_list_usage--;
+    ci->_free_list_size--;
+    ci->_recycled++;
 #if !defined REMOVE_LOG_DEBUG
     reuse = true;
 #endif
   }
 
-  /* add to used list */
-  list_add_tail(&ci->ci_used_list, &mem->node);
-
-  /* handle custom initialization */
-  if (!list_is_empty(&ci->ci_custom_list)) {
-    mem->custom = ((uint8_t *)mem) + ci->ci_custom_offset;
-
-    /* call up custom init functions */
-    OLSR_FOR_ALL_CUSTOM_MEM(ci, custom, iterator) {
-      if (custom->init) {
-        custom->init(ci, mem + 1, mem->custom + custom->offset);
-      }
-    }
-  }
-
   /* Stats keeping */
-  _usage_incr(ci);
+  ci->_current_usage++;
 
-  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: alloc %s, %p, %lu bytes%s\n",
-             ci->ci_name, mem + 1, (unsigned long)ci->ci_size, reuse ? ", reuse" : "");
-  return mem + 1;
+  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: alloc %s, " PRINTF_SIZE_T_SPECIFIER " bytes%s\n",
+             ci->name, ci->size, reuse ? ", reuse" : "");
+  return ptr;
 }
 
 /**
@@ -267,217 +180,35 @@ olsr_memcookie_malloc(struct olsr_memcookie_info *ci)
 void
 olsr_memcookie_free(struct olsr_memcookie_info *ci, void *ptr)
 {
-  struct olsr_memory_prefix *mem;
+  struct list_entity *item;
 #if !defined REMOVE_LOG_DEBUG
   bool reuse = false;
 #endif
-
-  /* calculate pointer to memory prefix */
-  mem = ptr;
-  mem--;
-
-  /* remove from used_memory list */
-  list_remove(&mem->node);
 
   /*
    * Rather than freeing the memory right away, try to reuse at a later
    * point. Keep at least ten percent of the active used blocks or at least
    * ten blocks on the free list.
    */
-  if (mem->is_inline && ((ci->ci_free_list_usage < ci->ci_min_free_count)
-      || (ci->ci_free_list_usage < ci->ci_usage / COOKIE_FREE_LIST_THRESHOLD))) {
+  if (ci->_free_list_size < ci->min_free_count
+      || (ci->_free_list_size < ci->_current_usage / COOKIE_FREE_LIST_THRESHOLD)) {
+    item = ptr;
 
-    list_add_tail(&ci->ci_free_list, &mem->node);
+    list_add_tail(&ci->_free_list, item);
 
-    ci->ci_free_list_usage++;
+    ci->_free_list_size++;
 #if !defined REMOVE_LOG_DEBUG
     reuse = true;
 #endif
   } else {
 
     /* No interest in reusing memory. */
-    if (!mem->is_inline) {
-      free (mem->custom);
-    }
-    free(mem);
+    free(ptr);
   }
 
   /* Stats keeping */
-  _usage_decr(ci);
+  ci->_current_usage--;
 
-  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: free %s, %p, %lu bytes%s\n",
-             ci->ci_name, ptr, (unsigned long)ci->ci_total_size, reuse ? ", reuse" : "");
-}
-
-/**
- * Add a custom memory section to an existing memcookie.
- *
- * Calling this function will call the specified init() callback and
- * the move() callback of all existing custom extensions of this memcookie
- * for every existing piece of allocated memory of the memcookie.
- *
- * @param memcookie_name name of memory cookie to be extended
- * @param name name of custom addition for the memory cookie
- * @param size number of bytes needed for custom addition
- * @param init callback of the custom memcookie manager which is called every
- *   times a new memcookie instance is allocated. Parameters are the memcookie_info
- *   object, a pointer to the allocated memory and a pointer to the custom
- *   part of the memory object.
- * @param move callback of the custom memcookie manager which is called every
- *   times the memory of the custom extension changes (because of adding/removal of
- *   other custom extensions). Parameters are the memcookie_info object, a pointer to
- *   the allocated memory, a pointer to the old position of the custom extension and
- *   a pointer to the new custom extension.
- * @return custom memory cookie
- */
-struct olsr_memcookie_custom *
-olsr_memcookie_add_custom(const char *memcookie_name, const char *name, size_t size,
-    void (*init)(struct olsr_memcookie_info *, void *, void *),
-    void (*move)(struct olsr_memcookie_info *, void *, void *)) {
-  struct olsr_memcookie_info *ci;
-  struct olsr_memcookie_custom *custom_cookie;
-  struct olsr_memcookie_custom *custom = NULL, *custom_iterator;
-  struct olsr_memory_prefix *mem, *mem_iterator;
-  size_t old_total_size, new_total_size;
-
-  ci = avl_find_element(&olsr_cookie_tree, memcookie_name, ci, ci_node);
-  if (ci == NULL) {
-    OLSR_WARN(LOG_MEMCOOKIE, "Memory cookie '%s' does not exist, cannot add custom block '%s'\n",
-        memcookie_name, name);
-    return NULL;
-  }
-
-  custom_cookie = calloc(sizeof(struct olsr_memcookie_custom), 1);
-  if (custom_cookie == NULL) {
-    return NULL;
-  }
-  custom_cookie->name = name;
-  custom_cookie->size = _calc_aligned_size(size);
-  custom_cookie->init = init;
-  custom_cookie->move = move;
-
-  /* recalculate custom data block size */
-  old_total_size = ci->ci_total_size - ci->ci_custom_offset;
-  new_total_size = old_total_size + custom_cookie->size;
-
-  custom_cookie->offset = old_total_size;
-  ci->ci_total_size += custom_cookie->size;
-
-  /* reallocate custom data blocks on used memory blocks*/
-  OLSR_FOR_ALL_USED_MEM(ci, mem, mem_iterator) {
-    uint8_t *new_custom;
-
-    new_custom = calloc(new_total_size, 1);
-    if (new_custom == NULL) {
-      OLSR_WARN_OOM(LOG_MEMCOOKIE);
-      return NULL;
-    }
-
-    /* copy old data */
-    if (old_total_size > 0) {
-      memmove(new_custom, mem->custom, old_total_size);
-    }
-
-    mem->is_inline = false;
-    mem->custom = new_custom;
-
-    /* call up necessary initialization */
-    if (custom->init) {
-      custom->init(ci, mem + 1, new_custom + old_total_size);
-    }
-
-    /* inform the custom cookie managers that their memory has moved */
-    OLSR_FOR_ALL_CUSTOM_MEM(ci, custom, custom_iterator) {
-      if (custom->move) {
-        custom->move(ci, mem+1, new_custom + custom->offset);
-      }
-    }
-  }
-
-  /* remove all free data blocks, they have the wrong size */
-  OLSR_FOR_ALL_FREE_MEM(ci, mem, mem_iterator) {
-    list_remove(&mem->node);
-    free(mem);
-  }
-  ci->ci_free_list_usage = 0;
-
-  /* add the custom data object to the list */
-  list_add_tail(&ci->ci_custom_list, &custom_cookie->node);
-  return custom_cookie;
-}
-
-/**
- * Remove a custom addition to a memcookie
- * @param memcookie_name name of memcookie
- * @param custom pointer to custom memcookie
- */
-void
-olsr_memcookie_remove_custom(const char*memcookie_name, struct olsr_memcookie_custom *custom) {
-  struct olsr_memcookie_info *ci;
-  struct olsr_memory_prefix *mem, *mem_iterator;
-  struct olsr_memcookie_custom *c_ptr, *c_iterator;
-  size_t prefix_block, suffix_block;
-  bool match;
-
-  ci = avl_find_element(&olsr_cookie_tree, memcookie_name, ci, ci_node);
-  if (ci == NULL) {
-    OLSR_WARN(LOG_MEMCOOKIE, "Memory cookie '%s' does not exist, cannot remove custom block '%s'\n",
-        memcookie_name, custom->name);
-    return;
-  }
-
-  prefix_block = 0;
-  suffix_block = 0;
-  match = false;
-
-  /* calculate size of (not) modified custom data block */
-  OLSR_FOR_ALL_CUSTOM_MEM(ci, c_ptr, c_iterator) {
-    if (c_ptr == custom) {
-      match = true;
-      continue;
-    }
-
-    if (match) {
-      suffix_block += c_ptr->size;
-    }
-    else {
-      prefix_block += c_ptr->size;
-    }
-  }
-
-  /* move the custom memory back into a continous block */
-  if (suffix_block > 0) {
-    OLSR_FOR_ALL_USED_MEM(ci, mem, mem_iterator) {
-      memmove(mem->custom + prefix_block, mem->custom + prefix_block + custom->size, suffix_block);
-
-      /* recalculate offsets of moved blocks and inform callbacks */
-      OLSR_FOR_ALL_CUSTOM_MEM(ci, c_ptr, c_iterator) {
-        if (c_ptr == custom) {
-          match = true;
-          continue;
-        }
-
-        if (match) {
-          c_ptr->offset -= custom->size;
-
-          if (c_ptr->move) {
-            c_ptr->move(ci, mem+1, mem->custom + c_ptr->offset);
-          }
-        }
-      }
-
-    }
-  }
-  ci->ci_total_size -= custom->size;
-
-  /* remove all free data blocks, they have the wrong size */
-  OLSR_FOR_ALL_FREE_MEM(ci, mem, mem_iterator) {
-    list_remove(&mem->node);
-    free(mem);
-  }
-  ci->ci_free_list_usage = 0;
-
-  /* remove the custom data object from the list */
-  list_remove(&custom->node);
-  free (custom);
+  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: free %s, "PRINTF_SIZE_T_SPECIFIER" bytes%s\n",
+             ci->name, ci->size, reuse ? ", reuse" : "");
 }

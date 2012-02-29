@@ -286,8 +286,13 @@ _print_memory(struct autobuf *buf) {
   struct olsr_memcookie_info *c, *iterator;
 
   OLSR_FOR_ALL_COOKIES(c, iterator) {
-    if (abuf_appendf(buf, "%-25s (MEMORY) size: %lu usage: %u freelist: %u\n",
-        c->ci_name, (unsigned long)c->ci_size, c->ci_usage, c->ci_free_list_usage) < 0) {
+    if (abuf_appendf(buf, "%-25s (MEMORY) size: "PRINTF_SIZE_T_SPECIFIER
+        " usage: %u freelist: %u allocations: %u/%u\n",
+        c->name, c->size,
+        olsr_memcookie_get_usage(c),
+        olsr_memcookie_get_free(c),
+        olsr_memcookie_get_allocations(c),
+        olsr_memcookie_get_recycled(c)) < 0) {
       return -1;
     }
   }

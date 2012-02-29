@@ -88,7 +88,7 @@ struct olsr_telnet_command {
 #define FOR_ALL_TELNET_COMMANDS(cmd, ptr) avl_for_each_element_safe(&telnet_cmd_tree, cmd, node, ptr)
 EXPORT struct avl_tree telnet_cmd_tree;
 
-EXPORT int olsr_telnet_init(void) __attribute__((warn_unused_result));
+EXPORT void olsr_telnet_init(void);
 EXPORT void olsr_telnet_cleanup(void);
 
 EXPORT int olsr_telnet_add(struct olsr_telnet_command *command);

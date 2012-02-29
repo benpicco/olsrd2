@@ -231,14 +231,10 @@ main(int argc, char **argv) {
   if (olsr_clock_init()) {
     goto olsrd_cleanup;
   }
-  if (olsr_timer_init()) {
-    goto olsrd_cleanup;
-  }
+  olsr_timer_init();
   olsr_socket_init();
   olsr_packet_init();
-  if (olsr_stream_init()) {
-    goto olsrd_cleanup;
-  }
+  olsr_stream_init();
 
   /* activate os-specific code */
   if (os_system_init()) {
@@ -261,9 +257,7 @@ main(int argc, char **argv) {
   }
 
   /* activate telnet and http */
-  if (olsr_telnet_init()) {
-    goto olsrd_cleanup;
-  }
+  olsr_telnet_init();
   olsr_http_init();
 
   /* activate custom additions to framework */

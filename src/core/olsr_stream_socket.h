@@ -191,7 +191,7 @@ struct olsr_stream_managed_config {
   uint16_t port;
 };
 
-EXPORT int olsr_stream_init(void) __attribute__((warn_unused_result));
+EXPORT void olsr_stream_init(void);
 EXPORT void olsr_stream_cleanup(void);
 
 EXPORT int olsr_stream_add(struct olsr_stream_socket *,
