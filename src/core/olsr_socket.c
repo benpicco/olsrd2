@@ -51,6 +51,7 @@
 #include "olsr_logging.h"
 #include "os_net.h"
 #include "olsr_socket.h"
+#include "olsr_timer.h"
 #include "olsr.h"
 
 /* List of all active sockets in scheduler */
@@ -119,41 +120,25 @@ olsr_socket_remove(struct olsr_socket_entry *entry)
 
 /**
  * Handle all incoming socket events until a certain time
- * @param until_time timestamp when the function should return
+ * @param stop_time timestamp when the handler should stop,
+ *   0 if it should keep running
  * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_socket_handle(uint32_t until_time)
+olsr_socket_handle(uint64_t stop_time)
 {
   struct olsr_socket_entry *entry, *iterator;
-  struct timeval tvp;
-  int32_t remaining;
+  uint64_t next_event;
+  struct timeval tv, *tv_ptr;
   int n = 0;
   bool fd_read;
   bool fd_write;
 
-  /* Update time since this is much used by the parsing functions */
-  if (olsr_clock_update()) {
-    return -1;
+  if (stop_time == 0) {
+    stop_time = ~0ull;
   }
 
-  remaining = olsr_clock_getRelative(until_time);
-  if (remaining <= 0) {
-    /* we are already over the interval */
-    if (list_is_empty(&socket_head)) {
-      /* If there are no registered sockets we do not call select(2) */
-      return 0;
-    }
-    tvp.tv_sec = 0;
-    tvp.tv_usec = 0;
-  } else {
-    /* we need an absolute time - milliseconds */
-    tvp.tv_sec = remaining / MSEC_PER_SEC;
-    tvp.tv_usec = (remaining % MSEC_PER_SEC) * USEC_PER_MSEC;
-  }
-
-  /* do at least one select */
-  for (;;) {
+  while (olsr_is_running()) {
     fd_set ibits, obits;
     int hfd = 0;
 
@@ -182,19 +167,46 @@ olsr_socket_handle(uint32_t until_time)
       }
     }
 
-    if (hfd == 0 && (long)remaining <= 0) {
-      /* we are over the interval and we have no fd's. Skip the select() etc. */
-      return 0;
-    }
-
     do {
-      n = os_select(hfd,
-          fd_read ? &ibits : NULL,
-          fd_write ? &obits : NULL,
-          NULL, &tvp);
+      /* Update time since this is much used by the parsing functions */
+      if (olsr_clock_update()) {
+        return -1;
+      }
+
+      if (olsr_clock_getNow() >= stop_time) {
+        return 0;
+      }
+
+      if (olsr_timer_getNextEvent() <= olsr_clock_getNow()) {
+        olsr_timer_walk();
+      }
+
+      next_event = olsr_timer_getNextEvent();
+      if (next_event > stop_time) {
+        next_event = stop_time;
+      }
+
+      if (next_event == ~0ull) {
+        /* no events waiting */
+        tv_ptr = NULL;
+      }
+      else {
+        /* convert time interval until event triggers */
+        next_event = olsr_clock_getRelative(next_event);
+
+        tv_ptr = &tv;
+        tv.tv_sec = (time_t)(next_event / 1000ull);
+        tv.tv_usec = (int)(next_event % 1000) * 1000;
+        fprintf(stderr, "Sleep time %ld.%03ld seconds (%"PRIu64", %"PRIu64")\n",
+            tv.tv_sec, tv.tv_usec/1000, olsr_clock_getNow(), olsr_timer_getNextEvent());
+      }
       if (!olsr_is_running()) {
         return 0;
       }
+      n = os_select(hfd,
+          fd_read ? &ibits : NULL,
+          fd_write ? &obits : NULL,
+          NULL, tv_ptr);
     } while (n == -1 && errno == EINTR);
 
     if (n == 0) {               /* timeout! */
@@ -202,13 +214,12 @@ olsr_socket_handle(uint32_t until_time)
     }
     if (n < 0) {              /* Did something go wrong? */
       OLSR_WARN(LOG_SOCKET, "select error: %s (%d)", strerror(errno), errno);
-      break;
+      return -1;
     }
 
     /* Update time since this is much used by the parsing functions */
     if (olsr_clock_update()) {
-      n = -1;
-      break;
+      return -1;
     }
     OLSR_FOR_ALL_SOCKETS(entry, iterator) {
       if (entry->process == NULL) {
@@ -221,19 +232,6 @@ olsr_socket_handle(uint32_t until_time)
         entry->process(entry->fd, entry->data, fd_read, fd_write);
       }
     }
-
-    /* calculate the next timeout */
-    remaining = olsr_clock_getRelative(until_time);
-    if (remaining <= 0) {
-      /* we are already over the interval */
-      break;
-    }
-    /* we need an absolute time - milliseconds */
-    tvp.tv_sec = remaining / MSEC_PER_SEC;
-    tvp.tv_usec = (remaining % MSEC_PER_SEC) * USEC_PER_MSEC;
   }
-
-  if (n<0)
-    return -1;
   return 0;
 }

@@ -46,9 +46,6 @@
 #include "common/list.h"
 #include "common/avl.h"
 
-#define TIMER_WHEEL_SLOTS 1024
-#define TIMER_WHEEL_MASK (TIMER_WHEEL_SLOTS - 1)
-
 /* prototype for timer callback */
 typedef void (*timer_cb_func) (void *);
 
@@ -86,7 +83,7 @@ struct olsr_timer_info {
  */
 struct olsr_timer_entry {
   /* Wheel membership */
-  struct list_entity timer_list;
+  struct list_entity _node;
 
   /* backpointer to timer info */
   struct olsr_timer_info *timer_info;
@@ -130,5 +127,7 @@ EXPORT struct olsr_timer_entry *olsr_timer_start(uint64_t, uint8_t,
     void *, struct olsr_timer_info *);
 EXPORT void olsr_timer_change(struct olsr_timer_entry *, uint64_t, uint8_t);
 EXPORT void olsr_timer_stop(struct olsr_timer_entry *);
+
+EXPORT uint64_t olsr_timer_getNextEvent(void);
 
 #endif /* OLSR_TIMER_H_ */

@@ -45,16 +45,27 @@
 #include <unistd.h>
 
 #include "common/avl.h"
-#include "common/avl_comp.h"
+#include "common/common_types.h"
 #include "olsr_clock.h"
 #include "olsr_logging.h"
 #include "olsr_memcookie.h"
 #include "olsr_timer.h"
 #include "olsr.h"
 
-/* Hashed root of all timers */
-static struct list_entity _timer_wheel[TIMER_WHEEL_SLOTS];
-static uint64_t _timer_last_run;        /* remember the last timeslot walk */
+/* BUCKET_COUNT and BUCKET_TIMESLICE must be powers of 2 */
+#define BUCKET_DEPTH 3
+#define BUCKET_COUNT 512ull
+#define BUCKET_TIMESLICE 128ull /* ms */
+
+/* root of all timers */
+static struct list_entity _buckets[BUCKET_COUNT][BUCKET_DEPTH];
+static int _bucket_ptr[BUCKET_DEPTH];
+
+/* time when the next timer will fire */
+static uint64_t _next_fire_event;
+
+/* number of timer events still in queue */
+static uint32_t _total_timer_events;
 
 /* Memory cookie for the timer manager */
 struct list_entity timerinfo_list;
@@ -67,7 +78,9 @@ static struct olsr_memcookie_info _timer_mem_cookie = {
 OLSR_SUBSYSTEM_STATE(_timer_state);
 
 /* Prototypes */
-static uint64_t calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val);
+static uint64_t _calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val);
+static void _insert_into_bucket(struct olsr_timer_entry *);
+static void _calculate_next_event(void);
 
 /**
  * Initialize timer scheduler subsystem
@@ -76,22 +89,33 @@ static uint64_t calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int 
 void
 olsr_timer_init(void)
 {
-  int idx;
+  uint64_t now, offset;
+  unsigned i,j;
 
   if (olsr_subsystem_init(&_timer_state))
     return;
 
-  OLSR_INFO(LOG_SOCKET, "Initializing scheduler.\n");
+  OLSR_INFO(LOG_TIMER, "Initializing timer scheduler.\n");
+  /* mask "last run" to slot size */
+  now = olsr_clock_getNow();
 
-  /* init lists */
-  for (idx = 0; idx < TIMER_WHEEL_SLOTS; idx++) {
-    list_init_head(&_timer_wheel[idx]);
+  offset = BUCKET_TIMESLICE * BUCKET_COUNT;
+  now /= BUCKET_TIMESLICE;
+
+  for (i = 0; i < BUCKET_DEPTH; i++) {
+    _bucket_ptr[i] = now & (BUCKET_COUNT - 1ull);
+
+    now /= BUCKET_COUNT;
+    offset *= BUCKET_COUNT;
+
+    for (j = 0; j < BUCKET_COUNT; j++) {
+      list_init_head(&_buckets[j][i]);
+    }
   }
 
-  /*
-   * Reset the last timer run.
-   */
-  _timer_last_run = olsr_clock_getNow();
+  /* at the moment we have no timer */
+  _next_fire_event = ~0ull;
+  _total_timer_events = 0;
 
   /* initialize a cookie for the block based memory manager. */
   olsr_memcookie_add(&_timer_mem_cookie);
@@ -107,20 +131,22 @@ olsr_timer_cleanup(void)
 {
   struct olsr_timer_info *ti, *iterator;
   struct list_entity *timer_head_node;
-  unsigned int wheel_slot = 0;
+  unsigned i,j;
 
   if (olsr_subsystem_cleanup(&_timer_state))
     return;
 
-  for (wheel_slot = 0; wheel_slot < TIMER_WHEEL_SLOTS; wheel_slot++) {
-    timer_head_node = &_timer_wheel[wheel_slot & TIMER_WHEEL_MASK];
+  for (i = 0; i < BUCKET_DEPTH; i++) {
+    for (j = 0; j < BUCKET_COUNT; j++) {
+      timer_head_node = &_buckets[j][i];
 
-    /* Kill all entries hanging off this hash bucket. */
-    while (!list_is_empty(timer_head_node)) {
-      struct olsr_timer_entry *timer;
+      /* Kill all entries hanging off this hash bucket. */
+      while (!list_is_empty(timer_head_node)) {
+        struct olsr_timer_entry *timer;
 
-      timer = list_first_element(timer_head_node, timer, timer_list);
-      olsr_timer_stop(timer);
+        timer = list_first_element(timer_head_node, timer, _node);
+        olsr_timer_stop(timer);
+      }
     }
   }
 
@@ -150,13 +176,15 @@ olsr_timer_add(struct olsr_timer_info *ti) {
 void
 olsr_timer_remove(struct olsr_timer_info *info) {
   struct olsr_timer_entry *timer, *iterator;
-  int slot;
+  unsigned i,j;
 
-  for (slot=0; slot < TIMER_WHEEL_SLOTS; slot++) {
-    list_for_each_element_safe(&_timer_wheel[slot], timer, timer_list, iterator) {
-      /* remove all timers of this timer_info */
-      if (timer->timer_info == info) {
-        olsr_timer_stop(timer);
+  for (i = 0; i < BUCKET_DEPTH; i++) {
+    for (j = 0; j < BUCKET_COUNT; j++) {
+      list_for_each_element_safe(&_buckets[j][i], timer, _node, iterator) {
+        /* remove all timers of this timer_info */
+        if (timer->timer_info == info) {
+          olsr_timer_stop(timer);
+        }
       }
     }
   }
@@ -177,13 +205,14 @@ olsr_timer_start(uint64_t rel_time,
     uint8_t jitter_pct, void *context, struct olsr_timer_info *ti)
 {
   struct olsr_timer_entry *timer;
+
 #if !defined(REMOVE_LOG_DEBUG)
   struct timeval_buf timebuf;
 #endif
 
-  assert(ti != 0);          /* we want timer cookies everywhere */
-  assert(rel_time);
+  assert(ti != 0);
   assert(jitter_pct <= 100);
+  assert (rel_time > 0 && rel_time < 1000ull * INT32_MAX);
 
   timer = olsr_memcookie_malloc(&_timer_mem_cookie);
 
@@ -195,7 +224,7 @@ olsr_timer_start(uint64_t rel_time,
   }
 
   /* Fill entry */
-  timer->timer_clock = calc_jitter(rel_time, jitter_pct, timer->timer_random);
+  timer->timer_clock = _calc_jitter(rel_time, jitter_pct, timer->timer_random);
   timer->timer_cb_context = context;
   timer->timer_jitter_pct = jitter_pct;
   timer->timer_running = true;
@@ -211,7 +240,13 @@ olsr_timer_start(uint64_t rel_time,
   /*
    * Now insert in the respective _timer_wheel slot.
    */
-  list_add_before(&_timer_wheel[timer->timer_clock & TIMER_WHEEL_MASK], &timer->timer_list);
+  _insert_into_bucket(timer);
+
+  /* and update internal time data */
+  _total_timer_events++;
+  if (timer->timer_clock < _next_fire_event) {
+    _next_fire_event = timer->timer_clock;
+  }
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: start %s timer %p firing in %s, ctx %p\n",
              ti->name, timer, olsr_clock_toClockString(&timebuf, timer->timer_clock), context);
@@ -231,9 +266,6 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
     return;
   }
 
-  assert(timer->timer_info);     /* we want timer cookies everywhere */
-  assert(timer->timer_list.next != NULL && timer->timer_list.prev != NULL);
-
   OLSR_DEBUG(LOG_TIMER, "TIMER: stop %s timer %p, ctx %p\n",
              timer->timer_info->name, timer, timer->timer_cb_context);
 
@@ -241,10 +273,16 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
   /*
    * Carve out of the existing wheel_slot and free.
    */
-  list_remove(&timer->timer_list);
+  list_remove(&timer->_node);
   timer->timer_running = false;
   timer->timer_info->usage--;
   timer->timer_info->changes++;
+
+  /* and update internal time data */
+  _total_timer_events--;
+  if (_next_fire_event == timer->timer_clock) {
+    _calculate_next_event();
+  }
 
   if (!timer->timer_in_callback) {
     olsr_memcookie_free(&_timer_mem_cookie, timer);
@@ -263,29 +301,41 @@ olsr_timer_change(struct olsr_timer_entry *timer, uint64_t rel_time, uint8_t jit
 #if !defined(REMOVE_LOG_DEBUG)
   struct timeval_buf timebuf;
 #endif
+  bool recalculate;
 
   /* Sanity check. */
   if (!timer) {
     return;
   }
 
-  assert(timer->timer_info);     /* we want timer cookies everywhere */
+  assert (rel_time < 1000ull * INT32_MAX);
+
+  /* remember if we have to recalculate the _next_fire_event variable */
+  recalculate = _next_fire_event == timer->timer_clock;
 
   /* Singleshot or periodical timer ? */
   timer->timer_period = timer->timer_info->periodic ? rel_time : 0;
 
-  timer->timer_clock = calc_jitter(rel_time, jitter_pct, timer->timer_random);
+  timer->timer_clock = _calc_jitter(rel_time, jitter_pct, timer->timer_random);
   timer->timer_jitter_pct = jitter_pct;
 
   /*
-   * Changes are easy: Remove timer from the exisiting _timer_wheel slot
+   * Changes are easy: Remove timer from the existing _timer_wheel slot
    * and reinsert into the new slot.
    */
-  list_remove(&timer->timer_list);
-  list_add_before(&_timer_wheel[timer->timer_clock & TIMER_WHEEL_MASK], &timer->timer_list);
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: change %s timer %p, firing to %s, ctx %p\n",
-             timer->timer_info->name, timer,
+  list_remove(&timer->_node);
+  _insert_into_bucket(timer);
+
+  if (timer->timer_clock < _next_fire_event) {
+    _next_fire_event = timer->timer_clock;
+  }
+  else if (recalculate) {
+    _calculate_next_event();
+  }
+
+  OLSR_DEBUG(LOG_TIMER, "TIMER: change %s timer, firing to %s, ctx %p\n",
+             timer->timer_info->name,
              olsr_clock_toClockString(&timebuf, timer->timer_clock), timer->timer_cb_context);
 }
 
@@ -327,99 +377,86 @@ olsr_timer_set(struct olsr_timer_entry **timer_ptr,
 void
 olsr_timer_walk(void)
 {
-  int timers_walked = 0, timers_fired = 0;
-  int wheel_slot_walks = 0;
+  struct olsr_timer_entry *timer, *t_it;
+  int i;
 
-  /*
-   * Check the required wheel slots since the last time a timer walk was invoked,
-   * or check *all* the wheel slots, whatever is less work.
-   * The latter is meant as a safety belt if the scheduler falls behind.
-   */
-  while ((_timer_last_run <= olsr_clock_getNow()) && (wheel_slot_walks < TIMER_WHEEL_SLOTS)) {
-    struct list_entity tmp_head_node;
+  while (_next_fire_event <= olsr_clock_getNow()) {
+    i = _bucket_ptr[0];
+    list_for_each_element_safe(&_buckets[i][0], timer, _node, t_it) {
+      OLSR_DEBUG(LOG_TIMER, "TIMER: fire %s timer %p, ctx %p, "
+                  "at clocktick %" PRIu64 "\n",
+                  timer->timer_info->name,
+                  timer, timer->timer_cb_context, _next_fire_event);
 
-    /* Get the hash slot for this clocktick */
-    struct list_entity *timer_head_node;
+       /* This timer is expired, call into the provided callback function */
+       timer->timer_in_callback = true;
+       timer->timer_info->callback(timer->timer_cb_context);
+       timer->timer_in_callback = false;
+       timer->timer_info->changes++;
 
-    timer_head_node = &_timer_wheel[_timer_last_run & TIMER_WHEEL_MASK];
-
-    /* Walk all entries hanging off this hash bucket. We treat this basically as a stack
-     * so that we always know if and where the next element is.
-     */
-    list_init_head(&tmp_head_node);
-    while (!list_is_empty(timer_head_node)) {
-      /* the top element */
-      struct olsr_timer_entry *timer;
-
-      timer = list_first_element(timer_head_node, timer, timer_list);
-
-      /*
-       * Dequeue and insert to a temporary list.
-       * We do this to avoid loosing our walking context when
-       * multiple timers fire.
-       */
-      list_remove(&timer->timer_list);
-      list_add_after(&tmp_head_node, &timer->timer_list);
-      timers_walked++;
-
-      /* Ready to fire ? */
-      if (olsr_clock_isPast(timer->timer_clock)) {
-        OLSR_DEBUG(LOG_TIMER, "TIMER: fire %s timer %p, ctx %p, "
-                   "at clocktick %" PRIu64 "\n",
-                   timer->timer_info->name,
-                   timer, timer->timer_cb_context, _timer_last_run);
-
-        /* This timer is expired, call into the provided callback function */
-        timer->timer_in_callback = true;
-        timer->timer_info->callback(timer->timer_cb_context);
-        timer->timer_in_callback = false;
-        timer->timer_info->changes++;
-
-        /* Only act on actually running timers */
-        if (timer->timer_running) {
-          /*
-           * Don't restart the periodic timer if the callback function has
-           * stopped the timer.
-           */
-          if (timer->timer_period) {
-            /* For periodical timers, rehash the random number and restart */
-            timer->timer_random = random();
-            olsr_timer_change(timer, timer->timer_period, timer->timer_jitter_pct);
-          } else {
-            /* Singleshot timers are stopped */
-            olsr_timer_stop(timer);
-          }
-        }
-        else {
-          /* free memory */
-          olsr_memcookie_free(&_timer_mem_cookie, timer);
-        }
-
-        timers_fired++;
-      }
+       /* Only act on actually running timers */
+       if (timer->timer_running) {
+         /*
+          * Don't restart the periodic timer if the callback function has
+          * stopped the timer.
+          */
+         if (timer->timer_period) {
+           /* For periodical timers, rehash the random number and restart */
+           timer->timer_random = random();
+           olsr_timer_change(timer, timer->timer_period, timer->timer_jitter_pct);
+         } else {
+           /* Singleshot timers are stopped */
+           olsr_timer_stop(timer);
+         }
+       }
+       else {
+         /* free memory */
+         olsr_memcookie_free(&_timer_mem_cookie, timer);
+       }
     }
 
-    /*
-     * Now merge the temporary list back to the old bucket.
-     */
-    list_merge(timer_head_node, &tmp_head_node);
+    /* advance our 'next event' marker */
+    _calculate_next_event();
+  }
+}
 
-    /* Increment the time slot and wheel slot walk iteration */
-    _timer_last_run++;
-    wheel_slot_walks++;
+/**
+ * @return timestamp when next timer will fire
+ */
+uint64_t
+olsr_timer_getNextEvent(void) {
+  return _next_fire_event;
+}
+
+/**
+ *
+ * @param timestamp
+ * @param depth
+ * @return true if the
+ */
+static void
+_insert_into_bucket(struct olsr_timer_entry *timer) {
+  uint64_t slot;
+  int64_t relative;
+  int group;
+
+  slot = timer->timer_clock / BUCKET_TIMESLICE;
+  relative = olsr_clock_getRelative(timer->timer_clock) / BUCKET_TIMESLICE;
+  OLSR_DEBUG(LOG_TIMER, "Insert new timer: %" PRIu64, relative);
+
+  for (group = 0; group < BUCKET_DEPTH; group++, slot /= BUCKET_COUNT, relative /= BUCKET_COUNT) {
+    if (relative < (int64_t)BUCKET_COUNT) {
+      slot %= BUCKET_COUNT;
+      OLSR_DEBUG_NH(LOG_TIMER, "    Insert into bucket: %" PRId64"/%d", slot, group);
+      list_add_tail(&_buckets[slot][group], &timer->_node);
+      return;
+    }
   }
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: processed %4u/%d clockwheel slots, "
-             "timers walked %u, timers fired %u\n",
-             wheel_slot_walks, TIMER_WHEEL_SLOTS,
-             timers_walked, timers_fired);
-
-  /*
-   * If the scheduler has slipped and we have walked all wheel slots,
-   * reset the last timer run.
-   */
-  _timer_last_run = olsr_clock_getNow();
+  OLSR_WARN(LOG_TIMER, "Error, timer event too far in the future: %" PRIu64,
+      olsr_clock_getRelative(timer->timer_clock));
 }
+
 
 /**
  * Decrement a relative timer by a random number range.
@@ -429,7 +466,7 @@ olsr_timer_walk(void)
  * @return the absolute time when timer will fire
  */
 static uint64_t
-calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val)
+_calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val)
 {
   uint64_t jitter_time;
 
@@ -444,11 +481,80 @@ calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val)
   /*
    * Play some tricks to avoid overflows with integer arithmetic.
    */
-  jitter_time = (jitter_pct * rel_time) / 100;
-  jitter_time = random_val / (1 + RAND_MAX / (jitter_time + 1));
+  jitter_time = ((uint64_t)jitter_pct * rel_time) / 100;
+  jitter_time = (uint64_t)random_val / (1ull + (uint64_t)RAND_MAX / (jitter_time + 1ull));
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %" PRIu64 "ms to %" PRIu64 "ms\n",
       jitter_pct, rel_time, rel_time - jitter_time);
 
   return olsr_clock_get_absolute(rel_time - jitter_time);
+}
+
+static void
+_copy_bucket(unsigned depth, unsigned idx) {
+  struct olsr_timer_entry *timer, *timer_it;
+  uint64_t divide;
+  unsigned i;
+
+  assert (depth > 0 && depth < BUCKET_DEPTH && idx < BUCKET_COUNT);
+
+  divide = BUCKET_TIMESLICE;
+  for (i = 0; i < depth-1; i++) {
+    divide *= BUCKET_COUNT;
+  }
+
+  _bucket_ptr[depth] = idx+1;
+
+  list_for_each_element_safe(&_buckets[idx][depth], timer, _node, timer_it) {
+    list_remove(&timer->_node);
+
+    i = (timer->timer_clock / divide) & (BUCKET_COUNT - 1ull);
+    list_add_tail(&_buckets[i][depth-1], &timer->_node);
+  }
+}
+
+static int
+_look_for_event(unsigned depth) {
+  unsigned i,j;
+  int idx;
+
+  /* first look in existing data */
+  for (i=_bucket_ptr[depth], j=0; j < BUCKET_COUNT; i=(i+1)&255, j++) {
+    if (!list_is_empty(&_buckets[i][depth])) {
+      return i;
+    }
+  }
+
+  /* copy bucket from level higher if possible */
+  if (depth < BUCKET_DEPTH - 1) {
+    idx = _look_for_event(depth+1);
+    if (idx != -1) {
+      _copy_bucket(depth+1, idx);
+    }
+  }
+
+  for (i=0; i < BUCKET_COUNT; i++) {
+    if (!list_is_empty(&_buckets[i][depth])) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+static void
+_calculate_next_event(void) {
+  struct olsr_timer_entry *timer;
+
+  /* no timer event in queue ? */
+  if (_total_timer_events == 0) {
+    _next_fire_event = ~0ull;
+    return;
+  }
+
+  _bucket_ptr[0] = _look_for_event(0);
+  assert (_bucket_ptr[0] != -1);
+
+  timer = list_first_element(&_buckets[_bucket_ptr[0]][0], timer, _node);
+  _next_fire_event = timer->timer_clock & (~((uint64_t)BUCKET_TIMESLICE - 1));
 }

@@ -39,64 +39,92 @@
  *
  */
 
-#ifndef _OLSR_SCHEDULER
-#define _OLSR_SCHEDULER
+#ifndef OS_CLOCK_H_
+#define OS_CLOCK_H_
+
+#include <stdio.h>
+#include <sys/time.h>
 
 #include "common/common_types.h"
-#include "common/list.h"
-#include "common/avl.h"
+#include "olsr_logging.h"
+#include "olsr_interface.h"
 
-/* prototype for socket handler */
-typedef void (*socket_handler_func) (int fd, void *data,
-    bool event_read, bool event_write);
+#define MSEC_PER_SEC 1000
+#define USEC_PER_MSEC 1000
 
-/* This struct represents a single registered socket handler */
-struct olsr_socket_entry {
-  /* list of socket handlers */
-  struct list_entity node;
-
-  /* file descriptor of the socket */
-  int fd;
-
-  /* socket handler */
-  socket_handler_func process;
-
-  /* custom data pointer for sockets */
-  void *data;
-
-  /* event mask for socket handler */
-  bool event_read, event_write;
-};
-
-/* deletion safe macro for socket list traversal */
-EXPORT extern struct list_entity socket_head;
-#define OLSR_FOR_ALL_SOCKETS(socket, iterator) list_for_each_element_safe(&socket_head, socket, node, iterator)
-
-EXPORT void olsr_socket_init(void);
-EXPORT void olsr_socket_cleanup(void);
-EXPORT int olsr_socket_handle(uint64_t) __attribute__((warn_unused_result));
-
-EXPORT void olsr_socket_add(struct olsr_socket_entry *);
-EXPORT void olsr_socket_remove(struct olsr_socket_entry *);
-
-/**
- * Enable one or both flags of a socket handler
- * @param sock pointer to socket entry
+/*
+ * Set one of the following defines in the os specific os_net includes
+ * to OS_SPECIFIC to define that the os code is implementing the function
+ * itself and does not use the generic function
+ * Set it to OS_GENERIC to define that the code use the default implementation.
+ *
+ * Example from os_system_linux.h:
+ *
+ * #define OS_SYSTEM_INIT         OS_SPECIFIC
+ * #define OS_SYSTEM_INIT_IF      OS_SPECIFIC
+ * #define OS_SYSTEM_SET_IFSTATE  OS_SPECIFIC
+ * #define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
+ * #define OS_SYSTEM_LOG          OS_GENERIC
  */
-static INLINE void
-olsr_socket_set_read(struct olsr_socket_entry *entry, bool event_read)
-{
-  entry->event_read = event_read;
+
+/* set the guard macro so we can include the os specific settings */
+#define OS_NET_SPECIFIC_INCLUDE
+#include "os_helper.h"
+
+#ifdef OS_LINUX
+#include "os_linux/os_clock_linux.h"
+#endif
+
+#ifdef OS_BSD
+#include "os_bsd/os_clock_bsd.h"
+#endif
+
+#ifdef OS_WIN32
+#include "os_win32/os_clock_win32.h"
+#endif
+
+#undef OS_NET_SPECIFIC_INCLUDE
+
+/* prototypes for all os_system functions */
+EXPORT int os_clock_init(void);
+EXPORT void os_clock_cleanup(void);
+
+EXPORT int os_clock_gettime64(uint64_t *t64);
+
+/*
+ * INLINE implementations for generic os_net functions
+ */
+
+#if OS_CLOCK_INIT == OS_GENERIC
+/**
+ * Dummy init function
+ * @return always returns 0
+ */
+static INLINE int
+os_clock_init(void) {
+  return 0;
 }
 
 /**
- * Disable one or both flags of a socket handler
- * @param sock pointer to socket entry
+ * Dummy cleanup function
  */
 static INLINE void
-olsr_socket_set_write(struct olsr_socket_entry *entry, bool event_write)
-{
-  entry->event_write = event_write;
+os_clock_init(void) {
 }
 
 #endif
+
+#if OS_CLOCK_GETTIMEOFDAY == OS_GENERIC
+/**
+ * Inline wrapper around gettimeofday
+ * @param tv pointer to target timeval object
+ * @return -1 if an error happened, 0 otherwise
+ */
+static INLINE int
+os_clock_gettimeofday(struct timeval *tv) {
+  return gettimeofday(tv, NULL);
+}
+#endif
+
+
+#endif /* OS_CLOCK_H_ */

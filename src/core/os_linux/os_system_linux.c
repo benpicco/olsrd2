@@ -117,11 +117,6 @@ static struct olsr_timer_info _netlink_timer= {
 /* built in rtnetlink multicast receiver */
 static struct os_system_netlink _rtnetlink_receiver;
 
-/* type of clock source to be used */
-#if defined(CLOCK_MONOTONIC_RAW) || defined (CLOCK_MONOTONIC)
-static int _clock_source = 0;
-#endif
-
 OLSR_SUBSYSTEM_STATE(_os_system_state);
 
 /**
@@ -130,8 +125,6 @@ OLSR_SUBSYSTEM_STATE(_os_system_state);
  */
 int
 os_system_init(void) {
-  struct timespec ts;
-
   if (olsr_subsystem_is_initialized(&_os_system_state)) {
     return 0;
   }
@@ -152,17 +145,6 @@ os_system_init(void) {
 
   olsr_timer_add(&_netlink_timer);
 
-#ifdef CLOCK_MONOTONIC_RAW
-  if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0) {
-    _clock_source = CLOCK_MONOTONIC_RAW;
-  }
-#endif
-#ifdef CLOCK_MONOTONIC
-  if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-    _clock_source = CLOCK_MONOTONIC;
-  }
-#endif
-
   olsr_subsystem_init(&_os_system_state);
   return 0;
 }
@@ -178,44 +160,6 @@ os_system_cleanup(void) {
   olsr_timer_remove(&_netlink_timer);
   os_system_netlink_remove(&_rtnetlink_receiver);
   close(_ioctl_fd);
-}
-
-/**
- * Reads the current time as a monotonic timestamp
- * @param pointer to timestamp
- * @return 0 if valid timestamp was read, negative otherwise
- */
-int
-os_system_gettime64(uint64_t *t64) {
-  static time_t offset = 0, last_sec = 0;
-  struct timeval tv;
-  int error;
-
-#if defined(CLOCK_MONOTONIC_RAW) || defined (CLOCK_MONOTONIC)
-  if (_clock_source) {
-    struct timespec ts;
-
-    if ((error = clock_gettime(_clock_source, &ts)) != 0) {
-      return error;
-    }
-
-    *t64 = 1000ull * ts.tv_sec + ts.tv_nsec / 1000000ull;
-    return 0;
-  }
-#endif
-  if ((error = gettimeofday(&tv, NULL)) != 0) {
-    return error;
-  }
-
-  tv.tv_sec += offset;
-  if (tv.tv_sec < last_sec || tv.tv_sec > last_sec + 60) {
-    offset += last_sec - tv.tv_sec;
-    tv.tv_sec = last_sec;
-  }
-  last_sec = tv.tv_sec;
-
-  *t64 = 1000ull * tv.tv_sec + tv.tv_usec/ 1000ull;
-  return 0;
 }
 
 /**

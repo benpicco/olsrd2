@@ -56,6 +56,7 @@
 #include "config/cfg_schema.h"
 #include "builddata/plugin_static.h"
 #include "builddata/data.h"
+#include "os_clock.h"
 #include "os_net.h"
 #include "os_system.h"
 #include "os_routing.h"
@@ -228,6 +229,9 @@ main(int argc, char **argv) {
   /* initialize basic framework */
   os_system_openlog();
   olsr_memcookie_init();
+  if (os_clock_init()) {
+    goto olsrd_cleanup;
+  }
   if (olsr_clock_init()) {
     goto olsrd_cleanup;
   }
@@ -314,6 +318,8 @@ olsrd_cleanup:
   olsr_packet_cleanup();
   olsr_socket_cleanup();
   olsr_timer_cleanup();
+  olsr_clock_cleanup();
+  os_clock_cleanup();
   olsr_memcookie_cleanup();
   os_system_closelog();
   olsr_logcfg_cleanup();
@@ -350,14 +356,59 @@ hup_signal_handler(int signo __attribute__ ((unused))) {
   olsr_cfg_trigger_reload();
 }
 
+static struct olsr_timer_info _test_timer_info;
+
+static void _cb_test(void *t __attribute__((unused))) {
+  fprintf(stderr, "Fire %" PRIu64 "\n", olsr_clock_getNow());
+
+//  olsr_timer_start((random() % 20000) + 1000, 0, NULL, &_test_timer_info);
+}
+static struct olsr_timer_info _test_timer_info = {
+    .name = "test",
+    .callback = _cb_test,
+    .periodic = false,
+};
+
+static int cmp(const void *a, const void *b) {
+  const uint64_t *a64 = a;
+  const uint64_t *b64 = b;
+
+  if (*a64 < *b64)
+    return -1;
+  if (*a64 > *b64)
+    return 1;
+  return 0;
+}
 /**
  * Mainloop of olsrd
  * @return exit code for olsrd
  */
 static int
 mainloop(int argc, char **argv) {
-  uint32_t next_interval;
+  static uint64_t starts[3];
+  uint64_t next_interval;
   int exit_code = 0;
+  size_t i;
+
+  olsr_timer_add(&_test_timer_info);
+
+  for (i=0; i< ARRAYSIZE(starts); i++) {
+    starts[i] = (uint64_t)(random() % 600000) + 1000ull;
+  }
+
+  starts[0] = 4526;
+  starts[1] = 11012;
+  starts[2] = 39335;
+
+  qsort(starts, ARRAYSIZE(starts), sizeof(uint64_t), cmp);
+
+  for (i=0; i<ARRAYSIZE(starts); i++) {
+    fprintf(stderr, "Random start: %" PRIu64" / %" PRIu64 "\n", starts[i], i==0 ? 0 : starts[i]-starts[i-1]);
+  }
+
+  for (i=0; i< ARRAYSIZE(starts); i++) {
+    olsr_timer_start(starts[i], 0, NULL, &_test_timer_info);
+  }
 
   OLSR_INFO(LOG_MAIN, "Starting %s.", olsr_log_get_builddata()->app_name);
 
@@ -372,13 +423,8 @@ mainloop(int argc, char **argv) {
       break;
     }
 
-    next_interval = olsr_clock_get_absolute(1000);
-
-    /* Process timers */
-    olsr_timer_walk();
-
     /* Read incoming data and handle it immediately */
-    if (olsr_socket_handle(next_interval)) {
+    if (olsr_socket_handle(0)) {
       exit_code = 1;
       break;
     }
@@ -407,7 +453,6 @@ mainloop(int argc, char **argv) {
 
   /* wait for 500 milliseconds and process socket events */
   next_interval = olsr_clock_get_absolute(500);
-  olsr_timer_walk();
   if (olsr_socket_handle(next_interval)) {
     exit_code = 1;
   }

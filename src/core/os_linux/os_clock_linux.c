@@ -39,64 +39,89 @@
  *
  */
 
-#ifndef _OLSR_SCHEDULER
-#define _OLSR_SCHEDULER
+#include <time.h>
 
 #include "common/common_types.h"
-#include "common/list.h"
-#include "common/avl.h"
+#include "olsr.h"
+#include "os_clock.h"
 
-/* prototype for socket handler */
-typedef void (*socket_handler_func) (int fd, void *data,
-    bool event_read, bool event_write);
-
-/* This struct represents a single registered socket handler */
-struct olsr_socket_entry {
-  /* list of socket handlers */
-  struct list_entity node;
-
-  /* file descriptor of the socket */
-  int fd;
-
-  /* socket handler */
-  socket_handler_func process;
-
-  /* custom data pointer for sockets */
-  void *data;
-
-  /* event mask for socket handler */
-  bool event_read, event_write;
-};
-
-/* deletion safe macro for socket list traversal */
-EXPORT extern struct list_entity socket_head;
-#define OLSR_FOR_ALL_SOCKETS(socket, iterator) list_for_each_element_safe(&socket_head, socket, node, iterator)
-
-EXPORT void olsr_socket_init(void);
-EXPORT void olsr_socket_cleanup(void);
-EXPORT int olsr_socket_handle(uint64_t) __attribute__((warn_unused_result));
-
-EXPORT void olsr_socket_add(struct olsr_socket_entry *);
-EXPORT void olsr_socket_remove(struct olsr_socket_entry *);
-
-/**
- * Enable one or both flags of a socket handler
- * @param sock pointer to socket entry
- */
-static INLINE void
-olsr_socket_set_read(struct olsr_socket_entry *entry, bool event_read)
-{
-  entry->event_read = event_read;
-}
-
-/**
- * Disable one or both flags of a socket handler
- * @param sock pointer to socket entry
- */
-static INLINE void
-olsr_socket_set_write(struct olsr_socket_entry *entry, bool event_write)
-{
-  entry->event_write = event_write;
-}
-
+/* type of clock source to be used */
+#if defined(CLOCK_MONOTONIC_RAW) || defined (CLOCK_MONOTONIC)
+static int _clock_source = 0;
 #endif
+
+OLSR_SUBSYSTEM_STATE(_os_clock_state);
+
+/**
+ * Initialize os-specific subsystem
+ */
+int
+os_clock_init(void) {
+  struct timespec ts;
+
+  if (olsr_subsystem_init(&_os_clock_state)) {
+    return 0;
+  }
+
+#ifdef CLOCK_MONOTONIC_RAW
+  if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0) {
+    _clock_source = CLOCK_MONOTONIC_RAW;
+  }
+#endif
+#ifdef CLOCK_MONOTONIC
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+    _clock_source = CLOCK_MONOTONIC;
+  }
+#endif
+  return 0;
+}
+
+/**
+ * Cleanup os-specific subsystem
+ */
+void
+os_clock_cleanup(void) {
+  if (olsr_subsystem_cleanup(&_os_clock_state))
+    return;
+}
+
+/**
+ * Reads the current time as a monotonic timestamp
+ * @param pointer to timestamp
+ * @return 0 if valid timestamp was read, negative otherwise
+ */
+int
+os_clock_gettime64(uint64_t *t64) {
+  static time_t offset = 0, last_sec = 0;
+  struct timeval tv;
+  int error;
+
+#if defined(CLOCK_MONOTONIC_RAW) || defined (CLOCK_MONOTONIC)
+  if (_clock_source) {
+    struct timespec ts;
+
+    if ((error = clock_gettime(_clock_source, &ts)) != 0) {
+      return error;
+    }
+
+    *t64 = 1000ull * ts.tv_sec + ts.tv_nsec / 1000000;
+    return 0;
+  }
+#endif
+  if ((error = gettimeofday(&tv, NULL)) != 0) {
+    return error;
+  }
+
+  tv.tv_sec += offset;
+  if (last_sec == 0) {
+    last_sec = tv.tv_sec;
+  }
+  if (tv.tv_sec < last_sec || tv.tv_sec > last_sec + 60) {
+    offset += last_sec - tv.tv_sec;
+    tv.tv_sec = last_sec;
+  }
+  last_sec = tv.tv_sec;
+
+  *t64 = 1000ull * tv.tv_sec + tv.tv_usec/ 1000;
+  return 0;
+}

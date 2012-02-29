@@ -45,7 +45,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "os_system.h"
+#include "os_clock.h"
 #include "olsr_logging.h"
 #include "olsr_clock.h"
 #include "olsr.h"
@@ -68,10 +68,12 @@ olsr_clock_init(void) {
   if (olsr_subsystem_is_initialized(&_clock_state))
     return 0;
 
-  if (os_system_gettime64(&start_time)) {
+  if (os_clock_gettime64(&start_time)) {
     OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
     return -1;
   }
+
+  now_times = 0;
 
   olsr_subsystem_init(&_clock_state);
   return 0;
@@ -92,8 +94,9 @@ olsr_clock_cleanup(void) {
 int
 olsr_clock_update(void)
 {
+
   uint64_t now;
-  if (os_system_gettime64(&now)) {
+  if (os_clock_gettime64(&now)) {
     OLSR_WARN(LOG_TIMER, "OS clock is not working: %s (%d)\n", strerror(errno), errno);
     return -1;
   }

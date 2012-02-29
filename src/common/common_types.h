@@ -102,19 +102,45 @@ typedef signed int int32_t;
 typedef signed long long int64_t;
 
 /* Minimum of signed integral types.  */
+#ifndef INT8_MIN
 # define INT8_MIN   (-128)
+#endif
+#ifndef INT16_MIN
 # define INT16_MIN    (-32767-1)
+#endif
+#ifndef INT32_MIN
 # define INT32_MIN    (-2147483647-1)
+#endif
 
 /* Maximum of signed integral types.  */
+#ifndef INT8_MAX
 # define INT8_MAX   (127)
+#endif
+#ifndef INT16_MAX
 # define INT16_MAX    (32767)
+#endif
+#ifndef INT32_MAX
 # define INT32_MAX    (2147483647)
+#endif
 
 /* Maximum of unsigned integral types.  */
+#ifndef UINT8_MAX
 # define UINT8_MAX    (255)
+#endif
+#ifndef UINT16_MAX
 # define UINT16_MAX   (65535)
+#endif
+#ifndef UINT32_MAX
 # define UINT32_MAX   (4294967295U)
+#endif
+
+/* printf modifier for int64_t and uint64_t */
+#ifndef PRId64
+#define PRId64        "lld"
+#endif
+#ifndef PRIu64
+#define PRIu64        "llu"
+#endif
 
 #ifdef __GNUC__
 /* we simulate a C99 environment */
