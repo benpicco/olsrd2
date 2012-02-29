@@ -85,7 +85,7 @@ struct list_entity timerinfo_list;
 OLSR_SUBSYSTEM_STATE(_timer_state);
 
 /* Prototypes */
-static uint64_t _calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val);
+static void _calc_clock(struct olsr_timer_entry *timer, uint64_t rel_time);
 static void _insert_into_bucket(struct olsr_timer_entry *);
 static void _calculate_next_event(void);
 
@@ -228,7 +228,7 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
   }
 
   /* Fill entry */
-  timer->_clock = _calc_jitter(rel_time, timer->jitter_pct, timer->_random);
+  _calc_clock(timer, rel_time);
 
   /* Singleshot or periodical timer ? */
   timer->period = timer->info->periodic ? rel_time : 0;
@@ -391,8 +391,8 @@ _insert_into_bucket(struct olsr_timer_entry *timer) {
  * @param random_val cached random variable to calculate jitter
  * @return the absolute time when timer will fire
  */
-static uint64_t
-_calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val)
+static void
+_calc_clock(struct olsr_timer_entry *timer, uint64_t rel_time)
 {
   uint64_t jitter_time;
 
@@ -400,21 +400,22 @@ _calc_jitter(uint64_t rel_time, uint8_t jitter_pct, unsigned int random_val)
    * No jitter or, jitter larger than 99% does not make sense.
    * Also protect against overflows resulting from > 25 bit timers.
    */
-  if (jitter_pct == 0 || jitter_pct > 99 || rel_time > (1 << 24)) {
-    return olsr_clock_get_absolute(rel_time);
+  if (timer->jitter_pct == 0 || timer->jitter_pct > 99) {
+    timer->_clock = olsr_clock_get_absolute(rel_time);
+    return;
   }
 
   /*
    * Play some tricks to avoid overflows with integer arithmetic.
-   * TODO: change this because of the larger values
+   * TODO: check if need to be changed because of 64 bit arithmetics
    */
-  jitter_time = ((uint64_t)jitter_pct * rel_time) / 100;
-  jitter_time = (uint64_t)random_val / (1ull + (uint64_t)RAND_MAX / (jitter_time + 1ull));
+  jitter_time = ((uint64_t)timer->jitter_pct * rel_time) / 100;
+  jitter_time = (uint64_t)timer->_random / (1ull + (uint64_t)RAND_MAX / (jitter_time + 1ull));
 
   OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %" PRIu64 "ms to %" PRIu64 "ms\n",
-      jitter_pct, rel_time, rel_time - jitter_time);
+      timer->jitter_pct, rel_time, rel_time - jitter_time);
 
-  return olsr_clock_get_absolute(rel_time - jitter_time);
+  timer->_clock = olsr_clock_get_absolute(rel_time - jitter_time);
 }
 
 static void
