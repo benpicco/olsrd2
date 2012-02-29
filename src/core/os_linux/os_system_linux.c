@@ -255,8 +255,8 @@ os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multi
   nl->socket.data = nl;
   olsr_socket_add(&nl->socket);
 
-  nl->timeout.timer_cb_context = nl;
-  nl->timeout.timer_info = &_netlink_timer;
+  nl->timeout.cb_context = nl;
+  nl->timeout.info = &_netlink_timer;
 
   return 0;
 

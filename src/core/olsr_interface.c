@@ -154,8 +154,8 @@ _interface_add(const char *name, bool mesh) {
     interf->node.key = interf->name;
     avl_insert(&olsr_interface_tree, &interf->node);
 
-    interf->change_timer.timer_info = &_change_timer_info;
-    interf->change_timer.timer_cb_context = interf;
+    interf->change_timer.info = &_change_timer_info;
+    interf->change_timer.cb_context = interf;
 
     /* grab data of interface */
     os_net_update_interface(&interf->data, interf->name);

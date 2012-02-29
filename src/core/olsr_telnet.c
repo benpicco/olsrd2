@@ -640,8 +640,8 @@ _cb_telnet_repeat(struct olsr_telnet_data *data) {
     return TELNET_RESULT_INTERNAL_ERROR;
   }
 
-  timer->timer_cb_context = data;
-  timer->timer_info = &_telnet_repeat_timerinfo;
+  timer->cb_context = data;
+  timer->info = &_telnet_repeat_timerinfo;
   olsr_timer_start(timer, interval * 1000);
 
   data->stop_handler = _cb_telnet_repeat_stophandler;

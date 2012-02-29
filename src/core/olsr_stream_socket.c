@@ -309,9 +309,7 @@ olsr_stream_close(struct olsr_stream_session *session, bool force) {
     session->comport->config.cleanup(session);
   }
 
-  if (session->timeout.timer_clock) {
-    olsr_timer_stop(&session->timeout);
-  }
+  olsr_timer_stop(&session->timeout);
 
   session->comport->config.allowed_sessions++;
   list_remove(&session->node);
@@ -531,8 +529,8 @@ _create_session(struct olsr_stream_socket *stream_socket,
     session->state = STREAM_SESSION_SEND_AND_QUIT;
   }
 
-  session->timeout.timer_cb_context = session;
-  session->timeout.timer_info = &connection_timeout;
+  session->timeout.cb_context = session;
+  session->timeout.info = &connection_timeout;
   if (stream_socket->config.session_timeout) {
     olsr_timer_start(&session->timeout, stream_socket->config.session_timeout);
   }

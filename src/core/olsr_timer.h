@@ -86,22 +86,23 @@ struct olsr_timer_entry {
   struct list_entity _node;
 
   /* backpointer to timer info */
-  struct olsr_timer_info *timer_info;
-
-  /* when timer shall fire (absolute internal timerstamp) */
-  uint64_t timer_clock;
+  struct olsr_timer_info *info;
 
   /* timeperiod between two timer events for periodical timers */
-  uint64_t timer_period;
+  uint64_t period;
 
   /* the jitter expressed in percent */
-  uint8_t timer_jitter_pct;
-
-  /* cache random() result for performance reasons */
-  unsigned int timer_random;
+  uint8_t jitter_pct;
 
   /* context pointer */
-  void *timer_cb_context;
+  void *cb_context;
+
+  /* cache random() result for performance reasons */
+  unsigned int _random;
+
+  /* absolute timestamp when timer will fire */
+  uint64_t _clock;
+
 };
 
 /* Timers */
@@ -117,7 +118,6 @@ EXPORT void olsr_timer_remove(struct olsr_timer_info *);
 
 EXPORT void olsr_timer_set(struct olsr_timer_entry *timer, uint64_t rel_time);
 EXPORT void olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time);
-EXPORT void olsr_timer_change(struct olsr_timer_entry *, uint64_t);
 EXPORT void olsr_timer_stop(struct olsr_timer_entry *);
 
 EXPORT uint64_t olsr_timer_getNextEvent(void);
