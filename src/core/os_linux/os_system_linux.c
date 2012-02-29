@@ -255,6 +255,9 @@ os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multi
   nl->socket.data = nl;
   olsr_socket_add(&nl->socket);
 
+  nl->timeout.timer_cb_context = nl;
+  nl->timeout.timer_info = &_netlink_timer;
+
   return 0;
 
 os_add_netlink_fail:
@@ -341,8 +344,6 @@ static void
 _cb_handle_netlink_timerout(void *ptr) {
   struct os_system_netlink *nl = ptr;
 
-  nl->timeout = NULL;
-
   if (nl->cb_timeout) {
     nl->cb_timeout();
   }
@@ -359,7 +360,7 @@ _flush_netlink_buffer(struct os_system_netlink *nl) {
   ssize_t ret;
 
   /* start feedback timer */
-  olsr_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT, 0, nl, &_netlink_timer);
+  olsr_timer_set(&nl->timeout, OS_SYSTEM_NETLINK_TIMEOUT);
 
   /* send outgoing message */
   _netlink_send_iov[0].iov_base = abuf_getptr(&nl->out);
@@ -391,8 +392,7 @@ _netlink_job_finished(struct os_system_netlink *nl) {
     nl->msg_in_transit--;
   }
   if (nl->msg_in_transit == 0) {
-    olsr_timer_stop(nl->timeout);
-    nl->timeout= NULL;
+    olsr_timer_stop(&nl->timeout);
     nl->seq_used = 0;
   }
 }

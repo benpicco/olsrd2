@@ -97,12 +97,6 @@ struct olsr_timer_entry {
   /* the jitter expressed in percent */
   uint8_t timer_jitter_pct;
 
-  /* true if timer is running at the moment */
-  bool timer_running;
-
-  /* true if timer is in callback at the moment */
-  bool timer_in_callback;
-
   /* cache random() result for performance reasons */
   unsigned int timer_random;
 
@@ -121,11 +115,9 @@ EXPORT void olsr_timer_walk(void);
 EXPORT void olsr_timer_add(struct olsr_timer_info *ti);
 EXPORT void olsr_timer_remove(struct olsr_timer_info *);
 
-EXPORT void olsr_timer_set(struct olsr_timer_entry **, uint64_t, uint8_t,
-    void *, struct olsr_timer_info *);
-EXPORT struct olsr_timer_entry *olsr_timer_start(uint64_t, uint8_t,
-    void *, struct olsr_timer_info *);
-EXPORT void olsr_timer_change(struct olsr_timer_entry *, uint64_t, uint8_t);
+EXPORT void olsr_timer_set(struct olsr_timer_entry *timer, uint64_t rel_time);
+EXPORT void olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time);
+EXPORT void olsr_timer_change(struct olsr_timer_entry *, uint64_t);
 EXPORT void olsr_timer_stop(struct olsr_timer_entry *);
 
 EXPORT uint64_t olsr_timer_getNextEvent(void);

@@ -50,6 +50,7 @@
 #include "olsr_memcookie.h"
 #include "olsr_netaddr_acl.h"
 #include "olsr_socket.h"
+#include "olsr_timer.h"
 
 enum olsr_stream_session_state {
   STREAM_SESSION_ACTIVE,
@@ -91,7 +92,7 @@ struct olsr_stream_session {
   struct olsr_socket_entry scheduler_entry;
 
   /* timer for handling session timeout */
-  struct olsr_timer_entry *timeout;
+  struct olsr_timer_entry timeout;
 
   /* input buffer for session */
   struct autobuf in;
@@ -125,7 +126,7 @@ struct olsr_stream_config {
    * Timeout of the socket. A session will be closed if it does not
    * send or receive data for timeout milliseconds.
    */
-  uint32_t session_timeout;
+  uint64_t session_timeout;
 
   /* maximum allowed size of input buffer (default 65536) */
   size_t maximum_input_buffer;
@@ -202,7 +203,7 @@ EXPORT struct olsr_stream_session *olsr_stream_connect_to(
 EXPORT void olsr_stream_flush(struct olsr_stream_session *con);
 
 EXPORT void olsr_stream_set_timeout(
-    struct olsr_stream_session *con, uint32_t timeout);
+    struct olsr_stream_session *con, uint64_t timeout);
 EXPORT void olsr_stream_close(struct olsr_stream_session *con, bool force);
 
 EXPORT void olsr_stream_add_managed(struct olsr_stream_managed *);

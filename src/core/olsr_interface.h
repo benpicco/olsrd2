@@ -95,7 +95,7 @@ struct olsr_interface {
   uint32_t _original_state;
 
   /* timer for lazy interface change handling */
-  struct olsr_timer_entry *change_timer;
+  struct olsr_timer_entry change_timer;
 };
 
 struct olsr_interface_listener {

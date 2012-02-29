@@ -579,6 +579,7 @@ _cb_telnet_timeout(struct olsr_telnet_data *data) {
 static void
 _cb_telnet_repeat_stophandler(struct olsr_telnet_data *data) {
   olsr_timer_stop((struct olsr_timer_entry *)data->stop_data[0]);
+  free(data->stop_data[0]);
   free(data->stop_data[1]);
 
   data->stop_handler = NULL;
@@ -634,7 +635,15 @@ _cb_telnet_repeat(struct olsr_telnet_data *data) {
 
   interval = atoi(data->parameter);
 
-  timer = olsr_timer_start(interval * 1000, 0, data, &_telnet_repeat_timerinfo);
+  timer = calloc(1, sizeof(*timer));
+  if (timer == NULL) {
+    return TELNET_RESULT_INTERNAL_ERROR;
+  }
+
+  timer->timer_cb_context = data;
+  timer->timer_info = &_telnet_repeat_timerinfo;
+  olsr_timer_start(timer, interval * 1000);
+
   data->stop_handler = _cb_telnet_repeat_stophandler;
   data->stop_data[0] = timer;
   data->stop_data[1] = strdup(ptr);

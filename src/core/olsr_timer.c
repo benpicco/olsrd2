@@ -69,10 +69,6 @@ static uint32_t _total_timer_events;
 
 /* Memory cookie for the timer manager */
 struct list_entity timerinfo_list;
-static struct olsr_memcookie_info _timer_mem_cookie = {
-  .name = "timer entry",
-  .size = sizeof(struct olsr_timer_entry),
-};
 
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_timer_state);
@@ -117,9 +113,6 @@ olsr_timer_init(void)
   _next_fire_event = ~0ull;
   _total_timer_events = 0;
 
-  /* initialize a cookie for the block based memory manager. */
-  olsr_memcookie_add(&_timer_mem_cookie);
-
   list_init_head(&timerinfo_list);
 }
 
@@ -154,9 +147,6 @@ olsr_timer_cleanup(void)
   OLSR_FOR_ALL_TIMERS(ti, iterator) {
     olsr_timer_remove(ti);
   }
-
-  /* release memory cookie for timers */
-  olsr_memcookie_remove(&_timer_mem_cookie);
 }
 
 /**
@@ -194,27 +184,18 @@ olsr_timer_remove(struct olsr_timer_info *info) {
 
 /**
  * Start a new timer.
- * @param rel_time time expressed in milliseconds
- * @param jitter_pct expressed in percent
- * @param context for the callback function
- * @param ti pointer to timer_info object
- * @return a pointer to the created entry
+ * @param timer initialized timer entry
  */
-struct olsr_timer_entry *
-olsr_timer_start(uint64_t rel_time,
-    uint8_t jitter_pct, void *context, struct olsr_timer_info *ti)
+void
+olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
 {
-  struct olsr_timer_entry *timer;
-
 #if !defined(REMOVE_LOG_DEBUG)
   struct timeval_buf timebuf;
 #endif
 
-  assert(ti != 0);
-  assert(jitter_pct <= 100);
-  assert (rel_time > 0 && rel_time < 1000ull * INT32_MAX);
-
-  timer = olsr_memcookie_malloc(&_timer_mem_cookie);
+  assert(timer->timer_info);
+  assert(timer->timer_jitter_pct <= 100);
+  assert(rel_time > 0 && rel_time < 1000ull * INT32_MAX);
 
   /*
    * Compute random numbers only once.
@@ -224,18 +205,14 @@ olsr_timer_start(uint64_t rel_time,
   }
 
   /* Fill entry */
-  timer->timer_clock = _calc_jitter(rel_time, jitter_pct, timer->timer_random);
-  timer->timer_cb_context = context;
-  timer->timer_jitter_pct = jitter_pct;
-  timer->timer_running = true;
+  timer->timer_clock = _calc_jitter(rel_time, timer->timer_jitter_pct, timer->timer_random);
 
   /* The cookie is used for debugging to traceback the originator */
-  timer->timer_info = ti;
-  ti->usage++;
-  ti->changes++;
+  timer->timer_info->usage++;
+  timer->timer_info->changes++;
 
   /* Singleshot or periodical timer ? */
-  timer->timer_period = ti->periodic ? rel_time : 0;
+  timer->timer_period = timer->timer_info->periodic ? rel_time : 0;
 
   /*
    * Now insert in the respective _timer_wheel slot.
@@ -248,10 +225,9 @@ olsr_timer_start(uint64_t rel_time,
     _next_fire_event = timer->timer_clock;
   }
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: start %s timer %p firing in %s, ctx %p\n",
-             ti->name, timer, olsr_clock_toClockString(&timebuf, timer->timer_clock), context);
-
-  return timer;
+  OLSR_DEBUG(LOG_TIMER, "TIMER: start %s timer %p firing in %s\n",
+             timer->timer_info->name, timer,
+             olsr_clock_toClockString(&timebuf, timer->timer_clock));
 }
 
 /**
@@ -261,20 +237,15 @@ olsr_timer_start(uint64_t rel_time,
 void
 olsr_timer_stop(struct olsr_timer_entry *timer)
 {
-  /* It's okay to get a NULL here */
-  if (timer == NULL) {
+  if (timer->timer_clock == 0) {
     return;
   }
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: stop %s timer %p, ctx %p\n",
-             timer->timer_info->name, timer, timer->timer_cb_context);
+  OLSR_DEBUG(LOG_TIMER, "TIMER: stop %s\n", timer->timer_info->name);
 
-
-  /*
-   * Carve out of the existing wheel_slot and free.
-   */
+  /* remove timer from buckets */
   list_remove(&timer->_node);
-  timer->timer_running = false;
+  timer->timer_clock = 0;
   timer->timer_info->usage--;
   timer->timer_info->changes++;
 
@@ -282,10 +253,6 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
   _total_timer_events--;
   if (_next_fire_event == timer->timer_clock) {
     _calculate_next_event();
-  }
-
-  if (!timer->timer_in_callback) {
-    olsr_memcookie_free(&_timer_mem_cookie, timer);
   }
 }
 
@@ -296,7 +263,7 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
  * @param jitter_pct new jitter expressed in percent.
  */
 void
-olsr_timer_change(struct olsr_timer_entry *timer, uint64_t rel_time, uint8_t jitter_pct)
+olsr_timer_change(struct olsr_timer_entry *timer, uint64_t rel_time)
 {
 #if !defined(REMOVE_LOG_DEBUG)
   struct timeval_buf timebuf;
@@ -316,8 +283,7 @@ olsr_timer_change(struct olsr_timer_entry *timer, uint64_t rel_time, uint8_t jit
   /* Singleshot or periodical timer ? */
   timer->timer_period = timer->timer_info->periodic ? rel_time : 0;
 
-  timer->timer_clock = _calc_jitter(rel_time, jitter_pct, timer->timer_random);
-  timer->timer_jitter_pct = jitter_pct;
+  timer->timer_clock = _calc_jitter(rel_time, timer->timer_jitter_pct, timer->timer_random);
 
   /*
    * Changes are easy: Remove timer from the existing _timer_wheel slot
@@ -334,9 +300,9 @@ olsr_timer_change(struct olsr_timer_entry *timer, uint64_t rel_time, uint8_t jit
     _calculate_next_event();
   }
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: change %s timer, firing to %s, ctx %p\n",
+  OLSR_DEBUG(LOG_TIMER, "TIMER: change %s timer, firing to %s\n",
              timer->timer_info->name,
-             olsr_clock_toClockString(&timebuf, timer->timer_clock), timer->timer_cb_context);
+             olsr_clock_toClockString(&timebuf, timer->timer_clock));
 }
 
 /**
@@ -346,27 +312,20 @@ olsr_timer_change(struct olsr_timer_entry *timer, uint64_t rel_time, uint8_t jit
  * terminated.
  * @param timer_ptr pointer to timer_entry pointer
  * @param rel_time time until the new timer should fire, 0 to stop timer
- * @param jitter_pct jitter of timer in percent
- * @param context context pointer of timer
- * @param ti timer_info of timer
  */
 void
-olsr_timer_set(struct olsr_timer_entry **timer_ptr,
-               uint64_t rel_time,
-               uint8_t jitter_pct, void *context, struct olsr_timer_info *ti)
+olsr_timer_set(struct olsr_timer_entry *timer, uint64_t rel_time)
 {
-  assert(ti);          /* we want timer cookies everywhere */
   if (rel_time == 0) {
     /* No good future time provided, kill it. */
-    olsr_timer_stop(*timer_ptr);
-    *timer_ptr = NULL;
+    olsr_timer_stop(timer);
   }
-  else if ((*timer_ptr) == NULL) {
+  else if (timer->timer_clock == 0) {
     /* No timer running, kick it. */
-    *timer_ptr = olsr_timer_start(rel_time, jitter_pct, context, ti);
+    olsr_timer_start(timer, rel_time);
   }
   else {
-    olsr_timer_change(*timer_ptr, rel_time, jitter_pct);
+    olsr_timer_change(timer, rel_time);
   }
 }
 
@@ -389,13 +348,14 @@ olsr_timer_walk(void)
                   timer, timer->timer_cb_context, _next_fire_event);
 
        /* This timer is expired, call into the provided callback function */
-       timer->timer_in_callback = true;
        timer->timer_info->callback(timer->timer_cb_context);
-       timer->timer_in_callback = false;
        timer->timer_info->changes++;
 
-       /* Only act on actually running timers */
-       if (timer->timer_running) {
+       /*
+        * Only act on actually running timers, the callback might have
+        * called olsr_timer_stop() !
+        */
+       if (timer->timer_clock) {
          /*
           * Don't restart the periodic timer if the callback function has
           * stopped the timer.
@@ -403,15 +363,11 @@ olsr_timer_walk(void)
          if (timer->timer_period) {
            /* For periodical timers, rehash the random number and restart */
            timer->timer_random = random();
-           olsr_timer_change(timer, timer->timer_period, timer->timer_jitter_pct);
+           olsr_timer_change(timer, timer->timer_period);
          } else {
            /* Singleshot timers are stopped */
            olsr_timer_stop(timer);
          }
-       }
-       else {
-         /* free memory */
-         olsr_memcookie_free(&_timer_mem_cookie, timer);
        }
     }
 

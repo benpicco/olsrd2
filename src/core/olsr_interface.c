@@ -154,6 +154,9 @@ _interface_add(const char *name, bool mesh) {
     interf->node.key = interf->name;
     avl_insert(&olsr_interface_tree, &interf->node);
 
+    interf->change_timer.timer_info = &_change_timer_info;
+    interf->change_timer.timer_cb_context = interf;
+
     /* grab data of interface */
     os_net_update_interface(&interf->data, interf->name);
   }
@@ -250,6 +253,5 @@ _cb_change_handler(void *ptr) {
  */
 static void
 _trigger_change_timer(struct olsr_interface *interf) {
-  olsr_timer_set(&interf->change_timer,
-      OLSR_INTERFACE_CHANGE_INTERVAL, 0, interf, &_change_timer_info);
+  olsr_timer_set(&interf->change_timer, OLSR_INTERFACE_CHANGE_INTERVAL);
 }

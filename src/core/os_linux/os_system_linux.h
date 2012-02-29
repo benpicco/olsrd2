@@ -40,7 +40,7 @@ struct os_system_netlink {
   void (*cb_timeout)(void);
   void (*cb_done)(uint32_t seq);
 
-  struct olsr_timer_entry *timeout;
+  struct olsr_timer_entry timeout;
 };
 
 EXPORT int os_system_netlink_add(struct os_system_netlink *,

@@ -285,8 +285,8 @@ connect_to_error:
  * @param timeout timeout in milliseconds
  */
 void
-olsr_stream_set_timeout(struct olsr_stream_session *con, uint32_t timeout) {
-  olsr_timer_set(&con->timeout, timeout, 0, con, &connection_timeout);
+olsr_stream_set_timeout(struct olsr_stream_session *con, uint64_t timeout) {
+  olsr_timer_set(&con->timeout, timeout);
 }
 
 /**
@@ -309,8 +309,8 @@ olsr_stream_close(struct olsr_stream_session *session, bool force) {
     session->comport->config.cleanup(session);
   }
 
-  if (session->timeout) {
-    olsr_timer_stop(session->timeout);
+  if (session->timeout.timer_clock) {
+    olsr_timer_stop(&session->timeout);
   }
 
   session->comport->config.allowed_sessions++;
@@ -531,9 +531,10 @@ _create_session(struct olsr_stream_socket *stream_socket,
     session->state = STREAM_SESSION_SEND_AND_QUIT;
   }
 
+  session->timeout.timer_cb_context = session;
+  session->timeout.timer_info = &connection_timeout;
   if (stream_socket->config.session_timeout) {
-    session->timeout = olsr_timer_start(
-        stream_socket->config.session_timeout, 0, session, &connection_timeout);
+    olsr_timer_start(&session->timeout, stream_socket->config.session_timeout);
   }
 
   if (stream_socket->config.init) {
