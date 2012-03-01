@@ -247,9 +247,8 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
     _calculate_next_event();
   }
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: start %s timer %p firing in %s\n",
-             timer->info->name, timer,
-             olsr_clock_toClockString(&timebuf, timer->_clock));
+  OLSR_DEBUG(LOG_TIMER, "TIMER: start timer %s firing in %s\n",
+             timer->info->name, olsr_clock_toClockString(&timebuf, rel_time));
 }
 
 /**
@@ -370,10 +369,8 @@ olsr_timer_getNextEvent(void) {
 }
 
 /**
- *
- * @param timestamp
- * @param depth
- * @return true if the
+ * Puts a timer into the corresponding bucket
+ * @param timer pointer to initialized timer struct
  */
 static void
 _insert_into_bucket(struct olsr_timer_entry *timer) {
@@ -383,13 +380,11 @@ _insert_into_bucket(struct olsr_timer_entry *timer) {
 
   slot = timer->_clock >> BUCKET_TIMESLICE_POW2;
   relative = olsr_clock_getRelative(timer->_clock) >> BUCKET_TIMESLICE_POW2;
-  OLSR_DEBUG(LOG_TIMER, "Insert new timer: %" PRIu64, relative);
 
   for (group = 0; group < BUCKET_DEPTH;
       group++, slot >>= BUCKET_COUNT_POW2, relative >>= BUCKET_COUNT_POW2) {
     if (relative < (int64_t)BUCKET_COUNT) {
       slot &= (BUCKET_COUNT - 1);
-      OLSR_DEBUG_NH(LOG_TIMER, "    Insert into bucket: %" PRId64"/%d", slot, group);
       list_add_tail(&_buckets[slot][group], &timer->_node);
       return;
     }
@@ -410,27 +405,19 @@ _insert_into_bucket(struct olsr_timer_entry *timer) {
 static void
 _calc_clock(struct olsr_timer_entry *timer, uint64_t rel_time)
 {
-  uint64_t jitter_time;
+  uint64_t jitter_time = 0;
+  unsigned random_jitter;
 
-  /*
-   * No jitter or, jitter larger than 99% does not make sense.
-   * Also protect against overflows resulting from > 25 bit timers.
-   */
-  if (timer->jitter_pct == 0 || timer->jitter_pct > 99) {
-    timer->_clock = olsr_clock_get_absolute(rel_time);
-    return;
+  if (timer->jitter_pct) {
+    /*
+     * Play some tricks to avoid overflows with integer arithmetic.
+     */
+    random_jitter = timer->_random / (RAND_MAX / timer->jitter_pct);
+    jitter_time = (uint64_t)random_jitter * rel_time / 100;
+
+    OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %" PRIu64 "ms to %" PRIu64 "ms\n",
+        timer->jitter_pct, rel_time, rel_time - jitter_time);
   }
-
-  /*
-   * Play some tricks to avoid overflows with integer arithmetic.
-   * TODO: check if need to be changed because of 64 bit arithmetics
-   */
-  jitter_time = ((uint64_t)timer->jitter_pct * rel_time) / 100;
-  jitter_time = (uint64_t)timer->_random / (1ull + (uint64_t)RAND_MAX / (jitter_time + 1ull));
-
-  OLSR_DEBUG(LOG_TIMER, "TIMER: jitter %u%% rel_time %" PRIu64 "ms to %" PRIu64 "ms\n",
-      timer->jitter_pct, rel_time, rel_time - jitter_time);
-
   timer->_clock = olsr_clock_get_absolute(rel_time - jitter_time);
 }
 
@@ -442,11 +429,7 @@ _copy_bucket(unsigned depth, unsigned idx) {
 
   assert (depth > 0 && depth < BUCKET_DEPTH && idx < BUCKET_COUNT);
 
-  shift = BUCKET_TIMESLICE_POW2;
-  for (i = 0; i < depth-1; i++) {
-    shift += BUCKET_COUNT_POW2;
-  }
-
+  shift = BUCKET_TIMESLICE_POW2 + BUCKET_COUNT_POW2*depth;
   _bucket_ptr[depth] = idx+1;
 
   list_for_each_element_safe(&_buckets[idx][depth], timer, _node, timer_it) {

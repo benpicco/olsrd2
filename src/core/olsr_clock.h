@@ -51,12 +51,12 @@
 #define USEC_PER_MSEC 1000
 
 struct millitxt_buf {
-  char buf[sizeof("4000000.000")];
+  char buf[20];
 };
 
 /* buffer for displaying absolute timestamps */
 struct timeval_buf {
-  char buf[sizeof("00:00:00.000")];
+  char buf[20];
 };
 
 EXPORT int olsr_clock_init(void) __attribute__((warn_unused_result));

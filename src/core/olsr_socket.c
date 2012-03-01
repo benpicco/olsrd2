@@ -142,6 +142,20 @@ olsr_socket_handle(uint64_t stop_time)
     fd_set ibits, obits;
     int hfd = 0;
 
+    /* Update time since this is much used by the parsing functions */
+    if (olsr_clock_update()) {
+      return -1;
+    }
+
+    if (olsr_clock_getNow() >= stop_time) {
+      return 0;
+    }
+
+    if (olsr_timer_getNextEvent() <= olsr_clock_getNow()) {
+      olsr_timer_walk();
+    }
+
+    /* no event left for now, prepare for select () */
     fd_read = false;
     fd_write = false;
 
@@ -167,39 +181,25 @@ olsr_socket_handle(uint64_t stop_time)
       }
     }
 
+    next_event = olsr_timer_getNextEvent();
+    if (next_event > stop_time) {
+      next_event = stop_time;
+    }
+
+    if (next_event == ~0ull) {
+      /* no events waiting */
+      tv_ptr = NULL;
+    }
+    else {
+      /* convert time interval until event triggers */
+      next_event = olsr_clock_getRelative(next_event);
+
+      tv_ptr = &tv;
+      tv.tv_sec = (time_t)(next_event / 1000ull);
+      tv.tv_usec = (int)(next_event % 1000) * 1000;
+    }
+
     do {
-      /* Update time since this is much used by the parsing functions */
-      if (olsr_clock_update()) {
-        return -1;
-      }
-
-      if (olsr_clock_getNow() >= stop_time) {
-        return 0;
-      }
-
-      if (olsr_timer_getNextEvent() <= olsr_clock_getNow()) {
-        olsr_timer_walk();
-      }
-
-      next_event = olsr_timer_getNextEvent();
-      if (next_event > stop_time) {
-        next_event = stop_time;
-      }
-
-      if (next_event == ~0ull) {
-        /* no events waiting */
-        tv_ptr = NULL;
-      }
-      else {
-        /* convert time interval until event triggers */
-        next_event = olsr_clock_getRelative(next_event);
-
-        tv_ptr = &tv;
-        tv.tv_sec = (time_t)(next_event / 1000ull);
-        tv.tv_usec = (int)(next_event % 1000) * 1000;
-        fprintf(stderr, "Sleep time %ld.%03ld seconds (%"PRIu64", %"PRIu64")\n",
-            tv.tv_sec, tv.tv_usec/1000, olsr_clock_getNow(), olsr_timer_getNextEvent());
-      }
       if (!olsr_is_running()) {
         return 0;
       }

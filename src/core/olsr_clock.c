@@ -175,7 +175,7 @@ olsr_clock_toClockString(struct timeval_buf *buf, uint64_t clk)
   uint64_t sec = clk / MSEC_PER_SEC;
 
   snprintf(buf->buf, sizeof(buf),
-      "%02"PRIu64":%02"PRIu64":%02"PRIu64".%03"PRIu64"",
+      "%"PRIu64":%02"PRIu64":%02"PRIu64".%03"PRIu64"",
       sec / 3600, (sec % 3600) / 60, (sec % 60), msec);
 
   return buf->buf;
