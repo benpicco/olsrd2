@@ -156,6 +156,7 @@ olsr_memcookie_malloc(struct olsr_memcookie_info *ci)
     list_remove(entity);
 
     memset(entity, 0, ci->size);
+    ptr = entity;
 
     ci->_free_list_size--;
     ci->_recycled++;
