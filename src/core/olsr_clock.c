@@ -115,54 +115,8 @@ olsr_clock_getNow(void) {
 }
 
 /**
- * converts an unsigned integer value into a string representation
- * (divided by 1000)
- * @param buffer pointer to time string buffer
- * @param t current OLSR time
- * @return pointer to time string
- */
-char *
-olsr_clock_to_string(struct millitxt_buf *buffer, uint64_t t) {
-  sprintf(buffer->buf, "%"PRIu64".%03"PRIu64, t/1000, t%1000);
-  return buffer->buf;
-}
-
-/**
- * converts a floating point text into a unsigned integer representation
- * (multiplied by 1000)
- * @param txt pointer to text representation
- * @return integer representation
- */
-uint32_t olsr_clock_parse_string(char *txt) {
-  uint32_t t = 0;
-  int fractionDigits = 0;
-  bool frac = false;
-
-  while (fractionDigits < 3 && *txt) {
-    if (*txt == '.' && !frac) {
-      frac = true;
-      txt++;
-    }
-
-    if (!isdigit(*txt)) {
-      break;
-    }
-
-    t = t * 10 + (*txt++ - '0');
-    if (frac) {
-      fractionDigits++;
-    }
-  }
-
-  while (fractionDigits++ < 3) {
-    t *= 10;
-  }
-  return t;
-}
-
-/**
- * Format an relative non-wallclock system time string.
- * Displays millisecond resolution.
+ * Format an internal time value into a string.
+ * Displays hours:minutes:seconds.millisecond.
  *
  * @param buf string buffer for creating output
  * @param clk OLSR timestamp
@@ -179,4 +133,63 @@ olsr_clock_toClockString(struct timeval_buf *buf, uint64_t clk)
       sec / 3600, (sec % 3600) / 60, (sec % 60), msec);
 
   return buf->buf;
+}
+
+/**
+ * Format an internal time value into a string.
+ * Displays seconds.millisecond.
+ *
+ * @param buf string buffer for creating output
+ * @param clk OLSR timestamp
+ * @return buffer to a formatted system time string.
+ */
+const char *
+olsr_clock_toIntervalString(struct timeval_buf *buf, uint64_t clk)
+{
+  snprintf(buf->buf, sizeof(buf),
+      "%"PRIu64".%03"PRIu64"", clk / MSEC_PER_SEC, clk % MSEC_PER_SEC);
+  return buf->buf;
+}
+
+uint64_t
+olsr_clock_fromIntervalString(const char *string) {
+  bool period;
+  uint64_t t;
+  int post_period;
+  char c;
+
+  /* initialize variables */
+  post_period = 0;
+  period = false;
+  t = 0;
+
+  /* parse string */
+  while ((c = *string++) != 0 && post_period < 3) {
+    if (c == '.') {
+      if (period) {
+        /* error, no two '.' allowed */
+        return 0;
+      }
+      period = true;
+      continue;
+    }
+
+    if (c < '0' || c > '9') {
+      /* error, no-digit character found */
+      return 0;
+    }
+
+    t = t * 10ull + (c - '0');
+
+    if (period) {
+      post_period++;
+    }
+  }
+
+  /* shift number to factor 1000 */
+  while (post_period++ < 3) {
+    t *= 10;
+  }
+
+  return t;
 }
