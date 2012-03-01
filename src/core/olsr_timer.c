@@ -166,7 +166,7 @@ olsr_timer_cleanup(void)
  */
 void
 olsr_timer_add(struct olsr_timer_info *ti) {
-  list_add_tail(&timerinfo_list, &ti->node);
+  list_add_tail(&timerinfo_list, &ti->_node);
 }
 
 /**
@@ -190,7 +190,7 @@ olsr_timer_remove(struct olsr_timer_info *info) {
     }
   }
 
-  list_remove(&info->node);
+  list_remove(&info->_node);
 }
 
 /**
@@ -272,6 +272,10 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
   timer->info->usage--;
   timer->info->changes++;
 
+  if (timer->info->_timer_in_callback == timer) {
+    timer->info->_timer_stopped = true;
+  }
+
   /* and update internal time data */
   _total_timer_events--;
   if (_next_fire_event == timer->_clock) {
@@ -308,6 +312,8 @@ void
 olsr_timer_walk(void)
 {
   struct olsr_timer_entry *timer, *t_it;
+  struct olsr_timer_info *info;
+
   int i;
 
   while (_next_fire_event <= olsr_clock_getNow()) {
@@ -318,26 +324,36 @@ olsr_timer_walk(void)
                   timer->info->name,
                   timer, timer->cb_context, _next_fire_event);
 
-       /* This timer is expired, call into the provided callback function */
-       timer->info->callback(timer->cb_context);
-       timer->info->changes++;
+      /*
+       * The timer->info pointer is invalidated by olsr_timer_stop()
+       */
+      info = timer->info;
+      info->_timer_in_callback = timer;
+      info->_timer_stopped = false;
 
-       /*
-        * Only act on actually running timers, the callback might have
-        * called olsr_timer_stop() !
-        */
-       if (!timer->_clock) {
-         /* Timer has been stopped by callback */
-         continue;
-       }
-       if (timer->period) {
-         /* For periodical timers, rehash the random number and restart */
-         timer->_random = random();
-         olsr_timer_start(timer, timer->period);
-       } else {
-         /* Singleshot timers are stopped */
-         olsr_timer_stop(timer);
-       }
+      /* update statistics */
+      info->changes++;
+
+      if (timer->period == 0) {
+        /* stop now, the data structure might not be available anymore later */
+        olsr_timer_stop(timer);
+      }
+
+      /* This timer is expired, call into the provided callback function */
+      timer->info->callback(timer->cb_context);
+
+      /*
+       * Only act on actually running timers, the callback might have
+       * called olsr_timer_stop() !
+       */
+      if (!info->_timer_stopped) {
+        /*
+         * Timer has been not been stopped, so its periodic
+         * rehash the random number and restart
+         */
+        timer->_random = random();
+        olsr_timer_start(timer, timer->period);
+      }
     }
 
     /* advance our 'next event' marker */

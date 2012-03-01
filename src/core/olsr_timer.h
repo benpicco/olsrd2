@@ -49,13 +49,15 @@
 /* prototype for timer callback */
 typedef void (*timer_cb_func) (void *);
 
+struct olsr_timer_entry;
+
 /*
  * This struct defines a class of timers which have the same
  * type (periodic/non-periodic) and callback.
  */
 struct olsr_timer_info {
-  /* node of timerinfo list */
-  struct list_entity node;
+  /* _node of timerinfo list */
+  struct list_entity _node;
 
   /* name of this timer class */
   const char *name;
@@ -71,6 +73,12 @@ struct olsr_timer_info {
 
   /* Stats, resource churn */
   uint32_t changes;
+
+  /* pointer to timer currently in callback */
+  struct olsr_timer_entry *_timer_in_callback;
+
+  /* set to true if the current running timer has been stopped */
+  bool _timer_stopped;
 };
 
 
@@ -102,12 +110,11 @@ struct olsr_timer_entry {
 
   /* absolute timestamp when timer will fire */
   uint64_t _clock;
-
 };
 
 /* Timers */
 EXPORT extern struct list_entity timerinfo_list;
-#define OLSR_FOR_ALL_TIMERS(ti, iterator) list_for_each_element_safe(&timerinfo_list, ti, node, iterator)
+#define OLSR_FOR_ALL_TIMERS(ti, iterator) list_for_each_element_safe(&timerinfo_list, ti, _node, iterator)
 
 EXPORT void olsr_timer_init(void);
 EXPORT void olsr_timer_cleanup(void);
