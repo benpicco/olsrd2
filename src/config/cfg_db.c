@@ -132,8 +132,8 @@ _cfg_db_append(struct cfg_db *dst, struct cfg_db *src,
         }
 
         FOR_ALL_STRINGS(&entry->val, ptr) {
-          if (cfg_db_set_entry(
-              dst, section->type, named->name, entry->name, ptr, true) == NULL) {
+          if (cfg_db_set_entry_ext(
+              dst, section->type, named->name, entry->name, ptr, true, false) == NULL) {
             return -1;
           }
         }
@@ -260,12 +260,14 @@ cfg_db_remove_namedsection(struct cfg_db *db, const char *section_type,
  * @param value entry value
  * @param append true if the value should be appended to a list,
  *   false if it should overwrite all old values
+ * @param front true if the value should be put in front of existing
+ *   values, false if it should be put at the end
  * @return pointer to cfg_entry, NULL if an error happened
  */
 struct cfg_entry *
-cfg_db_set_entry(struct cfg_db *db, const char *section_type,
+cfg_db_set_entry_ext(struct cfg_db *db, const char *section_type,
     const char *section_name, const char *entry_name, const char *value,
-    bool prepend) {
+    bool append, bool front) {
   struct cfg_entry *entry;
   struct cfg_named_section *named;
   bool new_section = false, new_entry = NULL;
@@ -286,12 +288,19 @@ cfg_db_set_entry(struct cfg_db *db, const char *section_type,
     new_entry = true;
   }
 
-  if (!prepend) {
+  if (!append) {
     strarray_free(&entry->val);
   }
   /* prepend new entry */
-  if (strarray_prepend(&entry->val, value)) {
-    goto set_entry_error;
+  if (front) {
+    if (strarray_prepend(&entry->val, value)) {
+      goto set_entry_error;
+    }
+  }
+  else {
+    if (strarray_append(&entry->val, value)) {
+      goto set_entry_error;
+    }
   }
 
   return entry;

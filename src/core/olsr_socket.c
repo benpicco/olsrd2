@@ -47,6 +47,7 @@
 
 #include "common/avl.h"
 #include "common/avl_comp.h"
+#include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_logging.h"
 #include "os_net.h"
@@ -138,7 +139,7 @@ olsr_socket_handle(uint64_t stop_time)
     stop_time = ~0ull;
   }
 
-  while (olsr_is_running()) {
+  while (true) {
     fd_set ibits, obits;
     int hfd = 0;
 
@@ -153,6 +154,10 @@ olsr_socket_handle(uint64_t stop_time)
 
     if (olsr_timer_getNextEvent() <= olsr_clock_getNow()) {
       olsr_timer_walk();
+    }
+
+    if (!olsr_is_running() || olsr_cfg_is_commit_set() || olsr_cfg_is_reload_set()) {
+      return 0;
     }
 
     /* no event left for now, prepare for select () */
@@ -200,7 +205,7 @@ olsr_socket_handle(uint64_t stop_time)
     }
 
     do {
-      if (!olsr_is_running()) {
+      if (!olsr_is_running() || olsr_cfg_is_commit_set() || olsr_cfg_is_reload_set()) {
         return 0;
       }
       n = os_select(hfd,

@@ -115,7 +115,9 @@ static struct olsr_timer_info _netlink_timer= {
 };
 
 /* built in rtnetlink multicast receiver */
-static struct os_system_netlink _rtnetlink_receiver;
+static struct os_system_netlink _rtnetlink_receiver = {
+  .cb_message = _handle_rtnetlink,
+};
 
 OLSR_SUBSYSTEM_STATE(_os_system_state);
 
@@ -141,7 +143,6 @@ os_system_init(void) {
     close(_ioctl_fd);
     return -1;
   }
-  _rtnetlink_receiver.cb_message = _handle_rtnetlink;
 
   olsr_timer_add(&_netlink_timer);
 
@@ -207,7 +208,7 @@ os_system_set_interface_state(const char *dev, bool up) {
 
 /**
  * Open a new bidirectional netlink socket
- * @param nl pointer to uninitialized netlink socket handler
+ * @param nl pointer to initialized netlink socket handler
  * @param protocol protocol id (NETLINK_ROUTING for example)
  * @param multicast multicast groups this socket should listen to
  * @return -1 if an error happened, 0 otherwise
@@ -215,8 +216,6 @@ os_system_set_interface_state(const char *dev, bool up) {
 int
 os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multicast) {
   struct sockaddr_nl addr;
-
-  memset(nl, 0, sizeof(*nl));
 
   nl->socket.fd = socket(PF_NETLINK, SOCK_RAW, protocol);
   if (nl->socket.fd < 0) {

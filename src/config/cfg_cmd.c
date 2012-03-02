@@ -211,7 +211,7 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
   struct cfg_named_section *named, *named_it;
   struct cfg_entry *entry, *entry_it;
   struct _parsed_argument pa;
-  char *ptr;
+  char *arg_copy, *tmp;
   int result;
 
   if (arg == NULL || *arg == 0) {
@@ -223,15 +223,15 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
     return 0;
   }
 
-  ptr = strdup(arg);
-  if (!ptr) {
+  arg_copy = strdup(arg);
+  if (!arg_copy) {
     return -1;
   }
 
   /* prepare for cleanup */
   result = -1;
 
-  if (_do_parse_arg(instance, ptr, &pa, log)) {
+  if (_do_parse_arg(instance, arg_copy, &pa, log)) {
     goto handle_get_cleanup;
   }
 
@@ -248,8 +248,8 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
     }
 
     cfg_append_printable_line(log, "Key '%s' has value:", arg);
-    FOR_ALL_STRINGS(&entry->val, ptr) {
-      cfg_append_printable_line(log, "%s", ptr);
+    FOR_ALL_STRINGS(&entry->val, tmp) {
+      cfg_append_printable_line(log, "%s", tmp);
     }
     result = 0;
     goto handle_get_cleanup;
@@ -286,7 +286,7 @@ cfg_cmd_handle_get(struct cfg_instance *instance, struct cfg_db *db,
   result = 0;
 
 handle_get_cleanup:
-  free(ptr);
+  free(arg_copy);
   return result;
 }
 

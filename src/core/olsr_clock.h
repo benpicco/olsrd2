@@ -43,6 +43,7 @@
 #define _OLSR_CLOCK
 
 #include "common/common_types.h"
+#include "config/cfg_schema.h"
 
 /* Some defs for juggling with timers */
 #define MSEC_PER_SEC 1000
@@ -50,9 +51,16 @@
 #define NSEC_PER_USEC 1000
 #define USEC_PER_MSEC 1000
 
-struct millitxt_buf {
-  char buf[20];
-};
+/* definitions for config parser usage */
+#define CFG_VALIDATE_CLOCK(p_name, p_def, p_help, args...)                      _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_clock_validate, .cb_valhelp = olsr_clock_help, .validate_params = {.p_i1 = -1, .p_i2 = -1}, ##args )
+#define CFG_VALIDATE_CLOCK_MIN(p_name, p_def, p_help, p_min, args...)           _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_clock_validate, .cb_valhelp = olsr_clock_help, .validate_params = {.p_i1 = p_min, .p_i2 = -1},##args )
+#define CFG_VALIDATE_CLOCK_MAX(p_name, p_def, p_help, p_min, args...)           _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_clock_validate, .cb_valhelp = olsr_clock_help, .validate_params = {.p_i1 = -1, .p_i2 = p_max},##args )
+#define CFG_VALIDATE_CLOCK_MINMAX(p_name, p_def, p_help, p_min, p_max, args...) _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_clock_validate, .cb_valhelp = olsr_clock_help, .validate_params = {.p_i1 = p_min, .p_i2 = p_max},##args )
+
+#define CFG_MAP_CLOCK(p_reference, p_field, p_name, p_def, p_help, args...)                      CFG_VALIDATE_CLOCK(p_name, p_def, p_help, .cb_to_binary = olsr_clock_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_CLOCK_MIN(p_reference, p_field, p_name, p_def, p_help, p_min, args...)           CFG_VALIDATE_CLOCK(p_name, p_def, p_help, p_min, .cb_to_binary = olsr_clock_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_CLOCK_MAX(p_reference, p_field, p_name, p_def, p_help, p_max, args...)           CFG_VALIDATE_CLOCK(p_name, p_def, p_help, p_max, .cb_to_binary = olsr_clock_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
+#define CFG_MAP_CLOCK_MINMAX(p_reference, p_field, p_name, p_def, p_help, p_min, p_max, args...) CFG_VALIDATE_CLOCK(p_name, p_def, p_help, p_min, p_max, .cb_to_binary = olsr_clock_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
 
 /* buffer for displaying absolute timestamps */
 struct timeval_buf {
@@ -67,7 +75,14 @@ EXPORT uint64_t olsr_clock_getNow(void);
 
 EXPORT const char *olsr_clock_toClockString(struct timeval_buf *, uint64_t);
 EXPORT const char *olsr_clock_toIntervalString(struct timeval_buf *, uint64_t);
-EXPORT uint64_t olsr_clock_fromIntervalString(const char *string);
+EXPORT int olsr_clock_fromIntervalString(uint64_t *result, const char *string);
+
+EXPORT int olsr_clock_validate(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
+EXPORT int olsr_clock_tobin(const struct cfg_schema_entry *s_entry,
+    const struct const_strarray *value, void *reference);
+EXPORT void  olsr_clock_help(
+    const struct cfg_schema_entry *entry, struct autobuf *out);
 
 /**
  * Returns a timestamp s seconds in the future

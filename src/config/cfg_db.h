@@ -128,8 +128,9 @@ EXPORT struct cfg_named_section *cfg_db_find_namedsection(
 EXPORT int cfg_db_remove_namedsection(struct cfg_db *db, const char *section_type,
     const char *section_name);
 
-EXPORT struct cfg_entry *cfg_db_set_entry(struct cfg_db *db, const char *section_type,
-    const char *section_name, const char *entry_name, const char *value, bool append);
+EXPORT struct cfg_entry *cfg_db_set_entry_ext(struct cfg_db *db, const char *section_type,
+    const char *section_name, const char *entry_name, const char *value,
+    bool append, bool front);
 
 EXPORT struct cfg_entry *cfg_db_find_entry(struct cfg_db *db,
     const char *section_type, const char *section_name, const char *entry_name);
@@ -342,6 +343,24 @@ cfg_db_add_unnamedsection(
   return _cfg_db_add_section(db, section_type, NULL, &dummy);
 }
 
+/**
+ * Sets an entry to a configuration database
+ * @param db pointer to configuration database
+ * @param section_type type of section
+ * @param section_name name of section, NULL if an unnamed one
+ * @param entry_name entry name
+ * @param value entry value
+ * @param append true if the value should be put in front of a list,
+ *   false if it should overwrite all old values
+ * @return pointer to cfg_entry, NULL if an error happened
+ */
+static INLINE struct cfg_entry *
+cfg_db_set_entry(struct cfg_db *db, const char *section_type,
+    const char *section_name, const char *entry_name, const char *value,
+    bool append) {
+  return cfg_db_set_entry_ext(db, section_type, section_name, entry_name,
+      value, append, true);
+}
 
 /**
  * Adds an entry to a configuration database

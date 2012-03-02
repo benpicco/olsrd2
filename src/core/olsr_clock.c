@@ -45,6 +45,9 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "config/cfg_schema.h"
+#include "config/cfg.h"
+
 #include "os_clock.h"
 #include "olsr_logging.h"
 #include "olsr_clock.h"
@@ -128,7 +131,7 @@ olsr_clock_toClockString(struct timeval_buf *buf, uint64_t clk)
   uint64_t msec = clk % MSEC_PER_SEC;
   uint64_t sec = clk / MSEC_PER_SEC;
 
-  snprintf(buf->buf, sizeof(buf),
+  snprintf(buf->buf, sizeof(*buf),
       "%"PRIu64":%02"PRIu64":%02"PRIu64".%03"PRIu64"",
       sec / 3600, (sec % 3600) / 60, (sec % 60), msec);
 
@@ -146,17 +149,21 @@ olsr_clock_toClockString(struct timeval_buf *buf, uint64_t clk)
 const char *
 olsr_clock_toIntervalString(struct timeval_buf *buf, uint64_t clk)
 {
-  snprintf(buf->buf, sizeof(buf),
+  snprintf(buf->buf, sizeof(*buf),
       "%"PRIu64".%03"PRIu64"", clk / MSEC_PER_SEC, clk % MSEC_PER_SEC);
   return buf->buf;
 }
 
-uint64_t
-olsr_clock_fromIntervalString(const char *string) {
+int
+olsr_clock_fromIntervalString(uint64_t *result, const char *string) {
   bool period;
   uint64_t t;
   int post_period;
   char c;
+
+  if (*string == 0) {
+    return -1;
+  }
 
   /* initialize variables */
   post_period = 0;
@@ -164,26 +171,32 @@ olsr_clock_fromIntervalString(const char *string) {
   t = 0;
 
   /* parse string */
-  while ((c = *string++) != 0 && post_period < 3) {
+  while ((c = *string) != 0 && post_period < 3) {
     if (c == '.') {
       if (period) {
         /* error, no two '.' allowed */
-        return 0;
+        return -1;
       }
       period = true;
-      continue;
     }
+    else {
+      if (c < '0' || c > '9') {
+        /* error, no-digit character found */
+        return -1;
+      }
 
-    if (c < '0' || c > '9') {
-      /* error, no-digit character found */
-      return 0;
+      t = t * 10ull + (c - '0');
+
+      if (period) {
+        post_period++;
+      }
     }
+    string++;
+  }
 
-    t = t * 10ull + (c - '0');
-
-    if (period) {
-      post_period++;
-    }
+  if (*string) {
+    /* string too long */
+    return -1;
   }
 
   /* shift number to factor 1000 */
@@ -191,5 +204,83 @@ olsr_clock_fromIntervalString(const char *string) {
     t *= 10;
   }
 
-  return t;
+  *result = t;
+  return 0;
+}
+
+/**
+ * Checks a value of a CLOCK field for validity.
+ * See CFG_VALIDATE_TIME() macro in olr_clock.h
+ * @param entry pointer to schema entry
+ * @param section_name name of section type and name
+ * @param value value of schema entry
+ * @param out pointer to autobuffer for validator output
+ * @return 0 if validation found no problems, -1 otherwise
+ */
+int
+olsr_clock_validate(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
+  uint64_t num;
+
+  if (olsr_clock_fromIntervalString(&num, value)) {
+    cfg_append_printable_line(out, "Value '%s' for entry '%s'"
+        " in section %s is not a valid fractional integer"
+        " (positive or zero, maximum of 3 fractional digits)",
+        value, entry->key.entry, section_name);
+    return -1;
+  }
+
+  if (entry->validate_params.p_i1 != -1
+      && num < (unsigned)(entry->validate_params.p_i1)) {
+    cfg_append_printable_line(out, "Value '%s' for entry '%s'"
+        " in section %s must be larger than %d)",
+        value, entry->key.entry, section_name,
+        entry->validate_params.p_i1);
+    return -1;
+  }
+  if (entry->validate_params.p_i2 != -1
+      && num > (unsigned)(entry->validate_params.p_i1)) {
+    cfg_append_printable_line(out, "Value '%s' for entry '%s'"
+        " in section %s must be smaller than %d",
+        value, entry->key.entry, section_name,
+        entry->validate_params.p_i2);
+    return -1;
+  }
+  return 0;
+}
+
+/**
+ * Binary converter for time intervals.
+ * See CFG_MAP_TIME() macro in olr_clock.h
+ * @param s_entry pointer to configuration entry schema.
+ * @param value pointer to value of configuration entry.
+ * @param reference pointer to binary output buffer.
+ * @return 0 if conversion succeeded, -1 otherwise.
+ */
+int
+olsr_clock_tobin(
+    const struct cfg_schema_entry *s_entry __attribute__((unused)),
+    const struct const_strarray *value, void *reference) {
+  return olsr_clock_fromIntervalString(reference, strarray_get_first_c(value));
+}
+
+/**
+ * Help generator for time validator.
+ * See CFG_VALIDATE_TIME() and CFG_VALIDATE_TIME_MINMAX() macro in olr_clock.h
+ * @param entry pointer to schema entry
+ * @param out pointer to autobuffer for validator output
+ */
+void
+olsr_clock_help(
+    const struct cfg_schema_entry *entry, struct autobuf *out) {
+  cfg_append_printable_line(out,
+      "    Parameter must be an timestamp with a maximum of 3 fractional digits");
+  if (entry->validate_params.p_i1 != -1) {
+    cfg_append_printable_line(out,
+        "    Minimal valid time is %d.0", entry->validate_params.p_i1);
+  }
+  if (entry->validate_params.p_i2 != -1) {
+    cfg_append_printable_line(out,
+        "    Maximum valid time is %d.0", entry->validate_params.p_i2);
+  }
 }

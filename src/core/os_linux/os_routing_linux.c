@@ -85,7 +85,12 @@ static char _original_rp_filter;
 static char _original_icmp_redirect;
 
 /* netlink socket for route set/get commands */
-struct os_system_netlink _rtnetlink_socket;
+struct os_system_netlink _rtnetlink_socket = {
+  .cb_message = _cb_rtnetlink_message,
+  .cb_error = _cb_rtnetlink_error,
+  .cb_done = _cb_rtnetlink_done,
+  .cb_timeout = _cb_rtnetlink_timeout,
+};
 struct list_entity _rtnetlink_feedback;
 
 OLSR_SUBSYSTEM_STATE(_os_routing_state);
@@ -114,11 +119,6 @@ os_routing_init(void) {
   if (os_system_netlink_add(&_rtnetlink_socket, NETLINK_ROUTE, 0)) {
     return -1;
   }
-
-  _rtnetlink_socket.cb_message = _cb_rtnetlink_message;
-  _rtnetlink_socket.cb_error = _cb_rtnetlink_error;
-  _rtnetlink_socket.cb_done = _cb_rtnetlink_done;
-  _rtnetlink_socket.cb_timeout = _cb_rtnetlink_timeout;
 
   if (_os_linux_writeToProc(PROC_ALL_REDIRECT, &_original_icmp_redirect, '0')) {
     OLSR_WARN(LOG_OS_SYSTEM, "WARNING! Could not disable ICMP redirects! "

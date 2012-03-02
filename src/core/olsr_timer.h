@@ -96,14 +96,14 @@ struct olsr_timer_entry {
   /* backpointer to timer info */
   struct olsr_timer_info *info;
 
-  /* timeperiod between two timer events for periodical timers */
-  uint64_t period;
-
   /* the jitter expressed in percent */
   uint8_t jitter_pct;
 
   /* context pointer */
   void *cb_context;
+
+  /* timeperiod between two timer events for periodical timers */
+  uint64_t _period;
 
   /* cache random() result for performance reasons */
   unsigned int _random;
@@ -128,5 +128,14 @@ EXPORT void olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time);
 EXPORT void olsr_timer_stop(struct olsr_timer_entry *);
 
 EXPORT uint64_t olsr_timer_getNextEvent(void);
+
+/**
+ * @param timer pointer to timer
+ * @return true if the timer is running, false otherwise
+ */
+static INLINE bool
+olsr_timer_is_active(struct olsr_timer_entry *timer) {
+  return timer->_clock > 0ull;
+}
 
 #endif /* OLSR_TIMER_H_ */

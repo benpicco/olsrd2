@@ -48,6 +48,7 @@
 
 #include "olsr_logging.h"
 #include "olsr_plugins.h"
+#include "olsr_socket.h"
 #include "olsr_cfg.h"
 #include "olsr.h"
 
@@ -154,6 +155,7 @@ olsr_cfg_cleanup(void) {
  */
 void
 olsr_cfg_trigger_reload(void) {
+  OLSR_DEBUG(LOG_CONFIG, "Config reload triggered");
   _trigger_reload = true;
 }
 
@@ -170,7 +172,8 @@ olsr_cfg_is_reload_set(void) {
  */
 void
 olsr_cfg_trigger_commit(void) {
-  _trigger_reload = true;
+  OLSR_DEBUG(LOG_CONFIG, "Config commit triggered");
+  _trigger_commit = true;
 }
 
 /**
@@ -178,7 +181,7 @@ olsr_cfg_trigger_commit(void) {
  */
 bool
 olsr_cfg_is_commit_set(void) {
-  return _trigger_reload;
+  return _trigger_commit;
 }
 
 /**
@@ -232,7 +235,7 @@ olsr_cfg_loadplugins(void) {
 int
 olsr_cfg_apply(void) {
   struct olsr_plugin *plugin, *plugin_it;
-  struct cfg_db *new_db, *old_db;
+  struct cfg_db *old_db;
   struct autobuf log;
   int result;
 
@@ -259,16 +262,17 @@ olsr_cfg_apply(void) {
     goto apply_failed;
   }
 
+  /* backup old db */
+  old_db = _olsr_work_db;
+
   /* create new configuration database with correct values */
-  new_db = cfg_db_duplicate(_olsr_raw_db);
-  if (new_db == NULL) {
+  _olsr_work_db = cfg_db_duplicate(_olsr_raw_db);
+  if (_olsr_work_db == NULL) {
     OLSR_WARN_OOM(LOG_CONFIG);
+    _olsr_work_db = old_db;
+    old_db = NULL;
     goto apply_failed;
   }
-
-  /* switch databases */
-  old_db = _olsr_work_db;
-  _olsr_work_db = new_db;
 
   /* bind schema */
   cfg_db_link_schema(_olsr_work_db, &_olsr_schema);
@@ -284,7 +288,7 @@ olsr_cfg_apply(void) {
   }
 
   /* remove everything not valid */
-  cfg_schema_validate(new_db, true, false, NULL);
+  cfg_schema_validate(_olsr_work_db, true, false, NULL);
 
   if (olsr_cfg_update_globalcfg(false)) {
     /* this should not happen at all */
@@ -305,6 +309,11 @@ olsr_cfg_apply(void) {
   result = 0;
   _trigger_reload = false;
   _trigger_commit = false;
+
+  /* now get a new working copy of the committed settings */
+  cfg_db_remove(_olsr_raw_db);
+  _olsr_raw_db = cfg_db_duplicate(_olsr_work_db);
+  cfg_db_link_schema(_olsr_raw_db, &_olsr_schema);
 
 apply_failed:
   /* look for loaded but not enabled plugins and unload them */
