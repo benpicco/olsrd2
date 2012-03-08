@@ -63,7 +63,7 @@ struct olsr_layer2_neighbor {
   struct avl_node _node;
 
   struct netaddr mac_address;
-  int if_index;
+  uint32_t if_index;
 
   enum olsr_layer2_neighbor_data available_data;
 
@@ -87,7 +87,7 @@ struct olsr_layer2_network {
   struct avl_node _node;
 
   struct netaddr id;
-  int if_index;
+  uint32_t if_index;
 
   enum olsr_layer2_network_data available_data;
 
@@ -99,15 +99,25 @@ struct olsr_layer2_network {
   size_t rate_count;
 };
 
+EXPORT extern struct avl_tree olsr_layer2_network_tree;
+EXPORT extern struct avl_tree olsr_layer2_neighbor_tree;
 
 EXPORT void olsr_layer2_init(void);
 EXPORT void olsr_layer2_cleanup(void);
 
-EXPORT struct olsr_layer2_network *olsr_layer2_get_network(int if_index);
+EXPORT struct olsr_layer2_network *olsr_layer2_add_network(uint32_t if_index);
 EXPORT void olsr_layer2_remove_network(struct olsr_layer2_network *);
 
 EXPORT struct olsr_layer2_neighbor *olsr_layer2_get_neighbor(
-    struct netaddr *, int if_index);
+    struct netaddr *, uint32_t if_index);
+EXPORT struct olsr_layer2_neighbor *olsr_layer2_add_neighbor(
+    struct netaddr *, uint32_t if_index);
 EXPORT void olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *);
+
+static INLINE struct olsr_layer2_network *
+olsr_layer2_get_network(uint32_t if_index) {
+  struct olsr_layer2_network *net;
+  return avl_find_element(&olsr_layer2_network_tree, &if_index, net, _node);
+}
 
 #endif /* OLSR_LAYER2_H_ */

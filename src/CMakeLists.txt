@@ -1,6 +1,7 @@
 # add main program
 set(OONF_SRCS olsr_main.c 
-              olsr_setup.c)
+              olsr_setup.c
+              olsr_layer2.c)
 
 # create executable
 ADD_EXECUTABLE(${OONF_EXE} ${OONF_SRCS})
