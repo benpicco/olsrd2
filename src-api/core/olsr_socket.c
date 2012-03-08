@@ -197,7 +197,7 @@ olsr_socket_handle(uint64_t stop_time)
     }
     else {
       /* convert time interval until event triggers */
-      next_event = olsr_clock_getRelative(next_event);
+      next_event = olsr_clock_get_relative(next_event);
 
       tv_ptr = &tv;
       tv.tv_sec = (time_t)(next_event / 1000ull);
