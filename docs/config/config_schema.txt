@@ -1,0 +1,173 @@
+OLSRd config library
+Copyright (c) 2011 the olsr.org team
+
+The OLSRd config library is a complete config parser/writer
+API with variable backend and format support.
+
+===============================
+    OLSRd config schema API
+===============================
+
+(see src/config/cfg_schema.c)
+Config schemata are an easy was to check the data of a configuration
+database with predefined formats and limits. It also allows to convert
+the content of a (un)named section into a C binary struct and compare
+the changes between two databases.
+
+The schema validator supports both read-only checks and removing all
+entries that could not be validated
+
+1) defining a schema for a section type
+2) schema sections
+3) schema handling
+4) validating a schema
+5) conversion into binary data
+6) compare two databases
+7) defining a new validator
+8) defining a new mapper
+
+
+1) defining a schema for a section type
+***************************************
+
+A schema is defined by creating an array of cfg_schema_entry structs.
+To make it easier for the user there are two groups of macros to create
+
+The first set of macros defined in cfg_schema.h starts with the prefix
+CFG_VALIDATE_. Each of them defines one cfg_schema_entry for validating
+one entry of configuration data.
+
+The first two parameters of this macros are always the same, the name of
+the entry (as a string), the default value for the entry and the help text
+for it.
+
+Some of the macros have other mandatory parameters as the range of
+values for CFG_VALIDATE_INT_MINMAX() for example. After the mandatory
+parameters the user can add definitions of other optional fields in
+the struct.
+
+struct cfg_schema_entry test_entries[] = {
+  CFG_VALIDATE_BOOL("enable", "true", "enables feature X"),
+  CFG_VALIDATE_PRINTABLE("logfile", "/tmp/test", "A list of logfile names", .list = true),
+  CFG_VALIDATE_INT_MINMAX("value", "0", "a small random number", 0, 20),
+};
+
+The second set of macros starts with the prefix CFG_MAP_. They are
+used to validate the configuration data AND map them into a predefined
+binary struct.
+
+Each CFG_MAP_ macro adds two parameters at the beginning, the type of
+the struct the data should be mapped for and the name of the field
+it should be mapped to.
+After these parameters, the macros use the same parameters as the
+CFG_VALIDATE_ ones.
+
+struct bin_data {
+  bool enable_me;
+  char *log;
+  int int_value;
+};
+
+struct cfg_schema_section test_section = {
+  .type = "plugin",
+  .mode = CFG_SSMODE_NAMED
+};
+
+struct cfg_schema_entry test_entries[] = {
+  CFG_MAP_BOOL(bin_data, enable_me, "enable", "true", "enables feature X"),
+  CFG_MAP_PRINTABLE(bin_data, log, "logfile", "/tmp/test", "A list of logfile names", .list = true),
+  CFG_MAP_INT_MINMAX(bin_data, int_value, "value", "0", "a small random number", 0, 20),
+};
+
+The primary optional field of cfg_schema_entry a user might want to set
+is a boolean with the field name 'list'. If true, the configuration entry
+supports a list of elements instead of only one, each of them must be unique
+and is validated by the schema.
+
+
+2) schema sections
+******************
+
+Each schema section can only be initialized by a single piece of code.
+To allow other parts of the code to contribute schema entries to an
+existing section, it has to provide a pointer to its initialized
+cfg_schema_section.
+
+struct cfg_schema_section test_section = {
+  .type = "plugin", 
+  .mode = CFG_SSMODE_UNNAMED
+};
+
+
+3) schema handling
+******************
+
+The schema sections have to be aggregated into a single cfg_schema to
+use them for validation or mapping.
+
+An unused cfg_schema has to be initialized with the cfg_schema_add()
+call. At the end of its lifetime, all allocated resources should be
+freed with the cfg_schema_remove() call.
+
+The cfg_schema_add_section() call adds a section to a schema, the
+cfg_schema_remove_section() removes it again. Multiple overlapping
+schema sections can be added to a cfg_schema.
+
+
+4) validating a schema
+**********************
+
+To validate a configuration database, it first has to be linked to a
+schema with the cfg_db_link_schema() call (see config_db.txt).
+
+After this the function cfg_schema_validate() can be used to validate
+the database or remove all non-validated entries.
+
+The cfg_schema_validate() call needs four parameters. The first one is
+a pointer to the configuration database, the second one 'cleanup'
+should be true if the api call should remove non-validated. If the third one
+'ignore_unknown_sections' is true, the validation ignores all database
+sections that have no corresponding schema_section. The last parameter
+is a pointer to an autobuf to get the output of the validation.
+
+
+5) conversion into binary data
+******************************
+
+The cfg_schema_tobin() call allows to automatically map a number of
+configuration entries into a binary struct. It requires a pointer to
+the target struct, a pointer to the (un)named section that should be
+converted, a pointer to an array of cfg_schema_entry objects and the
+number of this objects.
+
+The api call will then convert all entries with a corresponding mapper
+in the cfg_schema_entry into the struct.
+
+Its good practice to validate a set of configuration before its written
+into a binary struct. If one of the conversion fails, the struct will
+be partly overwritten.
+
+
+6) compare two databases
+************************
+
+Each cfg_schema_section has the cb_delta_handler() callback pointer for
+comparing databases and trigger the callbacks of the sections for the
+changes between them.
+
+When the user calls the cfg_schema_handle_db_changes() functions with
+the old and the new database, the function will loop through all sections
+of both databases.
+
+For each section that has been added, changed or removed it will
+initialize the pre/post variable in the corresponding cfg_schema_section
+and the pre/post/delta_changed variable of each of its cfg_schema_entry
+objects. After this the cb_delta_handler() callback is called.
+
+
+7) defining a new validator
+***************************
+
+
+8) defining a new mapper
+************************

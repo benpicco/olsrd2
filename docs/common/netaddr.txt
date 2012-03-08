@@ -1,0 +1,99 @@
+OLSRd commons library
+Copyright (c) 2004-2011 the olsr.org team
+Cleaned up and extracted into this form by Henning Rogge in 2011
+
+The OLSRd commons library is a collection of helper functions
+that are used through the whole OSLRd for list/tree handling,
+string management and other things.
+
+=================================
+    OLSRd commons netaddr API
+=================================
+
+The netaddr API provides an unified handling of different addresses.
+It supports IPv4, IPv6, MAC-48 and EUI-64 addresses, both with and
+without prefix lengths and offers API calls for conversion from or to
+binary or text representation.
+
+Each netaddr object stores its own address type, so the address type
+doesn't need to be handled in the users code. 
+
+In addition to this it provides an union object for all four kinds of
+sockaddr structs (no support for unix sockets at the moment), which
+allows to interface with os network function without casting between
+data types (which produce an error on some modern gcc variants).
+
+It also provides an inet_ntop() and inet_pton() function (for IPv4 and
+IPv6) for win32.
+
+For a full list of helper functions, see the netaddr.h file.
+
+
+
+======================================
+    OLSRd commons netaddr overview
+======================================
+
+1) netaddr string conversion
+2) netaddr binary conversion
+3) netaddr_socket functions
+4) netaddr compare functions
+
+
+
+1) netaddr string conversion
+****************************
+
+netaddr_to_string() and netaddr_from_string() are the two main
+conversion functions between string and netaddr format. Both of
+them automatically detect the address format and the optional
+prefix length.
+
+netaddr_to_prefixstring() is a special function that allows the
+user to force the output of a prefix length, even if it has the
+maximum length (10.0.0.0/32 instead of just 10.0.0.0).
+
+
+
+2) netaddr binary conversion
+****************************
+
+netaddr_to_binary() and netaddr_from_binary() work similar than
+the string variants. netaddr_to_binary() ignores the prefix length
+to allow the user to store it into the right data field itself.
+netaddr_from_binary() initialize the prefix length with the
+maximum value.
+
+netaddr_to_autobuf() is similar to netaddr_to_binary() but just
+adds the binary address to an autobuf.
+
+
+
+3) netaddr_socket functions
+***************************
+
+netaddr_socket_init() initialize a netaddr_socket with a netaddr
+address and a port number.
+netaddr_socket_get_port() returns the port number set in the
+netaddr_socket object.
+
+netaddr_socket_to_string() converts a netaddr_socket into a
+string representation.
+
+netaddr_from_socket() extracts the address part of the object
+into a netaddr.
+
+
+
+4) netaddr compare functions
+****************************
+
+netaddr_cmp() and netaddr_socket_cmp() are inline comparator
+functions for netaddr and netaddr_socket objects.
+
+netaddr_is_in_subnet() and netaddr_binary_is_in_subnet() check
+if a netaddr/binary address is inside the subnet defined by
+another netaddr and its prefix length.
+
+netaddr_avlcmp() is a comparator for the avl API for netaddr
+objects.

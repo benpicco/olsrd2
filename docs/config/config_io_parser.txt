@@ -1,0 +1,155 @@
+OLSRd config library
+Copyright (c) 2011 the olsr.org team
+
+The OLSRd config library is a complete config parser/writer
+API with variable backend and format support.
+
+=====================================
+    OLSRd config load/storage API
+=====================================
+
+(see src/config/cfg_io.c, src/config-io/*.c, src/config/cfg_parser.c
+and src/config-parser/*.c)
+
+The configuration API has a flexible framework to load and store
+configuration data in different formats and with different data sources.
+
+cfg_io is the basic facility for loading/storage of configuration data.
+
+The code keeps a list of registered io_handlers, each of them represents
+a single source/target of data (a file, a http address, a sql database
+or an ldap directory).
+
+Because many io handlers just loads/stores a text/binary file with a
+certain format, io handlers can (but don't need to) offload the
+parsing/creation of the format to a second facility, cfg_parser. Some
+io handlers might not do this, because they directly load/store the
+(for example a sql io handler that read/stores configuration data in
+a table).
+
+1) load configuration data
+2) store configuration data
+3) write an io handler
+4) write an parser
+
+
+1) load configuration data
+**************************
+
+The usual way to load configuration data is by using the cfg_io_load()
+call. The user supplies the url to load the data from and a pointer to
+an autobuffer to store error messages of the loading process.
+
+The call either returns a pointer to a newly generated configuration
+database with the data or NULL, if an error happened.
+
+The url has to be in the format "<io-handler>://<parameter>", the
+parameter part is io handler specific.
+
+The url can be reduced to just the parameter if the default io handler
+shall be used.
+
+If the io handler needs a parser, the user can specify the parser by
+using the cfg_io_load_parser() call. Otherwise the configuration API
+will try to autodetect the parser.
+
+ 
+2) store configuration data
+***************************
+
+cfg_io_save() is the usual call to store configuration data. The user
+calls the function with the url to store the data, a pointer to a
+configuration database and a pointer to an autobuffer to store error
+messages or the storage process.
+
+The call returns 0 if it was successful and -1 otherwise, the url has
+the same format as for loading configuration data.
+
+To specify the parser, user the cfg_io_save_parser() call, otherwise
+the autodetection will be used.
+
+
+3) write an io handler
+**********************
+
+To write an IO handler one have to initialize a cfg_io struct with
+the handlers name and two callbacks (one for loading, one for storage)
+and need to register it with the cfg_io_add() call.
+
+If an io handler does only support loading or storage, the other
+callback can be set to NULL.
+
+The load callback will be called the three parameters of the 
+cfg_io_load_parser() call, just that the url will only contain the
+parameter part (and not the name of the io handler) and that the
+parser parameter will be NULL if it should be autodetected.
+
+The callback should load the data, initialize a configuration database
+and parse the data into the database. If the io handler does not do the
+parsing itself, it should call cfg_parser_find() (if the parser was not
+specified) and then cfg_parser_parse_buffer().
+
+  if (parser == NULL) {
+    /* lookup a fitting parser, we know the path as a hint */
+    parser = cfg_parser_find(&autobuf, path, mime);
+  }
+
+  db = cfg_parser_parse_buffer(parser, buffer, buffer_len, log);
+
+The save callback will be also called with the parameters of the
+cfg_io_save_parser() call, and again only the parameter part of the
+url will be supplied.
+
+The callback should convert the configuration database into the right
+format and then store it. If the io handler does not do the serializing
+itself, it should call cfg_parser_find() (if the parser was not
+specified) and then cfg_parser_serialize_to_buffer().
+
+  if (parser == NULL) {
+    parser = cfg_parser_find(NULL, path, mime);
+  }
+  if (cfg_parser_serialize_to_buffer(parser, &autobuf, src_db, log)) {
+    // error... 
+    return -1;
+  }
+
+
+The cfg_parser_find() call takes three arguments, all of which can
+be NULL if not specified.
+
+The first parameter is a pointer to an autobuffer with the loaded data,
+the second one contains the 'path' and 'name' of the data (if existing)
+and the third one can contain the mime type.
+
+The fields will be used by the existing parsers to do the autodetection.
+
+
+4) write an parser
+******************
+
+To write a parser, one has to initialize a cfg_parser struct with
+the parsers name and up to three callbacks.
+
+If the parser supports autodetection, it has to implement the check_hints
+callback, if parsing or serialization is supported the corresponding
+callbacks have to be implemented two.
+
+The check_hints callback will be supplied with up to three hints
+(all of them can be NULL), which should help the parser to decide if it
+can parse the data. The hints are the data itself (for loading data),
+the path to the data (for checking directories of file extensions) and
+the mime type.
+
+The callback can check any of the supplied hints and should return true
+if it should be able to parse the file.
+
+The parse callback will get a pointer to the loaded raw data, the length
+of the data and pointer to an autobuf for adding error messages during
+parsing. It should return a pointer to an initialized configuration
+database filled with config entries or NULL if an error happened.
+
+The serialize callback will get a pointer to an autobuf to store its
+output, a pointer to the source configuration database and a pointer to
+a second autobuf for adding error messages during serialization. It
+should write all config entries into the output autobuf and return 0,
+or return -1 if an error happened.

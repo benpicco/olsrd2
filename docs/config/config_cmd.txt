@@ -1,0 +1,146 @@
+OLSRd config library
+Copyright (c) 2011 the olsr.org team
+
+The OLSRd config library is a complete config parser/writer
+API with variable backend and format support.
+
+=====================================
+    OLSRd config command line API
+=====================================
+
+(See src/config/cfg_cmd.c)
+The command line API allows to manipulate the content of a
+configuration database through a text interface, for example
+telnet or argument parsing.
+
+The API provides commands for reading and writing entries directly into
+the database, for loading and saving in different formats and
+for looking up the defined schema for the database.
+
+Before using the cfg_cmd_handle_ commands, the user must initialize
+a cfg_instance struct with a call to cfg_add(). At the end of
+usage, the user must cleanup the allocated memory with cfg_remove().
+
+1) set command
+2) remove command
+3) schema command
+4) get command
+5) load command
+6) save command
+7) format command
+
+
+1) set command
+**************
+
+The cfg_cmd_handle_set() call allows to add sections and key/value-
+pair to the configuration database.
+
+It supports the following parameters:
+
+section_type.                Add an unnamed section
+section_type.key=value       Add a key/value pair to an unnamed section
+section_type[name].          Add a named section to the configuration
+section_type[name].key=value Add a key/value pair to a named section
+key=value                    Add a key/value pair to a named section.
+    Section type/name will be taken from the cfg_cmd_state.
+
+
+
+2) remove command
+*****************
+
+The cfg_cmd_handle_remove() call removes a section or key from the
+configuration database.
+
+It supports the following parameters:
+
+section_type.             Delete all sections of a certain type
+section_type.key          Delete a key in an unnamed section
+section_type[name].       Delete a named section
+section_type[name].key    Delete a key in a named section
+key                       Delete a key from the database.
+    Section type/name will be taken from the cfg_cmd_state.
+
+
+
+3) schema command
+*****************
+
+The cfg_cmd_handle_schema() call allows to display the existing schema
+entries connected to the configuration database.
+
+Without parameters it displays all all allowed section types.
+
+In addition to this it supports the following parameters:
+
+section_type             Display all allowed entries of one schema section
+section_type.key         Display help text for schema entry. This includes
+                         the default value of the key.
+
+
+
+4) get command
+**************
+
+The cfg_cmd_handle_get() call displays the content of the configuration
+database.
+
+Without parameters it show all section types in database.
+
+In addition to this it supports the following parameters:
+
+section_type.                Show all named sections of a certain type
+section_type.key             Show the value(s) of a key in an unnamed
+                             section
+section_type[name].key       Show the value(s) of a key in a named section
+
+
+
+5) load command
+***************
+
+cfg_cmd_handle_load() loads configuration data from a source and adds it to the
+current configuration database. The type of the source (file, http, ...)
+is specified similar to an URL handler in the parameter. If no handler
+is specified, the API falls down to a default handler specified in the
+sourcecode.
+
+It supports the following parameters:
+
+source_name                Loads data from a source with the default handler.
+                           (filename for the file:// handler for example)
+file://source_name         Loads data from a source with the file handler.
+
+
+
+6) save command
+***************
+
+cfg_cmd_handle_save() stores a configuration database into a target. The type
+of the source (file, http, ...) is specified similar to an URL handler
+in the parameter. If no handler is specified, the API falls down to a
+default handler specified in the sourcecode.
+
+It supports the following parameters:
+
+target_name                Saves data to a target with the default handler.
+                           (filename for the file:// handler for example)
+file://target_name         Saves data to a target with the file handler.
+
+
+
+7) format command
+*****************
+
+Some load/save handlers support multiple formats. The cfg_cmd_handle_format()
+call sets the format that should be used by the handler (if the handler
+supports formats).
+
+It supports the following parameters:
+
+format_name               Name of the file format to be used in the
+                          following load/save operations
+AUTO                      Try to use format auto-detection. This can be
+                          based on the content of the source (for loading),
+                          the source name or the MIME-type.

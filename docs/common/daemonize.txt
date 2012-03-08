@@ -1,0 +1,63 @@
+OLSRd commons library
+Copyright (c) 2004-2011 the olsr.org team
+Cleaned up and extracted into this form by Henning Rogge in 2011
+
+The OLSRd commons library is a collection of helper functions
+that are used through the whole OSLRd for list/tree handling,
+string management and other things.
+
+===================================
+    OLSRd commons daemonize API
+===================================
+
+The daemonize API tries to solve a subtile problem with error
+handling, initialization and forking a daemon into background.
+
+One of the important question about forking into background is
+always WHEN to fork.
+
+If a program do it first, it can do all its initialization
+within the forked process, which prevents a duplication of some
+of the resources during forking. Unfortunately the parent process
+will most likely return to the caller even before initialization
+is over, so you cannot provide an error code if something goes
+wrong, which is a problem for scripts.
+
+If a program forks after initialization, it can provide correct
+error signaling to the caller, but some parts of the initialized
+objects might be duplicated during the fork.
+
+The solution of the daemonize API is to fork early, but keep
+the parent process waiting for an okay/error message from the
+forked process. This combined the advantages of both cases above
+without their disadvantages.
+
+The daemonize_prepare() call will fork the process into background
+and keep a pipe between both processes. The daemonize_finish() call
+will send the return code to the parent process. it will do nothing
+if the pipes filedescriptor is zero, which simplifies the 
+"do not fork" case for the API user.
+
+DO NOT FORGET to call daemonize_finish(), even if initialization fails.
+
+{
+    int fork_fd = 0;
+    
+    if (shall_fork) {
+        fork_fd = daemonize_prepare();
+    }
+    
+    /* do initialization */
+    ...
+    if (error) {
+        daemonize_finish(fork_fd, 1);
+        exit(1);
+    }
+    
+    ...
+    
+    /* successful initialization */
+    daemonize_finish(fork_fd, 0);
+    
+    ...
+}
