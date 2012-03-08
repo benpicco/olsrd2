@@ -7,7 +7,6 @@ ADD_CUSTOM_TARGET(AppCleanData ALL
     COMMENT "Remove old builddata"
 )
 
-message ("Version trailer: '${OONF_VERSION_TRAILER}'")
 ADD_CUSTOM_COMMAND (
     OUTPUT ${GEN_DATA_C} ${GEN_PLUGIN_STATIC_C}
     COMMAND ${CMAKE_COMMAND}
@@ -37,5 +36,3 @@ ADD_LIBRARY(static_builddata STATIC ${GEN_DATA_C})
 ADD_LIBRARY(static_pluginloader STATIC ${GEN_PLUGIN_STATIC_C})
 ADD_DEPENDENCIES(static_builddata AppCleanData)
 ADD_DEPENDENCIES(static_pluginloader AppCleanData)
-
-message("Compiler: ${CMAKE_C_COMPILER_ID}")

@@ -1,4 +1,4 @@
-function(compile_common_test executable source)
+function(compile_config_test executable source)
     # create executable
     ADD_EXECUTABLE(${executable} ${source})
 
@@ -10,7 +10,7 @@ function(compile_common_test executable source)
         SET_TARGET_PROPERTIES(${executable} PROPERTIES ENABLE_EXPORTS true)
         TARGET_LINK_LIBRARIES(${executable} ws2_32 iphlpapi)
     ENDIF(WIN32)
-endfunction(add_compiler_flag)
+endfunction(compile_config_test)
 
 set(TESTS test_config_list
           test_config_validation
@@ -20,6 +20,6 @@ set(TESTS test_config_list
           test_config_delta)
 
 foreach(TEST ${TESTS})
-    compile_common_test(${TEST} ${TEST}.c)
+    compile_config_test(${TEST} ${TEST}.c)
     ADD_TEST(NAME ${TEST} COMMAND ${TEST})
-endforeach(OONF_EXE)
+endforeach(TEST)
