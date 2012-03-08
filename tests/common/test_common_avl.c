@@ -622,7 +622,8 @@ static void test_remove_all_macro(bool do_random) {
 
 static void test_for_each_key_macros(void) {
   struct tree_element *e, *p;
-  int i, key;
+  int key;
+  size_t i;
 
   START_TEST();
   avl_init(&head, avl_comp_uint32, true, NULL);
@@ -739,10 +740,9 @@ static void test_for_each_key_macros(void) {
     }
   }
 
-  CHECK_TRUE(i>=1, "Less than one nodes returned");
+  CHECK_TRUE(i>0, "Less than one nodes returned");
 
   key = 6;
-  i = 0;
   avl_for_each_elements_with_key(&head, e, node, p, &key) {
     CHECK_TRUE(false, "Element returned by loop over non-existing key");
   }

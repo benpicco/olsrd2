@@ -37,6 +37,7 @@ include_directories(src-api/core)
 ENABLE_TESTING()
 
 # start compiling core and plugins
+add_subdirectory(src)
 add_subdirectory(src-api)
 add_subdirectory(src-plugins)
 add_subdirectory(tests)
