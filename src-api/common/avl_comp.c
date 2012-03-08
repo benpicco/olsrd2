@@ -54,8 +54,8 @@
  * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
  */
 int
-avl_comp_uint32(const void *k1, const void *k2, void *ptr __attribute__ ((unused)))
-{
+avl_comp_uint32(const void *k1, const void *k2,
+    void *ptr __attribute__ ((unused))) {
   const uint32_t *u1 = k1;
   const uint32_t *u2 = k2;
 
@@ -77,8 +77,8 @@ avl_comp_uint32(const void *k1, const void *k2, void *ptr __attribute__ ((unused
  * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
  */
 int
-avl_comp_uint16(const void *k1, const void *k2, void *ptr __attribute__ ((unused)))
-{
+avl_comp_uint16(const void *k1, const void *k2,
+    void *ptr __attribute__ ((unused))) {
   const uint16_t *u1 = k1;
   const uint16_t *u2 = k2;
 
@@ -100,8 +100,8 @@ avl_comp_uint16(const void *k1, const void *k2, void *ptr __attribute__ ((unused
  * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
  */
 int
-avl_comp_uint8(const void *k1, const void *k2, void *ptr __attribute__ ((unused)))
-{
+avl_comp_uint8(const void *k1, const void *k2,
+    void *ptr __attribute__ ((unused))) {
   const uint8_t *u1 = k1;
   const uint8_t *u2 = k2;
 
@@ -115,17 +115,18 @@ avl_comp_uint8(const void *k1, const void *k2, void *ptr __attribute__ ((unused)
 }
 
 /**
- * AVL tree comparator for arbitrary memory blocks.
- * Custom pointer is the length of the memory to compare.
+ * AVL tree comparator for netaddr objects.
  * @param k1 pointer to key 1
  * @param k2 pointer to key 2
- * @param ptr length of memory blocks to compare (size_t)
+ * @param ptr not used in this comparator
  * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
  */
 int
-avl_comp_mem(const void *k1, const void *k2, void *ptr) {
-  const size_t length = (const size_t)ptr;
-  return memcmp(k1, k2, length);
+avl_comp_netaddr(const void *k1, const void *k2,
+    void *ptr __attribute__ ((unused))) {
+  const struct netaddr *n1 = k1;
+  const struct netaddr *n2 = k2;
+  return memcmp(n1, n2, sizeof(struct netaddr));
 }
 
 /**
