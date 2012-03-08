@@ -102,7 +102,7 @@ olsr_clock_get_absolute(uint64_t relative)
  *   happened.
  */
 static INLINE int64_t
-olsr_clock_getRelative(uint64_t absolute)
+olsr_clock_get_relative(uint64_t absolute)
 {
   return (int64_t)absolute - (int64_t)olsr_clock_getNow();
 }
@@ -113,7 +113,7 @@ olsr_clock_getRelative(uint64_t absolute)
  * @return true if the event already happened, false otherwise
  */
 static INLINE bool
-olsr_clock_isPast(uint64_t absolute)
+olsr_clock_is_past(uint64_t absolute)
 {
   return absolute < olsr_clock_getNow();
 }

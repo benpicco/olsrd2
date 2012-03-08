@@ -412,7 +412,7 @@ _insert_into_bucket(struct olsr_timer_entry *timer) {
   int group;
 
   slot = timer->_clock >> BUCKET_TIMESLICE_POW2;
-  relative = olsr_clock_getRelative(timer->_clock) >> BUCKET_TIMESLICE_POW2;
+  relative = olsr_clock_get_relative(timer->_clock) >> BUCKET_TIMESLICE_POW2;
 
   for (group = 0; group < BUCKET_DEPTH;
       group++, slot >>= BUCKET_COUNT_POW2, relative >>= BUCKET_COUNT_POW2) {
@@ -425,7 +425,7 @@ _insert_into_bucket(struct olsr_timer_entry *timer) {
   }
 
   OLSR_WARN(LOG_TIMER, "Error, timer event too far in the future: %" PRIu64,
-      olsr_clock_getRelative(timer->_clock));
+      olsr_clock_get_relative(timer->_clock));
   return -1;
 }
 

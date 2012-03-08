@@ -31,6 +31,7 @@ if(DOXYGEN_FOUND)
 endif(DOXYGEN_FOUND)
 
 # set include directories
+include_directories(src)
 include_directories(src-api)
 include_directories(src-api/core)
 
