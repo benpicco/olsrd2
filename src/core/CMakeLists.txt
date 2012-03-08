@@ -17,11 +17,7 @@ SET(OONF_CORE_SRCS olsr_cfg.c
                    os_system_generic.c)
                    
 # add os_specific source files
-IF(WIN32)
-    FILE(GLOB SRCS "os_win32/*.c")    
-    set(OONF_SRCS ${OONF_SRCS} ${SRCS})
-ENDIF(WIN32)
-
+# TODO: add BSD and WIN32
 IF(LINUX)
     SET(OONF_CORE_SRCS ${OONF_CORE_SRCS}
                        os_linux/os_net_linux.c
@@ -29,11 +25,6 @@ IF(LINUX)
                        os_linux/os_routing_linux.c
                        os_linux/os_clock_linux.c)
 ENDIF(LINUX)
-
-IF(BSD)
-    FILE(GLOB SRCS "os_bsd/*.c")    
-    set(OONF_SRCS ${OONF_SRCS} ${SRCS})
-ENDIF(BSD)
 
 IF(ANDROID)
     include_directories(src/android)

@@ -43,8 +43,9 @@
 #include <sys/socket.h>
 
 /* and now the rest of the includes */
-#include <linux/rtnetlink.h>
 #include <linux/types.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
@@ -62,7 +63,7 @@
 
 #define OS_SYSTEM_NETLINK_TIMEOUT 100
 
-static void _cb_handle_netlink_timerout(void *);
+static void _cb_handle_netlink_timeout(void *);
 static void _netlink_handler(int fd, void *data,
     bool event_read, bool event_write);
 static void _handle_rtnetlink(struct nlmsghdr *hdr);
@@ -110,8 +111,8 @@ static struct msghdr _netlink_send_msg = {
 
 /* netlink timeout handling */
 static struct olsr_timer_info _netlink_timer= {
-  .name = "rtnetlink feedback timer",
-  .callback = _cb_handle_netlink_timerout,
+  .name = "netlink feedback timer",
+  .callback = _cb_handle_netlink_timeout,
 };
 
 /* built in rtnetlink multicast receiver */
@@ -229,12 +230,12 @@ os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multi
     goto os_add_netlink_fail;
   }
 
-  nl->in = calloc(1, UIO_MAXIOV);
+  nl->in = calloc(1, getpagesize());
   if (nl->in == NULL) {
     OLSR_WARN_OOM(LOG_OS_SYSTEM);
     goto os_add_netlink_fail;
   }
-
+  nl->in_len = getpagesize();
 
   memset(&addr, 0, sizeof(addr));
   addr.nl_family = AF_NETLINK;
@@ -314,24 +315,26 @@ int
 os_system_netlink_addreq(struct nlmsghdr *n,
     int type, const void *data, int len)
 {
-  struct rtattr *rta;
+  struct nlattr *nl_attr;
   size_t aligned_msg_len, aligned_attr_len;
 
   /* calculate aligned length of message and new attribute */
   aligned_msg_len = NLMSG_ALIGN(n->nlmsg_len);
-  aligned_attr_len = RTA_LENGTH(len);
+  aligned_attr_len = NLA_HDRLEN + len;
 
   if (aligned_msg_len + aligned_attr_len > UIO_MAXIOV) {
     OLSR_WARN(LOG_OS_SYSTEM, "Netlink message got too large!");
     return -1;
   }
-  rta = (struct rtattr *)((void*)((char *)n + aligned_msg_len));
-  rta->rta_type = type;
-  rta->rta_len = aligned_attr_len;
 
+  nl_attr = (struct nlattr *) ((void*)((char *)n + aligned_msg_len));
+  nl_attr->nla_type = type;
+  nl_attr->nla_len = aligned_attr_len;
+
+  /* fix length of netlink message */
   n->nlmsg_len = aligned_msg_len + aligned_attr_len;
 
-  memcpy(RTA_DATA(rta), data, len);
+  memcpy((char *)nl_attr + NLA_HDRLEN, data, len);
   return 0;
 }
 
@@ -340,7 +343,7 @@ os_system_netlink_addreq(struct nlmsghdr *n,
  * @param ptr pointer to netlink handler
  */
 static void
-_cb_handle_netlink_timerout(void *ptr) {
+_cb_handle_netlink_timeout(void *ptr) {
   struct os_system_netlink *nl = ptr;
 
   if (nl->cb_timeout) {
@@ -409,8 +412,8 @@ _netlink_handler(int fd, void *data, bool event_read, bool event_write) {
   struct nlmsghdr *nh;
   ssize_t ret;
   size_t len;
+  int flags;
 
-  OLSR_DEBUG(LOG_OS_SYSTEM, "Got netlink message (%d/%d)", event_read, event_write);
   nl = data;
   if (event_write) {
     _flush_netlink_buffer(nl);
@@ -421,15 +424,47 @@ _netlink_handler(int fd, void *data, bool event_read, bool event_write) {
   }
 
   /* handle incoming messages */
+  _netlink_rcv_msg.msg_flags = 0;
+  flags = MSG_PEEK;
+
+netlink_rcv_retry:
   _netlink_rcv_iov.iov_base = nl->in;
-  _netlink_rcv_iov.iov_len = UIO_MAXIOV;
-  if ((ret = recvmsg(fd, &_netlink_rcv_msg, MSG_DONTWAIT)) < 0) {
+  _netlink_rcv_iov.iov_len = nl->in_len;
+
+  if ((ret = recvmsg(fd, &_netlink_rcv_msg, MSG_DONTWAIT | flags)) < 0) {
     if (errno != EAGAIN) {
       OLSR_WARN(LOG_OS_SYSTEM,"netlink recvmsg error: %s (%d)\n",
           strerror(errno), errno);
     }
     return;
   }
+
+  /* not enough buffer space ? */
+  if (nl->in_len < (size_t)ret || (_netlink_rcv_msg.msg_flags & MSG_TRUNC) != 0) {
+    void *ptr;
+    size_t size;
+
+    size = nl->in_len;
+    while (size < (size_t)ret) {
+      size += getpagesize();
+    }
+    ptr = realloc(nl->in, size);
+    if (!ptr) {
+      OLSR_WARN_OOM(LOG_OS_SYSTEM);
+      return;
+    }
+    nl->in = ptr;
+    nl->in_len = size;
+    goto netlink_rcv_retry;
+  }
+  if (flags) {
+    /* it worked, not remove the message from the queue */
+    flags = 0;
+    goto netlink_rcv_retry;
+  }
+
+  OLSR_DEBUG(LOG_OS_SYSTEM, "Got netlink message of %"
+      PRINTF_SSIZE_T_SPECIFIER" bytes", ret);
 
   /* loop through netlink headers */
   len = (size_t) ret;
@@ -448,7 +483,7 @@ _netlink_handler(int fd, void *data, bool event_read, bool event_write) {
         }
         _netlink_job_finished(nl);
         /* End of a multipart netlink message reached */
-        return;
+        break;
 
       case NLMSG_ERROR:
         /* Feedback for async netlink message */

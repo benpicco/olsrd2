@@ -168,7 +168,7 @@ olsr_memcookie_malloc(struct olsr_memcookie_info *ci)
   /* Stats keeping */
   ci->_current_usage++;
 
-  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: alloc %s, " PRINTF_SIZE_T_SPECIFIER " bytes%s\n",
+  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: alloc %s, %" PRINTF_SIZE_T_SPECIFIER " bytes%s\n",
              ci->name, ci->size, reuse ? ", reuse" : "");
   return ptr;
 }
@@ -210,6 +210,6 @@ olsr_memcookie_free(struct olsr_memcookie_info *ci, void *ptr)
   /* Stats keeping */
   ci->_current_usage--;
 
-  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: free %s, "PRINTF_SIZE_T_SPECIFIER" bytes%s\n",
+  OLSR_DEBUG(LOG_MEMCOOKIE, "MEMORY: free %s, %"PRINTF_SIZE_T_SPECIFIER" bytes%s\n",
              ci->name, ci->size, reuse ? ", reuse" : "");
 }

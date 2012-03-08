@@ -72,7 +72,10 @@ static struct list_entity _buckets[1ull << BUCKET_COUNT_POW2][BUCKET_DEPTH];
 static int _bucket_ptr[BUCKET_DEPTH];
 
 /* time when the next timer will fire */
-static uint64_t _next_fire_event;
+static uint64_t _next_event;
+
+/* false if the _next_valid variable must be recalculated */
+static bool _next_event_valid;
 
 /* number of timer events still in queue */
 static uint32_t _total_timer_events;
@@ -123,9 +126,10 @@ olsr_timer_init(void)
   }
 
   /* at the moment we have no timer */
-  _next_fire_event = ~0ull;
+  _next_event = ~0ull;
   _total_timer_events = 0;
   _scheduling_now = false;
+  _next_event_valid = true;
 
   list_init_head(&timerinfo_list);
 }
@@ -254,9 +258,9 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
     return;
   }
 
-  if (timer->_clock <= _next_fire_event) {
+  if (timer->_clock <= _next_event) {
     /* we have a new 'earliest' event */
-    _next_fire_event = timer->_clock;
+    _next_event = timer->_clock;
 
     if (new_slot != -1) {
       /* earliest event in depth 0 buckets ! */
@@ -269,7 +273,7 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
   }
   else if (list_is_empty(&_buckets[_bucket_ptr[0]][0])) {
     /* event got later and now the 'earliest bucket' is empty */
-    _calculate_next_event();
+    _next_event_valid =  false;
   }
 }
 
@@ -301,7 +305,7 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
   _total_timer_events--;
   if (!_scheduling_now && list_is_empty(&_buckets[_bucket_ptr[0]][0])) {
     /* we are outside the event loop and now the 'earliest bucket' is empty */
-    _calculate_next_event();
+    _next_event_valid = false;
   }
 }
 
@@ -340,11 +344,11 @@ olsr_timer_walk(void)
 
   _scheduling_now = true;
 
-  while (_next_fire_event <= olsr_clock_getNow()) {
+  while (_next_event <= olsr_clock_getNow()) {
     i = _bucket_ptr[0];
     list_for_each_element_safe(&_buckets[i][0], timer, _node, t_it) {
       OLSR_DEBUG(LOG_TIMER, "TIMER: fire '%s' at clocktick %" PRIu64 "\n",
-                  timer->info->name, _next_fire_event);
+                  timer->info->name, _next_event);
 
       /*
        * The timer->info pointer is invalidated by olsr_timer_stop()
@@ -390,7 +394,10 @@ olsr_timer_walk(void)
  */
 uint64_t
 olsr_timer_getNextEvent(void) {
-  return _next_fire_event;
+  if (!_next_event_valid) {
+    _calculate_next_event();
+  }
+  return _next_event;
 }
 
 /**
@@ -505,9 +512,12 @@ static void
 _calculate_next_event(void) {
   struct olsr_timer_entry *timer;
 
+  /* prevent multiple recalculations */
+  _next_event_valid = true;
+
   /* no timer event in queue ? */
   if (_total_timer_events == 0) {
-    _next_fire_event = ~0ull;
+    _next_event = ~0ull;
     return;
   }
 
@@ -516,5 +526,5 @@ _calculate_next_event(void) {
 
   /* get the timestamp when the first bucket will happen */
   timer = list_first_element(&_buckets[_bucket_ptr[0]][0], timer, _node);
-  _next_fire_event = timer->_clock;
+  _next_event = timer->_clock;
 }

@@ -286,7 +286,7 @@ _print_memory(struct autobuf *buf) {
   struct olsr_memcookie_info *c, *iterator;
 
   OLSR_FOR_ALL_COOKIES(c, iterator) {
-    if (abuf_appendf(buf, "%-25s (MEMORY) size: "PRINTF_SIZE_T_SPECIFIER
+    if (abuf_appendf(buf, "%-25s (MEMORY) size: %"PRINTF_SIZE_T_SPECIFIER
         " usage: %u freelist: %u allocations: %u/%u\n",
         c->name, c->size,
         olsr_memcookie_get_usage(c),
