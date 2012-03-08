@@ -25,3 +25,7 @@
 
 [remotecontrol]
 #	acl          accept_default
+
+[nl80211]
+	if           wlan0
+	interval     3.0

@@ -31,9 +31,9 @@ if(DOXYGEN_FOUND)
 endif(DOXYGEN_FOUND)
 
 # set include directories
-include_directories(src)
-include_directories(src/core)
+include_directories(src-api)
+include_directories(src-api/core)
 
 # start compiling core and plugins
-add_subdirectory(src)
-add_subdirectory(lib)
+add_subdirectory(src-api)
+add_subdirectory(src-plugins)
