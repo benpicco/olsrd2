@@ -61,6 +61,7 @@
 #include "olsr_timer.h"
 #include "os_system.h"
 #include "olsr.h"
+#include "olsr_layer2.h"
 
 /* constants */
 #define _CFG_SECTION "nl80211"
@@ -220,35 +221,6 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
   }
 }
 
-enum olsr_layer2_neighbor_data {
-  OLSR_L2NEIGH_SIGNAL = 1<<0,
-  OLSR_L2NEIGH_INACTIVE_TIME = 1<<1,
-  OLSR_L2NEIGH_RX_BITRATE = 1<<2,
-  OLSR_L2NEIGH_RX_BYTES = 1<<3,
-  OLSR_L2NEIGH_RX_PACKETS = 1<<4,
-  OLSR_L2NEIGH_TX_BITRATE = 1<<5,
-  OLSR_L2NEIGH_TX_BYTES = 1<<6,
-  OLSR_L2NEIGH_TX_PACKETS = 1<<7,
-  OLSR_L2NEIGH_TX_RETRIES = 1<<8,
-  OLSR_L2NEIGH_TX_FAILED = 1<<9,
-};
-
-struct olsr_layer2_neighbor {
-  struct netaddr mac_address;
-  int if_index;
-
-  enum olsr_layer2_neighbor_data available_data;
-
-  uint16_t signal;
-  uint32_t inactive_time;
-
-  uint64_t tx_bitrate, rx_bitrate;
-  uint32_t tx_bytes, tx_packets;
-  uint32_t rx_bytes, rx_packets;
-
-  uint32_t tx_retries, tx_failed;
-};
-
 static int
 _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh) {
   static struct nla_policy stats_policy[NL80211_STA_INFO_MAX + 1] = {
@@ -301,7 +273,8 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
 
   if (sinfo[NL80211_STA_INFO_INACTIVE_TIME]) {
     neigh->available_data |= OLSR_L2NEIGH_INACTIVE_TIME;
-    neigh->inactive_time = nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]);
+    neigh->last_seen =
+        olsr_clock_get_absolute(nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]));
   }
   if (sinfo[NL80211_STA_INFO_RX_BYTES]) {
     neigh->available_data |= OLSR_L2NEIGH_RX_BYTES;
@@ -383,26 +356,6 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
 #define WLAN_CAPABILITY_SHORT_SLOT_TIME (1<<10)
 #define WLAN_CAPABILITY_APSD    (1<<11)
 #define WLAN_CAPABILITY_DSSS_OFDM (1<<13)
-
-enum olsr_layer2_network_data {
-  OLSR_L2NET_INACTIVE_TIME = 1<<0,
-  OLSR_L2NET_FREQUENCY = 1<<1,
-  OLSR_L2NET_SUPPORTED_RATES = 1<<2,
-};
-
-struct olsr_layer2_network {
-  struct netaddr id;
-  int if_index;
-
-  enum olsr_layer2_network_data available_data;
-
-  uint32_t inactive_time;
-
-  uint64_t frequency;
-
-  uint64_t *supported_rates;
-  size_t rate_count;
-};
 
 static int
 _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net) {
@@ -528,7 +481,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
 #endif
   if (bss[NL80211_BSS_SEEN_MS_AGO]) {
     net->available_data |= OLSR_L2NET_INACTIVE_TIME;
-    net->inactive_time = nla_get_u32(bss[NL80211_BSS_SEEN_MS_AGO]);
+    net->last_seen = olsr_clock_get_absolute(nla_get_u32(bss[NL80211_BSS_SEEN_MS_AGO]));
   }
   if (bss[NL80211_BSS_INFORMATION_ELEMENTS] != NULL ||
       bss[NL80211_BSS_BEACON_IES] != NULL) {
