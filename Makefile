@@ -7,11 +7,11 @@ all: default_target FORCE
 doc: default_target FORCE
 	@make -s -C $(BUILD_DIR) doc
 
-clean: default_target FORCE
-	@make -s -C $(BUILD_DIR) clean
+test: default_target FORCE
+	@make -s -C $(BUILD_DIR) test
 
-autotest:
-	@./test_all.sh
+clean: default_target FORCE
+	@rm -rf build
 
 default_target:
 	@test -d ${BUILD_DIR} || sh -c "mkdir $(BUILD_DIR) ; cd $(BUILD_DIR) ;  cmake .."

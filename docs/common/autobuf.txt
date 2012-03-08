@@ -1,0 +1,124 @@
+OLSRd commons library
+Copyright (c) 2004-2011 the olsr.org team
+Cleaned up and extracted into this form by Henning Rogge in 2011
+
+The OLSRd commons library is a collection of helper functions
+that are used through the whole OSLRd for list/tree handling,
+string management and other things.
+
+=================================
+    OLSRd commons autobuf API
+=================================
+
+The autobuf API provides a set of automatically shrinking and growing
+buffers and accessor functions to add both text and binary content to
+it.
+
+Each buffer will be always null terminated and grow in a blocksize
+of 4096.
+
+
+
+======================================
+    OLSRd commons autobuf overview
+======================================
+
+1) autobuf lifecycle
+2) adding data to an autobuf
+3) removing data from an autobuf
+4) custom memory management
+
+
+
+1) autobuf lifecycle
+********************
+
+Each autobuf is created with the function abuf_init(), which takes the
+minimum initial size of the autobuffer as a parameter. This size is
+rounded up to a multiply of 4096 (with 4096 as a minimum).
+
+The autobuf struct is NOT allocated by abuf_init.
+
+To free an existing autobuf later, you just call the abuf_free() function,
+with a pointer to the autobuf as a parameter.
+
+{
+    struct autobuf abuf;
+    
+    if (abuf_init(&abuf, 4096)) { 
+       // error
+       return;
+    }
+    
+    ....
+    
+    abuf_free(&abuf);
+}
+
+
+
+2) adding data to an autobuf
+****************************
+
+There are six functions for adding data to an autobuf, four adding text
+information and two adding binary data.
+
+If appended data doesn't fit into the current autobuf, its enlarged by
+the necessary amount of data, rounded to 4096. If there is not enough
+memory left for the new buffer, the function will return -1.
+
+abuf_appendf() and abuf_puts() are the two most common functions to add
+text to an autobuf. abuf_appendf() just works like fprintf(), but instead
+of a FILE pointer, it takes an autobuf pointer as the first argument.
+abuf_puts() just appends a fixed string to an autobuf.
+
+abuf_vappendf() is a variant of abuf_appendf() that takes a va_list
+parameter instead of variable arguments itself. This allows to use
+autobuffers in functions that take variable arguments itself. The
+OLSR.org logging systems is an example where it is used.
+
+abuf_strftime() is a helper function that adds the output of strftime()
+to an autobuf without the need of allocating a temporary buffer.
+
+abuf_memcpy() appends a binary memory block to an autobuffer.
+abuf_memcpy_prefix() does the same, just put the memory block before
+the current content of the buffer.
+
+void add(struct autobuf *abuf)
+{
+   char *txt = "textblock";
+   char *prefix = "prefix: ";
+   int i = 1;
+   float f = 2.5;
+   
+   abuf_appendf(abuf, "integer: %d    float: %f\n", i, f);
+   abuf_puts(abuf, "Just a line of text\n");
+   
+   abuf_memcpy(abuf, txt, strlen(txt));
+   abuf_memcpy_prefix(abuf, prefix, strlen(prefix));
+}
+
+
+
+3) removing data from an autobuf
+********************************
+
+There are two functions to remove data from an autobuf.
+
+abuf_clear() is an inline macro that resets the current length of the
+used buffer to zero and clears the content of the buffer.
+
+abuf_pull() is a function that removes a number of bytes from the
+beginning of the autobuf. This can be used to create a fifo buffer
+with a variable length.
+
+
+
+4) custom memory management
+***************************
+
+The autobuf API use three functions to handle its internal buffers,
+malloc(), realloc() and free(). To allow the user of the API to connect
+the autobuffers to their own memory management, you can overwrite
+the used memory functions with the abuf_set_memory_handler() function.
+ 

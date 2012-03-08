@@ -1,0 +1,64 @@
+OLSRd commons library
+Copyright (c) 2004-2011 the olsr.org team
+Cleaned up and extracted into this form by Henning Rogge in 2011
+
+The OLSRd commons library is a collection of helper functions
+that are used through the whole OSLRd for list/tree handling,
+string management and other things.
+
+================================
+    OLSRd commons string API
+================================
+
+The string API contains a few helper functions for secure
+string handling.
+
+The first two functions, strscpy() and strscat() are OLSR.orgs
+implementation of secure string copy and concatenation functions
+(see wikipedia 'strlcpy').
+
+The third function str_trim() is used to trim leading or trailing
+whitespaces from a string. It takes a pointer to a string pointer
+as an argument and changes the referenced pointer to trim away the
+leading whitespaces. The trailing ones are removed by setting a new
+null byte terminator. This way the trim operation can be done
+without any string copy.
+
+=====================================
+    OLSRd commons stringarray API
+=====================================
+
+The strarray_*() functions are a simple API to handle a list of strings
+with a single strarray struct. The API is mostly designed for iterating
+over a list of strings, append and remove operations (and counting elements)
+can be a bit slow.
+
+The lifetime of a stringarray is defined by strarray_init() and
+strarray_free(). Call the first function to initialize a new array and
+the second one to free the allocated memory.
+
+The const_strarray struct is used to initialize constant string arrays
+directly with strings (which are type 'const char *' in C99). Most
+functions for strarray struct also exists for const_strarray,
+just with a _c suffix (e.g. 'strarray_get_c()' instead of 'strarray_get').
+
+strarray_append() adds a new string to the end of an array. It will
+grow the allocated memory if necessary. strarray_remove() removes an
+element of an array and shrinks the allocated memory.
+
+strarray_get() returns the pointer to the x-th element of the array.
+strarray_get_count() returns the number of elements of the array. Both
+iterate over the array starting with the first element.
+
+strarray_get_first() returns the pointer to the first element of the
+array, strarray_get_last() returns the pointer to the last one.
+
+strarray_get_next() returns the pointer to the next element of an array.
+It does return an undefined pointer if the parameter already points to
+the last element.
+
+strarray_get_next_safe() returns the pointer to the next element of
+an array or NULL if the parameter was already the last element.
+
+The FOR_ALL_STRINGS() macro iterates over an array of strings. It is
+NOT safe to remove elements while iterating.

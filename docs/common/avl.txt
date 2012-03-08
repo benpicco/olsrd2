@@ -1,0 +1,189 @@
+OLSRd commons library
+Copyright (c) 2004-2011 the olsr.org team
+Cleaned up and extracted into this form by Henning Rogge in 2011
+
+The OLSRd commons library is a collection of helper functions
+that are used through the whole OSLRd for list/tree handling,
+string management and other things.
+
+=============================
+    OLSRd commons avl API
+=============================
+
+The avl API provides a generic binary tree library with iteration
+and custom comparator support
+
+The API use two structs to define AVL trees, the avl_tree struct
+which is a handler for the whole key, and the avl_node struct,
+which has to be included into every tree node object.
+
+The AVL nodes do not contain a pointer to the value of the node.
+Instead of this the avl_node must be put into a larger datastructure
+and the API calculates the pointer to this struct by the known
+offset of the avl_node inside it.
+
+For a full documentation of all helper macros and inline functions
+look into the avl.h header file.
+
+
+
+==================================
+    OLSRd commons avl overview
+==================================
+
+1) avl lifecycle
+2) defining a comparator
+3) adding/removing elements to a tree
+4) look for tree elements
+5) iterator macros
+
+
+
+1) avl lifecycle
+****************
+
+Each avl_tree must be initialized with the avl_init() function, which
+needs a pointer to the avl_tree and a comparator of the tree. The third
+parameter controls if the tree supports multiple elements with the
+same key and the last one is a user defined pointer that will be
+provided to the comparator.
+
+The avl API does not allocate memory at all. Both the avl_tree and
+the avl_node structs have to be allocated by the user. Because of this
+the API does NOT contain a avl_free() operation.
+
+
+
+2) defining a comparator
+************************
+
+Each AVL tree needs a comparator for it keys. The comparator is a
+function with three elements, first the two keys and last the custom
+data pointer from the avl_tree.
+
+The comparator has to return 0 if both keys are equal (for the avl tree),
+a number smaller than zero if key1 is smaller than key2 and a number
+larger than zero if key1 is larger than key2.
+
+The avl_comp.c file contains a number of predefined comparators.
+
+int
+avl_comp_strcasecmp(const void *txt1, const void *txt2,
+    void *ptr __attribute__ ((unused))) {
+  return strcasecmp(txt1, txt2);
+}
+
+
+
+3) adding/removing elements to a tree
+*************************************
+
+avl_insert() adds a node to an avl_tree. If the node does not allow
+duplicate keys and a node with the same key is already present,
+avl_insert will return an error.
+
+The avl_node key variable MUST BE INITIALIZED before the node can be
+added to the avl_tree. All other node fields will be initialized by
+the API. 
+
+Each avl_node can only be in one avl_tree at once.
+
+The avl_remove() function removes a node from an avl_tree. It is not
+allowed to call the function for a node which is not a member of the
+tree.
+
+struct my_node {
+    int i;
+    struct avl_node node
+};
+
+void add(struct avl_tree *tree, struct my_node *n)
+{
+    /* use the integer as the key */
+    n->node.key = &m->i;
+    avl_insert(tree, &n->node);
+}
+
+
+
+4) look for tree elements
+*************************
+
+There are three functions to look for avl_nodes in a tree. All of
+them return NULL if they find no matching node or a pointer to
+the avl_node.
+
+avl_find() is the simplest lookup function, which searchs for an
+avl_node within a tree with a certain key.
+
+avl_find_lessequal() looks for the 'largest' key that is less or
+equal compared to the parameter of the lookup function.
+
+avl_find_greaterequal() does the same, it just searchs for the
+'smallest' key larger or equal to the parameter.
+
+Because all these functions return only the avl_node pointer and
+not the struct it is embedded into, there are three corresponding
+macros that do this translation automatically.
+
+The macros are avl_find_element(), avl_find_le_element() and
+avl_find_ge_element().
+
+Each of this functions needs four parameters. The first and second
+are the same as the lookup functions, a pointer to the avl_tree and
+a pointer to a key.
+
+The third parameter is a pointer to a struct, in which the avl_node
+is embedded into. The fourth one is the NAME of the avl_node inside
+the struct.
+
+struct my_node {
+    int i;
+    struct avl_node node
+};
+
+void find(struct avl_tree *tree)
+{
+    struct my_node *my;
+    int key = 1;
+    
+    my = avl_find_element(tree, &key, my, node);
+    if (my) {
+        ....
+    }
+}
+
+
+
+5) iterator macros
+******************
+
+avl.h contains a series of iterator macros, which can be each used
+similar to a normal C for-loop statement. They are usually prefixed
+with "avl_for_".
+
+Most of the macros exist twice, once 'normal' and once with the suffix
+"_safe". The safe macros can be used even if the current iterated
+node will be removed inside the loop, but they need an additional
+pointer to the iterated objects to store the next element.
+
+struct my_node {
+    int i;
+    struct avl_node node
+};
+
+void iterate(struct avl_tree *tree)
+{
+    struct my_node *my, *safe;
+    
+    avl_for_each_element(tree, my, node) {
+        ....
+    }
+    
+    avl_for_each_element_safe(tree, my, node, safe) {
+        if ( ... ) {
+            avl_remove(tree, my);
+        }
+    }
+}
+ 

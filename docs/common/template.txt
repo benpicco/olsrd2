@@ -1,0 +1,56 @@
+OLSRd commons library
+Copyright (c) 2004-2011 the olsr.org team
+Cleaned up and extracted into this form by Henning Rogge in 2011
+
+The OLSRd commons library is a collection of helper functions
+that are used through the whole OSLRd for list/tree handling,
+string management and other things.
+
+=================================
+    OLSRd commons template API
+=================================
+
+The template API contains a simple template engine, that allow the
+user to define several values for key, which are then inserted into
+a template pattern and appended to an autobuf.
+ 
+The template engine looks for a series of keys, each beginning and
+ending with a '%'. The user has to supply a string for each of the keys,
+that contains the corresponding value. The engine then replace each of
+the keys in the provided template pattern with the value, and appends
+the result to the autobuf.
+
+The user has to call the function abuf_template_init() first, which
+analyzes the template pattern, compares it to the array of keys and
+stores the result in an array of intergers. The array must have at
+least 3 times as many entries as the number of keys in the template
+pattern.
+
+After this the function abuf_templatef() appends to combination of
+template pattern and values to the autobuf.
+
+Pseudocode:
+
+char *keys[2] = {
+    "key1", "key2"
+};
+
+{
+    char *pattern = "print %key1%, %key2%";
+    char *values[2];
+    int buffer[30];
+    int indexCount;
+    
+    values[0] = "value for key 1";
+    values[1] = "second value";
+    
+    indexCount = abuf_template_init(keys, ARRAYSIZE(keys), pattern,
+        buffer, ARRAYSIZE(buffer));
+    
+    if (indexCount >= 0) {
+        abuf_templatef(autobuf, pattern, values, buffer, indexCount);
+    }
+} 
+
+
+   

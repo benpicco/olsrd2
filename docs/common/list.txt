@@ -1,0 +1,99 @@
+OLSRd commons library
+Copyright (c) 2004-2011 the olsr.org team
+Cleaned up and extracted into this form by Henning Rogge in 2011
+
+The OLSRd commons library is a collection of helper functions
+that are used through the whole OSLRd for list/tree handling,
+string management and other things.
+
+==============================
+    OLSRd commons list API
+==============================
+
+The list API provides a generic double-linked list library 
+with iteration support
+
+The API use a single struct list_entity to define both the
+head of the list and the nodes, which has to be included
+into every list node object.
+
+The list nodes do not contain a pointer to the value of the node.
+Instead of this the list_entity must be put into a larger datastructure
+and the API calculates the pointer to this struct by the known
+offset of the list_entity inside it.
+
+For a full documentation of all helper macros and inline functions
+look into the list.h header file.
+
+The list implementation is made only of small inline functions and
+macros. Because of this there is no list.c file.
+
+
+
+===================================
+    OLSRd commons list overview
+===================================
+
+1) list lifecycle
+2) adding/removing elements to a list
+3) iterator macros
+
+
+
+1) list lifecycle
+*****************
+
+Each list head must be initialized with the list_init() function, which
+needs a pointer to the list_entity for the head of the list.
+
+The list API does not allocate memory at all, all list_entity structs
+have to be allocated by the user. Because of this the API does NOT
+contain a list_free() operation.
+
+
+
+2) adding/removing elements to a list
+*************************************
+
+list_add_head() adds a new list element to the beginning of a list,
+list_add_tail() adds it to the end of a list.
+
+list_add_before() adds a new element right before an existing one,
+list_add_after() adds it after the existing element.
+
+list_remove() removes an object from an list. Do not call this function
+for nodes NOT added to a list.
+
+
+
+3) iterator macros
+******************
+
+list.h contains a series of iterator macros, which can be each used
+similar to a normal C for-loop statement. They are usually prefixed
+with "list_for_".
+
+Most of the macros exist twice, once 'normal' and once with the suffix
+"_safe". The safe macros can be used even if the current iterated
+node will be removed inside the loop, but they need an additional
+pointer to the iterated objects to store the next element.
+
+struct my_node {
+    int i;
+    struct list_entity node
+};
+
+void iterate(struct list_entity *head)
+{
+    struct my_node *my, *safe;
+    
+    list_for_each_element(head, my, node) {
+        ....
+    }
+    
+    list_for_each_element_safe(head, my, node, safe) {
+        if ( ... ) {
+            list_remove(tree, my);
+        }
+    }
+}
