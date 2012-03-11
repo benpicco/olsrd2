@@ -69,7 +69,7 @@ os_clock_init(void) {
   }
 #endif
 #ifdef CLOCK_MONOTONIC
-  if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+  if (_clock_source == 0 && clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
     _clock_source = CLOCK_MONOTONIC;
   }
 #endif
