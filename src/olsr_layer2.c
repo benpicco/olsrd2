@@ -40,6 +40,7 @@
  */
 
 #include "common/avl.h"
+#include "common/avl_comp.h"
 #include "common/common_types.h"
 
 #include "olsr_memcookie.h"
@@ -61,6 +62,9 @@ static struct olsr_memcookie_info _neighbor_cookie = {
 
 OLSR_SUBSYSTEM_STATE(_layer2_state);
 
+/**
+ * Initialize layer2 subsystem
+ */
 void
 olsr_layer2_init(void) {
   if (olsr_subsystem_init(&_layer2_state))
@@ -69,17 +73,40 @@ olsr_layer2_init(void) {
   olsr_memcookie_add(&_network_cookie);
   olsr_memcookie_add(&_neighbor_cookie);
 
-  /* TODO: init avl trees */
+  avl_init(&olsr_layer2_network_tree, avl_comp_uint32, false, NULL);
+  avl_init(&olsr_layer2_neighbor_tree, avl_comp_netaddr, true, NULL);
 }
 
+/**
+ * Cleanup all resources allocated by layer2 subsystem
+ */
 void
 olsr_layer2_cleanup(void) {
-  /* TODO: free avl tree elements */
+  struct olsr_layer2_neighbor *neigh, *neigh_it;
+  struct olsr_layer2_network *net, *net_it;
+
+  if (olsr_subsystem_cleanup(&_layer2_state))
+    return;
+
+  OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
+    olsr_layer2_remove_network(net);
+  }
+
+  OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
+    olsr_layer2_remove_neighbor(neigh);
+  }
 
   olsr_memcookie_remove(&_network_cookie);
   olsr_memcookie_remove(&_neighbor_cookie);
 }
 
+/**
+ * Add an active network to the database. If an entry for the
+ * interface does already exists, it will be returned by this
+ * function and no new entry will be created.
+ * @param if_index local interface index of network
+ * @return pointer to layer2 network data, NULL if OOM
+ */
 struct olsr_layer2_network *
 olsr_layer2_add_network(uint32_t if_index) {
   struct olsr_layer2_network *net;
@@ -97,12 +124,22 @@ olsr_layer2_add_network(uint32_t if_index) {
   return net;
 }
 
+/**
+ * Remove a layer2 network from the database
+ * @param net pointer to layer2 network data
+ */
 void
 olsr_layer2_remove_network(struct olsr_layer2_network *net) {
   avl_remove(&olsr_layer2_network_tree, &net->_node);
   olsr_memcookie_free(&_network_cookie, net);
 }
 
+/**
+ * Retrieve a layer2 neighbor from the database
+ * @param mac pointer to layer2 address of neighbor
+ * @param if_index local interface index
+ * @return pointer to layer2 neighbor data, NULL if not found
+ */
 struct olsr_layer2_neighbor *
 olsr_layer2_get_neighbor(struct netaddr *mac, uint32_t if_index) {
   struct olsr_layer2_neighbor *neigh, *start;
@@ -115,6 +152,14 @@ olsr_layer2_get_neighbor(struct netaddr *mac, uint32_t if_index) {
   return NULL;
 }
 
+/**
+ * Add a layer2 neighbor to the database. If an entry for the
+ * neighbor on the interface does already exists, it will be
+ * returned by this function and no new entry will be created.
+ * @param mac layer2 address of neighbor
+ * @param if_index local interface index of the neighbor
+ * @return pointer to layer2 neighbor data, NULL if OOM
+ */
 struct olsr_layer2_neighbor *
 olsr_layer2_add_neighbor(struct netaddr *mac, uint32_t if_index) {
   struct olsr_layer2_neighbor *neigh;
@@ -134,6 +179,10 @@ olsr_layer2_add_neighbor(struct netaddr *mac, uint32_t if_index) {
   return neigh;
 }
 
+/**
+ * Remove a layer2 neighbor from the database
+ * @param neigh pointer to layer2 neighbor
+ */
 void
 olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *neigh) {
   avl_remove(&olsr_layer2_neighbor_tree, &neigh->_node);

@@ -46,6 +46,8 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
+#include "olsr_clock.h"
+
 enum olsr_layer2_neighbor_data {
   OLSR_L2NEIGH_SIGNAL = 1<<0,
   OLSR_L2NEIGH_INACTIVE_TIME = 1<<1,
@@ -65,7 +67,7 @@ struct olsr_layer2_neighbor {
   struct netaddr mac_address;
   uint32_t if_index;
 
-  enum olsr_layer2_neighbor_data available_data;
+  enum olsr_layer2_neighbor_data _available_data;
 
   uint16_t signal;
   uint64_t last_seen;
@@ -76,6 +78,152 @@ struct olsr_layer2_neighbor {
 
   uint32_t tx_retries, tx_failed;
 };
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains signal strength, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_signal(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_SIGNAL) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains inactive time, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_inactive_time(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_INACTIVE_TIME) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains rx bitrate, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_rx_bitrate(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_RX_BITRATE) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains rx bytes, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_rx_bytes(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_RX_BYTES) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains rx packets, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_rx_packets(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_RX_PACKETS) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains tx bitrate, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_tx_bitrate(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_TX_BITRATE) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains tx bytes, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_tx_bytes(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_TX_BYTES) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains tx packets, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_tx_packets(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_TX_PACKETS) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains tx retries, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_tx_retries(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_TX_RETRIES) != 0;
+}
+
+/**
+ * @param neigh pointer to layer2 neighbor data
+ * @return true if data contains tx failed, false otherwise
+ */
+static INLINE bool
+olsr_layer2_neighbor_has_tx_failed(struct olsr_layer2_neighbor *neigh) {
+  return (neigh->_available_data & OLSR_L2NEIGH_TX_FAILED) != 0;
+}
+
+/**
+ *
+ * @param neigh
+ * @param signal
+ */
+static INLINE void
+olsr_layer2_neighbor_set_signal(struct olsr_layer2_neighbor *neigh, uint16_t signal_dbm) {
+  neigh->_available_data |= OLSR_L2NEIGH_SIGNAL;
+  neigh->signal = signal_dbm;
+}
+static INLINE void
+olsr_layer2_neighbor_set_last_seen(struct olsr_layer2_neighbor *neigh, uint64_t relative) {
+  neigh->_available_data |= OLSR_L2NEIGH_INACTIVE_TIME;
+  neigh->last_seen = olsr_clock_get_absolute(relative);
+}
+static INLINE void
+olsr_layer2_neighbor_set_rx_bitrate(struct olsr_layer2_neighbor *neigh, uint64_t bitrate) {
+  neigh->_available_data |= OLSR_L2NEIGH_RX_BITRATE;
+  neigh->rx_bitrate = bitrate;
+}
+static INLINE void
+olsr_layer2_neighbor_set_rx_bytes(struct olsr_layer2_neighbor *neigh, uint32_t bytes) {
+  neigh->_available_data |= OLSR_L2NEIGH_RX_BYTES;
+  neigh->rx_bytes = bytes;
+}
+static INLINE void
+olsr_layer2_neighbor_set_rx_packets(struct olsr_layer2_neighbor *neigh, uint32_t packets) {
+  neigh->_available_data |= OLSR_L2NEIGH_RX_PACKETS;
+  neigh->rx_packets = packets;
+}
+static INLINE void
+olsr_layer2_neighbor_set_tx_bitrate(struct olsr_layer2_neighbor *neigh, uint64_t bitrate) {
+  neigh->_available_data |= OLSR_L2NEIGH_TX_BITRATE;
+  neigh->tx_bitrate = bitrate;
+}
+static INLINE void
+olsr_layer2_neighbor_set_tx_bytes(struct olsr_layer2_neighbor *neigh, uint32_t bytes) {
+  neigh->_available_data |= OLSR_L2NEIGH_TX_BYTES;
+  neigh->tx_bytes = bytes;
+}
+static INLINE void
+olsr_layer2_neighbor_set_tx_packets(struct olsr_layer2_neighbor *neigh, uint32_t packets) {
+  neigh->_available_data |= OLSR_L2NEIGH_TX_PACKETS;
+  neigh->tx_packets = packets;
+}
+static INLINE void
+olsr_layer2_neighbor_set_tx_retries(struct olsr_layer2_neighbor *neigh, uint32_t retries) {
+  neigh->_available_data |= OLSR_L2NEIGH_TX_PACKETS;
+  neigh->tx_retries = retries;
+}
+static INLINE void
+olsr_layer2_neighbor_set_tx_fails(struct olsr_layer2_neighbor *neigh, uint32_t failed) {
+  neigh->_available_data |= OLSR_L2NEIGH_TX_PACKETS;
+  neigh->tx_failed = failed;
+}
 
 enum olsr_layer2_network_data {
   OLSR_L2NET_INACTIVE_TIME = 1<<0,
@@ -102,6 +250,9 @@ struct olsr_layer2_network {
 EXPORT extern struct avl_tree olsr_layer2_network_tree;
 EXPORT extern struct avl_tree olsr_layer2_neighbor_tree;
 
+#define OLSR_FOR_ALL_LAYER2_NETWORKS(network, iterator) avl_for_each_element_safe(&olsr_layer2_network_tree, network, _node, iterator)
+#define OLSR_FOR_ALL_LAYER2_NEIGHBORS(neighbor, iterator) avl_for_each_element_safe(&olsr_layer2_neighbor_tree, neighbor, _node, iterator)
+
 EXPORT void olsr_layer2_init(void);
 EXPORT void olsr_layer2_cleanup(void);
 
@@ -114,6 +265,11 @@ EXPORT struct olsr_layer2_neighbor *olsr_layer2_add_neighbor(
     struct netaddr *, uint32_t if_index);
 EXPORT void olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *);
 
+/**
+ * Retrieve a layer2 network entry from the database
+ * @param if_index local interface index of network
+ * @return pointer to layer2 network, NULL if not found
+ */
 static INLINE struct olsr_layer2_network *
 olsr_layer2_get_network(uint32_t if_index) {
   struct olsr_layer2_network *net;

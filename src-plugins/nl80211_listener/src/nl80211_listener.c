@@ -266,42 +266,42 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
     return -1;
   }
 
-  neigh->available_data = 0;
+  neigh->_available_data = 0;
 
   netaddr_from_binary(&neigh->mac_address, nla_data(tb[NL80211_ATTR_MAC]), 6, AF_MAC48);
   neigh->if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
   if (sinfo[NL80211_STA_INFO_INACTIVE_TIME]) {
-    neigh->available_data |= OLSR_L2NEIGH_INACTIVE_TIME;
+    neigh->_available_data |= OLSR_L2NEIGH_INACTIVE_TIME;
     neigh->last_seen =
         olsr_clock_get_absolute(nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]));
   }
   if (sinfo[NL80211_STA_INFO_RX_BYTES]) {
-    neigh->available_data |= OLSR_L2NEIGH_RX_BYTES;
+    neigh->_available_data |= OLSR_L2NEIGH_RX_BYTES;
     neigh->rx_bytes = nla_get_u32(sinfo[NL80211_STA_INFO_RX_BYTES]);
   }
   if (sinfo[NL80211_STA_INFO_RX_PACKETS]) {
-    neigh->available_data |= OLSR_L2NEIGH_RX_PACKETS;
+    neigh->_available_data |= OLSR_L2NEIGH_RX_PACKETS;
     neigh->rx_packets = nla_get_u32(sinfo[NL80211_STA_INFO_RX_PACKETS]);
   }
   if (sinfo[NL80211_STA_INFO_TX_BYTES]) {
-    neigh->available_data |= OLSR_L2NEIGH_TX_BYTES;
+    neigh->_available_data |= OLSR_L2NEIGH_TX_BYTES;
     neigh->tx_bytes = nla_get_u32(sinfo[NL80211_STA_INFO_TX_BYTES]);
   }
   if (sinfo[NL80211_STA_INFO_TX_PACKETS]) {
-    neigh->available_data |= OLSR_L2NEIGH_TX_PACKETS;
+    neigh->_available_data |= OLSR_L2NEIGH_TX_PACKETS;
     neigh->tx_packets = nla_get_u32(sinfo[NL80211_STA_INFO_TX_PACKETS]);
   }
   if (sinfo[NL80211_STA_INFO_TX_RETRIES])  {
-    neigh->available_data |= OLSR_L2NEIGH_TX_RETRIES;
+    neigh->_available_data |= OLSR_L2NEIGH_TX_RETRIES;
     neigh->tx_retries = nla_get_u32(sinfo[NL80211_STA_INFO_TX_RETRIES]);
   }
   if (sinfo[NL80211_STA_INFO_TX_FAILED]) {
-    neigh->available_data |= OLSR_L2NEIGH_TX_FAILED;
+    neigh->_available_data |= OLSR_L2NEIGH_TX_FAILED;
     neigh->tx_failed = nla_get_u32(sinfo[NL80211_STA_INFO_TX_FAILED]);
   }
   if (sinfo[NL80211_STA_INFO_SIGNAL])  {
-    neigh->available_data |= OLSR_L2NEIGH_SIGNAL;
+    neigh->_available_data |= OLSR_L2NEIGH_SIGNAL;
     neigh->signal = (int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
   }
   if (sinfo[NL80211_STA_INFO_TX_BITRATE]) {
