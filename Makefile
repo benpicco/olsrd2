@@ -1,19 +1,19 @@
 BUILD_DIR=build
 
 .ONESHELL:
-all: default_target FORCE
-	@make -s -C $(BUILD_DIR) all
+.PHONY: cmake
 
-doc: default_target FORCE
-	@make -s -C $(BUILD_DIR) doc
-
-test: default_target FORCE
-	@make -s -C $(BUILD_DIR) test
-
-clean: default_target FORCE
+all: cmake FORCE
+	@${MAKE} -s -C ${BUILD_DIR} all
+ 
+clean:
 	@rm -rf build
 
-default_target:
-	@test -d ${BUILD_DIR} || sh -c "mkdir $(BUILD_DIR) ; cd $(BUILD_DIR) ;  cmake .."
+cmake:
+	@test -e ${BUILD_DIR}/Makefile || sh -c "rm -rf ${BUILD_DIR}; mkdir $(BUILD_DIR) ; cd $(BUILD_DIR) ;  cmake .."
 
 FORCE:
+
+.DEFAULT: cmake FORCE
+	@test -e ${BUILD_DIR}/Makefile || sh -c "rm -rf ${BUILD_DIR}; mkdir $(BUILD_DIR) ; cd $(BUILD_DIR) ;  cmake .."
+	@${MAKE} -s -C ${BUILD_DIR} $@
