@@ -890,14 +890,14 @@ _cb_handle_nl80211(struct olsr_telnet_data *data) {
   }
   else if ((next = str_hasnextword(data->parameter, "neigh"))) {
     if (*next) {
-      if (strchr(next, ':') != 0) {
-        if (netaddr_from_string(&mac, ptr)) {
-          abuf_appendf(data->out, "Error, illegal mac address: %s\n", ptr);
+      if (strchr(next, ':')) {
+        if (netaddr_from_string(&mac, next)) {
+          abuf_appendf(data->out, "Error, illegal mac address: %s\n", next);
           return TELNET_RESULT_ACTIVE;
         }
       }
       else {
-        if_index = atoi(ptr);
+        if_index = atoi(next);
       }
     }
 
