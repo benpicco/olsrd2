@@ -56,12 +56,13 @@
 #include "config/cfg_schema.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
+#include "olsr_layer2.h"
 #include "olsr_logging.h"
 #include "olsr_plugins.h"
 #include "olsr_timer.h"
+#include "olsr_telnet.h"
 #include "os_system.h"
 #include "olsr.h"
-#include "olsr_layer2.h"
 
 /* constants */
 #define _CFG_SECTION "nl80211"
@@ -83,6 +84,8 @@ static void _cb_config_changed(void);
 static void _cb_nl_message(struct nlmsghdr *hdr);
 static void _cb_transmission_event(void *);
 
+static enum olsr_telnet_result _cb_handle_nl80211(struct olsr_telnet_data *data);
+
 /* plugin declaration */
 OLSR_PLUGIN7 {
   .descr = "OLSRD nl80211 listener plugin",
@@ -95,6 +98,20 @@ OLSR_PLUGIN7 {
 
   .deactivate = true,
 };
+
+static struct olsr_telnet_command _telnet_cmd =
+  TELNET_CMD("nl80211", _cb_handle_nl80211,
+      "\"nl80211 list net\": list all connected wlan networks\n"
+      "\"nl80211 list neigh\": list all known wlan neighbors\n"
+      "\"nl80211 list neigh <if-index>\": list all known wlan"
+               " neighbors on interface with specified index\n"
+      "\"nl80211 net\": show data of all known wlan networks\n"
+      "\"nl80211 net <if-index>\": show data of a wlan network\n"
+      "\"nl80211 neigh\": show data of all known wlan neighbors\n"
+      "\"nl80211 neigh <if-index>\": show data of all known wlan"
+               " neighbors on specified interface\n"
+      "\"nl80211 neigh <ssid>\": show data of a wlan neighbor\n"
+      );
 
 /* configuration */
 static struct cfg_schema_section _nl80211_section = {
@@ -172,6 +189,7 @@ _cb_plugin_enable(void) {
   }
 
   olsr_timer_add(&_transmission_timer_info);
+  olsr_telnet_add(&_telnet_cmd);
   return 0;
 }
 
@@ -182,14 +200,13 @@ _cb_plugin_enable(void) {
 static int
 _cb_plugin_disable(void) {
   olsr_timer_remove(&_transmission_timer_info);
-
+  olsr_telnet_remove(&_telnet_cmd);
   os_system_netlink_remove(&_netlink_handler);
   return 0;
 }
 
 static void
 _parse_cmd_newfamily(struct nlmsghdr *hdr) {
-  struct nlattr *attrs[CTRL_ATTR_MAX+1];
   static struct nla_policy ctrl_policy[CTRL_ATTR_MAX+1] = {
     [CTRL_ATTR_FAMILY_ID] = { .type = NLA_U16 },
     [CTRL_ATTR_FAMILY_NAME] = { .type = NLA_STRING,
@@ -200,6 +217,7 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
     [CTRL_ATTR_OPS]   = { .type = NLA_NESTED },
     [CTRL_ATTR_MCAST_GROUPS] = { .type = NLA_NESTED },
   };
+  struct nlattr *attrs[CTRL_ATTR_MAX+1];
 
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       attrs, CTRL_ATTR_MAX, ctrl_policy) < 0) {
@@ -222,7 +240,7 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
 }
 
 static int
-_parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh) {
+_parse_cmd_new_station(struct nlmsghdr *hdr) {
   static struct nla_policy stats_policy[NL80211_STA_INFO_MAX + 1] = {
     [NL80211_STA_INFO_INACTIVE_TIME] = { .type = NLA_U32 },
     [NL80211_STA_INFO_RX_BYTES] = { .type = NLA_U32 },
@@ -238,7 +256,6 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
     [NL80211_STA_INFO_TX_RETRIES] = { .type = NLA_U32 },
     [NL80211_STA_INFO_TX_FAILED] = { .type = NLA_U32 },
   };
-
   static struct nla_policy rate_policy[NL80211_RATE_INFO_MAX + 1] = {
     [NL80211_RATE_INFO_BITRATE] = { .type = NLA_U16 },
     [NL80211_RATE_INFO_MCS] = { .type = NLA_U8 },
@@ -249,6 +266,10 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
   struct nlattr *tb[NL80211_ATTR_MAX + 1];
   struct nlattr *sinfo[NL80211_STA_INFO_MAX + 1];
   struct nlattr *rinfo[NL80211_RATE_INFO_MAX + 1];
+
+  struct olsr_layer2_neighbor *neigh;
+  struct netaddr mac;
+  unsigned if_index;
 
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
@@ -266,50 +287,57 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
     return -1;
   }
 
-  neigh->_available_data = 0;
+  netaddr_from_binary(&mac, nla_data(tb[NL80211_ATTR_MAC]), 6, AF_MAC48);
+  if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
-  netaddr_from_binary(&neigh->mac_address, nla_data(tb[NL80211_ATTR_MAC]), 6, AF_MAC48);
-  neigh->if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
+  neigh = olsr_layer2_add_neighbor(&mac, if_index);
+  if (neigh == NULL) {
+    OLSR_WARN_OOM(LOG_PLUGINS);
+    return -1;
+  }
 
+  /* reset all existing data */
+  olsr_layer2_neighbor_clear(neigh);
+
+  /* insert new data */
   if (sinfo[NL80211_STA_INFO_INACTIVE_TIME]) {
-    neigh->_available_data |= OLSR_L2NEIGH_INACTIVE_TIME;
-    neigh->last_seen =
-        olsr_clock_get_absolute(nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]));
+    olsr_layer2_neighbor_set_last_seen(neigh,
+        olsr_clock_get_absolute(nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME])));
   }
   if (sinfo[NL80211_STA_INFO_RX_BYTES]) {
-    neigh->_available_data |= OLSR_L2NEIGH_RX_BYTES;
-    neigh->rx_bytes = nla_get_u32(sinfo[NL80211_STA_INFO_RX_BYTES]);
+    olsr_layer2_neighbor_set_rx_bytes(neigh,
+        nla_get_u32(sinfo[NL80211_STA_INFO_RX_BYTES]));
   }
   if (sinfo[NL80211_STA_INFO_RX_PACKETS]) {
-    neigh->_available_data |= OLSR_L2NEIGH_RX_PACKETS;
-    neigh->rx_packets = nla_get_u32(sinfo[NL80211_STA_INFO_RX_PACKETS]);
+    olsr_layer2_neighbor_set_rx_packets(neigh,
+        nla_get_u32(sinfo[NL80211_STA_INFO_RX_PACKETS]));
   }
   if (sinfo[NL80211_STA_INFO_TX_BYTES]) {
-    neigh->_available_data |= OLSR_L2NEIGH_TX_BYTES;
-    neigh->tx_bytes = nla_get_u32(sinfo[NL80211_STA_INFO_TX_BYTES]);
+    olsr_layer2_neighbor_set_tx_bytes(neigh,
+        nla_get_u32(sinfo[NL80211_STA_INFO_TX_BYTES]));
   }
   if (sinfo[NL80211_STA_INFO_TX_PACKETS]) {
-    neigh->_available_data |= OLSR_L2NEIGH_TX_PACKETS;
-    neigh->tx_packets = nla_get_u32(sinfo[NL80211_STA_INFO_TX_PACKETS]);
+    olsr_layer2_neighbor_set_tx_packets(neigh,
+        nla_get_u32(sinfo[NL80211_STA_INFO_TX_PACKETS]));
   }
   if (sinfo[NL80211_STA_INFO_TX_RETRIES])  {
-    neigh->_available_data |= OLSR_L2NEIGH_TX_RETRIES;
-    neigh->tx_retries = nla_get_u32(sinfo[NL80211_STA_INFO_TX_RETRIES]);
+    olsr_layer2_neighbor_set_tx_retries(neigh,
+        nla_get_u32(sinfo[NL80211_STA_INFO_TX_RETRIES]));
   }
   if (sinfo[NL80211_STA_INFO_TX_FAILED]) {
-    neigh->_available_data |= OLSR_L2NEIGH_TX_FAILED;
-    neigh->tx_failed = nla_get_u32(sinfo[NL80211_STA_INFO_TX_FAILED]);
+    olsr_layer2_neighbor_set_tx_fails(neigh,
+        nla_get_u32(sinfo[NL80211_STA_INFO_TX_FAILED]));
   }
   if (sinfo[NL80211_STA_INFO_SIGNAL])  {
-    neigh->_available_data |= OLSR_L2NEIGH_SIGNAL;
-    neigh->signal = (int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
+    olsr_layer2_neighbor_set_signal(neigh,
+        (int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]));
   }
   if (sinfo[NL80211_STA_INFO_TX_BITRATE]) {
     if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX,
              sinfo[NL80211_STA_INFO_TX_BITRATE], rate_policy) == 0) {
       if (rinfo[NL80211_RATE_INFO_BITRATE]) {
         uint64_t rate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE]);
-        neigh->tx_bitrate = rate << ( 7ull + 10ull );
+        olsr_layer2_neighbor_set_tx_bitrate(neigh, ((uint64_t)rate * 1024 * 1024) / 10);
       }
       /* TODO: do we need the rest of the data ? */
 #if 0
@@ -327,7 +355,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
              sinfo[NL80211_STA_INFO_RX_BITRATE], rate_policy) == 0) {
       if (rinfo[NL80211_RATE_INFO_BITRATE]) {
         uint64_t rate = nla_get_u16(rinfo[NL80211_RATE_INFO_BITRATE]);
-        neigh->rx_bitrate = rate << ( 7ull + 10ull );
+        olsr_layer2_neighbor_set_rx_bitrate(neigh, ((uint64_t)rate * 1024 * 1024) / 10);
       }
       /* TODO: do we need the rest of the data ? */
 #if 0
@@ -358,7 +386,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr, struct olsr_layer2_neighbor *neigh)
 #define WLAN_CAPABILITY_DSSS_OFDM (1<<13)
 
 static int
-_parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net) {
+_parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   static struct nla_policy bss_policy[NL80211_BSS_MAX + 1] = {
     [NL80211_BSS_TSF] = { .type = NLA_U64 },
     [NL80211_BSS_FREQUENCY] = { .type = NLA_U32 },
@@ -375,6 +403,10 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
 
   struct nlattr *tb[NL80211_ATTR_MAX + 1];
   struct nlattr *bss[NL80211_BSS_MAX + 1];
+
+  struct olsr_layer2_network *net;
+  struct netaddr mac;
+  unsigned if_index;
 
   if (nlmsg_parse(msg, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
@@ -398,13 +430,18 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
     return -1;
   }
 
-  if ((net->available_data & OLSR_L2NET_SUPPORTED_RATES) != 0) {
-    free (net->supported_rates);
+  if (!bss[NL80211_BSS_STATUS]) {
+    /* ignore different networks for the moment */
+    return 0;
   }
-  net->available_data = 0;
+  netaddr_from_binary(&mac, nla_data(bss[NL80211_BSS_BSSID]), 6, AF_MAC48);
+  if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
-  netaddr_from_binary(&net->id, nla_data(bss[NL80211_BSS_BSSID]), 6, AF_MAC48);
-  net->if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
+  net = olsr_layer2_add_network(&mac, if_index);
+  if (net == NULL) {
+    OLSR_WARN_OOM(LOG_PLUGINS);
+    return -1;
+  }
 
 #if 0
   if (bss[NL80211_BSS_STATUS]) {
@@ -436,8 +473,8 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
 #endif
 
   if (bss[NL80211_BSS_FREQUENCY]) {
-    net->available_data |= OLSR_L2NET_FREQUENCY;
-    net->frequency = nla_get_u32(bss[NL80211_BSS_FREQUENCY]) * 1000000ull;
+    olsr_layer2_network_set_frequency(net,
+        nla_get_u32(bss[NL80211_BSS_FREQUENCY]) * 1000000ull);
   }
 #if 0
   if (bss[NL80211_BSS_BEACON_INTERVAL])
@@ -480,8 +517,8 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
   }
 #endif
   if (bss[NL80211_BSS_SEEN_MS_AGO]) {
-    net->available_data |= OLSR_L2NET_INACTIVE_TIME;
-    net->last_seen = olsr_clock_get_absolute(nla_get_u32(bss[NL80211_BSS_SEEN_MS_AGO]));
+    olsr_layer2_network_set_last_seen(net,
+        nla_get_u32(bss[NL80211_BSS_SEEN_MS_AGO]));
   }
   if (bss[NL80211_BSS_INFORMATION_ELEMENTS] != NULL ||
       bss[NL80211_BSS_BEACON_IES] != NULL) {
@@ -489,6 +526,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
     uint8_t *data;
     uint8_t *rate1, *rate2;
     uint8_t rate1_count, rate2_count;
+    uint64_t *rate;
 
     if (bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
       len = nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
@@ -499,7 +537,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
       data = nla_data(bss[NL80211_BSS_BEACON_IES]);
     }
 
-    /* collect pointers to datarates */
+    /* collect pointers to data-rates */
     rate1_count = 0;
     rate2_count = 0;
     while (len > 0) {
@@ -518,18 +556,18 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg, struct olsr_layer2_network *net
     }
 
     if (rate1_count + rate2_count > 0) {
-      net->supported_rates = calloc(rate1_count + rate2_count, sizeof(uint64_t));
-      if (net->supported_rates) {
-        net->available_data |= OLSR_L2NET_SUPPORTED_RATES;
-
+      rate = calloc(rate1_count + rate2_count, sizeof(uint64_t));
+      if (rate) {
         len = 0;
         for (i=0; i<rate1_count; i++) {
-          net->supported_rates[len++] = (uint64_t)rate1[i] << 19;
+          rate[len++] = (uint64_t)(rate1[i] & 0x7f) << 19;
         }
         for (i=0; i<rate2_count; i++) {
-          net->supported_rates[len++] = (uint64_t)rate2[i] << 19;
+          rate[len++] = (uint64_t)(rate2[i] & 0x7f) << 19;
         }
-        net->rate_count = len;
+
+        olsr_layer2_network_set_supported_rates(net, rate, rate1_count + rate2_count);
+        free(rate);
       }
     }
   }
@@ -547,19 +585,11 @@ _cb_nl_message(struct nlmsghdr *hdr) {
   }
   if (hdr->nlmsg_type == _nl80211_id) {
     if (gen_hdr->cmd == NL80211_CMD_NEW_STATION) {
-      struct olsr_layer2_neighbor neigh;
-
-      memset(&neigh, 0, sizeof(neigh));
-      _parse_cmd_new_station(hdr, &neigh);
-      // TODO print function !
+      _parse_cmd_new_station(hdr);
       return;
     }
     if (gen_hdr->cmd == NL80211_CMD_NEW_SCAN_RESULTS) {
-      struct olsr_layer2_network net;
-
-      memset(&net, 0, sizeof(net));
-      _parse_cmd_new_scan_result(hdr, &net);
-      // TODO print function !
+      _parse_cmd_new_scan_result(hdr);
       return;
     }
   }
@@ -652,6 +682,247 @@ _cb_transmission_event(void *ptr __attribute__((unused))) {
   }
 
   station_dump = !station_dump;
+}
+
+struct olsr_number_buf {
+    char buf[48];
+};
+
+static const char *
+_print_human_readable_number(
+    struct olsr_number_buf *out, uint64_t number, const char *unit, int maxfraction, bool binary) {
+  static const char symbol[] = " kMGTPE";
+  uint64_t step, multiplier, print, n;
+  const char *unit_modifier;
+  size_t idx, len;
+
+  step = binary ? 1024 : 1000;
+  multiplier = 1;
+  unit_modifier = symbol;
+
+  while (*unit_modifier != 0 && number >= multiplier * step) {
+    multiplier *= step;
+    unit_modifier++;
+  }
+
+  /* print whole */
+  idx = snprintf(out->buf, sizeof(*out), "%"PRIu64, number / multiplier);
+  len = idx;
+
+  out->buf[len++] = '.';
+  n = number;
+
+  while (true) {
+    n = n % multiplier;
+    if (n == 0 || maxfraction == 0) {
+      break;
+    }
+    maxfraction--;
+    multiplier /= 10;
+
+    print = n / multiplier;
+    assert (print < 10);
+    out->buf[len++] = (char)'0' + (char)(print);
+    if (print) {
+      idx = len;
+    }
+  }
+
+  out->buf[idx++] = ' ';
+  out->buf[idx++] = *unit_modifier;
+  out->buf[idx++] = 0;
+  strscat(out->buf, unit, sizeof(*out));
+
+  return out->buf;
+}
+
+static int
+_print_network(struct autobuf *out, struct olsr_layer2_network *net) {
+  struct netaddr_str netbuf;
+  struct timeval_buf tvbuf;
+  struct olsr_number_buf numbuf;
+
+  abuf_appendf(out,
+      "BSSID: %s\n"
+      "If-Index: %u\n",
+      netaddr_to_string(&netbuf, &net->id), net->if_index);
+
+  if (olsr_layer2_network_has_last_seen(net)) {
+    int64_t relative;
+
+    relative = olsr_clock_get_relative(net->last_seen);
+    abuf_appendf(out, "Last seen: %s seconds ago\n",
+        olsr_clock_toIntervalString(&tvbuf, -relative));
+  }
+  if (olsr_layer2_network_has_frequency(net)) {
+    abuf_appendf(out, "Frequency: %s\n",
+        _print_human_readable_number(&numbuf, net->frequency, "Hz", 3, false));
+  }
+  if (olsr_layer2_network_has_supported_rates(net)) {
+    size_t i;
+
+    for (i=0; i<net->rate_count; i++) {
+      abuf_appendf(out, "Supported rate: %s\n",
+          _print_human_readable_number(&numbuf, net->supported_rates[i], "bit/s", 3, true));
+    }
+  }
+  return 0;
+}
+
+static int
+_print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
+  struct netaddr_str netbuf;
+  struct timeval_buf tvbuf;
+  struct olsr_number_buf numbuf;
+
+  abuf_appendf(out,
+      "MAC: %s\n"
+      "If-Index: %u\n",
+      netaddr_to_string(&netbuf, &neigh->mac_address), neigh->if_index);
+
+  if (olsr_layer2_neighbor_has_last_seen(neigh)) {
+    int64_t relative;
+
+    relative = olsr_clock_get_relative(neigh->last_seen);
+    abuf_appendf(out, "Last seen: %s seconds ago\n",
+        olsr_clock_toIntervalString(&tvbuf, -relative));
+  }
+
+  if (olsr_layer2_neighbor_has_signal(neigh)) {
+    abuf_appendf(out, "RX bytes: %u dBm\n", neigh->signal);
+  }
+  if (olsr_layer2_neighbor_has_rx_bitrate(neigh)) {
+    abuf_appendf(out, "RX bitrate: %s\n",
+        _print_human_readable_number(&numbuf, neigh->rx_bitrate, "bit/s", 1, true));
+  }
+  if (olsr_layer2_neighbor_has_rx_bytes(neigh)) {
+    abuf_appendf(out, "RX traffic: %s\n",
+        _print_human_readable_number(&numbuf, neigh->rx_bytes, "Byte", 1, true));
+  }
+  if (olsr_layer2_neighbor_has_rx_packets(neigh)) {
+    abuf_appendf(out, "RX packets: %s\n",
+        _print_human_readable_number(&numbuf, neigh->rx_packets, "", 0, true));
+  }
+  if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
+    abuf_appendf(out, "TX bitrate: %s\n",
+        _print_human_readable_number(&numbuf, neigh->tx_bitrate, "bit/s", 1, true));
+  }
+  if (olsr_layer2_neighbor_has_tx_bytes(neigh)) {
+    abuf_appendf(out, "TX traffic: %s\n",
+        _print_human_readable_number(&numbuf, neigh->tx_bytes, "Byte", 1, true));
+  }
+  if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
+    abuf_appendf(out, "TX packets: %s\n",
+        _print_human_readable_number(&numbuf, neigh->tx_packets, "", 0, true));
+  }
+  if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
+    abuf_appendf(out, "TX retries: %s\n",
+        _print_human_readable_number(&numbuf, neigh->tx_retries, "", 3, true));
+  }
+  if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
+    abuf_appendf(out, "TX failed: %s\n",
+        _print_human_readable_number(&numbuf, neigh->tx_failed, "", 3, true));
+  }
+  return 0;
+}
+
+static enum olsr_telnet_result
+_cb_handle_nl80211(struct olsr_telnet_data *data) {
+  const char *next = NULL, *ptr = NULL;
+  struct olsr_layer2_network *net, *net_it;
+  struct olsr_layer2_neighbor *neigh, *neigh_it;
+  struct netaddr_str buf;
+  unsigned if_index;
+  struct netaddr mac;
+  bool first = true;
+
+  if_index = 0;
+  memset(&mac, 0, sizeof(mac));
+
+  if (data->parameter == NULL || *data->parameter == 0) {
+    abuf_puts(data->out, "Error, 'nl80211' needs a parameter\n");
+    return TELNET_RESULT_ACTIVE;
+  }
+
+  if ((next = str_hasnextword(data->parameter, "list"))) {
+    if ((ptr = str_hasnextword(next, "net"))) {
+      abuf_appendf(data->out, "If-index\tSSID\n");
+      OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
+        abuf_appendf(data->out, "%u\t%s\n", net->if_index,
+            netaddr_to_string(&buf, &net->id));
+      }
+      return TELNET_RESULT_ACTIVE;
+    }
+    else if ((ptr = str_hasnextword(next, "neigh"))) {
+      if (*ptr) {
+        if_index = atoi(ptr);
+      }
+
+      abuf_appendf(data->out, "If-index\tMAC\n");
+      OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
+        if (if_index == 0 || if_index == neigh->if_index) {
+          abuf_appendf(data->out, "%u\t%s\n", neigh->if_index,
+              netaddr_to_string(&buf, &neigh->mac_address));
+        }
+      }
+      return TELNET_RESULT_ACTIVE;
+    }
+  }
+  else if ((next = str_hasnextword(data->parameter, "net"))) {
+    if (*next) {
+      if_index = atoi(next);
+    }
+
+    OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
+      if (if_index == 0 || if_index == net->if_index) {
+        if (first) {
+          first = false;
+        }
+        else {
+          abuf_puts(data->out, "\n");
+        }
+        if (_print_network(data->out, net)) {
+          return TELNET_RESULT_INTERNAL_ERROR;
+        }
+      }
+    }
+    return TELNET_RESULT_ACTIVE;
+  }
+  else if ((next = str_hasnextword(data->parameter, "neigh"))) {
+    if (*next) {
+      if (strchr(next, ':') != 0) {
+        if (netaddr_from_string(&mac, ptr)) {
+          abuf_appendf(data->out, "Error, illegal mac address: %s\n", ptr);
+          return TELNET_RESULT_ACTIVE;
+        }
+      }
+      else {
+        if_index = atoi(ptr);
+      }
+    }
+
+    OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
+      if (first) {
+        first = false;
+      }
+      else {
+        abuf_puts(data->out, "\n");
+      }
+      if (if_index > 0 && neigh->if_index != if_index) {
+        continue;
+      }
+      if (mac.type != 0 && netaddr_cmp(&mac, &neigh->mac_address) != 0) {
+        continue;
+      }
+      if (_print_neighbor(data->out, neigh)) {
+        return TELNET_RESULT_INTERNAL_ERROR;
+      }
+    }
+    return TELNET_RESULT_ACTIVE;
+  }
+  abuf_appendf(data->out, "Error, unknown parameters for %s command\n",
+      data->command);
+  return TELNET_RESULT_ACTIVE;
 }
 
 /**

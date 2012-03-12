@@ -104,11 +104,12 @@ olsr_layer2_cleanup(void) {
  * Add an active network to the database. If an entry for the
  * interface does already exists, it will be returned by this
  * function and no new entry will be created.
+ * @param ssid ID of the attached network
  * @param if_index local interface index of network
  * @return pointer to layer2 network data, NULL if OOM
  */
 struct olsr_layer2_network *
-olsr_layer2_add_network(uint32_t if_index) {
+olsr_layer2_add_network(struct netaddr *ssid, uint32_t if_index) {
   struct olsr_layer2_network *net;
 
   net = olsr_layer2_get_network(if_index);
@@ -117,6 +118,7 @@ olsr_layer2_add_network(uint32_t if_index) {
     if (net) {
       net->if_index = if_index;
       net->_node.key = &net->if_index;
+      memcpy (&net->id, ssid, sizeof(*ssid));
 
       avl_insert(&olsr_layer2_network_tree, &net->_node);
     }
@@ -131,6 +133,7 @@ olsr_layer2_add_network(uint32_t if_index) {
 void
 olsr_layer2_remove_network(struct olsr_layer2_network *net) {
   avl_remove(&olsr_layer2_network_tree, &net->_node);
+  free (net->supported_rates);
   olsr_memcookie_free(&_network_cookie, net);
 }
 
@@ -187,4 +190,30 @@ void
 olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *neigh) {
   avl_remove(&olsr_layer2_neighbor_tree, &neigh->_node);
   olsr_memcookie_free(&_neighbor_cookie, neigh);
+}
+
+/**
+ * Set a new list of supported rates. Data will not be changed if an
+ * error happens.
+ * @param net pointer to layer2 network
+ * @param rate_array pointer to array of supported rates
+ * @param rate_count number of supported rates
+ * @return -1 if an out of memory error happened, 0 otherwise.
+ */
+int
+olsr_layer2_network_set_supported_rates(struct olsr_layer2_network *net,
+    uint64_t *rate_array, size_t rate_count) {
+  uint64_t *rates;
+
+  rates = realloc(net->supported_rates, rate_count * sizeof(uint64_t));
+  if (rates == NULL) {
+    return -1;
+  }
+
+  net->_available_data |= OLSR_L2NET_SUPPORTED_RATES;
+  net->supported_rates = rates;
+  net->rate_count = rate_count;
+  memcpy(rates, rate_array, sizeof(uint64_t) * rate_count);
+
+  return 0;
 }

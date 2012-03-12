@@ -90,7 +90,7 @@ EXPORT void  olsr_clock_help(
  * @return absolute time when event will happen
  */
 static INLINE uint64_t
-olsr_clock_get_absolute(uint64_t relative)
+olsr_clock_get_absolute(int64_t relative)
 {
   return olsr_clock_getNow() + relative;
 }
