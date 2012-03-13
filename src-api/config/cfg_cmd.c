@@ -467,34 +467,6 @@ cfg_cmd_handle_schema(struct cfg_db *db,
     }
   }
 
-#if 0
-  s_entry = avl_find_element(&s_section->_entries, ptr, s_entry, _section_node);
-  if (s_entry == NULL) {
-    cfg_append_printable_line(log, "Unknown entry name '%s' in section type '%s'",
-        ptr, copy);
-    goto handle_schema_cleanup;
-  }
-
-  cfg_append_printable_line(log, "%s.%s%s%s%s%s",
-      s_section->type,
-      s_entry->name,
-      strarray_is_empty_c(&s_entry->def) ? " (mandatory)" : "",
-      s_entry->list ? " (list)" : "",
-      s_entry->help ? ": " : "",
-      s_entry->help ? s_entry->help : "");
-
-  if (!strarray_is_empty_c(&s_entry->def)) {
-    cfg_append_printable_line(log, "    Default value:");
-    FOR_ALL_STRINGS(&s_entry->def, c_ptr) {
-      cfg_append_printable_line(log, "        '%s'", c_ptr);
-    }
-  }
-  if (s_entry->cb_valhelp) {
-    s_entry->cb_valhelp(s_entry, log);
-  }
-
-  result = 0;
-#endif
 handle_schema_cleanup:
   free (copy);
   return result;
