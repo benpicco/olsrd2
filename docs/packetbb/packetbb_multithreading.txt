@@ -1,0 +1,34 @@
+PacketBB (RFC 5444) handler library
+Copyright (c) 2010 Henning Rogge <hrogge@googlemail.com>
+
+The pbb library is a combined parser and generator for RFC 5444
+(Generalized Mobile Ad Hoc Network (MANET) Packet/Message Format),
+also known as "packetbb".
+The library is split into a separate reader and writer part, both
+of them use a generic avl-tree and double-linked list implementation.
+
+The reader and writer allow multiple independent code blocks to read
+overlapping parts of a PacketBB data stream and assemble packets and
+messages together. This allow API users to separate different sub-
+protocol in their codebase (e.g. NHDP and OLSRv2).
+
+
+======================
+    Multithreading
+======================
+
+The packetbb library contains no static variables, all state is
+contained within the pbb_reader and pbb_writer objects (and objects
+linked by them). Because of this multiple pbb_reader and pbb_writer
+instances can be used by different threads at the same time.
+
+The packetbb library is NOT safe for multithreading in the same
+pbb_reader or pbb_writer. Do not call functions of the API with
+the same context from different threads at the same time, you
+will get strange bugs, segmentation faults or just bad output.
+If you have to use the library from more than one thread with
+the same context, use a semaphore to prevent concurrent access.
+
+Summary:
+NO MULTITHREADING with the same pbb_reader/pbb_writer object.
+
