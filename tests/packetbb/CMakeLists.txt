@@ -1,8 +1,8 @@
-function(compile_config_test executable source)
+function(compile_packetbb_test executable source)
     # create executable
     ADD_EXECUTABLE(${executable} ${source})
 
-    TARGET_LINK_LIBRARIES(${executable} ${OONF_LIBPREFIX}_config)
+    TARGET_LINK_LIBRARIES(${executable} ${OONF_LIBPREFIX}_packetbb)
     TARGET_LINK_LIBRARIES(${executable} ${OONF_LIBPREFIX}_common)
 
     # link regex for windows and android
@@ -15,16 +15,16 @@ function(compile_config_test executable source)
         SET_TARGET_PROPERTIES(${executable} PROPERTIES ENABLE_EXPORTS true)
         TARGET_LINK_LIBRARIES(${executable} ws2_32 iphlpapi)
     ENDIF(WIN32)
-endfunction(compile_config_test)
+endfunction(compile_packetbb_test)
 
-set(TESTS test_config_list
-          test_config_validation
-          test_config_mapping
-          test_config_cmd
-          test_config_default
-          test_config_delta)
+set(TESTS test_packetbb_reader_blockcb
+          test_packetbb_reader_dropcontext
+          test_packetbb_writer_fragmentation
+          test_packetbb_writer_ifspecific)
+
+include_directories(${CMAKE_BINARY_DIR})
 
 foreach(TEST ${TESTS})
-    compile_config_test(${TEST} ${TEST}.c)
+    compile_packetbb_test(${TEST} ${TEST}.c)
     ADD_TEST(NAME ${TEST} COMMAND ${TEST})
 endforeach(TEST)
