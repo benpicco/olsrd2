@@ -42,7 +42,7 @@
 #include "common/common_types.h"
 #include "packetbb/pbb_tlv_writer.h"
 #include "packetbb/pbb_context.h"
-#include "pbb_api_config.h"
+#include "packetbb/pbb_api_config.h"
 
 static size_t _calc_tlv_size(bool exttype, size_t length);
 static void _write_tlv(uint8_t *ptr, uint8_t type, uint8_t exttype,
@@ -66,7 +66,7 @@ _pbb_tlv_writer_init(struct pbb_tlv_writer_data *data, size_t max,
   data->set = 0;
   data->max = max;
 
-#if DEBUG_CLEANUP == 1
+#if DEBUG_CLEANUP == true
   memset(data->buffer, 0, mtu);
 #endif
 }

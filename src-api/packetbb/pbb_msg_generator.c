@@ -43,7 +43,7 @@
 
 #include "common/common_types.h"
 #include "packetbb/pbb_writer.h"
-#include "pbb_api_config.h"
+#include "packetbb/pbb_api_config.h"
 
 /* data necessary for automatic address compression */
 struct _pbb_internal_addr_compress_session {
@@ -94,7 +94,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
   bool first;
   bool not_fragmented;
   size_t max_msg_size;
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -169,7 +169,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
   /* initialize message tlvdata */
   _pbb_tlv_writer_init(&writer->msg, max_msg_size, writer->msg_mtu);
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_ADD_HEADER;
 #endif
   /* let the message creator write the message header */
@@ -178,7 +178,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
     msg->addMessageHeader(writer, msg);
   }
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_ADD_MSGTLV;
 #endif
 
@@ -189,7 +189,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
     }
   }
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_ADD_ADDRESSES;
 #endif
   /* call content providers for addresses */
@@ -203,7 +203,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
   /* no addresses ? */
   if (list_is_empty(&msg->addr_head)) {
     _finalize_message_fragment(writer, msg, NULL, NULL, true, useIf, param);
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
     writer->int_state = PBB_WRITER_NONE;
 #endif
     _pbb_writer_free_addresses(writer, msg);
@@ -242,7 +242,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
     /* look for best current compression */
     best_head = -1;
     best_size = writer->msg.max + 1;
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
     for (i = 0; i < msg->addr_len; i++) {
 #else
     i=0;
@@ -262,7 +262,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
     if (best_head == -1) {
       if (first_addr == addr) {
         /* even a single address does not fit into the block */
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
         writer->int_state = PBB_WRITER_NONE;
 #endif
         _pbb_writer_free_addresses(writer, msg);
@@ -286,7 +286,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
       continue;
     } else {
       /* add cost for this address to total costs */
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
       for (i = 0; i < msg->addr_len; i++) {
 #else
       i=0;
@@ -294,7 +294,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
 #endif
         acs[i].total += acs[i].current;
 
-#if DEBUG_CLEANUP == 1
+#if DEBUG_CLEANUP == true
         acs[i].current = 0;
 #endif
       }
@@ -315,7 +315,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
   /* free storage of addresses and address-tlvs */
   _pbb_writer_free_addresses(writer, msg);
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_NONE;
 #endif
   return PBB_OKAY;
@@ -375,7 +375,7 @@ pbb_writer_forward_msg(struct pbb_writer *writer, uint8_t *msg, size_t len,
   struct pbb_writer_interface *interf;
   size_t max_msg_size;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -475,7 +475,7 @@ pbb_writer_forward_msg(struct pbb_writer *writer, uint8_t *msg, size_t len,
 enum pbb_result
 pbb_writer_add_messagetlv(struct pbb_writer *writer,
     uint8_t type, uint8_t exttype, void *value, size_t length) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_MSGTLV);
 #endif
   return _pbb_tlv_writer_add(&writer->msg, type, exttype, value, length);
@@ -493,7 +493,7 @@ pbb_writer_add_messagetlv(struct pbb_writer *writer,
 enum pbb_result
 pbb_writer_allocate_messagetlv(struct pbb_writer *writer,
     bool has_exttype, size_t length) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_MSGTLV);
 #endif
   return _pbb_tlv_writer_allocate(&writer->msg, has_exttype, length);
@@ -513,7 +513,7 @@ pbb_writer_allocate_messagetlv(struct pbb_writer *writer,
 enum pbb_result
 pbb_writer_set_messagetlv(struct pbb_writer *writer,
     uint8_t type, uint8_t exttype, void *value, size_t length) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_FINISH_MSGTLV);
 #endif
   return _pbb_tlv_writer_set(&writer->msg, type, exttype, value, length);
@@ -529,7 +529,7 @@ pbb_writer_set_messagetlv(struct pbb_writer *writer,
 void
 pbb_writer_set_msg_addrlen(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_message *msg, uint8_t addrlen) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_HEADER);
 #endif
 
@@ -561,7 +561,7 @@ void
 pbb_writer_set_msg_header(struct pbb_writer *writer, struct pbb_writer_message *msg,
     bool has_originator, bool has_hopcount, bool has_hoplimit, bool has_seqno) {
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_HEADER);
 #endif
 
@@ -599,7 +599,7 @@ pbb_writer_set_msg_header(struct pbb_writer *writer, struct pbb_writer_message *
 void
 pbb_writer_set_msg_originator(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_message *msg, uint8_t *originator) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_HEADER || writer->int_state == PBB_WRITER_FINISH_HEADER);
 #endif
 
@@ -618,7 +618,7 @@ pbb_writer_set_msg_originator(struct pbb_writer *writer __attribute__ ((unused))
 void
 pbb_writer_set_msg_hopcount(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_message *msg, uint8_t hopcount) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_HEADER || writer->int_state == PBB_WRITER_FINISH_HEADER);
 #endif
   msg->hopcount = hopcount;
@@ -636,7 +636,7 @@ pbb_writer_set_msg_hopcount(struct pbb_writer *writer __attribute__ ((unused)),
 void
 pbb_writer_set_msg_hoplimit(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_message *msg, uint8_t hoplimit) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_HEADER || writer->int_state == PBB_WRITER_FINISH_HEADER);
 #endif
   msg->hoplimit = hoplimit;
@@ -654,7 +654,7 @@ pbb_writer_set_msg_hoplimit(struct pbb_writer *writer __attribute__ ((unused)),
 void
 pbb_writer_set_msg_seqno(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_message *msg, uint16_t seqno) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_HEADER || writer->int_state == PBB_WRITER_FINISH_HEADER);
 #endif
   msg->seqno = seqno;
@@ -675,7 +675,7 @@ _close_addrblock(struct _pbb_internal_addr_compress_session *acs,
     struct pbb_writer_message *msg __attribute__ ((unused)),
     struct pbb_writer_address *last_addr, int common_head) {
   int best;
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
   int i, size;
   if (common_head > msg->addr_len) {
     /* nothing to do */
@@ -686,7 +686,7 @@ _close_addrblock(struct _pbb_internal_addr_compress_session *acs,
 #endif
   /* check for best compression at closed blocks */
   best = common_head;
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
   size = acs[common_head].total;
   for (i = common_head + 1; i < msg->addr_len; i++) {
     if (acs[i].total < size) {
@@ -700,7 +700,7 @@ _close_addrblock(struct _pbb_internal_addr_compress_session *acs,
   acs[best].ptr->block_multiple_prefixlen = acs[best].multiplen;
   acs[best].ptr->block_headlen = best;
 
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
   for (i = common_head + 1; i < msg->addr_len; i++) {
     /* remember best block compression */
     acs[i].total = size;
@@ -790,7 +790,7 @@ _compress_address(struct _pbb_internal_addr_compress_session *acs,
     }
 
     /* add bytes to continue encodings with same prefix */
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
     for (common_head = 0; common_head < addrlen; common_head++) {
       if (last_addr->addr[common_head] != addr->addr[common_head]) {
         break;
@@ -801,7 +801,7 @@ _compress_address(struct _pbb_internal_addr_compress_session *acs,
   }
 
   /* calculate new costs for next address including tlvs */
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
   for (i = 0; i < addrlen; i++) {
 #else
   i = 0;
@@ -810,7 +810,7 @@ _compress_address(struct _pbb_internal_addr_compress_session *acs,
     int new_cost = 0, continue_cost = 0;
     bool closed = false;
 
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
     closed = first || (i > common_head);
 #else
     closed = true;
@@ -921,12 +921,12 @@ _write_addresses(struct pbb_writer *writer, struct pbb_writer_message *msg,
   /* loop through address blocks */
   do {
     uint8_t head_len = 0, tail_len = 0, mid_len = 0;
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
     bool zero_tail = false;
 #endif
 
     addr_end = addr_start->block_end;
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
     if (addr_start != addr_end) {
       /* only use head/tail for address blocks with multiple addresses */
       int tail;
@@ -965,7 +965,7 @@ _write_addresses(struct pbb_writer *writer, struct pbb_writer_message *msg,
     flag = ptr;
     *ptr++ = 0;
 
-#if DO_ADDR_COMPRESSION == 1
+#if DO_ADDR_COMPRESSION == true
     /* write head */
     if (head_len) {
       *flag |= PBB_ADDR_FLAG_HEAD;
@@ -1171,7 +1171,7 @@ _finalize_message_fragment(struct pbb_writer *writer, struct pbb_writer_message 
   /* reset optional tlv length */
   writer->msg.set = 0;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_FINISH_MSGTLV;
 #endif
 
@@ -1186,7 +1186,7 @@ _finalize_message_fragment(struct pbb_writer *writer, struct pbb_writer_message 
     _write_addresses(writer, msg, first, last);
   }
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_FINISH_HEADER;
 #endif
 
@@ -1198,7 +1198,7 @@ _finalize_message_fragment(struct pbb_writer *writer, struct pbb_writer_message 
   /* write header */
   _write_msgheader(writer, msg);
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_NONE;
 #endif
 
@@ -1246,7 +1246,7 @@ _finalize_message_fragment(struct pbb_writer *writer, struct pbb_writer_message 
   writer->msg.set = 0;
 
   /* clear message buffer */
-#if DEBUG_CLEANUP == 1
+#if DEBUG_CLEANUP == true
   memset(&writer->msg.buffer[len], 0, writer->msg.max - len);
 #endif
 }

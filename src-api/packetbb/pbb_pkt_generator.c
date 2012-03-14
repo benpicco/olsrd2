@@ -43,7 +43,7 @@
 #include "common/common_types.h"
 #include "common/list.h"
 #include "packetbb/pbb_writer.h"
-#include "pbb_api_config.h"
+#include "packetbb/pbb_api_config.h"
 
 static void _write_pktheader(struct pbb_writer_interface *interf);
 
@@ -60,7 +60,7 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
   /* cleanup packet buffer data */
   _pbb_tlv_writer_init(&interface->pkt, interface->mtu, interface->mtu);
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_ADD_PKTHEADER;
 #endif
   /* add packet header */
@@ -71,7 +71,7 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
     pbb_writer_set_pkt_header(writer, interface, false);
   }
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_ADD_PKTTLV;
 #endif
   /* add packet tlvs */
@@ -80,7 +80,7 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
   }
 
   interface->is_flushed = false;
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_NONE;
 #endif
 }
@@ -96,7 +96,7 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
   struct pbb_writer_pkthandler *handler;
   size_t len;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -111,7 +111,7 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
     _pbb_writer_begin_packet(writer, interface);
   }
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_FINISH_PKTTLV;
 #endif
 
@@ -120,7 +120,7 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
     handler->finishPacketTLVs(writer, interface);
   }
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_FINISH_PKTHEADER;
 #endif
   /* finalize packet header */
@@ -158,11 +158,11 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
   /* mark buffer as flushed */
   interface->is_flushed = true;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_NONE;
 #endif
 
-#if DEBUG_CLEANUP == 1
+#if DEBUG_CLEANUP == true
   memset(&interface->pkt.buffer[len + interface->pkt.added], 0,
       interface->pkt.max - len - interface->pkt.added);
 #endif
@@ -184,7 +184,7 @@ enum pbb_result
 pbb_writer_add_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf,
     uint8_t type, uint8_t exttype, void *value, size_t length) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_PKTTLV);
 #endif
   return _pbb_tlv_writer_add(&interf->pkt, type, exttype, value, length);
@@ -203,7 +203,7 @@ pbb_writer_add_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
 enum pbb_result
 pbb_writer_allocate_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf, bool has_exttype, size_t length) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_PKTTLV);
 #endif
   return _pbb_tlv_writer_allocate(&interf->pkt, has_exttype, length);
@@ -224,7 +224,7 @@ enum pbb_result
 pbb_writer_set_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf,
     uint8_t type, uint8_t exttype, void *value, size_t length) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_FINISH_PKTTLV);
 #endif
   return _pbb_tlv_writer_set(&interf->pkt, type, exttype, value, length);
@@ -239,7 +239,7 @@ pbb_writer_set_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
  */
 void pbb_writer_set_pkt_header(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf, bool has_seqno) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_PKTHEADER);
 #endif
 
@@ -264,7 +264,7 @@ void pbb_writer_set_pkt_header(struct pbb_writer *writer __attribute__ ((unused)
 void
 pbb_writer_set_pkt_seqno(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf, uint16_t seqno) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_PKTHEADER
       || writer->int_state == PBB_WRITER_FINISH_PKTHEADER);
 #endif

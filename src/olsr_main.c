@@ -57,10 +57,10 @@
 #include "config/cfg_schema.h"
 #include "builddata/plugin_static.h"
 #include "builddata/data.h"
+#include "builddata/app_config.h"
 #include "os_clock.h"
 #include "os_net.h"
 #include "os_system.h"
-#include "os_routing.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_http.h"
@@ -76,6 +76,10 @@
 #include "olsr_timer.h"
 #include "olsr_setup.h"
 #include "olsr.h"
+
+#if OONF_NEED_ROUTING == true
+#include "os_routing.h"
+#endif
 
 static bool _end_olsr_signal, _display_schema;
 static char *_schema_name;
@@ -206,7 +210,7 @@ main(int argc, char **argv) {
   }
 
   /* check if we are root, otherwise stop */
-#ifdef NEED_ROOT
+#if OONF_NEED_ROOT == true
   if (geteuid() != 0) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
         olsr_builddata_get()->app_name);
@@ -248,7 +252,7 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-#ifdef NEED_ROUTING
+#if OONF_NEED_ROUTING == true
   if (os_routing_init()) {
     goto olsrd_cleanup;
   }
@@ -313,7 +317,7 @@ olsrd_cleanup:
   olsr_telnet_cleanup();
   olsr_interface_cleanup();
   os_net_cleanup();
-#ifdef NEED_ROUTING
+#if OONF_NEED_ROUTING
   os_routing_cleanup();
 #endif
   os_system_cleanup();

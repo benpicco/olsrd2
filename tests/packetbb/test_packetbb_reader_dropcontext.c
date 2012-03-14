@@ -42,7 +42,7 @@
 #include <stdio.h>
 
 #include "packetbb/pbb_reader.h"
-#include "pbb_api_config.h"
+#include "packetbb/pbb_api_config.h"
 
 #define PRINT_CB 1
 

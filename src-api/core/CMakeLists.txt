@@ -15,7 +15,7 @@ SET(OONF_CORE_SRCS olsr_cfg.c
                    olsr.c
                    os_net_generic.c
                    os_system_generic.c)
-                   
+
 # add os_specific source files
 # TODO: add BSD and WIN32
 IF(LINUX)

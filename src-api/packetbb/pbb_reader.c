@@ -45,9 +45,9 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 #include "packetbb/pbb_reader.h"
-#include "pbb_api_config.h"
+#include "packetbb/pbb_api_config.h"
 
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 1
+#if DISALLOW_CONSUMER_CONTEXT_DROP == true
 #define PBB_CONSUMER_DROP_ONLY(value, def) (def)
 #else
 #define PBB_CONSUMER_DROP_ONLY(value, def) (value)
@@ -78,7 +78,7 @@ static struct pbb_reader_tlvblock_entry *_malloc_tlvblock_entry(void);
 
 static uint8_t pbb_get_pktversion(uint8_t v);
 
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
 static void _set_addr_bitarray(struct pbb_reader_bitarray256 *b, int idx);
 static bool _test_addrbitarray(struct pbb_reader_bitarray256 *b, int idx);
 #endif
@@ -190,11 +190,11 @@ pbb_reader_handle_packet(struct pbb_reader *parser, uint8_t *buffer, size_t leng
     last_started = consumer;
     /* this one can drop a packet */
     if (consumer->start_callback != NULL) {
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       result =
 #endif
           consumer->start_callback(consumer, &context);
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       if (result != PBB_OKAY) {
         goto cleanup_parse_packet;
       }
@@ -203,11 +203,11 @@ pbb_reader_handle_packet(struct pbb_reader *parser, uint8_t *buffer, size_t leng
     /* handle packet tlv consumers */
     if (has_tlv && (consumer->tlv_callback != NULL || consumer->block_callback != NULL)) {
       /* can drop packet */
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       result =
 #endif
           _schedule_tlvblock(consumer, &context, &entries, 0);
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       if (result != PBB_OKAY) {
         goto cleanup_parse_packet;
       }
@@ -221,7 +221,7 @@ pbb_reader_handle_packet(struct pbb_reader *parser, uint8_t *buffer, size_t leng
     result = _handle_message(parser, &context, &ptr, eob);
   }
 
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
 cleanup_parse_packet:
 #endif
   /* call end-of-context callback */
@@ -235,7 +235,7 @@ cleanup_parse_packet:
   _free_tlvblock(parser, &entries);
 
   /* do not tell caller about packet drop */
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
   if (result == PBB_DROP_PACKET) {
     return PBB_OKAY;
   }
@@ -701,11 +701,11 @@ _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer, struct pbb_rea
     /* handle tlv_callback first */
     if (index_match && consumer->tlv_callback != NULL) {
       /* call consumer for TLV, can skip tlv, address, message and packet */
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       result =
 #endif
           consumer->tlv_callback(consumer, tlv, context);
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       if (result == PBB_DROP_TLV) {
         /* mark dropped tlv */
         _set_addr_bitarray(&tlv->int_drop_tlv, idx);
@@ -772,12 +772,12 @@ _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer, struct pbb_rea
 
   /* call consumer for tlvblock */
   if (consumer->block_callback != NULL) {
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
     result =
 #endif
         consumer->block_callback(consumer, context, mandatory_missing);
 
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
     if (result == PBB_DROP_TLV) {
       avl_for_each_element(&consumer->consumer_entries, cons_entry, node) {
         if (cons_entry->tlv != NULL && cons_entry->drop) {
@@ -791,10 +791,10 @@ _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer, struct pbb_rea
     }
 #endif
   }
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
 cleanup_handle_tlvblock:
 #endif
-#if  DEBUG_CLEANUP == 1
+#if  DEBUG_CLEANUP == true
   avl_for_each_element(&consumer->consumer_entries, cons_entry, node) {
     cons_entry->tlv = NULL;
     cons_entry->drop = false;
@@ -918,7 +918,7 @@ schedule_msgtlv_consumer(struct pbb_reader_tlvblock_consumer *consumer,
   /* call start-of-context callback */
   if (consumer->start_callback) {
     /* could drop tlv, message or packet */
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
     result =
 #endif
         consumer->start_callback(consumer, tlv_context);
@@ -957,7 +957,7 @@ schedule_msgaddr_consumer(struct pbb_reader_tlvblock_consumer *consumer,
     tlv_context->prefixlen = addr->prefixlen;
     for (i=0; i<addr->num_addr; i++) {
       /* test if we should skip this address */
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       if (_test_addrbitarray(&addr->dropAddr, i)) {
         continue;
       }
@@ -975,7 +975,7 @@ schedule_msgaddr_consumer(struct pbb_reader_tlvblock_consumer *consumer,
       /* call start-of-context callback */
       if (consumer->start_callback) {
         /* can drop address, addressblock, message and packet */
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
         result =
 #endif
             consumer->start_callback(consumer, tlv_context);
@@ -995,7 +995,7 @@ schedule_msgaddr_consumer(struct pbb_reader_tlvblock_consumer *consumer,
         }
       }
 
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       /* handle result from tlvblock callbacks */
       if (result == PBB_DROP_ADDRESS) {
         _set_addr_bitarray(&addr->dropAddr, i);
@@ -1163,12 +1163,12 @@ _handle_message(struct pbb_reader *parser,
 
     /* remember range of consumers with same order to call end_message() callbacks */
     if (same_order[0] != NULL && consumer->order > same_order[1]->order) {
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       result =
 #endif
       schedule_end_message_cbs(tlv_context,
           same_order[0], same_order[1], result);
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       if (result != PBB_OKAY) {
         goto cleanup_parse_message;
       }
@@ -1177,13 +1177,13 @@ _handle_message(struct pbb_reader *parser,
     }
 
     if (consumer->addrblock_consumer) {
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       result =
 #endif
       schedule_msgaddr_consumer(consumer, tlv_context, &addr_head);
     }
     else {
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       result =
 #endif
       schedule_msgtlv_consumer(consumer, tlv_context, &tlv_entries);
@@ -1193,7 +1193,7 @@ _handle_message(struct pbb_reader *parser,
       same_order[1] = consumer;
     }
 
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
     if (result != PBB_OKAY) {
       break;
     }
@@ -1202,12 +1202,12 @@ _handle_message(struct pbb_reader *parser,
 
   /* handle last end_message() callback range */
   if (same_order[0] != NULL) {
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
     result =
 #endif
     schedule_end_message_cbs(tlv_context,
         same_order[0], same_order[1], result);
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
     if (result != PBB_OKAY) {
       goto cleanup_parse_message;
     }
@@ -1217,7 +1217,7 @@ _handle_message(struct pbb_reader *parser,
 cleanup_parse_message:
   /* handle message forwarding */
   if (
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
       (result == PBB_OKAY || result == PBB_DROP_MSG_BUT_FORWARD) &&
 #endif
       parser->forward_message != NULL && tlv_context->has_hopcount) {
@@ -1240,7 +1240,7 @@ cleanup_parse_message:
   /* free message tlvblock */
   _free_tlvblock(parser, &tlv_entries);
   *ptr = end;
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
   if (result == PBB_DROP_MESSAGE) {
     /* do not propagate message drop */
     return PBB_OKAY;
@@ -1322,7 +1322,7 @@ pbb_get_pktversion(uint8_t v) {
   return v >> 4;
 }
 
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
 /**
  * Set a bit in the bitarray256 struct
  * @param b pointer to bitarray

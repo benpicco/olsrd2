@@ -85,7 +85,7 @@
  *   bad format of forwarded message, size field wrong
  */
 enum pbb_result {
-#if DISALLOW_CONSUMER_CONTEXT_DROP == 0
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
   PBB_DROP_PACKET          =  5,
   PBB_DROP_MESSAGE         =  4,
   PBB_DROP_MSG_BUT_FORWARD =  3,
