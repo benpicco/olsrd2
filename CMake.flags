@@ -9,7 +9,7 @@ function(add_compiler_flag flag)
     endif()
 endfunction(add_compiler_flag)
 
-# allow to remove parts of the logging/helptext for smaller executable
+# compiler flags that needs to be there both for API and application
 IF (OONF_REMOVE_DEBUG_LOGGING)
     ADD_DEFINITIONS(-DREMOVE_LOG_DEBUG)
 ENDIF (OONF_REMOVE_DEBUG_LOGGING)
@@ -24,16 +24,7 @@ IF (OONF_REMOVE_HELPTEXT)
     ADD_DEFINITIONS(-DREMOVE_HELPTEXT)
 ENDIF(OONF_REMOVE_HELPTEXT)
 
-# set preprocessor variables for level of root access the app needs
-IF (OONF_NEED_ROOT)
-    ADD_DEFINITIONS(-DNEED_ROOT)
-ENDIF (OONF_NEED_ROOT)
-
-IF (OONF_NEED_ROUTING)
-    ADD_DEFINITIONS(-DNEED_ROUTING)
-ENDIF(OONF_NEED_ROUTING)
-
-# OS-specific settings
+# OS-specific compiler settings
 IF(ANDROID OR WIN32)
     # Android and windows don't compile well with c99
     ADD_DEFINITIONS(-std=gnu99)

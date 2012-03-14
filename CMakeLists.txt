@@ -34,6 +34,7 @@ endif(DOXYGEN_FOUND)
 include_directories(src)
 include_directories(src-api)
 include_directories(src-api/core)
+include_directories(${CMAKE_BINARY_DIR})
 
 ENABLE_TESTING()
 

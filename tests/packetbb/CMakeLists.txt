@@ -22,8 +22,6 @@ set(TESTS test_packetbb_reader_blockcb
           test_packetbb_writer_fragmentation
           test_packetbb_writer_ifspecific)
 
-include_directories(${CMAKE_BINARY_DIR})
-
 foreach(TEST ${TESTS})
     compile_packetbb_test(${TEST} ${TEST}.c)
     ADD_TEST(NAME ${TEST} COMMAND ${TEST})

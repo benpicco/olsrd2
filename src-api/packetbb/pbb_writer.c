@@ -47,7 +47,7 @@
 #include "common/list.h"
 #include "packetbb/pbb_context.h"
 #include "packetbb/pbb_writer.h"
-#include "pbb_api_config.h"
+#include "packetbb/pbb_api_config.h"
 
 static int _msgaddr_avl_comp(const void *k1, const void *k2, void *ptr);
 static void *_copy_addrtlv_value(struct pbb_writer *writer, void *value, size_t length);
@@ -88,7 +88,7 @@ pbb_writer_init(struct pbb_writer *writer, size_t msg_mtu, size_t addrtlv_data) 
   _pbb_tlv_writer_init(&writer->msg, 0, msg_mtu);
 
   writer->addrtlv_size = addrtlv_data;
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   writer->int_state = PBB_WRITER_NONE;
 #endif
 
@@ -112,7 +112,7 @@ pbb_writer_cleanup(struct pbb_writer *writer) {
   struct pbb_writer_interface *interf, *safe_interf;
 
   assert(writer);
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -170,7 +170,7 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
     struct pbb_writer_tlvtype *tlvtype, void *value, size_t length, bool allow_dup) {
   struct pbb_writer_addrtlv *addrtlv;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_ADDRESSES);
 #endif
 
@@ -220,16 +220,16 @@ struct pbb_writer_address *
 pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_message *msg, uint8_t *addr, uint8_t prefix) {
   struct pbb_writer_address *address;
-#if CLEAR_ADDRESS_POSTFIX == 1
+#if CLEAR_ADDRESS_POSTFIX == true
   int i, p;
   uint8_t cleaned_addr[PBB_MAX_ADDRLEN];
 #endif
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_ADD_ADDRESSES);
 #endif
 
-#if CLEAR_ADDRESS_POSTFIX == 1
+#if CLEAR_ADDRESS_POSTFIX == true
   /* only copy prefix part of address */
   for (p = prefix, i=0; i < msg->addr_len; i++, p -= 8) {
     if (p > 7) {
@@ -255,7 +255,7 @@ pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
       return NULL;
     }
 
-#if CLEAR_ADDRESS_POSTFIX == 1
+#if CLEAR_ADDRESS_POSTFIX == true
     memcpy(address->addr, cleaned_addr, msg->addr_len);
 #else
     memcpy(address->addr, addr, msg->addr_len);
@@ -287,7 +287,7 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
   struct pbb_writer_tlvtype *tlvtype;
   struct pbb_writer_message *msg;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
   if ((msg = _get_message(writer, msgtype)) == NULL) {
@@ -332,7 +332,7 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
  */
 void
 pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer, struct pbb_writer_tlvtype *tlvtype) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
   if (--tlvtype->usage_counter) {
@@ -360,7 +360,7 @@ pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
     struct pbb_writer_content_provider *cpr, uint8_t msgid, int priority) {
   struct pbb_writer_message *msg;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -384,7 +384,7 @@ pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
  */
 void
 pbb_writer_unregister_content_provider(struct pbb_writer *writer, struct pbb_writer_content_provider *cpr) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -408,7 +408,7 @@ pbb_writer_register_message(struct pbb_writer *writer, uint8_t msgid,
     bool if_specific, uint8_t addr_len) {
   struct pbb_writer_message *msg;
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -441,7 +441,7 @@ pbb_writer_register_message(struct pbb_writer *writer, uint8_t msgid,
  */
 void
 pbb_writer_unregister_message(struct pbb_writer *writer, struct pbb_writer_message *msg) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -464,7 +464,7 @@ void
 pbb_writer_register_pkthandler(struct pbb_writer *writer,
     struct pbb_writer_pkthandler *pkt) {
 
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -481,7 +481,7 @@ pbb_writer_register_pkthandler(struct pbb_writer *writer,
 void
 pbb_writer_unregister_pkthandler(struct pbb_writer *writer  __attribute__ ((unused)),
     struct pbb_writer_pkthandler *pkt) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -498,7 +498,7 @@ pbb_writer_unregister_pkthandler(struct pbb_writer *writer  __attribute__ ((unus
 int
 pbb_writer_register_interface(struct pbb_writer *writer,
     struct pbb_writer_interface *interf, size_t mtu) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
@@ -524,7 +524,7 @@ void
 pbb_writer_unregister_interface(
     struct pbb_writer *writer  __attribute__ ((unused)),
     struct pbb_writer_interface *interf) {
-#if WRITER_STATE_MACHINE == 1
+#if WRITER_STATE_MACHINE == true
   assert(writer->int_state == PBB_WRITER_NONE);
 #endif
 
