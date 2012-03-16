@@ -130,8 +130,7 @@ static bool droptlv_blocktlv_address[2][2][2];
 
 static enum pbb_result
 cb_blocktlv_packet(struct pbb_reader_tlvblock_consumer *consumer,
-      struct pbb_reader_tlvblock_context *c __attribute__ ((unused)),
-      bool mandatory_missing __attribute__ ((unused))) {
+      struct pbb_reader_tlvblock_context *c __attribute__ ((unused))) {
   int oi = consumer->order - 1;
 
 #ifdef PRINT_CB
@@ -151,8 +150,7 @@ cb_blocktlv_packet(struct pbb_reader_tlvblock_consumer *consumer,
 
 static enum pbb_result
 cb_blocktlv_message(struct pbb_reader_tlvblock_consumer *consumer,
-      struct pbb_reader_tlvblock_context *c __attribute__ ((unused)),
-      bool mandatory_missing __attribute__ ((unused))) {
+      struct pbb_reader_tlvblock_context *c __attribute__ ((unused))) {
   int oi = consumer->order - 1;
 
 #ifdef PRINT_CB
@@ -172,8 +170,7 @@ cb_blocktlv_message(struct pbb_reader_tlvblock_consumer *consumer,
 
 static enum pbb_result
 cb_blocktlv_message2(struct pbb_reader_tlvblock_consumer *consumer __attribute__ ((unused)),
-      struct pbb_reader_tlvblock_context *c __attribute__ ((unused)),
-      bool mandatory_missing __attribute__ ((unused))) {
+      struct pbb_reader_tlvblock_context *c __attribute__ ((unused))) {
 #ifdef PRINT_CB
   printf("%s: message 2 blocktlv: %d\n", __func__, callback_index);
 #endif
@@ -183,8 +180,7 @@ cb_blocktlv_message2(struct pbb_reader_tlvblock_consumer *consumer __attribute__
 
 static enum pbb_result
 cb_blocktlv_address(struct pbb_reader_tlvblock_consumer *consumer,
-      struct pbb_reader_tlvblock_context *ctx,
-      bool mandatory_missing __attribute__ ((unused))) {
+      struct pbb_reader_tlvblock_context *ctx) {
   uint8_t ai = ctx->addr[3] - 1;
   int oi = consumer->order - 1;
 

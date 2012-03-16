@@ -46,8 +46,9 @@
 #include "common/list.h"
 #include "common/autobuf.h"
 #include "common/netaddr.h"
-#include "olsr_logging.h"
 #include "os_net.h"
+#include "olsr_cfg.h"
+#include "olsr_logging.h"
 #include "olsr_packet_socket.h"
 #include "olsr.h"
 
@@ -57,6 +58,9 @@ static char input_buffer[65536];
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_packet_state);
 
+static int _apply_managed_socket(struct olsr_packet_managed *managed,
+    struct olsr_packet_socket *stream,
+    struct netaddr *bindto, uint16_t port);
 static void _cb_packet_event(int fd, void *data, bool r, bool w);
 
 /**
@@ -83,13 +87,13 @@ olsr_packet_cleanup(void) {
   while (!list_is_empty(&packet_sockets)) {
     skt = list_first_element(&packet_sockets, skt, node);
 
-    olsr_packet_remove(skt);
+    olsr_packet_remove(skt, true);
   }
 }
 
 /**
  * Add a new packet socket handler
- * @param pktsocket pointer to uninitialized packet socket struct
+ * @param pktsocket pointer to an initialized packet socket struct
  * @param local pointer local IP address of packet socket
  * @return -1 if an error happened, 0 otherwise
  */
@@ -97,8 +101,6 @@ int
 olsr_packet_add(struct olsr_packet_socket *pktsocket,
     union netaddr_socket *local) {
   int s = -1;
-
-  memset(pktsocket, 0, sizeof(*pktsocket));
 
   /* Init socket */
   s = os_net_getsocket(local, OS_SOCKET_UDP | OS_SOCKET_MULTICAST, 0, LOG_SOCKET_PACKET);
@@ -109,7 +111,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   pktsocket->scheduler_entry.fd = s;
   pktsocket->scheduler_entry.process = _cb_packet_event;
   pktsocket->scheduler_entry.event_read = true;
-  pktsocket->scheduler_entry.event_write = true;
+  pktsocket->scheduler_entry.event_write = false;
   pktsocket->scheduler_entry.data = pktsocket;
 
   olsr_socket_add(&pktsocket->scheduler_entry);
@@ -118,8 +120,10 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   list_add_tail(&packet_sockets, &pktsocket->node);
   memcpy(&pktsocket->local_socket, local, sizeof(pktsocket->local_socket));
 
-  pktsocket->input_buffer = input_buffer;
-  pktsocket->input_buffer_length = sizeof(input_buffer);
+  if (pktsocket->config.input_buffer_length == 0) {
+    pktsocket->config.input_buffer = input_buffer;
+    pktsocket->config.input_buffer_length = sizeof(input_buffer);
+  }
   return 0;
 }
 
@@ -128,13 +132,14 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
  * @param pktsocket pointer to packet socket
  */
 void
-olsr_packet_remove(struct olsr_packet_socket *pktsocket) {
+olsr_packet_remove(struct olsr_packet_socket *pktsocket,
+    bool force __attribute__((unused))) {
   if (list_is_node_added(&pktsocket->node)) {
     olsr_socket_remove(&pktsocket->scheduler_entry);
     os_close(pktsocket->scheduler_entry.fd);
-    list_remove(&pktsocket->node);
-
     abuf_free(&pktsocket->out);
+
+    list_remove(&pktsocket->node);
   }
 }
 
@@ -184,6 +189,87 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
   return 0;
 }
 
+void
+olsr_packet_add_managed(struct olsr_packet_managed *managed) {
+  if (managed->config.input_buffer_length == 0) {
+    managed->config.input_buffer = input_buffer;
+    managed->config.input_buffer_length = sizeof(input_buffer);
+  }
+}
+
+void
+olsr_packet_remove_managed(struct olsr_packet_managed *managed, bool forced) {
+  olsr_packet_remove(&managed->socket_v4, forced);
+  olsr_packet_remove(&managed->socket_v6, forced);
+
+  olsr_acl_remove(&managed->acl);
+}
+
+int
+olsr_packet_apply_managed(struct olsr_packet_managed *managed,
+    struct olsr_packet_managed_config *config) {
+  olsr_acl_copy(&managed->acl, &config->acl);
+
+  if (config_global.ipv4) {
+    if (_apply_managed_socket(managed,
+        &managed->socket_v4, &config->bindto_v4, config->port)) {
+      return -1;
+    }
+  }
+  else {
+    olsr_packet_remove(&managed->socket_v4, true);
+  }
+
+  if (config_global.ipv6) {
+    if (_apply_managed_socket(managed,
+        &managed->socket_v6, &config->bindto_v6, config->port)) {
+      return -1;
+    }
+  }
+  else {
+    olsr_packet_remove(&managed->socket_v6, true);
+  }
+  return 0;
+}
+
+/**
+ * Apply new configuration to a managed stream socket
+ * @param managed pointer to managed stream
+ * @param stream pointer to TCP stream to configure
+ * @param bindto local address to bind socket to
+ * @param port local port number
+ * @return -1 if an error happened, 0 otherwise.
+ */
+static int
+_apply_managed_socket(struct olsr_packet_managed *managed,
+    struct olsr_packet_socket *packet,
+    struct netaddr *bindto, uint16_t port) {
+  union netaddr_socket sock;
+#if !defined(REMOVE_LOG_WARN)
+  struct netaddr_str buf;
+#endif
+
+  if (netaddr_socket_init(&sock, bindto, port)) {
+    OLSR_WARN(LOG_SOCKET_STREAM, "Cannot create managed socket address: %s/%u",
+        netaddr_to_string(&buf, bindto), port);
+    return -1;
+  }
+
+  if (memcmp(&sock, &packet->local_socket, sizeof(sock)) == 0) {
+    /* nothing changed */
+    return 0;
+  }
+
+  olsr_packet_remove(packet, true);
+  if (olsr_packet_add(packet, &sock)) {
+    return -1;
+  }
+
+  /* copy configuration */
+  memcpy(&packet->config, &managed->config, sizeof(packet->config));
+  return 0;
+}
+
 /**
  * Callback to handle data from the olsr socket scheduler
  * @param fd filedescriptor to read data from
@@ -199,22 +285,28 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
   char *pkt;
   int result;
 #if !defined(REMOVE_LOG_WARN)
-  struct netaddr_str buf;
+  struct netaddr_str netbuf;
 #endif
 
+  OLSR_DEBUG(LOG_SOCKET_PACKET, "UDP event.");
+
   if (event_read) {
+    uint8_t *buf;
+
     /* handle incoming data */
-    result = os_recvfrom(fd, pktsocket->input_buffer, pktsocket->input_buffer_length-1, &sock);
-    if (result > 0 && pktsocket->receive_data != NULL) {
+    buf = pktsocket->config.input_buffer;
+
+    result = os_recvfrom(fd, buf, pktsocket->config.input_buffer_length-1, &sock);
+    if (result > 0 && pktsocket->config.receive_data != NULL) {
       /* null terminate it */
-      pktsocket->input_buffer[pktsocket->input_buffer_length-1] = 0;
+      buf[result] = 0;
 
       /* received valid packet */
-      pktsocket->receive_data(pktsocket, &sock, result);
+      pktsocket->config.receive_data(pktsocket, &sock, result);
     }
     else if (result < 0 && (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
       OLSR_WARN(LOG_SOCKET_PACKET, "Cannot read packet from socket %s: %s (%d)",
-          netaddr_socket_to_string(&buf, &pktsocket->local_socket), strerror(errno), errno);
+          netaddr_socket_to_string(&netbuf, &pktsocket->local_socket), strerror(errno), errno);
     }
   }
 
@@ -241,7 +333,7 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
     if (result < 0) {
       /* display error message */
       OLSR_WARN(LOG_SOCKET_PACKET, "Cannot send UDP packet to %s: %s (%d)",
-          netaddr_socket_to_string(&buf, skt), strerror(errno), errno);
+          netaddr_socket_to_string(&netbuf, skt), strerror(errno), errno);
     }
 
     /* remove data from outgoing buffer (both for success and for final error */

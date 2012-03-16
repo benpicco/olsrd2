@@ -54,7 +54,7 @@ static struct pbb_reader reader;
 struct pbb_reader_tlvblock_consumer consumer;
 static bool got_tlv[2];
 static bool got_multiple_times[2];
-static bool got_mandatory_missing;
+static bool got_failed_constraints;
 
 static enum pbb_result
 cb_blocktlv_packet(struct pbb_reader_tlvblock_consumer *cons __attribute__ ((unused)),
@@ -66,8 +66,20 @@ cb_blocktlv_packet(struct pbb_reader_tlvblock_consumer *cons __attribute__ ((unu
   got_tlv[1] = consumer_entries[1].tlv != NULL;
   got_multiple_times[1] = consumer_entries[1].duplicate_tlv;
 
-  got_mandatory_missing = mandatory_missing;
+  got_failed_constraints = mandatory_missing;
   return PBB_OKAY;
+}
+
+static enum pbb_result
+cb_blocktlv_packet_okay(struct pbb_reader_tlvblock_consumer *cons,
+      struct pbb_reader_tlvblock_context *cont) {
+  return cb_blocktlv_packet(cons, cont, false);
+}
+
+static enum pbb_result
+cb_blocktlv_packet_failed(struct pbb_reader_tlvblock_consumer *cons,
+      struct pbb_reader_tlvblock_context *cont) {
+  return cb_blocktlv_packet(cons, cont, true);
 }
 
 static void clear_elements(void) {
@@ -75,7 +87,7 @@ static void clear_elements(void) {
   got_multiple_times[0] = false;
   got_tlv[1] = false;
   got_multiple_times[1] = false;
-  got_mandatory_missing = false;
+  got_failed_constraints = false;
 }
 
 static void test_packet1(void) {
@@ -89,7 +101,7 @@ static void test_packet1(void) {
   CHECK_TRUE(!got_multiple_times[0], "TLV 1 (duplicate)");
   CHECK_TRUE(!got_multiple_times[1], "TLV 2 (duplicate)");
 
-  CHECK_TRUE(got_mandatory_missing, "mandatory missing");
+  CHECK_TRUE(got_failed_constraints, "mandatory missing");
   END_TEST();
 }
 
@@ -104,7 +116,7 @@ static void test_packet12(void) {
   CHECK_TRUE(!got_multiple_times[0], "TLV 1 (duplicate)");
   CHECK_TRUE(!got_multiple_times[1], "TLV 2 (duplicate)");
 
-  CHECK_TRUE(!got_mandatory_missing, "mandatory missing");
+  CHECK_TRUE(!got_failed_constraints, "mandatory missing");
   END_TEST();
 }
 
@@ -119,7 +131,7 @@ static void test_packet121(void) {
   CHECK_TRUE(got_multiple_times[0], "TLV 1 (duplicate)");
   CHECK_TRUE(!got_multiple_times[1], "TLV 2 (duplicate)");
 
-  CHECK_TRUE(!got_mandatory_missing, "mandatory missing");
+  CHECK_TRUE(!got_failed_constraints, "mandatory missing");
   END_TEST();
 }
 
@@ -134,14 +146,15 @@ static void test_packet212(void) {
   CHECK_TRUE(!got_multiple_times[0], "TLV 1 (duplicate)");
   CHECK_TRUE(got_multiple_times[1], "TLV 2 (duplicate)");
 
-  CHECK_TRUE(!got_mandatory_missing, "mandatory missing");
+  CHECK_TRUE(!got_failed_constraints, "mandatory missing");
   END_TEST();
 }
 
 int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))) {
   pbb_reader_init(&reader);
   pbb_reader_add_packet_consumer(&reader, &consumer, consumer_entries, ARRAYSIZE(consumer_entries), 1);
-  consumer.block_callback = cb_blocktlv_packet;
+  consumer.block_callback = cb_blocktlv_packet_okay;
+  consumer.block_callback_failed_constraints = cb_blocktlv_packet_failed;
 
   BEGIN_TESTING();
 
