@@ -54,7 +54,8 @@
 #endif
 
 static int _consumer_avl_comp(const void *k1, const void *k2, void *ptr);
-static int _calc_tlv_intorder(uint8_t type, uint8_t exttype);
+static int _calc_tlvconsumer_intorder(struct pbb_reader_tlvblock_consumer_entry *entry);
+static int _calc_tlvblock_intorder(struct pbb_reader_tlvblock_entry *entry);
 static bool _has_same_tlvtype(int int_type1, int int_type2);
 static uint8_t _pbb_get_u8(uint8_t **ptr, uint8_t *end, enum pbb_result *result);
 static uint16_t _pbb_get_u16(uint8_t **ptr, uint8_t *end, enum pbb_result *result);
@@ -263,12 +264,11 @@ pbb_reader_add_packet_consumer(struct pbb_reader *parser,
  * Add a message consumer for a single message type to
  * the parser to process the message tlvs
  * @param parser pointer to parser context
+ * @param consumer pointer to tlvblock consumer
  * @param entries array of tlvblock_entries
  * @param entrycount number of elements in array
  * @param msg_id type of the message for the consumer
- * @param order
- * @return pointer to pbb_reader_tlvblock_consumer,
- *   NULL if an error happened
+ * @param order priority of message consumer
  */
 void
 pbb_reader_add_message_consumer(struct pbb_reader *parser,
@@ -388,13 +388,22 @@ _consumer_avl_comp(const void *k1, const void *k2, void *ptr __attribute__ ((unu
 
 /**
  * Calculate internal tlvtype from type and exttype
- * @param type
- * @param exttype
+ * @param entry pointer tlvblock entry
  * @return 256*type + exttype
  */
 static int
-_calc_tlv_intorder(uint8_t type, uint8_t exttype) {
-  return (((int)type) << 8) | ((int)exttype);
+_calc_tlvconsumer_intorder(struct pbb_reader_tlvblock_consumer_entry *entry) {
+  return (((int)entry->type) << 8) | ((int)entry->type_ext);
+}
+
+/**
+ * Calculate internal tlvtype from type and exttype
+ * @param entry pointer tlvblock entry
+ * @return 256*type + exttype
+ */
+static int
+_calc_tlvblock_intorder(struct pbb_reader_tlvblock_entry *entry) {
+  return (((int)entry->type) << 8) | ((int)entry->type_ext);
 }
 
 /**
@@ -491,7 +500,7 @@ _parse_tlv(struct pbb_reader_tlvblock_entry *entry, uint8_t **ptr, uint8_t *eob)
   }
 
   /* calculate internal combination of tlv type and extension */
-  entry->int_order = _calc_tlv_intorder(entry->type, entry->type_ext);
+  entry->int_order = _calc_tlvblock_intorder(entry);
 
   /* check for TLV index values */
   masked = entry->flags & (PBB_TLV_FLAG_SINGLE_IDX | PBB_TLV_FLAG_MULTI_IDX);
@@ -642,29 +651,30 @@ _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer, struct pbb_rea
     struct avl_tree *entries, uint8_t idx) {
   struct pbb_reader_tlvblock_entry *tlv = NULL;
   struct pbb_reader_tlvblock_consumer_entry *cons_entry;
-  bool mandatory_missing;
+  bool constraints_failed;
   int cons_order, tlv_order;
   enum pbb_result result = PBB_OKAY;
 
-  if (avl_is_empty(entries)) {
-    /* empty TLV block */
-    return PBB_OKAY;
-  }
-
-  mandatory_missing = false;
+  constraints_failed = false;
 
   /* initialize tlv pointers, there must be TLVs */
-  tlv = avl_first_element(entries, tlv, node);
-  tlv_order = tlv->int_order;
+  if (avl_is_empty(entries)) {
+    tlv = NULL;
+    tlv_order = TLVTYPE_ORDER_INFINITE;
+  }
+  else {
+    tlv = avl_first_element(entries, tlv, node);
+    tlv_order = tlv->int_order;
+  }
 
   /* initialize consumer pointer */
-  if (avl_is_empty(&consumer->consumer_entries)) {
+  if (list_is_empty(&consumer->_consumer_list)) {
     cons_entry = NULL;
     cons_order = TLVTYPE_ORDER_INFINITE;
   }
   else {
-    cons_entry = avl_first_element(&consumer->consumer_entries, cons_entry, node);
-    cons_order = cons_entry->int_order;
+    cons_entry = list_first_element(&consumer->_consumer_list, cons_entry, _node);
+    cons_order = _calc_tlvconsumer_intorder(cons_entry);
     cons_entry->tlv = NULL;
     cons_entry->duplicate_tlv = false;
   }
@@ -722,16 +732,22 @@ _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer, struct pbb_rea
 
     /* run through both sorted lists until finding a match */
     if (cons_order <= tlv_order) {
-      mandatory_missing |= cons_entry->mandatory && !match;
+      constraints_failed |= cons_entry->mandatory && !match;
 
       if (match) {
+        if (cons_entry->match_length &&
+            (tlv->length < cons_entry->min_length
+                || tlv->length > cons_entry->max_length)) {
+          constraints_failed = true;
+        }
+
         if (cons_entry->tlv == NULL) {
           /* remember new tlv */
           cons_entry->tlv = tlv;
 
           if (cons_entry->copy_value != NULL && tlv->length > 0) {
             /* copy value into private buffer */
-            uint16_t len = cons_entry->copy_value_maxlen;
+            uint16_t len = cons_entry->max_length;
 
             if (tlv->length < len) {
               len = tlv->length;
@@ -757,13 +773,13 @@ _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer, struct pbb_rea
     }
     if (cons_order < tlv_order) {
       /* advance consumer pointer */
-      if (avl_is_last(&consumer->consumer_entries, &cons_entry->node)) {
+      if (list_is_last(&consumer->_consumer_list, &cons_entry->_node)) {
         cons_entry = NULL;
         cons_order = TLVTYPE_ORDER_INFINITE;
       }
       else {
-        cons_entry = avl_next_element(cons_entry, node);
-        cons_order = cons_entry->int_order;
+        cons_entry = list_next_element(cons_entry, _node);
+        cons_order = _calc_tlvconsumer_intorder(cons_entry);
         cons_entry->tlv = NULL;
         cons_entry->duplicate_tlv = false;
       }
@@ -771,31 +787,36 @@ _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer, struct pbb_rea
   }
 
   /* call consumer for tlvblock */
-  if (consumer->block_callback != NULL) {
+  if (consumer->block_callback != NULL && !constraints_failed) {
 #if DISALLOW_CONSUMER_CONTEXT_DROP == false
     result =
 #endif
-        consumer->block_callback(consumer, context, mandatory_missing);
-
-#if DISALLOW_CONSUMER_CONTEXT_DROP == false
-    if (result == PBB_DROP_TLV) {
-      avl_for_each_element(&consumer->consumer_entries, cons_entry, node) {
-        if (cons_entry->tlv != NULL && cons_entry->drop) {
-          _set_addr_bitarray(&cons_entry->tlv->int_drop_tlv, idx);
-          cons_entry->drop = false;
-        }
-      }
-
-      /* do not propagate tlv drops */
-      result = PBB_OKAY;
-    }
-#endif
+        consumer->block_callback(consumer, context);
   }
+  else if (consumer->block_callback_failed_constraints != NULL && constraints_failed) {
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
+    result =
+#endif
+        consumer->block_callback_failed_constraints(consumer, context);
+  }
+#if DISALLOW_CONSUMER_CONTEXT_DROP == false
+  if (result == PBB_DROP_TLV) {
+    list_for_each_element(&consumer->_consumer_list, cons_entry, _node) {
+      if (cons_entry->tlv != NULL && cons_entry->drop) {
+        _set_addr_bitarray(&cons_entry->tlv->int_drop_tlv, idx);
+        cons_entry->drop = false;
+      }
+    }
+
+    /* do not propagate tlv drops */
+    result = PBB_OKAY;
+  }
+#endif
 #if DISALLOW_CONSUMER_CONTEXT_DROP == false
 cleanup_handle_tlvblock:
 #endif
 #if  DEBUG_CLEANUP == true
-  avl_for_each_element(&consumer->consumer_entries, cons_entry, node) {
+  list_for_each_element(&consumer->_consumer_list, cons_entry, _node) {
     cons_entry->tlv = NULL;
     cons_entry->drop = false;
   }
@@ -1263,14 +1284,36 @@ cleanup_parse_message:
 static struct pbb_reader_tlvblock_consumer *
 _add_consumer(struct pbb_reader_tlvblock_consumer *consumer, struct avl_tree *consumer_tree,
     struct pbb_reader_tlvblock_consumer_entry *entries, int entrycount, int order) {
-  int i;
+  struct pbb_reader_tlvblock_consumer_entry *e;
+  int i, o;
+  bool set;
+
+  list_init_head(&consumer->_consumer_list);
 
   /* generate sorted list of entries */
-  avl_init(&consumer->consumer_entries, avl_comp_uint32, false, NULL);
   for (i=0; i<entrycount; i++) {
-    entries[i].int_order = _calc_tlv_intorder(entries[i].type, entries[i].type_ext);
-    entries[i].node.key = &entries[i].int_order;
-    avl_insert(&consumer->consumer_entries, &entries[i].node);
+    o = _calc_tlvconsumer_intorder(&entries[i]);
+
+    if (i == 0) {
+      list_add_tail(&consumer->_consumer_list, &entries[i]._node);
+    }
+    else {
+      set = false;
+      list_for_each_element_reverse(&consumer->_consumer_list, e, _node) {
+        if (_calc_tlvconsumer_intorder(e) <= o) {
+          list_add_after(&e->_node, &entries[i]._node);
+          set = true;
+          break;
+        }
+      }
+      if (!set) {
+        list_add_head(&consumer->_consumer_list, &entries[i]._node);
+      }
+    }
+
+    if (entries[i].min_length > entries[i].max_length) {
+      entries[i].max_length = entries[i].min_length;
+    }
   }
 
   /* initialize order */

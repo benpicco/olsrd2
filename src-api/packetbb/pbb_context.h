@@ -63,6 +63,8 @@
  *   illegal combination of thassingleindex and thasmultiindex flags
  * PBB_BAD_TLV_VALUEFLAGS
  *   illegal combination of thasvalue and thasextlen flag
+ * PBB_BAD_TLV_LENGTH
+ *   length of tlv is no multiple of number of values
  * PBB_OUT_OF_MEMORY
  *   dynamic memory allocation failed
  * PBB_EMPTY_ADDRBLOCK
@@ -86,6 +88,7 @@
  */
 enum pbb_result {
 #if DISALLOW_CONSUMER_CONTEXT_DROP == false
+  PBB_RESULT_MAX           =  5,
   PBB_DROP_PACKET          =  5,
   PBB_DROP_MESSAGE         =  4,
   PBB_DROP_MSG_BUT_FORWARD =  3,
@@ -108,7 +111,10 @@ enum pbb_result {
   PBB_NO_MSGCREATOR        = -13,
   PBB_FW_MESSAGE_TOO_LONG  = -14,
   PBB_FW_BAD_SIZE          = -15,
+  PBB_RESULT_MIN           = -15,
 };
+
+EXPORT const char *pbb_strerror(enum pbb_result result);
 
 /* maximum address length */
 /* defined as a macro because it's used to define length of arrays */

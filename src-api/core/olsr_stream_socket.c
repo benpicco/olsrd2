@@ -325,14 +325,19 @@ olsr_stream_close(struct olsr_stream_session *session, bool force) {
 
 /**
  * Initialized a managed TCP stream
- * @param managed pointer to uninitialized managed stream
+ * @param managed pointer to initialized managed stream
  */
 void
 olsr_stream_add_managed(struct olsr_stream_managed *managed) {
-  memset(managed, 0, sizeof(*managed));
-  managed->config.allowed_sessions = 10;
-  managed->config.maximum_input_buffer = 65536;
-  managed->config.session_timeout = 120000;
+  if (managed->config.allowed_sessions == 0) {
+    managed->config.allowed_sessions = 10;
+  }
+  if (managed->config.maximum_input_buffer == 0) {
+    managed->config.maximum_input_buffer = 65536;
+  }
+  if (managed->config.session_timeout == 0) {
+    managed->config.session_timeout = 120000;
+  }
 }
 
 /**

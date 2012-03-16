@@ -57,7 +57,7 @@ enum pbb_reader_tlvblock_context_type {
 };
 
 /**
- * This structs temporary holds the content of a decoded TLV.
+ * This struct temporary holds the content of a decoded TLV.
  */
 struct pbb_reader_tlvblock_entry {
   /* single linked list of entries */
@@ -177,14 +177,8 @@ struct pbb_reader_addrblock_entry {
  * representation of a consumer for a tlv block and context
  */
 struct pbb_reader_tlvblock_consumer_entry {
-  /* set by initialization to create a sorted list */
-  struct avl_node node;
-
-  /*
-   * set by initialization, internal sorting order for types:
-   * tlvtype * 256 + exttype
-   */
-  int int_order;
+  /* sorted list of consumer entries */
+  struct list_entity _node;
 
   /* set by the consumer if the entry is mandatory */
   bool mandatory;
@@ -192,15 +186,27 @@ struct pbb_reader_tlvblock_consumer_entry {
   /* set by the consumer to define the type of the tlv */
   uint8_t type;
 
-  /* set by the consumer to require a certain type extension */
-  bool match_type_ext;
-
   /* set by the consumer to define the required type extension */
   uint8_t type_ext;
 
+  /* set by the consumer to require a certain type extension */
+  bool match_type_ext;
+
+  /* set by the consumer to define the minimum length of the TLVs value */
+  uint16_t min_length;
+
+  /*
+   * set by the consumer to define the maximum length of the TLVs value.
+   * If smaller than min_length, this value will be assumed the same as
+   * min_length.
+   */
+  uint16_t max_length;
+
+  /* set by consumer to activate length checking */
+  bool match_length;
+
   /* set by the consumer to make the parser copy the TLV value into a private buffer */
   void *copy_value;
-  uint16_t copy_value_maxlen;
 
   /* set by the parser to announce that the TLV was present multiple times */
   bool duplicate_tlv;
@@ -238,7 +244,7 @@ struct pbb_reader_tlvblock_consumer {
   bool addrblock_consumer;
 
   /* Tree of sorted consumer entries */
-  struct avl_tree consumer_entries;
+  struct list_entity _consumer_list;
 
   /* consumer for TLVblock context start and end*/
   enum pbb_result (*start_callback)(struct pbb_reader_tlvblock_consumer *,
@@ -252,8 +258,12 @@ struct pbb_reader_tlvblock_consumer {
       struct pbb_reader_tlvblock_context *context);
 
   /* consumer for tlv block and context */
-  enum pbb_result (*block_callback)(struct pbb_reader_tlvblock_consumer *,
-      struct pbb_reader_tlvblock_context *context, bool mandatory_missing);
+  enum pbb_result (*block_callback)(
+      struct pbb_reader_tlvblock_consumer *,
+      struct pbb_reader_tlvblock_context *context);
+  enum pbb_result (*block_callback_failed_constraints)(
+      struct pbb_reader_tlvblock_consumer *,
+      struct pbb_reader_tlvblock_context *context);
 
   /* private data pointer for API user */
   void *private;

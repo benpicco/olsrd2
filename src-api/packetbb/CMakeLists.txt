@@ -1,7 +1,8 @@
 # prepare packetbb API configuration
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/pbb_api_config.h.in ${CMAKE_BINARY_DIR}/packetbb/pbb_api_config.h)
 
-SET(OLSRD_PACKETBB_SRCS pbb_msg_generator.c
+SET(OLSRD_PACKETBB_SRCS pbb_context.c
+                        pbb_msg_generator.c
                         pbb_pkt_generator.c
                         pbb_reader.c
                         pbb_tlv_writer.c

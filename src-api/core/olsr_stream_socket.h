@@ -157,6 +157,7 @@ struct olsr_stream_config {
    */
   enum olsr_stream_session_state (*receive_data)(struct olsr_stream_session *);
 };
+
 /*
  * Represents a TCP server socket or a configuration for a set of outgoing
  * TCP streams.
