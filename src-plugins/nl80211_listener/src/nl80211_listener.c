@@ -926,7 +926,7 @@ _cb_handle_nl80211(struct olsr_telnet_data *data) {
 }
 
 /**
- * Update configuration of remotecontrol plugin
+ * Update configuration of nl80211-listener plugin
  */
 static void
 _cb_config_changed(void) {
