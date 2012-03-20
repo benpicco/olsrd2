@@ -171,10 +171,6 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
     uint32_t if_index) {
   struct olsr_layer2_neighbor *neigh;
 
-  fprintf(stderr, "%u\n", radio_id->type);
-  fprintf(stderr, "%u\n", neigh_mac->type);
-  fprintf(stderr, "%u\n", if_index);
-
   neigh = olsr_layer2_get_neighbor(radio_id, neigh_mac);
   if (!neigh) {
     neigh = olsr_memcookie_malloc(&_neighbor_cookie);

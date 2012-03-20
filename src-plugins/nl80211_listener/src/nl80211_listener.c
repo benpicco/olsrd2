@@ -1032,7 +1032,6 @@ _cb_config_changed(void) {
   i = 0;
   FOR_ALL_STRINGS(&cfg.interf, ptr) {
     cfg.if_listener[i].name = ptr;
-    fprintf(stderr, "add: %s\n", ptr);
     olsr_interface_add_listener(&cfg.if_listener[i]);
   }
 
