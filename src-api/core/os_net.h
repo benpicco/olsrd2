@@ -104,7 +104,7 @@ EXPORT int os_net_configsocket(int sock, union netaddr_socket *bindto,
 EXPORT int net_os_join_mcast(int sock, union netaddr_socket *multicast,
     struct olsr_interface *oif, enum log_source log_src);
 EXPORT int os_net_set_nonblocking(int sock);
-EXPORT int os_net_update_interface(struct olsr_interface_data *, const char *);
+EXPORT int os_net_update_interface(struct olsr_interface_data *, uint32_t if_index);
 EXPORT int os_recvfrom(
     int fd, void *buf, size_t length, union netaddr_socket *source);
 EXPORT int os_sendto(

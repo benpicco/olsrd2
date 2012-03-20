@@ -1,7 +1,6 @@
-
 /*
- * The olsr.org Optimized Link-State Routing daemon(olsrd)
- * Copyright (c) 2004-2012, the olsr.org team - see HISTORY file
+ * PacketBB handler library (see RFC 5444)
+ * Copyright (c) 2010 Henning Rogge <hrogge@googlemail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,36 +30,35 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Visit http://www.olsr.org for more information.
+ * Visit http://www.olsr.org/git for more information.
  *
  * If you find this software useful feel free to make a donation
  * to the project. For more information see the website or contact
  * the copyright holders.
- *
  */
 
-#include "builddata/data.h"
+#ifndef PBB_TLV_WRITER_H_
+#define PBB_TLV_WRITER_H_
 
-static struct olsr_builddata _builddata = {
-  .app_name = "${OONF_APP}",
-  .version = "${OONF_VERSION}",
-  .versionstring_trailer = "${OONF_VERSION_TRAILER}",
-  .help_prefix = "${OONF_HELP_PREFIX}",
-  .help_suffix = "${OONF_HELP_SUFFIX}",
-  
-  .default_config = "${OONF_DEFAULT_CONF}",
-  
-  .git_commit = "${OONF_SRC_GIT}",
-  .git_change = "${OONF_SRC_CHANGE}",
-  
-  .builddate = __DATE__" "__TIME__,
-  .buildsystem = "${CMAKE_SYSTEM}",
-  
-  .sharedlibrary_prefix = "${CMAKE_SHARED_LIBRARY_PREFIX}",
-  .sharedlibrary_postfix = "${CMAKE_SHARED_LIBRARY_SUFFIX}",
+#include "common/common_types.h"
+
+struct pbb_tlv_writer_data {
+  uint8_t *buffer;
+  size_t header;
+  size_t added;
+  size_t allocated;
+  size_t set;
+  size_t max;
 };
 
-const struct olsr_builddata *
-olsr_builddata_get(void) {
-  return &_builddata;
-}
+/* internal functions that are not exported to the user */
+void _pbb_tlv_writer_init(struct pbb_tlv_writer_data *data, size_t max, size_t mtu);
+
+enum pbb_result _pbb_tlv_writer_add(struct pbb_tlv_writer_data *data,
+    uint8_t type, uint8_t exttype, void *value, size_t length);
+enum pbb_result _pbb_tlv_writer_allocate(struct pbb_tlv_writer_data *data,
+    bool has_exttype, size_t length);
+enum pbb_result _pbb_tlv_writer_set(struct pbb_tlv_writer_data *data,
+    uint8_t type, uint8_t exttype, void *value, size_t length);
+
+#endif /* PBB_TLV_WRITER_H_ */

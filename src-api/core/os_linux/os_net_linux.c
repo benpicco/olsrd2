@@ -112,7 +112,7 @@ os_net_cleanup(void) {
  */
 int
 os_net_update_interface(struct olsr_interface_data *data,
-    const char *name) {
+    uint32_t if_index) {
   struct ifaddrs *ifaddr, *ifa;
   union netaddr_socket *sock;
   struct netaddr addr;
@@ -120,12 +120,10 @@ os_net_update_interface(struct olsr_interface_data *data,
 
   memset(data, 0, sizeof(*data));
 
-  /* get interface index */
-  data->index = if_nametoindex(name);
+  data->index = if_index;
 
-  if (data->index == 0) {
-    return 0;
-  }
+  /* get interface index */
+  if_indextoname(if_index, data->name);
 
   if (getifaddrs(&ifaddr) == -1) {
     OLSR_WARN(LOG_OS_NET, "Cannot get interface addresses: %s (%d)",
@@ -134,7 +132,7 @@ os_net_update_interface(struct olsr_interface_data *data,
   }
 
   for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-    if (strcmp(ifa->ifa_name, name) != 0) {
+    if (strcmp(ifa->ifa_name, data->name) != 0) {
       continue;
     }
 
@@ -161,14 +159,15 @@ os_net_update_interface(struct olsr_interface_data *data,
       }
     }
   }
+  freeifaddrs(ifaddr);
 
   memset(&ifr, 0, sizeof(ifr));
-  strscpy(ifr.ifr_name, name, IFNAMSIZ);
+  strscpy(ifr.ifr_name, data->name, IF_NAMESIZE);
 
   if (ioctl(_ioctl_v4, SIOCGIFFLAGS, &ifr) < 0) {
     OLSR_WARN(LOG_OS_NET,
         "ioctl SIOCGIFFLAGS (get flags) error on device %s: %s (%d)\n",
-        name, strerror(errno), errno);
+        data->name, strerror(errno), errno);
     return -1;
   }
 
@@ -176,5 +175,16 @@ os_net_update_interface(struct olsr_interface_data *data,
     data->up = true;
   }
 
+  memset(&ifr, 0, sizeof(ifr));
+  strscpy(ifr.ifr_name, data->name, IF_NAMESIZE);
+
+  if (ioctl(_ioctl_v4, SIOCGIFHWADDR, &ifr) < 0) {
+    OLSR_WARN(LOG_OS_NET,
+        "ioctl SIOCGIFHWADDR (get flags) error on device %s: %s (%d)\n",
+        data->name, strerror(errno), errno);
+    return -1;
+  }
+
+  netaddr_from_binary(&data->mac, ifr.ifr_hwaddr.sa_data, 6, AF_MAC48);
   return 0;
 }

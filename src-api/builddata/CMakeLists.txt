@@ -2,6 +2,8 @@
 SET(GEN_DATA_C           ${PROJECT_BINARY_DIR}/data.c)
 SET(GEN_PLUGIN_STATIC_C  ${PROJECT_BINARY_DIR}/plugin_static.c)
 
+configure_file (${CMAKE_CURRENT_SOURCE_DIR}/app_config.h.in ${CMAKE_BINARY_DIR}/builddata/app_config.h)
+
 ADD_CUSTOM_TARGET(AppCleanData ALL
     COMMAND ${CMAKE_COMMAND} -E remove ${GEN_BUILDDATA_H} ${GEN_PLUGIN_STATIC_C}
     COMMENT "Remove old builddata"
