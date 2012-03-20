@@ -58,6 +58,12 @@ struct olsr_interface_data {
   /* IPv6 Interface address with global scope */
   struct netaddr linklocal_v6;
 
+  /* mac address of interface */
+  struct netaddr mac;
+
+  /* interface name */
+  char name[IF_NAMESIZE];
+
   /* interface index */
   unsigned index;
 
@@ -68,9 +74,6 @@ struct olsr_interface_data {
 struct olsr_interface {
   /* hook interfaces into tree */
   struct avl_node node;
-
-  /* name of interface */
-  const char *name;
 
   /* data of interface */
   struct olsr_interface_data data;
@@ -102,7 +105,10 @@ struct olsr_interface_listener {
   /* hook into list of listeners */
   struct list_entity node;
 
-  /* restrict listener to one interface or NULL for all interfaces */
+  /* restrict listener to this interface */
+  uint32_t if_index;
+
+  /* name of interface, will initialize if_index if its 0 */
   const char *name;
 
   /*
@@ -126,6 +132,7 @@ EXPORT struct olsr_interface *olsr_interface_add_listener(
     struct olsr_interface_listener *);
 EXPORT void olsr_interface_remove_listener(struct olsr_interface_listener *);
 
-EXPORT void olsr_interface_trigger_change(const char *name);
+EXPORT struct olsr_interface_data *olsr_interface_get_data(uint32_t if_index);
+EXPORT void olsr_interface_trigger_change(uint32_t if_index);
 
 #endif /* INTERFACE_H_ */
