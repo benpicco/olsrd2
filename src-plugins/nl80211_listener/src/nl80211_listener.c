@@ -56,6 +56,7 @@
 #include "config/cfg_schema.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
+#include "olsr_interface.h"
 #include "olsr_layer2.h"
 #include "olsr_logging.h"
 #include "olsr_plugins.h"
@@ -71,6 +72,9 @@
 struct _nl80211_config {
   struct strarray interf;
   uint64_t interval;
+
+  /* Array of interface listeners */
+  struct olsr_interface_listener *if_listener;
 };
 
 /* prototypes */
@@ -120,8 +124,10 @@ static struct cfg_schema_section _nl80211_section = {
 };
 
 static struct cfg_schema_entry _nl80211_entries[] = {
-  CFG_MAP_STRINGLIST(_nl80211_config, interf, "if", "wlan0", "TODO"),
-  CFG_MAP_CLOCK_MIN(_nl80211_config, interval, "interval", "1.0", "TODO", 100),
+  CFG_MAP_STRINGLIST(_nl80211_config, interf, "if", "wlan0",
+      "List of interfaces to request nl80211 linklayer information from."),
+  CFG_MAP_CLOCK_MIN(_nl80211_config, interval, "interval", "1.0",
+      "Interval between two linklayer information updates", 100),
 };
 
 static struct _nl80211_config _config;
@@ -171,7 +177,20 @@ _cb_plugin_load(void) {
  */
 static int
 _cb_plugin_unload(void) {
+  int i;
+  char *ptr;
+
+  /* free old resources */
+  if (_config.if_listener) {
+    i = 0;
+    FOR_ALL_STRINGS(&_config.interf, ptr) {
+      olsr_interface_remove_listener(&_config.if_listener[i]);
+      i++;
+    }
+    free(_config.if_listener);
+  }
   strarray_free(&_config.interf);
+
   free (_msgbuf);
 
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_nl80211_section);
@@ -267,6 +286,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   struct nlattr *sinfo[NL80211_STA_INFO_MAX + 1];
   struct nlattr *rinfo[NL80211_RATE_INFO_MAX + 1];
 
+  struct olsr_interface_data *if_data;
   struct olsr_layer2_neighbor *neigh;
   struct netaddr mac;
   unsigned if_index;
@@ -290,7 +310,12 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   netaddr_from_binary(&mac, nla_data(tb[NL80211_ATTR_MAC]), 6, AF_MAC48);
   if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
-  neigh = olsr_layer2_add_neighbor(&mac, if_index);
+  if_data = olsr_interface_get_data(if_index);
+  if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
+    return -1;
+  }
+
+  neigh = olsr_layer2_add_neighbor(&if_data->mac, &mac, if_index);
   if (neigh == NULL) {
     OLSR_WARN_OOM(LOG_PLUGINS);
     return -1;
@@ -404,6 +429,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   struct nlattr *tb[NL80211_ATTR_MAX + 1];
   struct nlattr *bss[NL80211_BSS_MAX + 1];
 
+  struct olsr_interface_data *if_data;
   struct olsr_layer2_network *net;
   struct netaddr mac;
   unsigned if_index;
@@ -437,7 +463,12 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   netaddr_from_binary(&mac, nla_data(bss[NL80211_BSS_BSSID]), 6, AF_MAC48);
   if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
-  net = olsr_layer2_add_network(&mac, if_index);
+  if_data = olsr_interface_get_data(if_index);
+  if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
+    return -1;
+  }
+
+  net = olsr_layer2_add_network(&if_data->mac, if_index);
   if (net == NULL) {
     OLSR_WARN_OOM(LOG_PLUGINS);
     return -1;
@@ -742,10 +773,15 @@ _print_network(struct autobuf *out, struct olsr_layer2_network *net) {
   struct timeval_buf tvbuf;
   struct olsr_number_buf numbuf;
 
-  abuf_appendf(out,
-      "BSSID: %s\n"
-      "If-Index: %u\n",
-      netaddr_to_string(&netbuf, &net->id), net->if_index);
+  abuf_appendf(out, "Radio-ID: %s\n", netaddr_to_string(&netbuf, &net->radio_id));
+
+  if (net->if_index) {
+    abuf_appendf(out, "If-Index: %u\n", net->if_index);
+  }
+
+  if (olsr_layer2_network_has_ssid(net)) {
+    abuf_appendf(out, "SSID: %s\n", netaddr_to_string(&netbuf, &net->ssid));
+  }
 
   if (olsr_layer2_network_has_last_seen(net)) {
     int64_t relative;
@@ -771,14 +807,20 @@ _print_network(struct autobuf *out, struct olsr_layer2_network *net) {
 
 static int
 _print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
-  struct netaddr_str netbuf;
+  struct netaddr_str netbuf1, netbuf2;
   struct timeval_buf tvbuf;
   struct olsr_number_buf numbuf;
 
   abuf_appendf(out,
-      "MAC: %s\n"
-      "If-Index: %u\n",
-      netaddr_to_string(&netbuf, &neigh->mac_address), neigh->if_index);
+      "Neighbor MAC: %s\n"
+      "Radio Mac: %s",
+      netaddr_to_string(&netbuf1, &neigh->key.neighbor_mac),
+      netaddr_to_string(&netbuf2, &neigh->key.radio_mac));
+
+  if (neigh->if_index) {
+    abuf_appendf(out, "(index: %u)", neigh->if_index);
+  }
+  abuf_puts(out, "\n");
 
   if (olsr_layer2_neighbor_has_last_seen(neigh)) {
     int64_t relative;
@@ -826,18 +868,54 @@ _print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
   return 0;
 }
 
+struct _routing_filter {
+  struct netaddr mac;
+  unsigned if_index;
+};
+
+static int
+_parse_routing_filter(struct _routing_filter *filter, const char *ptr) {
+  memset(filter, 0, sizeof(filter));
+  if ((filter->if_index = if_nametoindex(ptr)) != 0) {
+    return 0;
+  }
+
+  if (netaddr_from_string(&filter->mac, ptr) != 0) {
+    return -1;
+  }
+
+  if (filter->mac.type != AF_MAC48) {
+    filter->mac.type = AF_UNSPEC;
+    return -1;
+  }
+  return 0;
+}
+
+static int
+_match_routing_filter(struct _routing_filter *filter,
+    struct netaddr *mac, unsigned if_index) {
+  if (filter->if_index != 0 && filter->if_index != if_index) {
+    return -1;
+  }
+
+  if (filter->mac.type != AF_UNSPEC &&
+      netaddr_cmp(&filter->mac, mac) != 0) {
+    return -1;
+  }
+  return 0;
+}
+
 static enum olsr_telnet_result
 _cb_handle_nl80211(struct olsr_telnet_data *data) {
   const char *next = NULL, *ptr = NULL;
   struct olsr_layer2_network *net, *net_it;
   struct olsr_layer2_neighbor *neigh, *neigh_it;
-  struct netaddr_str buf;
-  unsigned if_index;
-  struct netaddr mac;
+  struct netaddr_str buf1, buf2;
+  struct _routing_filter filter;
   bool first = true;
+  char if_buffer[IF_NAMESIZE];
 
-  if_index = 0;
-  memset(&mac, 0, sizeof(mac));
+  memset(&filter, 0, sizeof(filter));
 
   if (data->parameter == NULL || *data->parameter == 0) {
     abuf_puts(data->out, "Error, 'nl80211' needs a parameter\n");
@@ -846,35 +924,40 @@ _cb_handle_nl80211(struct olsr_telnet_data *data) {
 
   if ((next = str_hasnextword(data->parameter, "list"))) {
     if ((ptr = str_hasnextword(next, "net"))) {
-      abuf_appendf(data->out, "If-index\tSSID\n");
+      abuf_appendf(data->out, "Radio-id\tInterf.\n");
       OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
-        abuf_appendf(data->out, "%u\t%s\n", net->if_index,
-            netaddr_to_string(&buf, &net->id));
+        abuf_appendf(data->out, "%s\t%s\n",
+            netaddr_to_string(&buf1, &net->radio_id),
+            net->if_index == 0 ? "" : if_indextoname(net->if_index, if_buffer));
       }
       return TELNET_RESULT_ACTIVE;
     }
     else if ((ptr = str_hasnextword(next, "neigh"))) {
-      if (*ptr) {
-        if_index = atoi(ptr);
+      if (*ptr != 0 && _parse_routing_filter(&filter, ptr) != 0) {
+        abuf_appendf(data->out, "Unknown parameter: %s", ptr);
+        return TELNET_RESULT_ACTIVE;
       }
 
-      abuf_appendf(data->out, "If-index\tMAC\n");
+      abuf_appendf(data->out, "Radio-Id\tInterface\tMAC\n");
       OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
-        if (if_index == 0 || if_index == neigh->if_index) {
-          abuf_appendf(data->out, "%u\t%s\n", neigh->if_index,
-              netaddr_to_string(&buf, &neigh->mac_address));
+        if (_match_routing_filter(&filter, &neigh->key.radio_mac, neigh->if_index) == 0) {
+          abuf_appendf(data->out, "%s\t%s\t%s\n",
+              netaddr_to_string(&buf1, &neigh->key.radio_mac),
+              neigh->if_index == 0 ? "" : if_indextoname(neigh->if_index, if_buffer),
+              netaddr_to_string(&buf2, &neigh->key.neighbor_mac));
         }
       }
       return TELNET_RESULT_ACTIVE;
     }
   }
   else if ((next = str_hasnextword(data->parameter, "net"))) {
-    if (*next) {
-      if_index = atoi(next);
+    if (*next && _parse_routing_filter(&filter, next) != 0) {
+      abuf_appendf(data->out, "Unknown parameter: %s", next);
+      return TELNET_RESULT_ACTIVE;
     }
 
     OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
-      if (if_index == 0 || if_index == net->if_index) {
+      if (_match_routing_filter(&filter, &net->radio_id, net->if_index) == 0) {
         if (first) {
           first = false;
         }
@@ -889,30 +972,22 @@ _cb_handle_nl80211(struct olsr_telnet_data *data) {
     return TELNET_RESULT_ACTIVE;
   }
   else if ((next = str_hasnextword(data->parameter, "neigh"))) {
-    if (*next) {
-      if (strchr(next, ':')) {
-        if (netaddr_from_string(&mac, next)) {
-          abuf_appendf(data->out, "Error, illegal mac address: %s\n", next);
-          return TELNET_RESULT_ACTIVE;
-        }
-      }
-      else {
-        if_index = atoi(next);
-      }
+    if (*next && _parse_routing_filter(&filter, next) != 0) {
+      abuf_appendf(data->out, "Unknown parameter: %s", next);
+      return TELNET_RESULT_ACTIVE;
     }
 
     OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
+      if (_match_routing_filter(&filter,
+          &neigh->key.neighbor_mac, neigh->if_index) != 0) {
+        continue;
+      }
+
       if (first) {
         first = false;
       }
       else {
         abuf_puts(data->out, "\n");
-      }
-      if (if_index > 0 && neigh->if_index != if_index) {
-        continue;
-      }
-      if (mac.type != 0 && netaddr_cmp(&mac, &neigh->mac_address) != 0) {
-        continue;
       }
       if (_print_neighbor(data->out, neigh)) {
         return TELNET_RESULT_INTERNAL_ERROR;
@@ -930,11 +1005,50 @@ _cb_handle_nl80211(struct olsr_telnet_data *data) {
  */
 static void
 _cb_config_changed(void) {
-  if (cfg_schema_tobin(&_config, _nl80211_section.post,
+  struct _nl80211_config cfg;
+  int i;
+  char *ptr;
+
+  memset(&cfg, 0, sizeof(cfg));
+  if (cfg_schema_tobin(&cfg, _nl80211_section.post,
       _nl80211_entries, ARRAYSIZE(_nl80211_entries))) {
-    OLSR_WARN(LOG_CONFIG, "Could not convert nl80211_listener config to bin");
+    OLSR_WARN(LOG_PLUGINS, "Could not convert nl80211_listener config to bin");
     return;
   }
+
+  /* count interfaces */
+  i = 0;
+  FOR_ALL_STRINGS(&cfg.interf, ptr) {
+    i++;
+  }
+
+  cfg.if_listener = calloc(i, sizeof(struct olsr_interface_listener));
+  if (cfg.if_listener == NULL) {
+    OLSR_WARN_OOM(LOG_PLUGINS);
+    return;
+  }
+
+  /* initialize olsr interface listeners */
+  i = 0;
+  FOR_ALL_STRINGS(&cfg.interf, ptr) {
+    cfg.if_listener[i].name = ptr;
+    fprintf(stderr, "add: %s\n", ptr);
+    olsr_interface_add_listener(&cfg.if_listener[i]);
+  }
+
+  /* free old resources */
+  if (_config.if_listener) {
+    i = 0;
+    FOR_ALL_STRINGS(&_config.interf, ptr) {
+      olsr_interface_remove_listener(&_config.if_listener[i]);
+      i++;
+    }
+    free(_config.if_listener);
+  }
+  strarray_free(&_config.interf);
+
+  /* copy temporary configuration */
+  memcpy(&_config, &cfg, sizeof(_config));
 
   /* half of them station dumps, half of them passive scans */
   olsr_timer_start(&_transmission_timer, _config.interval / 2);

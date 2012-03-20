@@ -56,8 +56,8 @@
 /* timeinterval to delay change in interface to trigger actions */
 #define OLSR_INTERFACE_CHANGE_INTERVAL 100
 
-static struct olsr_interface *_interface_add(const char *name, bool mesh);
-static void _interface_remove(const char *name, bool mesh);
+static struct olsr_interface *_interface_add(uint32_t, bool mesh);
+static void _interface_remove(uint32_t, bool mesh);
 static void _cb_change_handler(void *);
 static void _trigger_change_timer(struct olsr_interface *);
 
@@ -84,7 +84,7 @@ olsr_interface_init(void) {
 
   olsr_timer_add(&_change_timer_info);
 
-  avl_init(&olsr_interface_tree, avl_comp_strcasecmp, false, NULL);
+  avl_init(&olsr_interface_tree, avl_comp_uint32, false, NULL);
   list_init_head(&_interface_listener);
 
   olsr_subsystem_init(&_interface_state);
@@ -118,8 +118,11 @@ olsr_interface_add_listener(
     struct olsr_interface_listener *listener) {
   struct olsr_interface *interf;
 
-  interf = _interface_add(listener->name, listener->mesh);
-  if (interf != NULL) {
+  if (listener->if_index == 0 && listener->name) {
+    listener->if_index = if_nametoindex(listener->name);
+  }
+  interf = _interface_add(listener->if_index, listener->mesh);
+  if (interf != NULL && listener->process != NULL) {
     list_add_tail(&_interface_listener, &listener->node);
   }
 
@@ -133,23 +136,22 @@ olsr_interface_add_listener(
 void
 olsr_interface_remove_listener(
     struct olsr_interface_listener *listener) {
-  if (list_is_node_added(&listener->node)) {
+  if (listener->process) {
     list_remove(&listener->node);
-    _interface_remove(listener->name, listener->mesh);
   }
+  _interface_remove(listener->if_index, listener->mesh);
 }
-
 
 /**
  * Trigger a potential change in the interface settings. Normally
  * called by os_system code
- * @param name pointer to name of interface
+ * @param if_index index of interface
  */
 void
-olsr_interface_trigger_change(const char *name) {
+olsr_interface_trigger_change(uint32_t if_index) {
   struct olsr_interface *interf;
 
-  interf = avl_find_element(&olsr_interface_tree, name, interf, node);
+  interf = avl_find_element(&olsr_interface_tree, &if_index, interf, node);
   if (interf == NULL) {
     return;
   }
@@ -158,17 +160,29 @@ olsr_interface_trigger_change(const char *name) {
   _trigger_change_timer(interf);
 }
 
+struct olsr_interface_data *
+olsr_interface_get_data(uint32_t if_index) {
+  struct olsr_interface *interf;
+
+  interf = avl_find_element(&olsr_interface_tree, &if_index, interf, node);
+  if (interf == NULL) {
+    return NULL;
+  }
+
+  return &interf->data;
+}
+
 /**
  * Add an interface to the listener system
- * @param name pointer to interface name
+ * @param if_index index of interface
  * @param mesh true if interface is used for mesh traffic
  * @return pointer to interface struct, NULL if an error happened
  */
 static struct olsr_interface *
-_interface_add(const char *name, bool mesh) {
+_interface_add(uint32_t if_index, bool mesh) {
   struct olsr_interface *interf;
 
-  interf = avl_find_element(&olsr_interface_tree, name, interf, node);
+  interf = avl_find_element(&olsr_interface_tree, &if_index, interf, node);
   if (!interf) {
     /* allocate new interface */
     interf = calloc(1, sizeof(*interf));
@@ -178,21 +192,15 @@ _interface_add(const char *name, bool mesh) {
     }
 
     /* hookup */
-    interf->name = strdup(name);
-    if (interf->name == NULL) {
-      OLSR_WARN_OOM(LOG_INTERFACE);
-      free(interf);
-      return NULL;
-    }
-
-    interf->node.key = interf->name;
+    interf->data.index = if_index;
+    interf->node.key = &interf->data.index;
     avl_insert(&olsr_interface_tree, &interf->node);
 
     interf->change_timer.info = &_change_timer_info;
     interf->change_timer.cb_context = interf;
 
-    /* grab data of interface */
-    os_net_update_interface(&interf->data, interf->name);
+    /* initialize data of interface */
+    os_net_update_interface(&interf->data, if_index);
   }
 
   /* update reference counters */
@@ -213,14 +221,14 @@ _interface_add(const char *name, bool mesh) {
 /**
  * Remove an interface from the listener system. If multiple listeners
  * share an interface, this will only decrease the reference counter.
- * @param name pointer to interface name
+ * @param if_index index of interface
  * @param mesh true if interface is used for mesh traffic
  */
 static void
-_interface_remove(const char *name, bool mesh) {
+_interface_remove(uint32_t if_index, bool mesh) {
   struct olsr_interface *interf;
 
-  interf = avl_find_element(&olsr_interface_tree, name, interf, node);
+  interf = avl_find_element(&olsr_interface_tree, &if_index, interf, node);
   if (!interf) {
     return;
   }
@@ -239,8 +247,6 @@ _interface_remove(const char *name, bool mesh) {
   }
 
   avl_remove(&olsr_interface_tree, &interf->node);
-
-  free((void *)interf->name);
   free(interf);
 }
 
@@ -258,7 +264,7 @@ _cb_change_handler(void *ptr) {
   interf = ptr;
 
   /* read interface data */
-  if (os_net_update_interface(&interf->data, interf->name)) {
+  if (os_net_update_interface(&new_data, interf->data.index)) {
     /* an error happened, try again */
     _trigger_change_timer(interf);
     return;
@@ -275,7 +281,7 @@ _cb_change_handler(void *ptr) {
 
   /* call listeners */
   list_for_each_element_safe(&_interface_listener, listener, node, l_it) {
-    if (listener->name == NULL || strcmp(listener->name, interf->name) == 0) {
+    if (listener->process != NULL && listener->if_index == interf->data.index) {
       listener->process(interf, &old_data);
     }
   }

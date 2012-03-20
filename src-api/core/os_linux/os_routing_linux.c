@@ -188,7 +188,7 @@ os_routing_init_mesh_if(struct olsr_interface *interf) {
   }
 
   /* Generate the procfile name */
-  snprintf(procfile, sizeof(procfile), PROC_IF_REDIRECT, interf->name);
+  snprintf(procfile, sizeof(procfile), PROC_IF_REDIRECT, interf->data.name);
 
   if (_os_linux_writeToProc(procfile, &old_redirect, '0')) {
     OLSR_WARN(LOG_OS_SYSTEM, "WARNING! Could not disable ICMP redirects! "
@@ -196,7 +196,7 @@ os_routing_init_mesh_if(struct olsr_interface *interf) {
   }
 
   /* Generate the procfile name */
-  snprintf(procfile, sizeof(procfile), PROC_IF_SPOOF, interf->name);
+  snprintf(procfile, sizeof(procfile), PROC_IF_SPOOF, interf->data.name);
 
   if (_os_linux_writeToProc(procfile, &old_spoof, '0')) {
     OLSR_WARN(LOG_OS_SYSTEM, "WARNING! Could not disable the IP spoof filter! "
@@ -225,7 +225,7 @@ os_routing_cleanup_mesh_if(struct olsr_interface *interf) {
   restore_spoof = (interf->_original_state & 255);
 
   /* Generate the procfile name */
-  snprintf(procfile, sizeof(procfile), PROC_IF_REDIRECT, interf->name);
+  snprintf(procfile, sizeof(procfile), PROC_IF_REDIRECT, interf->data.name);
 
   if (restore_redirect != 0
       && _os_linux_writeToProc(procfile, NULL, restore_redirect) != 0) {
@@ -234,7 +234,7 @@ os_routing_cleanup_mesh_if(struct olsr_interface *interf) {
   }
 
   /* Generate the procfile name */
-  snprintf(procfile, sizeof(procfile), PROC_IF_SPOOF, interf->name);
+  snprintf(procfile, sizeof(procfile), PROC_IF_SPOOF, interf->data.name);
 
   if (restore_spoof != 0
       && _os_linux_writeToProc(procfile, NULL, restore_spoof) != 0) {

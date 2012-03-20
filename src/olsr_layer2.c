@@ -47,6 +47,8 @@
 #include "olsr.h"
 #include "olsr_layer2.h"
 
+static int _avl_comp_l2neigh(const void *k1, const void *k2, void *);
+
 struct avl_tree olsr_layer2_network_tree;
 struct avl_tree olsr_layer2_neighbor_tree;
 
@@ -73,8 +75,8 @@ olsr_layer2_init(void) {
   olsr_memcookie_add(&_network_cookie);
   olsr_memcookie_add(&_neighbor_cookie);
 
-  avl_init(&olsr_layer2_network_tree, avl_comp_uint32, false, NULL);
-  avl_init(&olsr_layer2_neighbor_tree, avl_comp_netaddr, true, NULL);
+  avl_init(&olsr_layer2_network_tree, avl_comp_netaddr, false, NULL);
+  avl_init(&olsr_layer2_neighbor_tree, _avl_comp_l2neigh, false, NULL);
 }
 
 /**
@@ -104,23 +106,24 @@ olsr_layer2_cleanup(void) {
  * Add an active network to the database. If an entry for the
  * interface does already exists, it will be returned by this
  * function and no new entry will be created.
- * @param ssid ID of the attached network
+ * @param radio_id ID of the radio
  * @param if_index local interface index of network
  * @return pointer to layer2 network data, NULL if OOM
  */
 struct olsr_layer2_network *
-olsr_layer2_add_network(struct netaddr *ssid, uint32_t if_index) {
+olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index) {
   struct olsr_layer2_network *net;
 
   net = olsr_layer2_get_network(if_index);
   if (!net) {
     net = olsr_memcookie_malloc(&_network_cookie);
     if (net) {
-      net->if_index = if_index;
-      net->_node.key = &net->if_index;
-      memcpy (&net->id, ssid, sizeof(*ssid));
+      net->_node.key = &net->radio_id;
+      memcpy (&net->radio_id, radio_id, sizeof(*radio_id));
 
       avl_insert(&olsr_layer2_network_tree, &net->_node);
+
+      net->if_index = if_index;
     }
   }
   return net;
@@ -139,42 +142,48 @@ olsr_layer2_remove_network(struct olsr_layer2_network *net) {
 
 /**
  * Retrieve a layer2 neighbor from the database
- * @param mac pointer to layer2 address of neighbor
- * @param if_index local interface index
+ * @param radio_id pointer to radio_id of network
+ * @param neigh_mac pointer to layer2 address of neighbor
  * @return pointer to layer2 neighbor data, NULL if not found
  */
 struct olsr_layer2_neighbor *
-olsr_layer2_get_neighbor(struct netaddr *mac, uint32_t if_index) {
-  struct olsr_layer2_neighbor *neigh, *start;
+olsr_layer2_get_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac) {
+  struct olsr_layer2_neighbor_key key;
+  struct olsr_layer2_neighbor *neigh;
 
-  avl_for_each_elements_with_key(&olsr_layer2_neighbor_tree, neigh, _node, start, mac) {
-    if (neigh->if_index == if_index) {
-      return neigh;
-    }
-  }
-  return NULL;
+  key.radio_mac = *radio_id;
+  key.neighbor_mac = *neigh_mac;
+
+  return avl_find_element(&olsr_layer2_neighbor_tree, &key, neigh, _node);
 }
 
 /**
  * Add a layer2 neighbor to the database. If an entry for the
  * neighbor on the interface does already exists, it will be
  * returned by this function and no new entry will be created.
- * @param mac layer2 address of neighbor
+ * @param radio_id pointer to radio_id of network
+ * @param neigh_mac layer2 address of neighbor
  * @param if_index local interface index of the neighbor
  * @return pointer to layer2 neighbor data, NULL if OOM
  */
 struct olsr_layer2_neighbor *
-olsr_layer2_add_neighbor(struct netaddr *mac, uint32_t if_index) {
+olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
+    uint32_t if_index) {
   struct olsr_layer2_neighbor *neigh;
 
-  neigh = olsr_layer2_get_neighbor(mac, if_index);
+  fprintf(stderr, "%u\n", radio_id->type);
+  fprintf(stderr, "%u\n", neigh_mac->type);
+  fprintf(stderr, "%u\n", if_index);
+
+  neigh = olsr_layer2_get_neighbor(radio_id, neigh_mac);
   if (!neigh) {
     neigh = olsr_memcookie_malloc(&_neighbor_cookie);
     if (neigh) {
       neigh->if_index = if_index;
-      memcpy(&neigh->mac_address, mac, sizeof(*mac));
+      memcpy(&neigh->key.radio_mac, radio_id, sizeof(*radio_id));
+      memcpy(&neigh->key.neighbor_mac, neigh_mac, sizeof(*neigh_mac));
 
-      neigh->_node.key = &neigh->mac_address;
+      neigh->_node.key = &neigh->key;
 
       avl_insert(&olsr_layer2_neighbor_tree, &neigh->_node);
     }
@@ -216,4 +225,20 @@ olsr_layer2_network_set_supported_rates(struct olsr_layer2_network *net,
   memcpy(rates, rate_array, sizeof(uint64_t) * rate_count);
 
   return 0;
+}
+
+static int
+_avl_comp_l2neigh(const void *k1, const void *k2,
+    void *ptr __attribute__((unused))) {
+  const struct olsr_layer2_neighbor_key *key1, *key2;
+  int result;
+
+  key1 = k1;
+  key2 = k2;
+
+  result = netaddr_cmp(&key1->radio_mac, &key2->radio_mac);
+  if (!result) {
+    result = netaddr_cmp(&key1->neighbor_mac, &key1->neighbor_mac);
+  }
+  return result;
 }

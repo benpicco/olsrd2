@@ -61,10 +61,14 @@ enum olsr_layer2_neighbor_data {
   OLSR_L2NEIGH_TX_FAILED = 1<<9,
 };
 
+struct olsr_layer2_neighbor_key {
+  struct netaddr neighbor_mac;
+  struct netaddr radio_mac;
+};
+
 struct olsr_layer2_neighbor {
   struct avl_node _node;
-
-  struct netaddr mac_address;
+  struct olsr_layer2_neighbor_key key;
   uint32_t if_index;
 
   enum olsr_layer2_neighbor_data _available_data;
@@ -287,18 +291,21 @@ olsr_layer2_neighbor_set_tx_fails(struct olsr_layer2_neighbor *neigh, uint32_t f
 }
 
 enum olsr_layer2_network_data {
-  OLSR_L2NET_LAST_SEEN = 1<<0,
-  OLSR_L2NET_FREQUENCY = 1<<1,
-  OLSR_L2NET_SUPPORTED_RATES = 1<<2,
+  OLSR_L2NET_SSID = 1<<0,
+  OLSR_L2NET_LAST_SEEN = 1<<1,
+  OLSR_L2NET_FREQUENCY = 1<<2,
+  OLSR_L2NET_SUPPORTED_RATES = 1<<3,
 };
 
 struct olsr_layer2_network {
   struct avl_node _node;
 
-  struct netaddr id;
+  struct netaddr radio_id;
   uint32_t if_index;
 
   enum olsr_layer2_network_data _available_data;
+
+  struct netaddr ssid;
 
   uint64_t last_seen;
 
@@ -307,6 +314,16 @@ struct olsr_layer2_network {
   uint64_t *supported_rates;
   size_t rate_count;
 };
+
+/**
+ * @param neigh pointer to layer2 network data
+ * @return true if data contains timestamp when network
+ *    has been seen last, false otherwise
+ */
+static INLINE bool
+olsr_layer2_network_has_ssid(struct olsr_layer2_network *net) {
+  return (net->_available_data & OLSR_L2NET_SSID) != 0;
+}
 
 /**
  * @param neigh pointer to layer2 network data
@@ -351,6 +368,17 @@ olsr_layer2_network_clear(struct olsr_layer2_network *net) {
  *    to store in layer2 network data
  */
 static INLINE void
+olsr_layer2_network_set_ssid(struct olsr_layer2_network *net, struct netaddr *ssid) {
+  net->_available_data |= OLSR_L2NET_SSID;
+  memcpy(&net->ssid, ssid, sizeof(*ssid));
+}
+
+/**
+ * @param neigh pointer to layer2 network data
+ * @param relative relative timestamp when network has been seen last
+ *    to store in layer2 network data
+ */
+static INLINE void
 olsr_layer2_network_set_last_seen(struct olsr_layer2_network *net, uint64_t relative) {
   net->_available_data |= OLSR_L2NET_LAST_SEEN;
   net->last_seen = olsr_clock_get_absolute(-relative);
@@ -380,9 +408,9 @@ EXPORT struct olsr_layer2_network *olsr_layer2_add_network(
 EXPORT void olsr_layer2_remove_network(struct olsr_layer2_network *);
 
 EXPORT struct olsr_layer2_neighbor *olsr_layer2_get_neighbor(
-    struct netaddr *, uint32_t if_index);
+    struct netaddr *radio_id, struct netaddr *neigh_mac);
 EXPORT struct olsr_layer2_neighbor *olsr_layer2_add_neighbor(
-    struct netaddr *, uint32_t if_index);
+    struct netaddr *radio_id, struct netaddr *neigh_mac, uint32_t if_index);
 EXPORT void olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *);
 
 EXPORT int olsr_layer2_network_set_supported_rates(

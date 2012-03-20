@@ -188,7 +188,7 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
   if (multicast->std.sa_family == AF_INET) {
     OLSR_DEBUG(log_src,
         "Socket on interface %s joining multicast %s (src %s)\n",
-        oif->name,
+        oif->data.name,
         netaddr_socket_to_string(&buf2, multicast),
         netaddr_to_string(&buf1, &oif->data.if_v4));
 
@@ -217,7 +217,7 @@ net_os_join_mcast(int sock, union netaddr_socket *multicast,
   else {
     OLSR_DEBUG(log_src,
         "Socket on interface %s joining multicast %s (src %s)\n",
-        oif->name,
+        oif->data.name,
         netaddr_socket_to_string(&buf2, multicast),
         netaddr_to_string(&buf1, &oif->data.linklocal_v6));
 

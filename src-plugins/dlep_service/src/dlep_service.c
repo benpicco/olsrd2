@@ -1,3 +1,4 @@
+
 /*
  * The olsr.org Optimized Link-State Routing daemon(olsrd)
  * Copyright (c) 2004-2012, the olsr.org team - see HISTORY file
@@ -57,59 +58,71 @@
 
 #define DLEP_MESSAGE_ID 42
 
-/* DLEP TLV types */
-enum dlep_tlv_types {
-  DLEP_TLV_ORDER = 20,
-  DLEP_TLV_IDENTIFICATION,
-  DLEP_TLV_VERSION,
-  DLEP_TLV_PEER_TYPE,
-  DLEP_TLV_MAC,
-  DLEP_TLV_IPV4,
-  DLEP_TLV_IPV6,
-  DLEP_TLV_MAXIMUM_DATARATE,
-  DLEP_TLV_CURRENT_DATARATE,
-  DLEP_TLV_LATENCY,
-  DLEP_TLV_RESOURCES,
-  DLEP_TLV_EXPECTED_FORWARDING_TIME,
-  DLEP_TLV_RELATIVE_LINK_QUALITY,
-  DLEP_TLV_PEER_TERMINATION,
-  DLEP_TLV_STATUS,
-  DLEP_TLV_HEARTBEAT_INTERVAL,
-  DLEP_TLV_HEARTBEAT_TRESHOLD,
-  DLEP_TLV_LINK_CHARACTERISTICS_ACK,
-  DLEP_TLV_CREDIT_WINDOW_STATUS,
-  DLEP_TLV_CREDIT_GRANT,
-  DLEP_TLV_CREDIT_REQUEST,
+enum dlep_orders {
+  DLEP_ORDER_PEER_DISCOVERY,
+  DLEP_ORDER_PEER_OFFER,
+  DLEP_ORDER_PEER_TERMINATION,
+  DLEP_ORDER_PEER_UPDATE,
+  DLEP_ORDER_LINK_CHARACTERISTICS_REQUEST,
+  DLEP_ORDER_HEARTBEAT,
+  DLEP_ORDER_NEIGHBOR_UP,
+  DLEP_ORDER_NEIGHBOR_DOWN,
+  DLEP_ORDER_NEIGHBOR_UPDATE,
+  DLEP_ORDER_NEIGHBOR_ADDRESS_UPDATE,
+  DLEP_ORDER_ACK,
 };
 
 /* DLEP TLV types */
-enum dlep_idx {
+enum dlep_msgtlv_types {
+  DLEP_TLV_ORDER = 192,
+  DLEP_TLV_ID,
+  DLEP_TLV_VERSION,
+  DLEP_TLV_PEER_TYPE,
+  DLEP_TLV_REFERENCE,
+  DLEP_TLV_STATUS,
+  DLEP_TLV_HB_INTERVAL,
+  DLEP_TLV_HB_VTIME,
+
+  DLEP_TLV_MAX_RATE,
+  DLEP_TLV_CUR_RATE,
+  DLEP_TLV_LATENCY,
+  DLEP_TLV_EXP_FORW,
+  DLEP_TLV_RESOURCES,
+  DLEP_TLV_REL_LQ,
+};
+
+enum dlep_addrtlv_types {
+  DLEP_ADDRTLV_ADDRESSTYPE,
+};
+
+/* DLEP TLV array index */
+enum dlep_tlv_idx {
   DLEP_IDX_ORDER,
-  DLEP_IDX_IDENTIFICATION,
+  DLEP_IDX_ID,
   DLEP_IDX_VERSION,
   DLEP_IDX_PEER_TYPE,
-  DLEP_IDX_MAC,
-  DLEP_IDX_IPV4,
-  DLEP_IDX_IPV6,
-  DLEP_IDX_MAXIMUM_DATARATE,
-  DLEP_IDX_CURRENT_DATARATE,
-  DLEP_IDX_LATENCY,
-  DLEP_IDX_RESOURCES,
-  DLEP_IDX_EXPECTED_FORWARDING_TIME,
-  DLEP_IDX_RELATIVE_LINK_QUALITY,
-  DLEP_IDX_PEER_TERMINATION,
+  DLEP_IDX_REFERENCE,
   DLEP_IDX_STATUS,
-  DLEP_IDX_HEARTBEAT_INTERVAL,
-  DLEP_IDX_HEARTBEAT_TRESHOLD,
-  DLEP_IDX_LINK_CHARACTERISTICS_ACK,
-  DLEP_IDX_CREDIT_WINDOW_STATUS,
-  DLEP_IDX_CREDIT_GRANT,
-  DLEP_IDX_CREDIT_REQUEST,
+  DLEP_IDX_HB_INTERVAL,
+  DLEP_IDX_HB_VTIME,
+
+  DLEP_IDX_MAX_RATE,
+  DLEP_IDX_CUR_RATE,
+  DLEP_IDX_LATENCY,
+  DLEP_IDX_EXP_FORW,
+  DLEP_IDX_RESOURCES,
+  DLEP_IDX_REL_LQ,
 };
 /* definitions */
 struct _dlep_config {
-  struct strarray interf;
+  char dlep_if[IF_NAMESIZE];
+  struct strarray radio_id;
   struct olsr_packet_managed_config socket;
+
+  char peer_type[81];
+
+  uint64_t peer_discovery_interval;
+  uint64_t heartbeat_interval, heartbeat_vtime;
 };
 
 /* prototypes */
@@ -148,14 +161,28 @@ static struct cfg_schema_section _dlep_section = {
 };
 
 static struct cfg_schema_entry _dlep_entries[] = {
-  CFG_MAP_ACL_V46(_dlep_config,
-    socket.acl, "acl", "127.0.0.1", "Access control list for dlep interface"),
-  CFG_MAP_NETADDR_V4(_dlep_config,
-    socket.bindto_v4, "bindto_v4", "127.0.0.1", "Bind dlep ipv4 socket to this address", false),
-  CFG_MAP_NETADDR_V6(_dlep_config,
-    socket.bindto_v6, "bindto_v6", "::1", "Bind dlep ipv6 socket to this address", false),
-  CFG_MAP_INT_MINMAX(_dlep_config,
-    socket.port, "port", "2001", "Network port for dlep interface", 1, 65535),
+  CFG_MAP_STRINGLIST(_dlep_config, dlep_if, "dlep_if", "lo",
+      "List of interfaces to sent DLEP broadcasts to"),
+  CFG_MAP_STRING_ARRAY(_dlep_config, radio_id, "radio_id", "wlan0",
+      "List of interfaces to to query link layer data from", IF_NAMESIZE),
+
+  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "127.0.0.1",
+      "Access control list for dlep interface"),
+  CFG_MAP_NETADDR_V4(_dlep_config, socket.bindto_v4, "bindto_v4", "127.0.0.1",
+      "Bind dlep ipv4 socket to this address", false),
+  CFG_MAP_NETADDR_V6(_dlep_config, socket.bindto_v6, "bindto_v6", "::1",
+      "Bind dlep ipv6 socket to this address", false),
+  CFG_MAP_INT_MINMAX(_dlep_config, socket.port, "port", "2001",
+      "Network port for dlep interface", 1, 65535),
+
+  CFG_MAP_STRING_ARRAY(_dlep_config, peer_type, "peer_type", "",
+    "String for identifying this DLEP service", 80),
+  CFG_MAP_CLOCK(_dlep_config, peer_discovery_interval, "discovery_interval", "0",
+    "Interval in seconds between peer discovery messages (0 for no usage of PEER DISCOVERY message"),
+  CFG_MAP_CLOCK(_dlep_config, heartbeat_interval, "heartbeat_interval", "0",
+    "Interval in seconds between heartbeat messages (0 for no usage of HEARTBEAT message)"),
+  CFG_MAP_CLOCK(_dlep_config, heartbeat_vtime, "heartbeat_vtime", "0",
+    "Validity time of heartbeat in seconds (0 for validity three times as long as interval)"),
 };
 
 static struct _dlep_config _config;
@@ -172,27 +199,21 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
-  { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 1, .match_length = true, .copy_value = NULL },
-  { .type = DLEP_TLV_IDENTIFICATION, .mandatory = true, .min_length = 8, .match_length = true },
-  { .type = DLEP_TLV_VERSION, .min_length = 4, .match_length = true },
-  { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .match_length = true },
-  { .type = DLEP_TLV_MAC, .min_length = 6, .match_length = true },
-  { .type = DLEP_TLV_IPV4, .min_length = 4, .match_length = true },
-  { .type = DLEP_TLV_IPV6, .min_length = 16, .match_length = true },
-  { .type = DLEP_TLV_MAXIMUM_DATARATE, .min_length = 8, .match_length = true },
-  { .type = DLEP_TLV_CURRENT_DATARATE, .min_length = 8, .match_length = true },
-  { .type = DLEP_TLV_LATENCY, .min_length = 2, .match_length = true },
-  { .type = DLEP_TLV_RESOURCES, .min_length = 1, .match_length = true },
-  { .type = DLEP_TLV_EXPECTED_FORWARDING_TIME, .min_length = 4, .match_length = true },
-  { .type = DLEP_TLV_RELATIVE_LINK_QUALITY, .min_length = 1, .match_length = true },
-  { .type = DLEP_TLV_PEER_TERMINATION, .min_length = 1, .match_length = true },
-  { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
-  { .type = DLEP_TLV_HEARTBEAT_INTERVAL, .min_length = 1, .match_length = true },
-  { .type = DLEP_TLV_HEARTBEAT_TRESHOLD, .min_length = 1, .match_length = true },
-  { .type = DLEP_TLV_LINK_CHARACTERISTICS_ACK, .min_length = 1, .match_length = true },
-  { .type = DLEP_TLV_CREDIT_WINDOW_STATUS, .min_length = 16, .match_length = true },
-  { .type = DLEP_TLV_CREDIT_GRANT, .min_length = 8, .match_length = true },
-  { .type = DLEP_TLV_CREDIT_REQUEST, .min_length = 0, .match_length = true },
+  [DLEP_IDX_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 1, .match_length = true },
+  [DLEP_IDX_ID] =          { .type = DLEP_TLV_ID, .min_length = 8, .match_length = true },
+  [DLEP_IDX_VERSION] =     { .type = DLEP_TLV_VERSION, .min_length = 4, .match_length = true },
+  [DLEP_IDX_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .match_length = true },
+  [DLEP_IDX_REFERENCE] =   { .type = DLEP_TLV_REFERENCE, .min_length = 2, .match_length = true },
+  [DLEP_IDX_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
+  [DLEP_IDX_HB_INTERVAL] = { .type = DLEP_TLV_HB_INTERVAL, .min_length = 1, .match_length = true },
+  [DLEP_IDX_HB_VTIME] =    { .type = DLEP_TLV_HB_VTIME, .min_length = 1, .match_length = true },
+
+  [DLEP_IDX_MAX_RATE] =    { .type = DLEP_TLV_MAX_RATE, .min_length = 8, .match_length = true },
+  [DLEP_IDX_CUR_RATE] =    { .type = DLEP_TLV_CUR_RATE, .min_length = 8, .match_length = true },
+  [DLEP_IDX_LATENCY] =     { .type = DLEP_TLV_LATENCY, .min_length = 2, .match_length = true },
+  [DLEP_IDX_EXP_FORW] =    { .type = DLEP_TLV_EXP_FORW, .min_length = 4, .match_length = true },
+  [DLEP_IDX_RESOURCES] =   { .type = DLEP_TLV_RESOURCES, .min_length = 1, .match_length = true },
+  [DLEP_IDX_REL_LQ] =      { .type = DLEP_TLV_REL_LQ, .min_length = 1, .match_length = true },
 };
 
 /**
@@ -204,7 +225,7 @@ _cb_plugin_load(void) {
   cfg_schema_add_section(olsr_cfg_get_schema(), &_dlep_section,
       _dlep_entries, ARRAYSIZE(_dlep_entries));
 
-  strarray_init(&_config.interf);
+  strarray_init(&_config.radio_id);
   return 0;
 }
 
@@ -214,7 +235,7 @@ _cb_plugin_load(void) {
  */
 static int
 _cb_plugin_unload(void) {
-  strarray_free(&_config.interf);
+  strarray_free(&_config.radio_id);
 
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_dlep_section);
   return 0;
@@ -246,10 +267,54 @@ _cb_plugin_disable(void) {
   return 0;
 }
 
+static void
+_handle_dlep_peer_offer(void) {
+  uint32_t router_id, interface_id;
+
+  /*
+   * Message TLVs:
+   * - DLEP-Order TLV (mandatory)
+   * - Identification TLV (optional)
+   * - Version TLV (optional)
+   * - Peer Type TLV (optional)
+   * - Heartbeat Interval TLV (optional)
+   * - Heartbeat Validity Time TLV (optional)
+   */
+
+  if (_dlep_message_tlvs[DLEP_IDX_ID].tlv == NULL) {
+    OLSR_WARN(LOG_PLUGINS, "Received DLEP peer offer without identification");
+    return;
+  }
+
+  memcpy(&interface_id, _dlep_message_tlvs[DLEP_IDX_ID].tlv->single_value, sizeof(interface_id));
+  memcpy(&router_id, _dlep_message_tlvs[DLEP_IDX_ID].tlv->single_value + 4, sizeof(router_id));
+  interface_id = ntohl(interface_id);
+  router_id = ntohl(router_id);
+
+}
+
 static enum pbb_result
 _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+  uint8_t order;
 
+  order = _dlep_message_tlvs[DLEP_IDX_ORDER].tlv->single_value[0];
+  switch (order) {
+    case DLEP_ORDER_PEER_OFFER:
+      _handle_dlep_peer_offer();
+      break;
+    case DLEP_ORDER_PEER_TERMINATION:
+      break;
+    case DLEP_ORDER_LINK_CHARACTERISTICS_REQUEST:
+      break;
+    case DLEP_ORDER_HEARTBEAT:
+      break;
+    case DLEP_ORDER_ACK:
+      break;
+    default:
+      OLSR_WARN(LOG_PLUGINS, "Unknown order in DLEP message: %d", order);
+      break;
+  }
   return PBB_OKAY;
 }
 
@@ -282,10 +347,10 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
       0x00, 15,
 
       /* order TLV */
-      DLEP_TLV_ORDER, 0x10, 1, 0x42,
+      DLEP_TLV_ORDER, 0x10, 1, DLEP_ORDER_PEER_OFFER,
 
       /* ID tlv */
-      DLEP_TLV_IDENTIFICATION, 0x10, 8, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02,
+      DLEP_TLV_ID, 0x10, 8, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02,
   };
 
   OLSR_DEBUG(LOG_PLUGINS, "Parsing DLEP packet");

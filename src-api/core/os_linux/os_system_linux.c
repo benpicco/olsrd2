@@ -520,7 +520,7 @@ _handle_rtnetlink(struct nlmsghdr *hdr) {
     }
 
     OLSR_DEBUG(LOG_OS_SYSTEM, "Linkstatus of interface '%s' changed", if_name);
-    olsr_interface_trigger_change(if_name);
+    olsr_interface_trigger_change(ifi->ifi_index);
   }
 
   else if (hdr->nlmsg_type == RTM_NEWADDR || hdr->nlmsg_type == RTM_DELADDR) {
@@ -533,7 +533,7 @@ _handle_rtnetlink(struct nlmsghdr *hdr) {
     }
 
     OLSR_DEBUG(LOG_OS_SYSTEM, "Address of interface '%s' changed", if_name);
-    olsr_interface_trigger_change(if_name);
+    olsr_interface_trigger_change(ifa->ifa_index);
   }
 }
 
