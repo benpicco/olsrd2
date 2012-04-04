@@ -544,6 +544,21 @@ netaddr_avlcmp(const void *k1, const void *k2, void *unused __attribute__((unuse
 }
 
 /**
+ * Compares two netaddr sockets.
+ *
+ * This function is compatible with the avl comparator
+ * prototype.
+ * @param k1 address 1
+ * @param k2 address 2
+ * @param unused not used in this comparator
+ * @return >0 if k1>k2, <0 if k1<k2, 0 otherwise
+ */
+int
+netaddr_socket_avlcmp(const void *k1, const void *k2, void *unused __attribute__((unused))) {
+  return netaddr_socket_cmp(k1, k2);
+}
+
+/**
  * Compares an netaddr object with the address part of
  * a netaddr_socket.
  * @param a1 address
