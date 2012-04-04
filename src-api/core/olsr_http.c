@@ -403,7 +403,7 @@ _auth_okay(struct olsr_http_handler *handler,
 static void
 _cb_create_error(struct olsr_stream_session *session,
     enum olsr_stream_errors error) {
-  _create_http_error(session, error);
+  _create_http_error(session, (enum olsr_http_result)error);
 }
 
 /**
