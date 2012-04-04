@@ -41,7 +41,6 @@
 
 #include "config/cfg_schema.h"
 #include "packetbb/pbb_reader.h"
-#include "packetbb/pbb_writer.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_layer2.h"
@@ -96,6 +95,14 @@ enum dlep_tlv_idx {
 //  IDX_TLV_MAX_BC_RATE,
 };
 
+enum dlep_addrtlv_idx {
+  IDX_ADDRTLV_CUR_RATE,
+  IDX_ADDRTLV_THROUGHPUT,
+//  IDX_ADDRTLV_MAX_RATE,
+//  IDX_ADDRTLV_IPv4,
+//  IDX_ADDRTLV_IPv6,
+};
+
 /* definitions */
 struct _dlep_config {
   char dlep_if[IF_NAMESIZE];
@@ -121,6 +128,12 @@ static enum pbb_result _cb_parse_dlep_message(
 static enum pbb_result _cb_parse_dlep_message_failed(
     struct pbb_reader_tlvblock_consumer *consumer,
     struct pbb_reader_tlvblock_context *context);
+static enum pbb_result _cb_parse_dlep_address(
+    struct pbb_reader_tlvblock_consumer *consumer,
+    struct pbb_reader_tlvblock_context *context);
+static enum pbb_result _cb_parse_dlep_address_failed(
+    struct pbb_reader_tlvblock_consumer *consumer,
+    struct pbb_reader_tlvblock_context *context);
 static void _cb_receive_dlep(struct olsr_packet_socket *,
       union netaddr_socket *from, size_t length);
 static void _cb_config_changed(void);
@@ -131,7 +144,7 @@ static void _cb_neighbor_update(void *);
 
 /* plugin declaration */
 OLSR_PLUGIN7 {
-  .descr = "OLSRD DLEP (see IETF manet WG) service plugin",
+  .descr = "OLSRD DLEP (see IETF manet WG) client plugin",
   .author = "Henning Rogge",
 
   .load = _cb_plugin_load,
@@ -184,11 +197,15 @@ static struct olsr_packet_managed _dlep_socket = {
 
 /* DLEP reader data */
 static struct pbb_reader _dlep_reader;
-static struct pbb_writer _dlep_writer;
 
 static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
   .block_callback = _cb_parse_dlep_message,
   .block_callback_failed_constraints = _cb_parse_dlep_message_failed,
+};
+
+static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
+  .block_callback = _cb_parse_dlep_address,
+  .block_callback_failed_constraints = _cb_parse_dlep_address_failed,
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
@@ -196,6 +213,11 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .match_length = true },
   [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
+};
+
+static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
+  [IDX_ADDRTLV_CUR_RATE] =   { .type = DLEP_ADDRTLV_CUR_RATE, .min_length = 8, .match_length = true },
+  [IDX_ADDRTLV_THROUGHPUT] = { .type = DLEP_ADDRTLV_THROUGHPUT, .min_length = 8, .match_length = true },
 };
 
 /* temporary variables for parsing DLEP messages */
@@ -268,10 +290,12 @@ _cb_plugin_enable(void) {
   olsr_timer_add(&_tinfo_neighbor_update);
 
   pbb_reader_init(&_dlep_reader);
-  pbb_writer_init(&_dlep_writer, 1280, 1280);
 
   pbb_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
+
+  pbb_reader_add_address_consumer(&_dlep_reader, &_dlep_address_consumer,
+      _dlep_address_tlvs, ARRAYSIZE(_dlep_address_tlvs), DLEP_MESSAGE_ID, 0);
 
   olsr_packet_add_managed(&_dlep_socket);
 
@@ -286,6 +310,7 @@ static int
 _cb_plugin_disable(void) {
   olsr_packet_remove_managed(&_dlep_socket, true);
 
+  pbb_reader_remove_address_consumer(&_dlep_reader, &_dlep_address_consumer);
   pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
   pbb_reader_cleanup(&_dlep_reader);
   return 0;
@@ -377,9 +402,29 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
 }
 
 static enum pbb_result
+_cb_parse_dlep_address(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
+      struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+  if (_current_order != DLEP_ORDER_NEIGHBOR_UP
+      && _current_order != DLEP_ORDER_NEIGHBOR_DOWN
+      && _current_order != DLEP_ORDER_NEIGHBOR_UPDATE) {
+    /* ignnore addresses except for neighbor orders */
+    return PBB_OKAY;
+  }
+
+  return PBB_OKAY;
+}
+
+static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP message were not fulfilled!");
+  return PBB_OKAY;
+}
+
+static enum pbb_result
+_cb_parse_dlep_address_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
+      struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+  OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP address were not fulfilled!");
   return PBB_OKAY;
 }
 
