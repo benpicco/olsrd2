@@ -121,9 +121,11 @@ EXPORT bool netaddr_isequal_binary(const struct netaddr *addr,
 EXPORT bool netaddr_is_in_subnet(const struct netaddr *subnet, const struct netaddr *addr);
 EXPORT bool netaddr_binary_is_in_subnet(const struct netaddr *subnet,
     const void *bin, size_t len, uint8_t af_family);
-EXPORT int netaddr_avlcmp(const void *, const void *, void *);
 
 EXPORT uint8_t netaddr_get_maxprefix(const struct netaddr *);
+
+EXPORT int netaddr_avlcmp(const void *, const void *, void *);
+EXPORT int netaddr_socket_avlcmp(const void *, const void *, void *);
 
 #ifdef WIN32
 EXPORT const char *inet_ntop(int af, const void* src, char* dst, int cnt);
