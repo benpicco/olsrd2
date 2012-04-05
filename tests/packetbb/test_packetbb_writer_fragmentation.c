@@ -46,7 +46,16 @@
 #include "packetbb/pbb_writer.h"
 #include "../cunit.h"
 
-static struct pbb_writer writer;
+static uint8_t msg_buffer[128];
+static uint8_t msg_addrtlvs[1000];
+
+static struct pbb_writer writer = {
+  .msg_buffer = msg_buffer,
+  .msg_size = sizeof(msg_buffer),
+  .addrtlv_buffer = msg_addrtlvs,
+  .addrtlv_size = sizeof(msg_addrtlvs),
+};
+
 static struct pbb_writer_content_provider cpr;
 static struct pbb_writer_interface interf[2];
 static struct pbb_writer_tlvtype *tlvtype;
@@ -82,7 +91,7 @@ static void addAddresses(struct pbb_writer *wr,
       tlv_value[tlv_value_size-1] = (uint8_t)(i & 255);
     }
 
-    addr = pbb_writer_add_address(wr, provider->creator, ip, 32);
+    addr = pbb_writer_add_address(wr, provider->_creator, ip, 32);
     pbb_writer_add_addrtlv(wr, addr, tlvtype, tlv_value, tlv_value_size, false);
 
     if (tlv_value) {
@@ -220,8 +229,7 @@ int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))
     tlv_value_buffer[i] = i;
   }
 
-  if (pbb_writer_init(&writer, 128, 1000))
-    return -1;
+  pbb_writer_init(&writer);
 
   pbb_writer_register_interface(&writer, &interf[0], 128);
   interf[0].sendPacket = write_packet;

@@ -46,7 +46,16 @@
 #include "packetbb/pbb_writer.h"
 #include "../cunit.h"
 
-static struct pbb_writer writer;
+static uint8_t msg_buffer[128];
+static uint8_t msg_addrtlvs[1000];
+
+static struct pbb_writer writer = {
+  .msg_buffer = msg_buffer,
+  .msg_size = sizeof(msg_buffer),
+  .addrtlv_buffer = msg_addrtlvs,
+  .addrtlv_size = sizeof(msg_addrtlvs),
+};
+
 static struct pbb_writer_interface interf[2];
 
 static int unique_messages;
@@ -122,8 +131,7 @@ static void test_not_ip_specific(void) {
 int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))) {
   struct pbb_writer_message *msg[2];
 
-  if (pbb_writer_init(&writer, 128, 1000))
-    return -1;
+  pbb_writer_init(&writer);
 
   pbb_writer_register_interface(&writer, &interf[0], 128);
   interf[0].sendPacket = write_packet;
