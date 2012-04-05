@@ -123,11 +123,18 @@ static enum pbb_result _cb_parse_dlep_message_failed(
     struct pbb_reader_tlvblock_context *context);
 static void _cb_receive_dlep(struct olsr_packet_socket *,
       union netaddr_socket *from, size_t length);
-static void _cb_config_changed(void);
+
+static void _cb_ifdiscovery_addMessageTLVs(struct pbb_writer *,
+    struct pbb_writer_content_provider *);
+
+static void _cb_sendMulticast(struct pbb_writer *,
+    struct pbb_writer_interface *, void *, size_t);
 
 static void _cb_dlep_router_timerout(void *);
 static void _cb_interface_discovery(void *);
 static void _cb_neighbor_update(void *);
+
+static void _cb_config_changed(void);
 
 /* plugin declaration */
 OLSR_PLUGIN7 {
@@ -184,7 +191,6 @@ static struct olsr_packet_managed _dlep_socket = {
 
 /* DLEP reader data */
 static struct pbb_reader _dlep_reader;
-static struct pbb_writer _dlep_writer;
 
 static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
   .block_callback = _cb_parse_dlep_message,
@@ -196,6 +202,20 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .match_length = true },
   [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
+};
+
+/* DLEP writer data */
+static struct pbb_writer _dlep_writer;
+
+static struct pbb_writer_message *_dlep_message = NULL;
+static struct pbb_writer_tlvtype *_dlep_addrprv_curent_datarate = NULL;
+
+static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
+  .addMessageTLVs = _cb_ifdiscovery_addMessageTLVs,
+};
+
+static struct pbb_writer_interface _dlep_multicast = {
+  .sendPacket =_cb_sendMulticast,
 };
 
 /* temporary variables for parsing DLEP messages */
@@ -262,19 +282,51 @@ _cb_plugin_unload(void) {
  */
 static int
 _cb_plugin_enable(void) {
+  if (pbb_writer_init(&_dlep_writer, 1280, 1280)) {
+    OLSR_WARN(LOG_PLUGINS, "Could not init pbb writer");
+    return -1;
+  }
+
+  if (pbb_writer_register_interface(&_dlep_writer, &_dlep_multicast, 1280)) {
+    OLSR_WARN(LOG_PLUGINS, "Could not register DLEP interface");
+    pbb_writer_cleanup(&_dlep_writer);
+    return -1;
+  }
+
+  _dlep_message = pbb_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
+  if (_dlep_message == NULL) {
+    OLSR_WARN(LOG_PLUGINS, "Could not register DLEP message");
+    pbb_writer_unregister_interface(&_dlep_writer, &_dlep_multicast);
+    pbb_writer_cleanup(&_dlep_writer);
+    return -1;
+  }
+
+  /* cannot fail because we allocated the message above */
+  pbb_writer_register_msgcontentprovider(&_dlep_writer,
+      &_dlep_msgcontent_provider, DLEP_MESSAGE_ID, 0);
+
+  _dlep_addrprv_curent_datarate =
+      pbb_writer_register_addrtlvtype(&_dlep_writer,
+          DLEP_MESSAGE_ID, DLEP_ADDRTLV_CUR_RATE, 0);
+  if (_dlep_addrprv_curent_datarate == NULL) {
+    OLSR_WARN(LOG_PLUGINS, "Count not register DLEP addrtlv");
+    pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider);
+    pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
+    pbb_writer_unregister_interface(&_dlep_writer, &_dlep_multicast);
+    pbb_writer_cleanup(&_dlep_writer);
+    return -1;
+  }
+
   avl_init(&_session_tree, netaddr_socket_avlcmp, false, NULL);
 
   olsr_timer_add(&_tinfo_interface_discovery);
   olsr_timer_add(&_tinfo_neighbor_update);
 
   pbb_reader_init(&_dlep_reader);
-  pbb_writer_init(&_dlep_writer, 1280, 1280);
-
   pbb_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
 
   olsr_packet_add_managed(&_dlep_socket);
-
   return 0;
 }
 
@@ -288,6 +340,10 @@ _cb_plugin_disable(void) {
 
   pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
   pbb_reader_cleanup(&_dlep_reader);
+
+  pbb_writer_unregister_addrtlvtype(&_dlep_writer, _dlep_addrprv_curent_datarate);
+  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider);
+  pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
   return 0;
 }
 
@@ -428,23 +484,20 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
   _peer_socket = NULL;
 }
 
-/**
- * Update configuration of dlep-service plugin
- */
 static void
-_cb_config_changed(void) {
-  if (cfg_schema_tobin(&_config, _dlep_section.post,
-      _dlep_entries, ARRAYSIZE(_dlep_entries))) {
-    OLSR_WARN(LOG_CONFIG, "Could not convert dlep_listener config to bin");
-    return;
+_cb_ifdiscovery_addMessageTLVs(struct pbb_writer *writer,
+    struct pbb_writer_content_provider *prv __attribute__((unused))) {
+  uint8_t encoded_vtime = 0;
+
+  pbb_writer_add_messagetlv(writer,
+      DLEP_TLV_ORDER, DLEP_ORDER_INTERFACE_DISCOVERY, NULL, 0);
+  pbb_writer_add_messagetlv(writer,
+      MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+
+  if (_config.peer_type[0]) {
+    pbb_writer_add_messagetlv(writer, DLEP_TLV_PEER_TYPE, 0,
+        _config.peer_type, strlen(_config.peer_type));
   }
-
-  /* configure socket */
-  olsr_packet_apply_managed(&_dlep_socket, &_config.socket);
-
-  /* reconfigure timers */
-  olsr_timer_set(&_tentry_interface_discovery, _config.discovery_interval);
-  olsr_timer_set(&_tentry_neighbor_update, _config.neighbor_interval);
 }
 
 static void
@@ -464,4 +517,31 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
 static void
 _cb_neighbor_update(void *ptr __attribute__((unused))) {
 
+}
+
+static void
+_cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
+    struct pbb_writer_interface *interf __attribute__((unused)),
+    void *ptr __attribute__((unused)),
+    size_t len __attribute__((unused))) {
+
+}
+
+/**
+ * Update configuration of dlep-service plugin
+ */
+static void
+_cb_config_changed(void) {
+  if (cfg_schema_tobin(&_config, _dlep_section.post,
+      _dlep_entries, ARRAYSIZE(_dlep_entries))) {
+    OLSR_WARN(LOG_CONFIG, "Could not convert dlep_listener config to bin");
+    return;
+  }
+
+  /* configure socket */
+  olsr_packet_apply_managed(&_dlep_socket, &_config.socket);
+
+  /* reconfigure timers */
+  olsr_timer_set(&_tentry_interface_discovery, _config.discovery_interval);
+  olsr_timer_set(&_tentry_neighbor_update, _config.neighbor_interval);
 }
