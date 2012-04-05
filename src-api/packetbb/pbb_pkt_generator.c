@@ -58,7 +58,7 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
   struct pbb_writer_pkthandler *handler;
 
   /* cleanup packet buffer data */
-  _pbb_tlv_writer_init(&interface->_pkt, interface->mtu, interface->mtu);
+  _pbb_tlv_writer_init(&interface->_pkt, interface->packet_size, interface->packet_size);
 
 #if WRITER_STATE_MACHINE == true
   writer->_state = PBB_WRITER_ADD_PKTHEADER;
@@ -79,7 +79,7 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
     handler->addPacketTLVs(writer, interface);
   }
 
-  interface->is_flushed = false;
+  interface->_is_flushed = false;
 #if WRITER_STATE_MACHINE == true
   writer->_state = PBB_WRITER_NONE;
 #endif
@@ -102,7 +102,7 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
 
   assert(interface->sendPacket);
 
-  if (interface->is_flushed) {
+  if (interface->_is_flushed) {
     if (!force) {
       return;
     }
@@ -156,7 +156,7 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
   interface->_bin_msgs_size = 0;
 
   /* mark buffer as flushed */
-  interface->is_flushed = true;
+  interface->_is_flushed = true;
 
 #if WRITER_STATE_MACHINE == true
   writer->_state = PBB_WRITER_NONE;

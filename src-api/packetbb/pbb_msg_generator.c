@@ -155,11 +155,11 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
     }
 
     /* start packet if necessary */
-    if (interface->is_flushed) {
+    if (interface->_is_flushed) {
       _pbb_writer_begin_packet(writer, interface);
     }
 
-    interface_msg_mtu = interface->mtu
+    interface_msg_mtu = interface->packet_size
         - (interface->_pkt.header + interface->_pkt.added + interface->_pkt.allocated);
     if (interface_msg_mtu < max_msg_size) {
       max_msg_size = interface_msg_mtu;

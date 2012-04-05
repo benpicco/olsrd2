@@ -275,20 +275,11 @@ struct pbb_writer_message {
  * the pbb writer
  */
 struct pbb_writer_interface {
-  /* _if_node for list of all _interfaces */
-  struct list_entity _if_node;
+  /* buffer for packet generation */
+  uint8_t *packet_buffer;
 
   /* maximum number of bytes per packets allowed for interface */
-  size_t mtu;
-
-  /* packet buffer is currently flushed */
-  bool is_flushed;
-
-  /* buffer for constructing the current packet */
-  struct pbb_tlv_writer_data _pkt;
-
-  /* number of bytes used by messages */
-  size_t _bin_msgs_size;
+  size_t packet_size;
 
   /* packet seqno handling */
   bool has_seqno;
@@ -298,6 +289,18 @@ struct pbb_writer_interface {
   void (*addPacketHeader)(struct pbb_writer *, struct pbb_writer_interface *);
   void (*finishPacketHeader)(struct pbb_writer *, struct pbb_writer_interface *);
   void (*sendPacket)(struct pbb_writer *, struct pbb_writer_interface *, void *, size_t);
+
+  /* _if_node for list of all _interfaces */
+  struct list_entity _if_node;
+
+  /* packet buffer is currently flushed */
+  bool _is_flushed;
+
+  /* buffer for constructing the current packet */
+  struct pbb_tlv_writer_data _pkt;
+
+  /* number of bytes used by messages */
+  size_t _bin_msgs_size;
 };
 
 /**
@@ -422,8 +425,8 @@ EXPORT void pbb_writer_register_pkthandler(struct pbb_writer *writer,
 EXPORT void pbb_writer_unregister_pkthandler(struct pbb_writer *writer,
     struct pbb_writer_pkthandler *pkt);
 
-EXPORT int pbb_writer_register_interface(struct pbb_writer *writer,
-    struct pbb_writer_interface *interf, size_t mtu);
+EXPORT void pbb_writer_register_interface(struct pbb_writer *writer,
+    struct pbb_writer_interface *interf);
 EXPORT void pbb_writer_unregister_interface(
     struct pbb_writer *writer, struct pbb_writer_interface *interf);
 

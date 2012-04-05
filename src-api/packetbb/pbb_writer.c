@@ -481,26 +481,22 @@ pbb_writer_unregister_pkthandler(struct pbb_writer *writer  __attribute__ ((unus
  * Registers a new outgoing interface for the writer context
  * @param writer pointer to writer context
  * @param interf pointer to interface object
- * @param mtu maximum number of bytes in a packet on this interface
- * @return -1 if an error happened, 0 otherwise
  */
-int
+void
 pbb_writer_register_interface(struct pbb_writer *writer,
-    struct pbb_writer_interface *interf, size_t mtu) {
+    struct pbb_writer_interface *interf) {
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
-  if ((interf->_pkt.buffer = calloc(1, mtu)) == NULL) {
-    return -1;
-  }
+  assert (interf->packet_buffer != NULL && interf->packet_size > 0);
 
-  _pbb_tlv_writer_init(&interf->_pkt, mtu, mtu);
-  interf->is_flushed = true;
-  interf->mtu = mtu;
+  interf->_pkt.buffer = interf->packet_buffer;
+  _pbb_tlv_writer_init(&interf->_pkt, interf->packet_size, interf->packet_size);
+
+  interf->_is_flushed = true;
 
   list_add_tail(&writer->_interfaces, &interf->_if_node);
-  return 0;
 }
 
 /**
@@ -519,9 +515,6 @@ pbb_writer_unregister_interface(
 
   /* remove interface from writer */
   list_remove(&interf->_if_node);
-
-  /* free allocated memory */
-  free(interf->_pkt.buffer);
 }
 
 /**
