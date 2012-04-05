@@ -76,18 +76,18 @@ enum pbb_internal_state {
 };
 
 /**
- * This struct represents a single address tlv of an address
- * during pbb message creation.
+ * This INTERNAL struct represents a single address tlv
+ * of an address during message serialization.
  */
 struct pbb_writer_addrtlv {
   /* tree _if_node of tlvs of a certain type/exttype */
-  struct avl_node _tlv_node;
+  struct avl_node tlv_node;
 
-  /* backpointer to _tlvtype */
-  struct pbb_writer_tlvtype *_tlvtype;
+  /* backpointer to tlvtype */
+  struct pbb_writer_tlvtype *tlvtype;
 
   /* tree _if_node of tlvs used by a single address */
-  struct avl_node _addrtlv_node;
+  struct avl_node addrtlv_node;
 
   /* backpointer to address */
   struct pbb_writer_address *address;
@@ -118,21 +118,21 @@ struct pbb_writer_addrtlv {
  * message creation.
  */
 struct pbb_writer_address {
-  /* _if_node of address list in writer_message */
-  struct list_entity _addr_node;
-
-  /* _if_node for quick access ( O(log n)) to addresses */
-  struct avl_node _addr_tree_node;
-
-  /* tree to connect all TLVs of this address */
-  struct avl_tree _addrtlv_tree;
-
   /* index of the address */
   int index;
 
   /* address/prefix */
   uint8_t addr[PBB_MAX_ADDRLEN];
   uint8_t prefixlen;
+
+  /* node of address list in writer_message */
+  struct list_entity _addr_node;
+
+  /* node for quick access ( O(log n)) to addresses */
+  struct avl_node _addr_tree_node;
+
+  /* tree to connect all TLVs of this address */
+  struct avl_tree _addrtlv_tree;
 
   /* address block with same prefix/prefixlen until certain address */
   struct pbb_writer_address *_block_end;
@@ -141,24 +141,24 @@ struct pbb_writer_address {
 };
 
 /**
- * This struct is preallocated for each _tlvtype that can be added
+ * This struct is preallocated for each tlvtype that can be added
  * to an address of a certain message type.
  */
 struct pbb_writer_tlvtype {
-  /* _if_node of _tlvtype list in pbb_writer_message */
-  struct list_entity _tlvtype_node;
-
-  /* back pointer to message _creator */
-  struct pbb_writer_message *_creator;
-
-  /* number of users of this _tlvtype */
-  int _usage_counter;
-
   /* tlv type and extension is stored in writer_tlvtype */
   uint8_t type;
 
   /* tlv extension type */
   uint8_t exttype;
+
+  /* _if_node of tlvtype list in pbb_writer_message */
+  struct list_entity _tlvtype_node;
+
+  /* back pointer to message _creator */
+  struct pbb_writer_message *_creator;
+
+  /* number of users of this tlvtype */
+  int _usage_counter;
 
   /* head of writer_addrtlv list */
   struct avl_tree _tlv_tree;
@@ -176,23 +176,23 @@ struct pbb_writer_tlvtype {
  * tlvs for a message context.
  */
 struct pbb_writer_content_provider {
-  /* _if_node for tree of content providers for a message _creator */
-  struct avl_node _provider_node;
-
-  /* back pointer to message _creator */
-  struct pbb_writer_message *_creator;
-
   /* priority of content provider */
   int priority;
 
   /* callbacks for adding tlvs and addresses to a message */
   void (*addMessageTLVs)(struct pbb_writer *,
-      struct pbb_writer_content_provider *);
+    struct pbb_writer_content_provider *);
   void (*addAddresses)(struct pbb_writer *,
-      struct pbb_writer_content_provider *);
+    struct pbb_writer_content_provider *);
   void (*finishMessageTLVs)(struct pbb_writer *,
-      struct pbb_writer_content_provider *, struct pbb_writer_address *,
-      struct pbb_writer_address *, bool);
+    struct pbb_writer_content_provider *, struct pbb_writer_address *,
+    struct pbb_writer_address *, bool);
+
+  /* node for tree of content providers for a message creator */
+  struct avl_node _provider_node;
+
+  /* back pointer to message _creator */
+  struct pbb_writer_message *_creator;
 };
 
 /**
@@ -208,7 +208,7 @@ struct pbb_writer_message {
 
   /*
    * true if the _creator has already _registered
-   * false if the _creator was _registered because of a _tlvtype or content
+   * false if the _creator was _registered because of a tlvtype or content
    * provider registration
    */
   bool _registered;
@@ -243,13 +243,6 @@ struct pbb_writer_message {
   /* message sequence number */
   uint16_t seqno;
   bool has_seqno;
-
-  /* binary data of message tlvblock */
-  uint16_t tlvblock_length;
-  void *tlvblock_value;
-
-  /* allocated space for message tlvblock */
-  uint16_t tlvblock_allocated;
 
   /* head of writer_address list/tree */
   struct list_entity _addr_head;
@@ -430,7 +423,7 @@ EXPORT void pbb_writer_register_interface(struct pbb_writer *writer,
 EXPORT void pbb_writer_unregister_interface(
     struct pbb_writer *writer, struct pbb_writer_interface *interf);
 
-/* functions for message creation */
+/* prototype for message creation interface filter */
 typedef bool (*pbb_writer_ifselector)(struct pbb_writer *, struct pbb_writer_interface *, void *);
 
 EXPORT bool pbb_writer_singleif_selector(struct pbb_writer *, struct pbb_writer_interface *, void *);
@@ -439,31 +432,6 @@ EXPORT bool pbb_writer_allif_selector(struct pbb_writer *, struct pbb_writer_int
 EXPORT enum pbb_result pbb_writer_create_message(
     struct pbb_writer *writer, uint8_t msgid,
     pbb_writer_ifselector useIf, void *param);
-
-/**
- * creates a message of a certain ID for a single interface
- * @param writer pointer to writer context
- * @param msgid type of message
- * @param interf pointer to outgoing interface
- * @return PBB_OKAY if message was created and added to packet buffer,
- *   PBB_... otherwise
- */
-static INLINE enum pbb_result pbb_writer_create_message_singleif(
-    struct pbb_writer *writer, uint8_t msgid, struct pbb_writer_interface *interf) {
-  return pbb_writer_create_message(writer, msgid, pbb_writer_singleif_selector, interf);
-}
-
-/**
- * creates a message of a certain ID for all interface
- * @param writer pointer to writer context
- * @param msgid type of message
- * @return PBB_OKAY if message was created and added to packet buffer,
- *   PBB_... otherwise
- */
-static INLINE enum pbb_result pbb_writer_create_message_allif(
-    struct pbb_writer *writer, uint8_t msgid) {
-  return pbb_writer_create_message(writer, msgid, pbb_writer_allif_selector, NULL);
-}
 
 EXPORT enum pbb_result pbb_writer_forward_msg(struct pbb_writer *writer,
     uint8_t *msg, size_t len, pbb_writer_ifselector useIf, void *param);
@@ -477,5 +445,31 @@ EXPORT void pbb_writer_cleanup(struct pbb_writer *writer);
 void _pbb_writer_free_addresses(struct pbb_writer *writer, struct pbb_writer_message *msg);
 void _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface *interf);
 
+/**
+ * creates a message of a certain ID for a single interface
+ * @param writer pointer to writer context
+ * @param msgid type of message
+ * @param interf pointer to outgoing interface
+ * @return PBB_OKAY if message was created and added to packet buffer,
+ *   PBB_... otherwise
+ */
+static INLINE enum pbb_result
+pbb_writer_create_message_singleif(
+    struct pbb_writer *writer, uint8_t msgid, struct pbb_writer_interface *interf) {
+  return pbb_writer_create_message(writer, msgid, pbb_writer_singleif_selector, interf);
+}
+
+/**
+ * creates a message of a certain ID for all interface
+ * @param writer pointer to writer context
+ * @param msgid type of message
+ * @return PBB_OKAY if message was created and added to packet buffer,
+ *   PBB_... otherwise
+ */
+static INLINE enum pbb_result
+pbb_writer_create_message_allif(
+    struct pbb_writer *writer, uint8_t msgid) {
+  return pbb_writer_create_message(writer, msgid, pbb_writer_allif_selector, NULL);
+}
 
 #endif /* PBB_WRITER_H_ */

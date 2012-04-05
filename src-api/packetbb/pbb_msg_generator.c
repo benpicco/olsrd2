@@ -219,7 +219,7 @@ pbb_writer_create_message(struct pbb_writer *writer, uint8_t msgid,
   while(ptr1 != &msg->_addr_head) {
     addr = container_of(ptr1, struct pbb_writer_address, _addr_node);
     if (first) {
-      /* clear _tlvtype information for adress compression */
+      /* clear tlvtype information for adress compression */
       list_for_each_element(&msg->_tlvtype_head, tlvtype, _tlvtype_node) {
         memset(tlvtype->_tlvblock_count, 0, sizeof(tlvtype->_tlvblock_count));
         memset(tlvtype->_tlvblock_multi, 0, sizeof(tlvtype->_tlvblock_multi));
@@ -719,24 +719,24 @@ _calculate_tlv_flags(struct pbb_writer_address *addr, bool first) {
   struct pbb_writer_addrtlv *tlv;
 
   if (first) {
-    avl_for_each_element(&addr->_addrtlv_tree, tlv, _addrtlv_node) {
+    avl_for_each_element(&addr->_addrtlv_tree, tlv, addrtlv_node) {
       tlv->same_length = false;
       tlv->same_value = false;
     }
     return;
   }
 
-  avl_for_each_element(&addr->_addrtlv_tree, tlv, _addrtlv_node) {
+  avl_for_each_element(&addr->_addrtlv_tree, tlv, addrtlv_node) {
     struct pbb_writer_addrtlv *prev = NULL;
 
     /* check if this is the first tlv of this type */
-    if (avl_is_first(&tlv->_tlvtype->_tlv_tree, &tlv->_tlv_node)) {
+    if (avl_is_first(&tlv->tlvtype->_tlv_tree, &tlv->tlv_node)) {
       tlv->same_length = false;
       tlv->same_value = false;
       continue;
     }
 
-    prev = avl_prev_element(tlv, _tlv_node);
+    prev = avl_prev_element(tlv, tlv_node);
 
     if (tlv->address->index > prev->address->index + 1) {
       tlv->same_length = false;
@@ -835,11 +835,11 @@ _compress_address(struct _pbb_internal_addr_compress_session *acs,
     }
 
     /* calculate costs for breaking/continuing tlv sequences */
-    avl_for_each_element(&addr->_addrtlv_tree, tlv, _addrtlv_node) {
-      struct pbb_writer_tlvtype *tlvtype = tlv->_tlvtype;
+    avl_for_each_element(&addr->_addrtlv_tree, tlv, addrtlv_node) {
+      struct pbb_writer_tlvtype *tlvtype = tlv->tlvtype;
       int cost;
 
-      cost = 2 + (tlv->_tlvtype->exttype ? 1 : 0) + 2 + tlv->length;
+      cost = 2 + (tlv->tlvtype->exttype ? 1 : 0) + 2 + tlv->length;
       if (tlv->length > 255) {
         cost++;
       }
@@ -878,8 +878,8 @@ _compress_address(struct _pbb_internal_addr_compress_session *acs,
     }
 
     /* update internal tlv calculation */
-    avl_for_each_element(&addr->_addrtlv_tree, tlv, _addrtlv_node) {
-      struct pbb_writer_tlvtype *tlvtype = tlv->_tlvtype;
+    avl_for_each_element(&addr->_addrtlv_tree, tlv, addrtlv_node) {
+      struct pbb_writer_tlvtype *tlvtype = tlv->tlvtype;
       if (closed) {
         tlvtype->_tlvblock_count[i] = 1;
         tlvtype->_tlvblock_multi[i] = false;
@@ -1013,7 +1013,7 @@ _write_addresses(struct pbb_writer *writer, struct pbb_writer_message *msg,
     list_for_each_element(&msg->_tlvtype_head, tlvtype, _tlvtype_node) {
 
       /* find first/last tlv for this address block */
-      tlv_start = avl_find_ge_element(&tlvtype->_tlv_tree, &addr_start->index, tlv_start, _tlv_node);
+      tlv_start = avl_find_ge_element(&tlvtype->_tlv_tree, &addr_start->index, tlv_start, tlv_node);
 
       while (tlv_start != NULL && tlv_start->address->index <= addr_end->index) {
         bool same_value;
@@ -1022,7 +1022,7 @@ _write_addresses(struct pbb_writer *writer, struct pbb_writer_message *msg,
         same_value = true;
         tlv_end = tlv_start;
 
-        avl_for_element_to_last(&tlvtype->_tlv_tree, tlv_start, tlv, _tlv_node) {
+        avl_for_element_to_last(&tlvtype->_tlv_tree, tlv_start, tlv, tlv_node) {
           if (tlv != tlv_start && tlv->address->index <= addr_end->index && tlv->same_length) {
             tlv_end = tlv;
             same_value &= tlv->same_value;
@@ -1077,17 +1077,17 @@ _write_addresses(struct pbb_writer *writer, struct pbb_writer_message *msg,
             memcpy(ptr, tlv_start->value, tlv_start->length);
             ptr += tlv_start->length;
           } else {
-            avl_for_element_range(tlv_start, tlv_end, tlv, _tlv_node) {
+            avl_for_element_range(tlv_start, tlv_end, tlv, tlv_node) {
               memcpy(ptr, tlv->value, tlv->length);
               ptr += tlv->length;
             }
           }
         }
 
-        if (avl_is_last(&tlvtype->_tlv_tree, &tlv_end->_tlv_node)) {
+        if (avl_is_last(&tlvtype->_tlv_tree, &tlv_end->tlv_node)) {
           tlv_start = NULL;
         } else {
-          tlv_start = avl_next_element(tlv_end, _tlv_node);
+          tlv_start = avl_next_element(tlv_end, tlv_node);
         }
       }
     }

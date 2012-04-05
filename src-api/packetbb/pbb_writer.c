@@ -147,7 +147,7 @@ pbb_writer_cleanup(struct pbb_writer *writer) {
  *
  * @param writer pointer to writer context
  * @param addr pointer to address object
- * @param _tlvtype pointer to predefined _tlvtype object
+ * @param tlvtype pointer to predefined tlvtype object
  * @param value pointer to value or NULL if no value
  * @param length length of value in bytes or 0 if no value
  * @param allow_dup true if multiple TLVs of the same type are allowed,
@@ -175,7 +175,7 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
 
   /* set back pointer */
   addrtlv->address = addr;
-  addrtlv->_tlvtype = tlvtype;
+  addrtlv->tlvtype = tlvtype;
 
   /* copy value(length) */
   addrtlv->length = length;
@@ -185,12 +185,12 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
   }
 
   /* add to address tree */
-  addrtlv->_addrtlv_node.key = &tlvtype->_full_type;
-  avl_insert(&addr->_addrtlv_tree, &addrtlv->_addrtlv_node);
+  addrtlv->addrtlv_node.key = &tlvtype->_full_type;
+  avl_insert(&addr->_addrtlv_tree, &addrtlv->addrtlv_node);
 
-  /* add to _tlvtype tree */
-  addrtlv->_tlv_node.key = &addr->index;
-  avl_insert(&tlvtype->_tlv_tree, &addrtlv->_tlv_node);
+  /* add to tlvtype tree */
+  addrtlv->tlv_node.key = &addr->index;
+  avl_insert(&tlvtype->_tlv_tree, &addrtlv->tlv_node);
 
   return PBB_OKAY;
 }
@@ -267,9 +267,9 @@ pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
  *
  * @param writer pointer to writer context
  * @param msgtype messagetype for this tlv
- * @param tlv _tlvtype of this tlv
+ * @param tlv tlvtype of this tlv
  * @param tlvext extended tlv type, 0 if no extended type necessary
- * @return pointer to _tlvtype object, NULL if an error happened
+ * @return pointer to tlvtype object, NULL if an error happened
  */
 struct pbb_writer_tlvtype *
 pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint8_t tlv, uint8_t tlvext) {
@@ -313,11 +313,11 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
 }
 
 /**
- * Remove registration of _tlvtype for addresses.
+ * Remove registration of tlvtype for addresses.
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param _tlvtype pointer to _tlvtype object
+ * @param tlvtype pointer to tlvtype object
  */
 void
 pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer, struct pbb_writer_tlvtype *tlvtype) {
@@ -591,15 +591,15 @@ _copy_addrtlv_value(struct pbb_writer *writer, void *value, size_t length) {
 /**
  * Free memory of all temporary allocated tlvs of a certain type
  * @param writer pointer to writer context
- * @param _tlvtype pointer to _tlvtype object
+ * @param tlvtype pointer to tlvtype object
  */
 static void
 _free_tlvtype_tlvs(struct pbb_writer *writer, struct pbb_writer_tlvtype *tlvtype) {
   struct pbb_writer_addrtlv *addrtlv, *ptr;
 
-  avl_remove_all_elements(&tlvtype->_tlv_tree, addrtlv, _tlv_node, ptr) {
+  avl_remove_all_elements(&tlvtype->_tlv_tree, addrtlv, tlv_node, ptr) {
     /* remove from address too */
-    avl_remove(&addrtlv->address->_addrtlv_tree, &addrtlv->_addrtlv_node);
+    avl_remove(&addrtlv->address->_addrtlv_tree, &addrtlv->addrtlv_node);
     writer->free_addrtlv_entry(addrtlv);
   }
 }
@@ -613,9 +613,9 @@ _pbb_writer_free_addresses(struct pbb_writer *writer, struct pbb_writer_message 
     /* remove from list too */
     list_remove(&addr->_addr_node);
 
-    avl_remove_all_elements(&addr->_addrtlv_tree, addrtlv, _addrtlv_node, safe_addrtlv) {
-      /* remove from _tlvtype too */
-      avl_remove(&addrtlv->_tlvtype->_tlv_tree, &addrtlv->_tlv_node);
+    avl_remove_all_elements(&addr->_addrtlv_tree, addrtlv, addrtlv_node, safe_addrtlv) {
+      /* remove from tlvtype too */
+      avl_remove(&addrtlv->tlvtype->_tlv_tree, &addrtlv->tlv_node);
       writer->free_addrtlv_entry(addrtlv);
     }
     writer->free_address_entry(addr);
