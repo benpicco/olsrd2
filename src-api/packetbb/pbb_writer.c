@@ -324,6 +324,9 @@ pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer, struct pbb_writer_t
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
+  if (!list_is_node_added(&tlvtype->_tlvtype_node)) {
+    return;
+  }
   if (--tlvtype->_usage_counter) {
     return;
   }
@@ -377,6 +380,9 @@ pbb_writer_unregister_content_provider(struct pbb_writer *writer, struct pbb_wri
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
+  if (!avl_is_node_added(&cpr->_provider_node)) {
+    return;
+  }
   avl_remove(&cpr->_creator->_provider_tree, &cpr->_provider_node);
   _lazy_free_message(writer, cpr->_creator);
 }
@@ -434,6 +440,10 @@ pbb_writer_unregister_message(struct pbb_writer *writer, struct pbb_writer_messa
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
+  if (!avl_is_node_added(&msg->_msgcreator_node)) {
+    return;
+  }
+
   /* free addresses */
   _pbb_writer_free_addresses(writer, msg);
 
@@ -473,8 +483,9 @@ pbb_writer_unregister_pkthandler(struct pbb_writer *writer  __attribute__ ((unus
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
-
-  list_remove(&pkt->_pkthandle_node);
+  if (list_is_node_added(&pkt->_pkthandle_node)) {
+    list_remove(&pkt->_pkthandle_node);
+  }
 }
 
 /**
@@ -514,7 +525,9 @@ pbb_writer_unregister_interface(
 #endif
 
   /* remove interface from writer */
-  list_remove(&interf->_if_node);
+  if (list_is_node_added(&interf->_if_node)) {
+    list_remove(&interf->_if_node);
+  }
 }
 
 /**

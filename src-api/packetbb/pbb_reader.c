@@ -1335,7 +1335,9 @@ static void
 _free_consumer(struct avl_tree *consumer_tree,
     struct pbb_reader_tlvblock_consumer *consumer) {
   /* remove consumer from tree */
-  avl_remove(consumer_tree, &consumer->node);
+  if (avl_is_node_added(&consumer->node)) {
+    avl_remove(consumer_tree, &consumer->node);
+  }
 }
 
 /**
