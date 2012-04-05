@@ -46,8 +46,32 @@
 #include "packetbb/pbb_writer.h"
 #include "../cunit.h"
 
-static struct pbb_writer writer;
-static struct pbb_writer_interface interf[2];
+static void write_packet(struct pbb_writer *,
+    struct pbb_writer_interface *,void *, size_t);
+
+static uint8_t msg_buffer[128];
+static uint8_t msg_addrtlvs[1000];
+
+static struct pbb_writer writer = {
+  .msg_buffer = msg_buffer,
+  .msg_size = sizeof(msg_buffer),
+  .addrtlv_buffer = msg_addrtlvs,
+  .addrtlv_size = sizeof(msg_addrtlvs),
+};
+
+static uint8_t packet_buffer_if1[128];
+static struct pbb_writer_interface small_if = {
+  .packet_buffer = packet_buffer_if1,
+  .packet_size = sizeof(packet_buffer_if1),
+  .sendPacket = write_packet,
+};
+
+static uint8_t packet_buffer_if2[256];
+static struct pbb_writer_interface large_if = {
+  .packet_buffer = packet_buffer_if2,
+  .packet_size = sizeof(packet_buffer_if2),
+  .sendPacket = write_packet,
+};
 
 static int unique_messages;
 
@@ -72,7 +96,7 @@ static void write_packet(struct pbb_writer *wr __attribute__ ((unused)),
   size_t i, j;
   uint8_t *buf = buffer;
 
-  if (iface == &interf[0]) {
+  if (iface == &small_if) {
     printf("Interface 1:\n");
   }
   else {
@@ -98,8 +122,8 @@ static void test_ip_specific(void) {
   START_TEST();
 
   CHECK_TRUE(0 == pbb_writer_create_message_allif(&writer, 1), "Parser should return 0");
-  pbb_writer_flush(&writer, &interf[0], false);
-  pbb_writer_flush(&writer, &interf[1], false);
+  pbb_writer_flush(&writer, &small_if, false);
+  pbb_writer_flush(&writer, &large_if, false);
 
   CHECK_TRUE(unique_messages == 2, "bad number of messages: %d\n", unique_messages);
 
@@ -110,8 +134,8 @@ static void test_not_ip_specific(void) {
   START_TEST();
 
   CHECK_TRUE(0 == pbb_writer_create_message_allif(&writer, 2), "Parser should return 0");
-  pbb_writer_flush(&writer, &interf[0], false);
-  pbb_writer_flush(&writer, &interf[1], false);
+  pbb_writer_flush(&writer, &small_if, false);
+  pbb_writer_flush(&writer, &large_if, false);
 
   CHECK_TRUE(unique_messages == 1, "bad number of messages: %d\n", unique_messages);
 
@@ -122,14 +146,10 @@ static void test_not_ip_specific(void) {
 int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))) {
   struct pbb_writer_message *msg[2];
 
-  if (pbb_writer_init(&writer, 128, 1000))
-    return -1;
+  pbb_writer_init(&writer);
 
-  pbb_writer_register_interface(&writer, &interf[0], 128);
-  interf[0].sendPacket = write_packet;
-
-  pbb_writer_register_interface(&writer, &interf[1], 256);
-  interf[1].sendPacket = write_packet;
+  pbb_writer_register_interface(&writer, &small_if);
+  pbb_writer_register_interface(&writer, &large_if);
 
   msg[0] = pbb_writer_register_message(&writer, 1, true, 4);
   msg[0]->addMessageHeader = addMessageHeader;

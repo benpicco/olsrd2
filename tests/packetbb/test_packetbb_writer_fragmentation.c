@@ -46,9 +46,35 @@
 #include "packetbb/pbb_writer.h"
 #include "../cunit.h"
 
-static struct pbb_writer writer;
+static void write_packet(struct pbb_writer *,
+    struct pbb_writer_interface *, void *, size_t);
+
+static uint8_t msg_buffer[128];
+static uint8_t msg_addrtlvs[1000];
+
+static struct pbb_writer writer = {
+  .msg_buffer = msg_buffer,
+  .msg_size = sizeof(msg_buffer),
+  .addrtlv_buffer = msg_addrtlvs,
+  .addrtlv_size = sizeof(msg_addrtlvs),
+};
+
 static struct pbb_writer_content_provider cpr;
-static struct pbb_writer_interface interf[2];
+
+static uint8_t packet_buffer_if1[128];
+static struct pbb_writer_interface small_if = {
+  .packet_buffer = packet_buffer_if1,
+  .packet_size = sizeof(packet_buffer_if1),
+  .sendPacket = write_packet,
+};
+
+static uint8_t packet_buffer_if2[256];
+static struct pbb_writer_interface large_if = {
+  .packet_buffer = packet_buffer_if2,
+  .packet_size = sizeof(packet_buffer_if2),
+  .sendPacket = write_packet,
+};
+
 static struct pbb_writer_tlvtype *tlvtype;
 
 static int tlvcount, fragments, packets[2];
@@ -82,7 +108,7 @@ static void addAddresses(struct pbb_writer *wr,
       tlv_value[tlv_value_size-1] = (uint8_t)(i & 255);
     }
 
-    addr = pbb_writer_add_address(wr, provider->creator, ip, 32);
+    addr = pbb_writer_add_address(wr, provider->_creator, ip, 32);
     pbb_writer_add_addrtlv(wr, addr, tlvtype, tlv_value, tlv_value_size, false);
 
     if (tlv_value) {
@@ -97,7 +123,7 @@ static void write_packet(struct pbb_writer *w __attribute__ ((unused)),
   size_t i, j;
   uint8_t *buf = buffer;
 
-  if (iface == &interf[0]) {
+  if (iface == &small_if) {
     printf("Interface 1:\n");
     packets[0]++;
   }
@@ -132,8 +158,8 @@ static void test_frag_80_1(void) {
   tlv_value_size = 80;
 
   CHECK_TRUE(0 == pbb_writer_create_message_allif(&writer, 1), "Parser should return 0");
-  pbb_writer_flush(&writer, &interf[0], false);
-  pbb_writer_flush(&writer, &interf[1], false);
+  pbb_writer_flush(&writer, &small_if, false);
+  pbb_writer_flush(&writer, &large_if, false);
 
   CHECK_TRUE(fragments == 1, "bad number of fragments: %d\n", fragments);
   CHECK_TRUE(packets[0] == 1, "bad number of packets on if 1: %d\n", packets[0]);
@@ -150,8 +176,8 @@ static void test_frag_80_2(void) {
   tlv_value_size = 80;
 
   CHECK_TRUE(0 == pbb_writer_create_message_allif(&writer, 1), "Parser should return 0");
-  pbb_writer_flush(&writer, &interf[0], false);
-  pbb_writer_flush(&writer, &interf[1], false);
+  pbb_writer_flush(&writer, &small_if, false);
+  pbb_writer_flush(&writer, &large_if, false);
 
   CHECK_TRUE(fragments == 2, "bad number of fragments: %d\n", fragments);
   CHECK_TRUE(packets[0] == 2, "bad number of packets on if 1: %d\n", packets[0]);
@@ -168,8 +194,8 @@ static void test_frag_80_3(void) {
   tlv_value_size = 80;
 
   CHECK_TRUE(0 == pbb_writer_create_message_allif(&writer, 1), "Parser should return 0");
-  pbb_writer_flush(&writer, &interf[0], false);
-  pbb_writer_flush(&writer, &interf[1], false);
+  pbb_writer_flush(&writer, &small_if, false);
+  pbb_writer_flush(&writer, &large_if, false);
 
   CHECK_TRUE(fragments == 3, "bad number of fragments: %d\n", fragments);
   CHECK_TRUE(packets[0] == 3, "bad number of packets on if 1: %d\n", packets[0]);
@@ -186,8 +212,8 @@ static void test_frag_50_3(void) {
   tlv_value_size = 50;
 
   CHECK_TRUE(0 == pbb_writer_create_message_allif(&writer, 1), "Parser should return 0");
-  pbb_writer_flush(&writer, &interf[0], false);
-  pbb_writer_flush(&writer, &interf[1], false);
+  pbb_writer_flush(&writer, &small_if, false);
+  pbb_writer_flush(&writer, &large_if, false);
 
   CHECK_TRUE(fragments == 2, "bad number of fragments: %d\n", fragments);
   CHECK_TRUE(packets[0] == 2, "bad number of packets on if 1: %d\n", packets[0]);
@@ -220,14 +246,10 @@ int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))
     tlv_value_buffer[i] = i;
   }
 
-  if (pbb_writer_init(&writer, 128, 1000))
-    return -1;
+  pbb_writer_init(&writer);
 
-  pbb_writer_register_interface(&writer, &interf[0], 128);
-  interf[0].sendPacket = write_packet;
-
-  pbb_writer_register_interface(&writer, &interf[1], 256);
-  interf[1].sendPacket = write_packet;
+  pbb_writer_register_interface(&writer, &small_if);
+  pbb_writer_register_interface(&writer, &large_if);
 
   msg = pbb_writer_register_message(&writer, 1, false, 4);
   msg->addMessageHeader = addMessageHeader;

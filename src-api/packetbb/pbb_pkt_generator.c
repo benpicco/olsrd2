@@ -58,10 +58,10 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
   struct pbb_writer_pkthandler *handler;
 
   /* cleanup packet buffer data */
-  _pbb_tlv_writer_init(&interface->pkt, interface->mtu, interface->mtu);
+  _pbb_tlv_writer_init(&interface->_pkt, interface->packet_size, interface->packet_size);
 
 #if WRITER_STATE_MACHINE == true
-  writer->int_state = PBB_WRITER_ADD_PKTHEADER;
+  writer->_state = PBB_WRITER_ADD_PKTHEADER;
 #endif
   /* add packet header */
   if (interface->addPacketHeader) {
@@ -72,16 +72,16 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
   }
 
 #if WRITER_STATE_MACHINE == true
-  writer->int_state = PBB_WRITER_ADD_PKTTLV;
+  writer->_state = PBB_WRITER_ADD_PKTTLV;
 #endif
   /* add packet tlvs */
-  list_for_each_element(&writer->pkthandlers, handler, node) {
+  list_for_each_element(&writer->_pkthandlers, handler, _pkthandle_node) {
     handler->addPacketTLVs(writer, interface);
   }
 
-  interface->is_flushed = false;
+  interface->_is_flushed = false;
 #if WRITER_STATE_MACHINE == true
-  writer->int_state = PBB_WRITER_NONE;
+  writer->_state = PBB_WRITER_NONE;
 #endif
 }
 
@@ -97,12 +97,12 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
   size_t len;
 
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
   assert(interface->sendPacket);
 
-  if (interface->is_flushed) {
+  if (interface->_is_flushed) {
     if (!force) {
       return;
     }
@@ -112,16 +112,16 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
   }
 
 #if WRITER_STATE_MACHINE == true
-  writer->int_state = PBB_WRITER_FINISH_PKTTLV;
+  writer->_state = PBB_WRITER_FINISH_PKTTLV;
 #endif
 
   /* finalize packet tlvs */
-  list_for_each_element_reverse(&writer->pkthandlers, handler, node) {
+  list_for_each_element_reverse(&writer->_pkthandlers, handler, _pkthandle_node) {
     handler->finishPacketTLVs(writer, interface);
   }
 
 #if WRITER_STATE_MACHINE == true
-  writer->int_state = PBB_WRITER_FINISH_PKTHEADER;
+  writer->_state = PBB_WRITER_FINISH_PKTHEADER;
 #endif
   /* finalize packet header */
   if (interface->finishPacketHeader) {
@@ -136,35 +136,35 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
   if (interface->has_seqno) {
     len += 2;
   }
-  if (interface->pkt.added + interface->pkt.set > 0) {
+  if (interface->_pkt.added + interface->_pkt.set > 0) {
     len += 2;
   }
 
   /* compress packet buffer */
-  if (interface->bin_msgs_size) {
-    memmove(&interface->pkt.buffer[len + interface->pkt.added + interface->pkt.set],
-        &interface->pkt.buffer[interface->pkt.header + interface->pkt.added + interface->pkt.allocated],
-        interface->bin_msgs_size);
+  if (interface->_bin_msgs_size) {
+    memmove(&interface->_pkt.buffer[len + interface->_pkt.added + interface->_pkt.set],
+        &interface->_pkt.buffer[interface->_pkt.header + interface->_pkt.added + interface->_pkt.allocated],
+        interface->_bin_msgs_size);
   }
 
   /* send packet */
-  interface->sendPacket(writer, interface, interface->pkt.buffer,
-      len + interface->pkt.added + interface->pkt.set + interface->bin_msgs_size);
+  interface->sendPacket(writer, interface, interface->_pkt.buffer,
+      len + interface->_pkt.added + interface->_pkt.set + interface->_bin_msgs_size);
 
   /* cleanup length information */
-  interface->pkt.set  = 0;
-  interface->bin_msgs_size = 0;
+  interface->_pkt.set  = 0;
+  interface->_bin_msgs_size = 0;
 
   /* mark buffer as flushed */
-  interface->is_flushed = true;
+  interface->_is_flushed = true;
 
 #if WRITER_STATE_MACHINE == true
-  writer->int_state = PBB_WRITER_NONE;
+  writer->_state = PBB_WRITER_NONE;
 #endif
 
 #if DEBUG_CLEANUP == true
-  memset(&interface->pkt.buffer[len + interface->pkt.added], 0,
-      interface->pkt.max - len - interface->pkt.added);
+  memset(&interface->_pkt.buffer[len + interface->_pkt.added], 0,
+      interface->_pkt.max - len - interface->_pkt.added);
 #endif
 }
 
@@ -185,9 +185,9 @@ pbb_writer_add_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf,
     uint8_t type, uint8_t exttype, void *value, size_t length) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_ADD_PKTTLV);
+  assert(writer->_state == PBB_WRITER_ADD_PKTTLV);
 #endif
-  return _pbb_tlv_writer_add(&interf->pkt, type, exttype, value, length);
+  return _pbb_tlv_writer_add(&interf->_pkt, type, exttype, value, length);
 }
 
 /**
@@ -204,9 +204,9 @@ enum pbb_result
 pbb_writer_allocate_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf, bool has_exttype, size_t length) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_ADD_PKTTLV);
+  assert(writer->_state == PBB_WRITER_ADD_PKTTLV);
 #endif
-  return _pbb_tlv_writer_allocate(&interf->pkt, has_exttype, length);
+  return _pbb_tlv_writer_allocate(&interf->_pkt, has_exttype, length);
 }
 
 /**
@@ -225,9 +225,9 @@ pbb_writer_set_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf,
     uint8_t type, uint8_t exttype, void *value, size_t length) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_FINISH_PKTTLV);
+  assert(writer->_state == PBB_WRITER_FINISH_PKTTLV);
 #endif
-  return _pbb_tlv_writer_set(&interf->pkt, type, exttype, value, length);
+  return _pbb_tlv_writer_set(&interf->_pkt, type, exttype, value, length);
 }
 
 /**
@@ -240,16 +240,16 @@ pbb_writer_set_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
 void pbb_writer_set_pkt_header(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf, bool has_seqno) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_ADD_PKTHEADER);
+  assert(writer->_state == PBB_WRITER_ADD_PKTHEADER);
 #endif
 
   /* we assume that we have always an TLV block and substract the 2 bytes later */
-  interf->pkt.header = 1+2;
+  interf->_pkt.header = 1+2;
 
   /* handle sequence number */
   interf->has_seqno = has_seqno;
   if (has_seqno) {
-    interf->pkt.header += 2;
+    interf->_pkt.header += 2;
   }
 }
 
@@ -265,8 +265,8 @@ void
 pbb_writer_set_pkt_seqno(struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf, uint16_t seqno) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_ADD_PKTHEADER
-      || writer->int_state == PBB_WRITER_FINISH_PKTHEADER);
+  assert(writer->_state == PBB_WRITER_ADD_PKTHEADER
+      || writer->_state == PBB_WRITER_FINISH_PKTHEADER);
 #endif
   interf->seqno = seqno;
 }
@@ -280,18 +280,18 @@ _write_pktheader(struct pbb_writer_interface *interf) {
   uint8_t *ptr;
   size_t len;
 
-  ptr = interf->pkt.buffer;
+  ptr = interf->_pkt.buffer;
   *ptr++ = 0;
   if (interf->has_seqno) {
-    interf->pkt.buffer[0] |= PBB_PKT_FLAG_SEQNO;
+    interf->_pkt.buffer[0] |= PBB_PKT_FLAG_SEQNO;
     *ptr++ = (interf->seqno >> 8);
     *ptr++ = (interf->seqno & 255);
   }
 
   /* tlv-block ? */
-  len = interf->pkt.added + interf->pkt.set;
+  len = interf->_pkt.added + interf->_pkt.set;
   if (len > 0) {
-    interf->pkt.buffer[0] |= PBB_PKT_FLAG_TLV;
+    interf->_pkt.buffer[0] |= PBB_PKT_FLAG_TLV;
     *ptr++ = (len >> 8);
     *ptr++ = (len & 255);
   }

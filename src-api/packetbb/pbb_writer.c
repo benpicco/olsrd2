@@ -60,41 +60,34 @@ static struct pbb_writer_addrtlv *_malloc_addrtlv_entry(void);
 /**
  * Creates a new packetbb writer context
  * @param writer pointer to writer context
- * @param msg_mtu maximum number of bytes in a message
- * @param addrtlv_data number of bytes for temporary storage of
- *   addrtlv values. This should be more bytes than the mtu, because
- *   the storage have to be big enough to hold all address tlv values
- *   before fragmenting the message.
- * @return -1 if an error happened, 0 otherwise
  */
-int
-pbb_writer_init(struct pbb_writer *writer, size_t msg_mtu, size_t addrtlv_data) {
-  if ((writer->msg.buffer = calloc(1, msg_mtu)) == NULL) {
-    return -1;
-  }
-  if ((writer->addrtlv_buffer = calloc(1, addrtlv_data)) == NULL) {
-    free (writer->msg.buffer);
-    return -1;
-  }
+void
+pbb_writer_init(struct pbb_writer *writer) {
+  assert (writer->msg_buffer != NULL && writer->msg_size > 0);
+  assert (writer->addrtlv_buffer != NULL && writer->addrtlv_size > 0);
 
   /* set default memory handler functions */
-  writer->malloc_address_entry = _malloc_address_entry;
-  writer->malloc_addrtlv_entry = _malloc_addrtlv_entry;
-  writer->free_address_entry = free;
-  writer->free_addrtlv_entry = free;
+  if (!writer->malloc_address_entry)
+    writer->malloc_address_entry = _malloc_address_entry;
+  if (!writer->malloc_addrtlv_entry)
+    writer->malloc_addrtlv_entry = _malloc_addrtlv_entry;
+  if (!writer->free_address_entry)
+    writer->free_address_entry = free;
+  if (!writer->free_addrtlv_entry)
+    writer->free_addrtlv_entry = free;
 
-  list_init_head(&writer->interfaces);
-  writer->msg_mtu = msg_mtu;
-  _pbb_tlv_writer_init(&writer->msg, 0, msg_mtu);
+  list_init_head(&writer->_interfaces);
 
-  writer->addrtlv_size = addrtlv_data;
+  /* initialize packet buffer */
+  writer->_msg.buffer = writer->msg_buffer;
+  _pbb_tlv_writer_init(&writer->_msg, 0, writer->msg_size);
+
+  list_init_head(&writer->_pkthandlers);
+  avl_init(&writer->_msgcreators, avl_comp_uint8, false, NULL);
+
 #if WRITER_STATE_MACHINE == true
-  writer->int_state = PBB_WRITER_NONE;
+  writer->_state = PBB_WRITER_NONE;
 #endif
-
-  list_init_head(&writer->pkthandlers);
-  avl_init(&writer->msgcreators, avl_comp_uint8, false, NULL);
-  return 0;
 }
 
 /**
@@ -113,43 +106,39 @@ pbb_writer_cleanup(struct pbb_writer *writer) {
 
   assert(writer);
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
   /* remove all packet handlers */
-  list_for_each_element_safe(&writer->pkthandlers, pkt, node, safe_pkt) {
+  list_for_each_element_safe(&writer->_pkthandlers, pkt, _pkthandle_node, safe_pkt) {
     pbb_writer_unregister_pkthandler(writer, pkt);
   }
 
-  /* remove all interfaces */
-  list_for_each_element_safe(&writer->interfaces, interf, node, safe_interf) {
+  /* remove all _interfaces */
+  list_for_each_element_safe(&writer->_interfaces, interf, _if_node, safe_interf) {
     pbb_writer_unregister_interface(writer, interf);
   }
 
   /* remove all message creators */
-  avl_for_each_element_safe(&writer->msgcreators, msg, msgcreator_node, safe_msg) {
+  avl_for_each_element_safe(&writer->_msgcreators, msg, _msgcreator_node, safe_msg) {
     /* prevent message from being freed in the middle of the processing */
-    msg->registered = true;
+    msg->_registered = true;
 
     /* remove all message content providers */
-    avl_for_each_element_safe(&msg->provider_tree, provider, provider_node, safe_prv) {
+    avl_for_each_element_safe(&msg->_provider_tree, provider, _provider_node, safe_prv) {
       pbb_writer_unregister_content_provider(writer, provider);
     }
 
-    /* remove all registered address tlvs */
-    list_for_each_element_safe(&msg->tlvtype_head, tlvtype, tlvtype_node, safe_tt) {
+    /* remove all _registered address tlvs */
+    list_for_each_element_safe(&msg->_tlvtype_head, tlvtype, _tlvtype_node, safe_tt) {
       /* reset usage counter */
-      tlvtype->usage_counter = 1;
+      tlvtype->_usage_counter = 1;
       pbb_writer_unregister_addrtlvtype(writer, tlvtype);
     }
 
     /* remove message and addresses */
     pbb_writer_unregister_message(writer, msg);
   }
-
-  /* free buffers of writer */
-  free(writer->msg.buffer);
-  free(writer->addrtlv_buffer);
 }
 
 /**
@@ -171,11 +160,11 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
   struct pbb_writer_addrtlv *addrtlv;
 
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_ADD_ADDRESSES);
+  assert(writer->_state == PBB_WRITER_ADD_ADDRESSES);
 #endif
 
   /* check for collision if necessary */
-  if (!allow_dup && avl_find(&addr->addrtlv_tree, &tlvtype->int_type) != NULL) {
+  if (!allow_dup && avl_find(&addr->_addrtlv_tree, &tlvtype->_full_type) != NULL) {
     return PBB_DUPLICATE_TLV;
   }
 
@@ -196,12 +185,12 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
   }
 
   /* add to address tree */
-  addrtlv->addrtlv_node.key = &tlvtype->int_type;
-  avl_insert(&addr->addrtlv_tree, &addrtlv->addrtlv_node);
+  addrtlv->addrtlv_node.key = &tlvtype->_full_type;
+  avl_insert(&addr->_addrtlv_tree, &addrtlv->addrtlv_node);
 
   /* add to tlvtype tree */
   addrtlv->tlv_node.key = &addr->index;
-  avl_insert(&tlvtype->tlv_tree, &addrtlv->tlv_node);
+  avl_insert(&tlvtype->_tlv_tree, &addrtlv->tlv_node);
 
   return PBB_OKAY;
 }
@@ -211,7 +200,7 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param msg pointer to message object
+ * @param _msg pointer to message object
  * @param addr pointer to binary address in network byte order
  * @param prefix prefix length
  * @return pointer to address object, NULL if an error happened
@@ -226,12 +215,12 @@ pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
 #endif
 
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_ADD_ADDRESSES);
+  assert(writer->_state == PBB_WRITER_ADD_ADDRESSES);
 #endif
 
 #if CLEAR_ADDRESS_POSTFIX == true
   /* only copy prefix part of address */
-  for (p = prefix, i=0; i < msg->addr_len; i++, p -= 8) {
+  for (p = prefix, i=0; i < _msg->addr_len; i++, p -= 8) {
     if (p > 7) {
       cleaned_addr[i] = addr[i];
     }
@@ -244,9 +233,9 @@ pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
     }
   }
 
-  address = avl_find_element(&msg->addr_tree, cleaned_addr, address, addr_tree_node);
+  address = avl_find_element(&_msg->_addr_tree, cleaned_addr, address, _addr_tree_node);
 #else
-  address = avl_find_element(&msg->addr_tree, addr, address, addr_tree_node);
+  address = avl_find_element(&msg->_addr_tree, addr, address, _addr_tree_node);
 #endif
 
 
@@ -256,18 +245,18 @@ pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
     }
 
 #if CLEAR_ADDRESS_POSTFIX == true
-    memcpy(address->addr, cleaned_addr, msg->addr_len);
+    memcpy(address->addr, cleaned_addr, _msg->addr_len);
 #else
     memcpy(address->addr, addr, msg->addr_len);
 #endif
     address->prefixlen = prefix;
 
-    address->addr_tree_node.key = address->addr;
+    address->_addr_tree_node.key = address->addr;
 
-    list_add_tail(&msg->addr_head, &address->addr_node);
-    avl_insert(&msg->addr_tree, &address->addr_tree_node);
+    list_add_tail(&msg->_addr_head, &address->_addr_node);
+    avl_insert(&msg->_addr_tree, &address->_addr_tree_node);
 
-    avl_init(&address->addrtlv_tree, avl_comp_uint32, true, NULL);
+    avl_init(&address->_addrtlv_tree, avl_comp_uint32, true, NULL);
   }
   return address;
 }
@@ -288,7 +277,7 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
   struct pbb_writer_message *msg;
 
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
   if ((msg = _get_message(writer, msgtype)) == NULL) {
     /* out of memory error ? */
@@ -296,9 +285,9 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
   }
 
   /* Look for existing addrtlv */
-  list_for_each_element(&msg->tlvtype_head, tlvtype, tlvtype_node) {
+  list_for_each_element(&msg->_tlvtype_head, tlvtype, _tlvtype_node) {
     if (tlvtype->type == tlv && tlvtype->exttype == tlvext) {
-      tlvtype->usage_counter++;
+      tlvtype->_usage_counter++;
       return tlvtype;
     }
   }
@@ -312,14 +301,14 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
   /* initialize addrtlv fields */
   tlvtype->type = tlv;
   tlvtype->exttype = tlvext;
-  tlvtype->creator = msg;
-  tlvtype->usage_counter++;
-  tlvtype->int_type = tlv*256 + tlvext;
+  tlvtype->_creator = msg;
+  tlvtype->_usage_counter++;
+  tlvtype->_full_type = tlv*256 + tlvext;
 
-  avl_init(&tlvtype->tlv_tree, avl_comp_uint32, true, false);
+  avl_init(&tlvtype->_tlv_tree, avl_comp_uint32, true, false);
 
-  /* add to message creator list */
-  list_add_tail(&msg->tlvtype_head, &tlvtype->tlvtype_node);
+  /* add to message _creator list */
+  list_add_tail(&msg->_tlvtype_head, &tlvtype->_tlvtype_node);
   return tlvtype;
 }
 
@@ -333,15 +322,18 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
 void
 pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer, struct pbb_writer_tlvtype *tlvtype) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
-  if (--tlvtype->usage_counter) {
+  if (!list_is_node_added(&tlvtype->_tlvtype_node)) {
+    return;
+  }
+  if (--tlvtype->_usage_counter) {
     return;
   }
 
   _free_tlvtype_tlvs(writer, tlvtype);
-  list_remove(&tlvtype->tlvtype_node);
-  _lazy_free_message(writer, tlvtype->creator);
+  list_remove(&tlvtype->_tlvtype_node);
+  _lazy_free_message(writer, tlvtype->_creator);
   free(tlvtype);
 }
 
@@ -361,18 +353,18 @@ pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
   struct pbb_writer_message *msg;
 
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
   if ((msg = _get_message(writer, msgid)) == NULL) {
     return -1;
   }
 
-  cpr->creator = msg;
+  cpr->_creator = msg;
   cpr->priority = priority;
-  cpr->provider_node.key = &cpr->priority;
+  cpr->_provider_node.key = &cpr->priority;
 
-  avl_insert(&msg->provider_tree, &cpr->provider_node);
+  avl_insert(&msg->_provider_tree, &cpr->_provider_node);
   return 0;
 }
 
@@ -385,11 +377,14 @@ pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
 void
 pbb_writer_unregister_content_provider(struct pbb_writer *writer, struct pbb_writer_content_provider *cpr) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
-  avl_remove(&cpr->creator->provider_tree, &cpr->provider_node);
-  _lazy_free_message(writer, cpr->creator);
+  if (!avl_is_node_added(&cpr->_provider_node)) {
+    return;
+  }
+  avl_remove(&cpr->_creator->_provider_tree, &cpr->_provider_node);
+  _lazy_free_message(writer, cpr->_creator);
 }
 
 /**
@@ -409,7 +404,7 @@ pbb_writer_register_message(struct pbb_writer *writer, uint8_t msgid,
   struct pbb_writer_message *msg;
 
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
   msg = _get_message(writer, msgid);
@@ -418,13 +413,13 @@ pbb_writer_register_message(struct pbb_writer *writer, uint8_t msgid,
     return NULL;
   }
 
-  if (msg->registered) {
-    /* message was already registered */
+  if (msg->_registered) {
+    /* message was already _registered */
     return NULL;
   }
 
-  /* mark message as registered */
-  msg->registered = true;
+  /* mark message as _registered */
+  msg->_registered = true;
 
   /* set real address length and if_specific flag */
   msg->addr_len = addr_len;
@@ -437,19 +432,23 @@ pbb_writer_register_message(struct pbb_writer *writer, uint8_t msgid,
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param msg pointer to message object
+ * @param _msg pointer to message object
  */
 void
 pbb_writer_unregister_message(struct pbb_writer *writer, struct pbb_writer_message *msg) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
+
+  if (!avl_is_node_added(&msg->_msgcreator_node)) {
+    return;
+  }
 
   /* free addresses */
   _pbb_writer_free_addresses(writer, msg);
 
   /* mark message as unregistered */
-  msg->registered = false;
+  msg->_registered = false;
   _lazy_free_message(writer, msg);
 }
 
@@ -458,17 +457,17 @@ pbb_writer_unregister_message(struct pbb_writer *writer, struct pbb_writer_messa
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param pkt pointer to packet handler object
+ * @param _pkt pointer to packet handler object
  */
 void
 pbb_writer_register_pkthandler(struct pbb_writer *writer,
     struct pbb_writer_pkthandler *pkt) {
 
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
-  list_add_tail(&writer->pkthandlers, &pkt->node);
+  list_add_tail(&writer->_pkthandlers, &pkt->_pkthandle_node);
 }
 
 /**
@@ -476,42 +475,39 @@ pbb_writer_register_pkthandler(struct pbb_writer *writer,
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param pkt pointer to packet handler object
+ * @param _pkt pointer to packet handler object
  */
 void
 pbb_writer_unregister_pkthandler(struct pbb_writer *writer  __attribute__ ((unused)),
     struct pbb_writer_pkthandler *pkt) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
-
-  list_remove(&pkt->node);
+  if (list_is_node_added(&pkt->_pkthandle_node)) {
+    list_remove(&pkt->_pkthandle_node);
+  }
 }
 
 /**
  * Registers a new outgoing interface for the writer context
  * @param writer pointer to writer context
  * @param interf pointer to interface object
- * @param mtu maximum number of bytes in a packet on this interface
- * @return -1 if an error happened, 0 otherwise
  */
-int
+void
 pbb_writer_register_interface(struct pbb_writer *writer,
-    struct pbb_writer_interface *interf, size_t mtu) {
+    struct pbb_writer_interface *interf) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
-  if ((interf->pkt.buffer = calloc(1, mtu)) == NULL) {
-    return -1;
-  }
+  assert (interf->packet_buffer != NULL && interf->packet_size > 0);
 
-  _pbb_tlv_writer_init(&interf->pkt, mtu, mtu);
-  interf->is_flushed = true;
-  interf->mtu = mtu;
+  interf->_pkt.buffer = interf->packet_buffer;
+  _pbb_tlv_writer_init(&interf->_pkt, interf->packet_size, interf->packet_size);
 
-  list_add_tail(&writer->interfaces, &interf->node);
-  return 0;
+  interf->_is_flushed = true;
+
+  list_add_tail(&writer->_interfaces, &interf->_if_node);
 }
 
 /**
@@ -525,14 +521,13 @@ pbb_writer_unregister_interface(
     struct pbb_writer *writer  __attribute__ ((unused)),
     struct pbb_writer_interface *interf) {
 #if WRITER_STATE_MACHINE == true
-  assert(writer->int_state == PBB_WRITER_NONE);
+  assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
   /* remove interface from writer */
-  list_remove(&interf->node);
-
-  /* free allocated memory */
-  free(interf->pkt.buffer);
+  if (list_is_node_added(&interf->_if_node)) {
+    list_remove(&interf->_if_node);
+  }
 }
 
 /**
@@ -545,7 +540,7 @@ static struct pbb_writer_message *
 _get_message(struct pbb_writer *writer, uint8_t msgid) {
   struct pbb_writer_message *msg;
 
-  msg = avl_find_element(&writer->msgcreators, &msgid, msg, msgcreator_node);
+  msg = avl_find_element(&writer->_msgcreators, &msgid, msg, _msgcreator_node);
   if (msg != NULL) {
     return msg;
   }
@@ -556,8 +551,8 @@ _get_message(struct pbb_writer *writer, uint8_t msgid) {
 
   /* initialize key */
   msg->type = msgid;
-  msg->msgcreator_node.key = &msg->type;
-  if (avl_insert(&writer->msgcreators, &msg->msgcreator_node)) {
+  msg->_msgcreator_node.key = &msg->type;
+  if (avl_insert(&writer->_msgcreators, &msg->_msgcreator_node)) {
     free(msg);
     return NULL;
   }
@@ -566,12 +561,12 @@ _get_message(struct pbb_writer *writer, uint8_t msgid) {
   msg->addr_len = PBB_MAX_ADDRLEN;
 
   /* initialize list/tree heads */
-  avl_init(&msg->provider_tree, avl_comp_uint32, true, NULL);
+  avl_init(&msg->_provider_tree, avl_comp_uint32, true, NULL);
 
-  list_init_head(&msg->tlvtype_head);
+  list_init_head(&msg->_tlvtype_head);
 
-  avl_init(&msg->addr_tree, _msgaddr_avl_comp, false, msg);
-  list_init_head(&msg->addr_head);
+  avl_init(&msg->_addr_tree, _msgaddr_avl_comp, false, msg);
+  list_init_head(&msg->_addr_head);
   return msg;
 }
 
@@ -594,14 +589,14 @@ _msgaddr_avl_comp(const void *k1, const void *k2, void *ptr) {
 static void *
 _copy_addrtlv_value(struct pbb_writer *writer, void *value, size_t length) {
   void *ptr;
-  if (writer->addrtlv_used + length > writer->addrtlv_size) {
+  if (writer->_addrtlv_used + length > writer->addrtlv_size) {
     /* not enough memory for addrtlv values */
     return NULL;
   }
 
-  ptr = &writer->addrtlv_buffer[writer->addrtlv_used];
+  ptr = &writer->addrtlv_buffer[writer->_addrtlv_used];
   memcpy(ptr, value, length);
-  writer->addrtlv_used += length;
+  writer->_addrtlv_used += length;
 
   return ptr;
 }
@@ -615,9 +610,9 @@ static void
 _free_tlvtype_tlvs(struct pbb_writer *writer, struct pbb_writer_tlvtype *tlvtype) {
   struct pbb_writer_addrtlv *addrtlv, *ptr;
 
-  avl_remove_all_elements(&tlvtype->tlv_tree, addrtlv, tlv_node, ptr) {
+  avl_remove_all_elements(&tlvtype->_tlv_tree, addrtlv, tlv_node, ptr) {
     /* remove from address too */
-    avl_remove(&addrtlv->address->addrtlv_tree, &addrtlv->addrtlv_node);
+    avl_remove(&addrtlv->address->_addrtlv_tree, &addrtlv->addrtlv_node);
     writer->free_addrtlv_entry(addrtlv);
   }
 }
@@ -627,31 +622,31 @@ _pbb_writer_free_addresses(struct pbb_writer *writer, struct pbb_writer_message 
   struct pbb_writer_address *addr, *safe_addr;
   struct pbb_writer_addrtlv *addrtlv, *safe_addrtlv;
 
-  avl_remove_all_elements(&msg->addr_tree, addr, addr_tree_node, safe_addr) {
+  avl_remove_all_elements(&msg->_addr_tree, addr, _addr_tree_node, safe_addr) {
     /* remove from list too */
-    list_remove(&addr->addr_node);
+    list_remove(&addr->_addr_node);
 
-    avl_remove_all_elements(&addr->addrtlv_tree, addrtlv, addrtlv_node, safe_addrtlv) {
+    avl_remove_all_elements(&addr->_addrtlv_tree, addrtlv, addrtlv_node, safe_addrtlv) {
       /* remove from tlvtype too */
-      avl_remove(&addrtlv->tlvtype->tlv_tree, &addrtlv->tlv_node);
+      avl_remove(&addrtlv->tlvtype->_tlv_tree, &addrtlv->tlv_node);
       writer->free_addrtlv_entry(addrtlv);
     }
     writer->free_address_entry(addr);
   }
 
   /* allow overwriting of addrtlv-value buffer */
-  writer->addrtlv_used = 0;
+  writer->_addrtlv_used = 0;
 }
 /**
  * Free message object if not in use anymore
  * @param writer pointer to writer context
- * @param msg pointer to message object
+ * @param _msg pointer to message object
  */
 static void
 _lazy_free_message(struct pbb_writer *writer, struct pbb_writer_message *msg) {
-  if (!msg->registered && list_is_empty(&msg->addr_head)
-      && list_is_empty(&msg->tlvtype_head) && avl_is_empty(&msg->provider_tree)) {
-    avl_remove(&writer->msgcreators, &msg->msgcreator_node);
+  if (!msg->_registered && list_is_empty(&msg->_addr_head)
+      && list_is_empty(&msg->_tlvtype_head) && avl_is_empty(&msg->_provider_tree)) {
+    avl_remove(&writer->_msgcreators, &msg->_msgcreator_node);
     free(msg);
   }
 }
