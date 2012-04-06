@@ -42,7 +42,11 @@
 #ifndef INTERFACE_H_
 #define INTERFACE_H_
 
+#ifndef _WIN32
 #include <net/if.h>
+#else
+#define IF_NAMESIZE 16
+#endif
 
 #include "common/common_types.h"
 #include "common/avl.h"

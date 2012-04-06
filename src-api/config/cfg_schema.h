@@ -46,7 +46,7 @@ struct cfg_schema;
 struct cfg_schema_section;
 struct cfg_schema_entry;
 
-#ifndef OS_WIN32
+#ifndef _WIN32
 #include <arpa/inet.h>
 #include <netinet/if_ether.h>
 #include <netinet/ip.h>

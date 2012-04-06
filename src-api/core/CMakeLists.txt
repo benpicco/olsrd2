@@ -28,8 +28,6 @@ ENDIF(LINUX)
 
 IF(ANDROID)
     include_directories(src/android)
-    FILE(GLOB SRCS "android/*.c")    
-    set(OONF_SRCS ${OONF_SRCS} ${SRCS})
 ENDIF(ANDROID)
 
 ADD_LIBRARY(static_core STATIC ${OONF_CORE_SRCS})
@@ -42,8 +40,8 @@ IF(WIN32)
     TARGET_LINK_LIBRARIES(static_core static_common)
     TARGET_LINK_LIBRARIES(${OONF_LIBPREFIX}_core ${OONF_LIBPREFIX}_common)
 
-    TARGET_LINK_LIBRARIES(static_config static_regex)
-    TARGET_LINK_LIBRARIES(${OONF_LIBPREFIX}_config ${OONF_LIBPREFIX}_regex)
+    TARGET_LINK_LIBRARIES(static_core static_regex)
+    TARGET_LINK_LIBRARIES(${OONF_LIBPREFIX}_core ${OONF_LIBPREFIX}_regex)
 
     TARGET_LINK_LIBRARIES(static_core static_config)
     TARGET_LINK_LIBRARIES(${OONF_LIBPREFIX}_core ${OONF_LIBPREFIX}_config)

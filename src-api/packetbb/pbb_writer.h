@@ -435,8 +435,8 @@ EXPORT enum pbb_result pbb_writer_create_message(
 
 EXPORT enum pbb_result pbb_writer_forward_msg(struct pbb_writer *writer,
     uint8_t *msg, size_t len, pbb_writer_ifselector useIf, void *param);
-EXPORT void pbb_writer_flush(struct pbb_writer *writer,
-    struct pbb_writer_interface *interface, bool force_empty_packet);
+
+EXPORT void pbb_writer_flush(struct pbb_writer *, struct pbb_writer_interface *, bool);
 
 EXPORT void pbb_writer_init(struct pbb_writer *);
 EXPORT void pbb_writer_cleanup(struct pbb_writer *writer);

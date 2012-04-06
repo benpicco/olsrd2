@@ -72,16 +72,14 @@
 #define OS_NET_SPECIFIC_INCLUDE
 #include "os_helper.h"
 
-#ifdef OS_LINUX
+#if defined(__linux__)
 #include "os_linux/os_net_linux.h"
-#endif
-
-#ifdef OS_BSD
+#elif defined (BSD)
 #include "os_bsd/os_net_bsd.h"
-#endif
-
-#ifdef OS_WIN32
+#elif defined (_WIN32)
 #include "os_win32/os_net_win32.h"
+#else
+#error "Unknown operation system"
 #endif
 
 #undef OS_NET_SPECIFIC_INCLUDE
