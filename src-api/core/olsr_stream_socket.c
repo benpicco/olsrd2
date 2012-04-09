@@ -665,7 +665,7 @@ _cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
   /* send data if necessary */
   if (session->state != STREAM_SESSION_CLEANUP && abuf_getlen(&session->out) > 0) {
     if (event_write) {
-      len = os_sendto(fd, abuf_getptr(&session->out), abuf_getlen(&session->out), 0);
+      len = os_sendto(fd, abuf_getptr(&session->out), abuf_getlen(&session->out), NULL);
 
       if (len > 0) {
         OLSR_DEBUG(LOG_SOCKET_STREAM, "  send returned %d\n", len);
