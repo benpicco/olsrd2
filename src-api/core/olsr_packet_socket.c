@@ -324,7 +324,7 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
     pkt += 2;
 
     /* try to send packet */
-    result = sendto(fd, data, length, 0, &skt->std, sizeof(*skt));
+    result = os_sendto(fd, data, length, skt);
     if (result < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
       /* try again later */
       return;
