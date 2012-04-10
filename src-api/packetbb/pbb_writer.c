@@ -133,7 +133,7 @@ pbb_writer_cleanup(struct pbb_writer *writer) {
 
     /* remove all message content providers */
     avl_for_each_element_safe(&msg->_provider_tree, provider, _provider_node, safe_prv) {
-      pbb_writer_unregister_content_provider(writer, provider);
+      pbb_writer_unregister_content_provider(writer, provider, NULL, 0);
     }
 
     /* remove all _registered address tlvs */
@@ -380,13 +380,23 @@ pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
  * @param cpr pointer to message context provider object
  */
 void
-pbb_writer_unregister_content_provider(struct pbb_writer *writer, struct pbb_writer_content_provider *cpr) {
+pbb_writer_unregister_content_provider(
+    struct pbb_writer *writer, struct pbb_writer_content_provider *cpr,
+    struct pbb_writer_addrtlv_block *addrtlvs, size_t addrtlvs_count) {
+  size_t i;
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
   if (!avl_is_node_added(&cpr->_provider_node)) {
     return;
+  }
+
+  for (i=0; i<addrtlvs_count; i++) {
+    if (addrtlvs[i]._tlvtype) {
+      pbb_writer_unregister_addrtlvtype(writer, addrtlvs[i]._tlvtype);
+      addrtlvs[i]._tlvtype = NULL;
+    }
   }
   avl_remove(&cpr->_creator->_provider_tree, &cpr->_provider_node);
   _lazy_free_message(writer, cpr->_creator);
