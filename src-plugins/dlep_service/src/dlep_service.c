@@ -205,16 +205,32 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
 };
 
 /* DLEP writer data */
-static struct pbb_writer _dlep_writer;
+static uint8_t _msg_buffer[1500];
+static uint8_t _msg_addrtlvs[5000];
+
+static struct pbb_writer _dlep_writer = {
+  .msg_buffer = _msg_buffer,
+  .msg_size = sizeof(_msg_buffer),
+  .addrtlv_buffer = _msg_addrtlvs,
+  .addrtlv_size = sizeof(_msg_addrtlvs),
+};
 
 static struct pbb_writer_message *_dlep_message = NULL;
 static struct pbb_writer_tlvtype *_dlep_addrprv_curent_datarate = NULL;
 
 static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
+  .msg_type = DLEP_MESSAGE_ID,
   .addMessageTLVs = _cb_ifdiscovery_addMessageTLVs,
 };
 
+static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
+  { .type = DLEP_ADDRTLV_CUR_RATE },
+};
+
+static uint8_t _packet_buffer[256];
 static struct pbb_writer_interface _dlep_multicast = {
+  .packet_buffer = _packet_buffer,
+  .packet_size = sizeof(_packet_buffer),
   .sendPacket =_cb_sendMulticast,
 };
 
@@ -282,40 +298,24 @@ _cb_plugin_unload(void) {
  */
 static int
 _cb_plugin_enable(void) {
-  if (pbb_writer_init(&_dlep_writer, 1280, 1280)) {
-    OLSR_WARN(LOG_PLUGINS, "Could not init pbb writer");
-    return -1;
-  }
-
-  if (pbb_writer_register_interface(&_dlep_writer, &_dlep_multicast, 1280)) {
-    OLSR_WARN(LOG_PLUGINS, "Could not register DLEP interface");
-    pbb_writer_cleanup(&_dlep_writer);
-    return -1;
-  }
+  pbb_writer_init(&_dlep_writer);
 
   _dlep_message = pbb_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
   if (_dlep_message == NULL) {
     OLSR_WARN(LOG_PLUGINS, "Could not register DLEP message");
-    pbb_writer_unregister_interface(&_dlep_writer, &_dlep_multicast);
     pbb_writer_cleanup(&_dlep_writer);
     return -1;
   }
 
-  /* cannot fail because we allocated the message above */
-  pbb_writer_register_msgcontentprovider(&_dlep_writer,
-      &_dlep_msgcontent_provider, DLEP_MESSAGE_ID, 0);
-
-  _dlep_addrprv_curent_datarate =
-      pbb_writer_register_addrtlvtype(&_dlep_writer,
-          DLEP_MESSAGE_ID, DLEP_ADDRTLV_CUR_RATE, 0);
-  if (_dlep_addrprv_curent_datarate == NULL) {
-    OLSR_WARN(LOG_PLUGINS, "Count not register DLEP addrtlv");
-    pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider);
+  if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
+      &_dlep_msgcontent_provider, _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs))) {
+    OLSR_WARN(LOG_PLUGINS, "Count not register DLEP msg contentprovider");
     pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
-    pbb_writer_unregister_interface(&_dlep_writer, &_dlep_multicast);
     pbb_writer_cleanup(&_dlep_writer);
     return -1;
   }
+
+  pbb_writer_register_interface(&_dlep_writer, &_dlep_multicast);
 
   avl_init(&_session_tree, netaddr_socket_avlcmp, false, NULL);
 
