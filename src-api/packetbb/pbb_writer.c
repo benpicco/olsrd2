@@ -49,6 +49,8 @@
 #include "packetbb/pbb_writer.h"
 #include "packetbb/pbb_api_config.h"
 
+static struct pbb_writer_tlvtype *_register_addrtlvtype(
+    struct pbb_writer_message *msg, uint8_t tlv, uint8_t tlvext);
 static int _msgaddr_avl_comp(const void *k1, const void *k2, void *ptr);
 static void *_copy_addrtlv_value(struct pbb_writer *writer, void *value, size_t length);
 static void _free_tlvtype_tlvs(struct pbb_writer *writer, struct pbb_writer_tlvtype *tlvtype);
@@ -56,6 +58,11 @@ static void _lazy_free_message(struct pbb_writer *writer, struct pbb_writer_mess
 static struct pbb_writer_message *_get_message(struct pbb_writer *writer, uint8_t msgid);
 static struct pbb_writer_address *_malloc_address_entry(void);
 static struct pbb_writer_addrtlv *_malloc_addrtlv_entry(void);
+
+static INLINE int
+_get_fulltype(uint8_t type, uint8_t exttype) {
+  return type * 256 + exttype;
+}
 
 /**
  * Creates a new packetbb writer context
@@ -284,31 +291,10 @@ pbb_writer_register_addrtlvtype(struct pbb_writer *writer, uint8_t msgtype, uint
     return NULL;
   }
 
-  /* Look for existing addrtlv */
-  list_for_each_element(&msg->_tlvtype_head, tlvtype, _tlvtype_node) {
-    if (tlvtype->type == tlv && tlvtype->exttype == tlvext) {
-      tlvtype->_usage_counter++;
-      return tlvtype;
-    }
-  }
-
-  /* create a new addrtlv entry */
-  if ((tlvtype = calloc(1, sizeof(*tlvtype))) == NULL) {
+  tlvtype = _register_addrtlvtype(msg, tlv, tlvext);
+  if (!tlvtype) {
     _lazy_free_message(writer, msg);
-    return NULL;
   }
-
-  /* initialize addrtlv fields */
-  tlvtype->type = tlv;
-  tlvtype->exttype = tlvext;
-  tlvtype->_creator = msg;
-  tlvtype->_usage_counter++;
-  tlvtype->_full_type = tlv*256 + tlvext;
-
-  avl_init(&tlvtype->_tlv_tree, avl_comp_uint32, true, false);
-
-  /* add to message _creator list */
-  list_add_tail(&msg->_tlvtype_head, &tlvtype->_tlvtype_node);
   return tlvtype;
 }
 
@@ -343,25 +329,44 @@ pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer, struct pbb_writer_t
  *
  * @param writer pointer to writer context
  * @param cpr pointer to message content provider object
- * @param msgid message type
- * @param priority defines the order the content providers will be called
  * @return -1 if an error happened, 0 otherwise
  */
 int
 pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
-    struct pbb_writer_content_provider *cpr, uint8_t msgid, int priority) {
+    struct pbb_writer_content_provider *cpr,
+    struct pbb_writer_addrtlv_block *addrtlvs, size_t addrtlv_count) {
   struct pbb_writer_message *msg;
+  size_t i;
 
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
+  /* first allocate the message if necessary */
+  if ((msg = _get_message(writer, cpr->msg_type)) == NULL) {
+    return -1;
+  }
 
-  if ((msg = _get_message(writer, msgid)) == NULL) {
+  for (i=0; i<addrtlv_count; i++) {
+    addrtlvs[i]._tlvtype = _register_addrtlvtype(msg, addrtlvs[i].type, addrtlvs[i].exttype);
+    if (addrtlvs[i]._tlvtype == NULL) {
+      break;
+    }
+  }
+
+  if (addrtlv_count > 0 && i < addrtlv_count) {
+    /* allocation failed */
+    while (i > 0) {
+      i--;
+
+      pbb_writer_unregister_addrtlvtype(writer, addrtlvs[i]._tlvtype);
+      addrtlvs[i]._tlvtype = NULL;
+    }
+
+    _lazy_free_message(writer, msg);
     return -1;
   }
 
   cpr->_creator = msg;
-  cpr->priority = priority;
   cpr->_provider_node.key = &cpr->priority;
 
   avl_insert(&msg->_provider_tree, &cpr->_provider_node);
@@ -568,6 +573,48 @@ _get_message(struct pbb_writer *writer, uint8_t msgid) {
   avl_init(&msg->_addr_tree, _msgaddr_avl_comp, false, msg);
   list_init_head(&msg->_addr_head);
   return msg;
+}
+
+/**
+ * Register an tlv type for addressblocks of a certain message.
+ * This function must NOT be called from the pbb writer callbacks.
+ *
+ * @param writer pointer to writer context
+ * @param msg pointer to allocated pbb_writer_message
+ * @param tlv tlvtype of this tlv
+ * @param tlvext extended tlv type, 0 if no extended type necessary
+ * @return pointer to tlvtype object, NULL if an error happened
+ */
+static struct pbb_writer_tlvtype *
+_register_addrtlvtype(struct pbb_writer_message *msg,
+    uint8_t tlv, uint8_t tlvext) {
+  struct pbb_writer_tlvtype *tlvtype;
+
+  /* Look for existing addrtlv */
+  list_for_each_element(&msg->_tlvtype_head, tlvtype, _tlvtype_node) {
+    if (tlvtype->type == tlv && tlvtype->exttype == tlvext) {
+      tlvtype->_usage_counter++;
+      return tlvtype;
+    }
+  }
+
+  /* create a new addrtlv entry */
+  if ((tlvtype = calloc(1, sizeof(*tlvtype))) == NULL) {
+    return NULL;
+  }
+
+  /* initialize addrtlv fields */
+  tlvtype->type = tlv;
+  tlvtype->exttype = tlvext;
+  tlvtype->_creator = msg;
+  tlvtype->_usage_counter++;
+  tlvtype->_full_type = _get_fulltype(tlv, tlvext);
+
+  avl_init(&tlvtype->_tlv_tree, avl_comp_uint32, true, false);
+
+  /* add to message _creator list */
+  list_add_tail(&msg->_tlvtype_head, &tlvtype->_tlvtype_node);
+  return tlvtype;
 }
 
 /**

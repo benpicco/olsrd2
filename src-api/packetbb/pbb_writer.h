@@ -141,7 +141,7 @@ struct pbb_writer_address {
 };
 
 /**
- * This struct is preallocated for each tlvtype that can be added
+ * This INTERNAL struct is preallocated for each tlvtype that can be added
  * to an address of a certain message type.
  */
 struct pbb_writer_tlvtype {
@@ -172,12 +172,26 @@ struct pbb_writer_tlvtype {
 };
 
 /**
+ * Struct to define a list of address TLVs that should be preallocated
+ * for a certain message type
+ */
+struct pbb_writer_addrtlv_block {
+  struct pbb_writer_tlvtype *_tlvtype;
+
+  uint8_t type;
+  uint8_t exttype;
+};
+
+/**
  * This struct represents a single content provider of
  * tlvs for a message context.
  */
 struct pbb_writer_content_provider {
   /* priority of content provider */
   int priority;
+
+  /* message type for this content provider */
+  uint8_t msg_type;
 
   /* callbacks for adding tlvs and addresses to a message */
   void (*addMessageTLVs)(struct pbb_writer *,
@@ -403,8 +417,9 @@ EXPORT struct pbb_writer_tlvtype *pbb_writer_register_addrtlvtype(
 EXPORT void pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer,
     struct pbb_writer_tlvtype *tlvtype);
 
-EXPORT int pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
-    struct pbb_writer_content_provider *cpr, uint8_t msgid, int priority);
+EXPORT int pbb_writer_register_msgcontentprovider(
+    struct pbb_writer *writer, struct pbb_writer_content_provider *cpr,
+    struct pbb_writer_addrtlv_block *addrtlvs, size_t addrtlv_count);
 EXPORT void pbb_writer_unregister_content_provider(struct pbb_writer *writer,
     struct pbb_writer_content_provider *cpr);
 
