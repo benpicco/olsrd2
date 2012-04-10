@@ -420,8 +420,9 @@ EXPORT void pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer,
 EXPORT int pbb_writer_register_msgcontentprovider(
     struct pbb_writer *writer, struct pbb_writer_content_provider *cpr,
     struct pbb_writer_addrtlv_block *addrtlvs, size_t addrtlv_count);
-EXPORT void pbb_writer_unregister_content_provider(struct pbb_writer *writer,
-    struct pbb_writer_content_provider *cpr);
+EXPORT void pbb_writer_unregister_content_provider(
+    struct pbb_writer *writer, struct pbb_writer_content_provider *cpr,
+    struct pbb_writer_addrtlv_block *addrtlvs, size_t addrtlv_count);
 
 EXPORT struct pbb_writer_message *pbb_writer_register_message(
     struct pbb_writer *writer, uint8_t msgid, bool if_specific, uint8_t addr_len);
