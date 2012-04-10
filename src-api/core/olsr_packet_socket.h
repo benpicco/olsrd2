@@ -91,8 +91,10 @@ EXPORT int olsr_packet_add(struct olsr_packet_socket *,
     union netaddr_socket *local);
 EXPORT void olsr_packet_remove(struct olsr_packet_socket *, bool);
 
-EXPORT int olsr_packet_send(struct olsr_packet_socket *, union netaddr_socket *remove,
-    const void *data, size_t length);
+EXPORT int olsr_packet_send(struct olsr_packet_socket *,
+    union netaddr_socket *remote, const void *data, size_t length);
+EXPORT int olsr_packet_send_managed(struct olsr_packet_managed *,
+    union netaddr_socket *remote, const void *data, size_t length);
 
 EXPORT void olsr_packet_add_managed(struct olsr_packet_managed *);
 EXPORT int olsr_packet_apply_managed(struct olsr_packet_managed *,

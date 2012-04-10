@@ -183,4 +183,12 @@ netaddr_socket_cmp(const union netaddr_socket *s1, const union netaddr_socket *s
   return memcmp(s1, s2, sizeof(*s1));
 }
 
+/**
+ * @param s pointer to netaddr socket
+ * @return address family of socket
+ */
+static INLINE sa_family_t
+netaddr_socket_get_addressfamily(const union netaddr_socket *s) {
+  return s->std.sa_family;
+}
 #endif /* NETADDR_H_ */

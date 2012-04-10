@@ -189,6 +189,10 @@ olsr_packet_send(struct olsr_packet_socket *pktsocket, union netaddr_socket *rem
   return 0;
 }
 
+/**
+ * Initialize a new managed packet socket
+ * @param managed pointer to packet socket
+ */
 void
 olsr_packet_add_managed(struct olsr_packet_managed *managed) {
   if (managed->config.input_buffer_length == 0) {
@@ -197,6 +201,11 @@ olsr_packet_add_managed(struct olsr_packet_managed *managed) {
   }
 }
 
+/**
+ * Cleanup an initialized managed packet socket
+ * @param managed pointer to packet socket
+ * @param forced true if socket should be closed instantly
+ */
 void
 olsr_packet_remove_managed(struct olsr_packet_managed *managed, bool forced) {
   olsr_packet_remove(&managed->socket_v4, forced);
@@ -205,6 +214,13 @@ olsr_packet_remove_managed(struct olsr_packet_managed *managed, bool forced) {
   olsr_acl_remove(&managed->acl);
 }
 
+/**
+ * Apply a new configuration to a managed socket. This might close and
+ * reopen sockets because of changed binding IPs or ports.
+ * @param managed pointer to managed packet socket
+ * @param config pointer to new configuration
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsr_packet_apply_managed(struct olsr_packet_managed *managed,
     struct olsr_packet_managed_config *config) {
@@ -230,6 +246,27 @@ olsr_packet_apply_managed(struct olsr_packet_managed *managed,
     olsr_packet_remove(&managed->socket_v6, true);
   }
   return 0;
+}
+
+/**
+ * Send a packet out over one of the managed sockets, depending on the
+ * address family type of the remote address
+ * @param managed pointer to managed packet socket
+ * @param remote pointer to remote socket
+ * @param data pointer to data to send
+ * @param length length of data
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+olsr_packet_send_managed(struct olsr_packet_managed *managed,
+    union netaddr_socket *remote, const void *data, size_t length) {
+  if (config_global.ipv4 && netaddr_socket_get_addressfamily(remote) == AF_INET) {
+    return olsr_packet_send(&managed->socket_v4, remote, data, length);
+  }
+  if (config_global.ipv6 && netaddr_socket_get_addressfamily(remote) == AF_INET6) {
+    return olsr_packet_send(&managed->socket_v6, remote, data, length);
+  }
+  return -1;
 }
 
 /**
