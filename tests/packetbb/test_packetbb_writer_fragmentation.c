@@ -46,8 +46,12 @@
 #include "packetbb/pbb_writer.h"
 #include "../cunit.h"
 
+#define MSG_TYPE 1
+
 static void write_packet(struct pbb_writer *,
     struct pbb_writer_interface *, void *, size_t);
+static void addAddresses(struct pbb_writer *wr,
+    struct pbb_writer_content_provider *provider);
 
 static uint8_t msg_buffer[128];
 static uint8_t msg_addrtlvs[1000];
@@ -59,7 +63,14 @@ static struct pbb_writer writer = {
   .addrtlv_size = sizeof(msg_addrtlvs),
 };
 
-static struct pbb_writer_content_provider cpr;
+static struct pbb_writer_content_provider cpr = {
+  .msg_type = MSG_TYPE,
+  .addAddresses = addAddresses,
+};
+
+static struct pbb_writer_addrtlv_block addrtlvs[] = {
+  { .type = 3 },
+};
 
 static uint8_t packet_buffer_if1[128];
 static struct pbb_writer_interface small_if = {
@@ -74,8 +85,6 @@ static struct pbb_writer_interface large_if = {
   .packet_size = sizeof(packet_buffer_if2),
   .sendPacket = write_packet,
 };
-
-static struct pbb_writer_tlvtype *tlvtype;
 
 static int tlvcount, fragments, packets[2];
 
@@ -109,7 +118,7 @@ static void addAddresses(struct pbb_writer *wr,
     }
 
     addr = pbb_writer_add_address(wr, provider->_creator, ip, 32);
-    pbb_writer_add_addrtlv(wr, addr, tlvtype, tlv_value, tlv_value_size, false);
+    pbb_writer_add_addrtlv(wr, addr, addrtlvs[0]._tlvtype, tlv_value, tlv_value_size, false);
 
     if (tlv_value) {
       tlv_value[tlv_value_size-1] = (tlv_value_size-1) & 255;
@@ -251,14 +260,11 @@ int main(int argc __attribute__ ((unused)), char **argv __attribute__ ((unused))
   pbb_writer_register_interface(&writer, &small_if);
   pbb_writer_register_interface(&writer, &large_if);
 
-  msg = pbb_writer_register_message(&writer, 1, false, 4);
+  msg = pbb_writer_register_message(&writer, MSG_TYPE, false, 4);
   msg->addMessageHeader = addMessageHeader;
   msg->finishMessageHeader = finishMessageHeader;
 
-  pbb_writer_register_msgcontentprovider(&writer, &cpr, 1, 1);
-  cpr.addAddresses = addAddresses;
-
-  tlvtype = pbb_writer_register_addrtlvtype(&writer, 1, 3, 0);
+  pbb_writer_register_msgcontentprovider(&writer, &cpr, addrtlvs, ARRAYSIZE(addrtlvs));
 
   BEGIN_TESTING();
 
