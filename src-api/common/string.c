@@ -363,6 +363,13 @@ strarray_cmp(const struct strarray *a1, const struct strarray *a2) {
   int result;
   size_t min_len;
 
+  if (a1 == NULL || a1->value == NULL) {
+    return (a2 == NULL || a2->value == NULL) ? 0 : -1;
+  }
+  if (a2 == NULL || a2->value == NULL) {
+    return 1;
+  }
+
   if (a1->length > a2->length) {
     min_len = a2->length;
   }
