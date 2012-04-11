@@ -102,6 +102,7 @@ struct _dlep_config {
   char radio_if[IF_NAMESIZE];
 
   struct olsr_packet_managed_config socket;
+  struct netaddr multicast;
 
   char peer_type[81];
 
@@ -124,7 +125,7 @@ static enum pbb_result _cb_parse_dlep_message_failed(
 static void _cb_receive_dlep(struct olsr_packet_socket *,
       union netaddr_socket *from, size_t length);
 
-static void _cb_ifdiscovery_addMessageTLVs(struct pbb_writer *,
+static void _cb_addMessageTLVs(struct pbb_writer *,
     struct pbb_writer_content_provider *);
 
 static void _cb_sendMulticast(struct pbb_writer *,
@@ -170,6 +171,9 @@ static struct cfg_schema_entry _dlep_entries[] = {
   CFG_MAP_INT_MINMAX(_dlep_config, socket.port, "port", "2001",
       "Network port for dlep interface", 1, 65535),
 
+  CFG_MAP_NETADDR_V46(_dlep_config, multicast, "multicast", "255.255.255.255",
+      "Default IP for multicast messages", false),
+
   CFG_MAP_STRING_ARRAY(_dlep_config, peer_type, "peer_type", "",
     "String for identifying this DLEP service", 80),
 
@@ -208,6 +212,9 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
 static uint8_t _msg_buffer[1500];
 static uint8_t _msg_addrtlvs[5000];
 
+union netaddr_socket _multicast_destination;
+static enum dlep_orders _msg_order;
+
 static struct pbb_writer _dlep_writer = {
   .msg_buffer = _msg_buffer,
   .msg_size = sizeof(_msg_buffer),
@@ -216,11 +223,10 @@ static struct pbb_writer _dlep_writer = {
 };
 
 static struct pbb_writer_message *_dlep_message = NULL;
-static struct pbb_writer_tlvtype *_dlep_addrprv_curent_datarate = NULL;
 
 static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
   .msg_type = DLEP_MESSAGE_ID,
-  .addMessageTLVs = _cb_ifdiscovery_addMessageTLVs,
+  .addMessageTLVs = _cb_addMessageTLVs,
 };
 
 static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
@@ -341,9 +347,10 @@ _cb_plugin_disable(void) {
   pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
   pbb_reader_cleanup(&_dlep_reader);
 
-  pbb_writer_unregister_addrtlvtype(&_dlep_writer, _dlep_addrprv_curent_datarate);
-  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider);
+  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
+      _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs));
   pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
+  pbb_writer_cleanup(&_dlep_writer);
   return 0;
 }
 
@@ -485,18 +492,31 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
 }
 
 static void
-_cb_ifdiscovery_addMessageTLVs(struct pbb_writer *writer,
-    struct pbb_writer_content_provider *prv __attribute__((unused))) {
+_add_ifdiscovery_msgtlvs(void) {
   uint8_t encoded_vtime = 0;
 
-  pbb_writer_add_messagetlv(writer,
+  // TODO: calculate encoded vtime
+  pbb_writer_add_messagetlv(&_dlep_writer,
       DLEP_TLV_ORDER, DLEP_ORDER_INTERFACE_DISCOVERY, NULL, 0);
-  pbb_writer_add_messagetlv(writer,
+  pbb_writer_add_messagetlv(&_dlep_writer,
       MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 
   if (_config.peer_type[0]) {
-    pbb_writer_add_messagetlv(writer, DLEP_TLV_PEER_TYPE, 0,
+    pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
         _config.peer_type, strlen(_config.peer_type));
+  }
+}
+
+static void
+_cb_addMessageTLVs(struct pbb_writer *writer __attribute__((unused)),
+    struct pbb_writer_content_provider *prv __attribute__((unused))) {
+  switch (_msg_order) {
+    case DLEP_ORDER_INTERFACE_DISCOVERY:
+      _add_ifdiscovery_msgtlvs();
+      break;
+    default:
+      OLSR_WARN(LOG_PLUGINS, "DLEP Message order %d not implemented yet", _msg_order);
+      break;
   }
 }
 
@@ -511,20 +531,23 @@ _cb_dlep_router_timerout(void *ptr) {
 
 static void
 _cb_interface_discovery(void *ptr __attribute__((unused))) {
-
+  _msg_order = DLEP_ORDER_INTERFACE_DISCOVERY;
+  pbb_writer_create_message_allif(&_dlep_writer, DLEP_MESSAGE_ID);
 }
 
 static void
 _cb_neighbor_update(void *ptr __attribute__((unused))) {
-
+  _msg_order = DLEP_ORDER_NEIGHBOR_UPDATE;
+  pbb_writer_create_message_allif(&_dlep_writer, DLEP_MESSAGE_ID);
 }
 
 static void
 _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf __attribute__((unused)),
-    void *ptr __attribute__((unused)),
-    size_t len __attribute__((unused))) {
-
+    void *ptr, size_t len) {
+  if (olsr_packet_send_managed(&_dlep_socket, &_multicast_destination, ptr, len)) {
+    OLSR_WARN(LOG_PLUGINS, "Could not sent DLEP packet to socket");
+  }
 }
 
 /**
@@ -540,6 +563,8 @@ _cb_config_changed(void) {
 
   /* configure socket */
   olsr_packet_apply_managed(&_dlep_socket, &_config.socket);
+
+  netaddr_socket_init(&_multicast_destination, &_config.multicast, _config.socket.port);
 
   /* reconfigure timers */
   olsr_timer_set(&_tentry_interface_discovery, _config.discovery_interval);

@@ -85,6 +85,7 @@ static int _cb_plugin_disable(void);
 
 static void _cb_config_changed(void);
 
+static void _send_genl_getfamily(void);
 static void _cb_nl_message(struct nlmsghdr *hdr);
 static void _cb_transmission_event(void *);
 
@@ -209,6 +210,8 @@ _cb_plugin_enable(void) {
 
   olsr_timer_add(&_transmission_timer_info);
   olsr_telnet_add(&_telnet_cmd);
+
+  _send_genl_getfamily();
   return 0;
 }
 
@@ -290,6 +293,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   struct olsr_layer2_neighbor *neigh;
   struct netaddr mac;
   unsigned if_index;
+  char if_name[IF_NAMESIZE];
 
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
@@ -310,7 +314,10 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   netaddr_from_binary(&mac, nla_data(tb[NL80211_ATTR_MAC]), 6, AF_MAC48);
   if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
-  if_data = olsr_interface_get_data(if_index);
+  if (if_indextoname(if_index, if_name) == NULL) {
+    return -1;
+  }
+  if_data = olsr_interface_get_data(if_name);
   if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
     return -1;
   }
@@ -433,6 +440,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   struct olsr_layer2_network *net;
   struct netaddr mac;
   unsigned if_index;
+  char if_name[IF_NAMESIZE];
 
   if (nlmsg_parse(msg, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
@@ -463,7 +471,10 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   netaddr_from_binary(&mac, nla_data(bss[NL80211_BSS_BSSID]), 6, AF_MAC48);
   if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
-  if_data = olsr_interface_get_data(if_index);
+  if (if_indextoname(if_index, if_name) == NULL) {
+    return -1;
+  }
+  if_data = olsr_interface_get_data(if_name);
   if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
     return -1;
   }
@@ -614,6 +625,7 @@ _cb_nl_message(struct nlmsghdr *hdr) {
     _parse_cmd_newfamily(hdr);
     return;
   }
+
   if (hdr->nlmsg_type == _nl80211_id) {
     if (gen_hdr->cmd == NL80211_CMD_NEW_STATION) {
       _parse_cmd_new_station(hdr);
@@ -694,21 +706,28 @@ _send_nl80211_get_scan_dump(int if_idx) {
 static void
 _cb_transmission_event(void *ptr __attribute__((unused))) {
   static bool station_dump = false;
+  struct olsr_interface_data *data;
   char *interf;
-  int idx;
 
   if (_nl80211_id == -1) {
-    _send_genl_getfamily();
     return;
   }
 
   FOR_ALL_STRINGS(&_config.interf, interf) {
-    idx = if_nametoindex(interf);
+    OLSR_DEBUG(LOG_PLUGINS, "NL80211 Query: %s", interf);
+
+    if ((data = olsr_interface_get_data(interf)) == NULL) {
+      continue;
+    }
+    if (!data->up) {
+      continue;
+    }
+
     if (station_dump) {
-      _send_nl80211_get_station_dump(idx);
+      _send_nl80211_get_station_dump(data->index);
     }
     else {
-      _send_nl80211_get_scan_dump(idx);
+      _send_nl80211_get_scan_dump(data->index);
     }
   }
 
