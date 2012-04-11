@@ -112,18 +112,21 @@ os_net_cleanup(void) {
  */
 int
 os_net_update_interface(struct olsr_interface_data *data,
-    uint32_t if_index) {
+    const char *name) {
   struct ifaddrs *ifaddr, *ifa;
   union netaddr_socket *sock;
   struct netaddr addr;
   struct ifreq ifr;
 
   memset(data, 0, sizeof(*data));
-
-  data->index = if_index;
+  strscpy(data->name, name, sizeof(data->name));
 
   /* get interface index */
-  if_indextoname(if_index, data->name);
+  data->index = if_nametoindex(name);
+  if (data->index == 0) {
+    /* interface is not there at the moment */
+    return 0;
+  }
 
   if (getifaddrs(&ifaddr) == -1) {
     OLSR_WARN(LOG_OS_NET, "Cannot get interface addresses: %s (%d)",

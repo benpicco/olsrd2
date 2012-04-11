@@ -470,7 +470,7 @@ netlink_rcv_retry:
   len = (size_t) ret;
   for (nh = nl->in; NLMSG_OK (nh, len); nh = NLMSG_NEXT (nh, len)) {
     OLSR_DEBUG(LOG_OS_SYSTEM,
-        "Netlink message received: type %d\n", nl->in->nlmsg_type);
+        "Netlink message received: type %d\n", nh->nlmsg_type);
 
     switch (nh->nlmsg_type) {
       case NLMSG_NOOP:
@@ -520,7 +520,7 @@ _handle_rtnetlink(struct nlmsghdr *hdr) {
     }
 
     OLSR_DEBUG(LOG_OS_SYSTEM, "Linkstatus of interface '%s' changed", if_name);
-    olsr_interface_trigger_change(ifi->ifi_index);
+    olsr_interface_trigger_change(if_name, (ifi->ifi_flags & IFF_UP) == 0);
   }
 
   else if (hdr->nlmsg_type == RTM_NEWADDR || hdr->nlmsg_type == RTM_DELADDR) {
@@ -533,7 +533,7 @@ _handle_rtnetlink(struct nlmsghdr *hdr) {
     }
 
     OLSR_DEBUG(LOG_OS_SYSTEM, "Address of interface '%s' changed", if_name);
-    olsr_interface_trigger_change(ifa->ifa_index);
+    olsr_interface_trigger_change(if_name, false);
   }
 }
 
