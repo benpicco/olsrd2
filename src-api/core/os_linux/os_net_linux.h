@@ -42,21 +42,41 @@
 #ifndef OS_NET_LINUX_H_
 #define OS_NET_LINUX_H_
 
-#ifndef OS_NET_SPECIFIC_INCLUDE
-#error "DO not include this file directly, always use 'os_net.h'"
-#endif
+/**
+ * Close a file descriptor
+ * @param fd filedescriptor
+ */
+static INLINE int
+os_close(int fd) {
+  return close(fd);
+}
 
-#include "os_helper.h"
+/**
+ * polls a number of sockets for network events. If no even happens or
+ * already has happened, function will return after timeout time.
+ * see 'man select' for more details
+ * @param num
+ * @param r
+ * @param w
+ * @param e
+ * @param timeout
+ * @return
+ */
+static INLINE int
+os_select(int num, fd_set *r,fd_set *w,fd_set *e, struct timeval *timeout) {
+  return select(num, r, w, e, timeout);
+}
 
-/* Linux os_net runs on "all default" */
-#define OS_NET_GETSOCKET    OS_GENERIC
-#define OS_NET_CONFIGSOCKET OS_GENERIC
-#define OS_NET_JOINMCAST    OS_GENERIC
-#define OS_NET_SETNONBLOCK  OS_GENERIC
-#define OS_NET_CLOSE        OS_GENERIC
-#define OS_NET_SELECT       OS_GENERIC
-#define OS_NET_RECVFROM     OS_GENERIC
-#define OS_NET SENDTO       OS_GENERIC
+
+/**
+ * Binds a socket to a certain interface
+ * @param sock filedescriptor of socket
+ * @param interf name of interface
+ * @return -1 if an error happened, 0 otherwise
+ */
+static INLINE int
+os_net_bindto_interface(int sock, struct olsr_interface_data *data) {
+  return setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, data->name, strlen(data->name) + 1);
+}
 
 #endif /* OS_NET_LINUX_H_ */
-

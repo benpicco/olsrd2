@@ -1,6 +1,7 @@
+
 /*
- * PacketBB handler library (see RFC 5444)
- * Copyright (c) 2010 Henning Rogge <hrogge@googlemail.com>
+ * The olsr.org Optimized Link-State Routing daemon(olsrd)
+ * Copyright (c) 2004-2012, the olsr.org team - see HISTORY file
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,35 +31,29 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Visit http://www.olsr.org/git for more information.
+ * Visit http://www.olsr.org for more information.
  *
  * If you find this software useful feel free to make a donation
  * to the project. For more information see the website or contact
  * the copyright holders.
+ *
  */
 
-#ifndef PBB_TLV_WRITER_H_
-#define PBB_TLV_WRITER_H_
+#include <sys/socket.h>
 
 #include "common/common_types.h"
+#include "common/netaddr.h"
+#include "os_net.h"
 
-struct pbb_tlv_writer_data {
-  uint8_t *buffer;
-  size_t header;
-  size_t added;
-  size_t allocated;
-  size_t set;
-  size_t max;
-};
-
-/* internal functions that are not exported to the user */
-void _pbb_tlv_writer_init(struct pbb_tlv_writer_data *data, size_t max, size_t mtu);
-
-enum pbb_result _pbb_tlv_writer_add(struct pbb_tlv_writer_data *data,
-    uint8_t type, uint8_t exttype, const void *value, size_t length);
-enum pbb_result _pbb_tlv_writer_allocate(struct pbb_tlv_writer_data *data,
-    bool has_exttype, size_t length);
-enum pbb_result _pbb_tlv_writer_set(struct pbb_tlv_writer_data *data,
-    uint8_t type, uint8_t exttype, const void *value, size_t length);
-
-#endif /* PBB_TLV_WRITER_H_ */
+/**
+ * Sends data to an UDP socket.
+ * @param fd filedescriptor
+ * @param buf buffer for target data
+ * @param length length of buffer
+ * @param dst pointer to netaddr socket to send packet to
+ * @return same as sendto()
+ */
+int
+os_sendto(int fd, const void *buf, size_t length, union netaddr_socket *dst) {
+  return sendto(fd, buf, length, 0, &dst->std, sizeof(*dst));
+}

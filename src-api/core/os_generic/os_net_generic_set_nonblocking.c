@@ -1,6 +1,7 @@
+
 /*
- * PacketBB handler library (see RFC 5444)
- * Copyright (c) 2010 Henning Rogge <hrogge@googlemail.com>
+ * The olsr.org Optimized Link-State Routing daemon(olsrd)
+ * Copyright (c) 2004-2012, the olsr.org team - see HISTORY file
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,35 +31,34 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *
- * Visit http://www.olsr.org/git for more information.
+ * Visit http://www.olsr.org for more information.
  *
  * If you find this software useful feel free to make a donation
  * to the project. For more information see the website or contact
  * the copyright holders.
+ *
  */
 
-#ifndef PBB_TLV_WRITER_H_
-#define PBB_TLV_WRITER_H_
+#include <fcntl.h>
 
-#include "common/common_types.h"
+#include "os_net.h"
 
-struct pbb_tlv_writer_data {
-  uint8_t *buffer;
-  size_t header;
-  size_t added;
-  size_t allocated;
-  size_t set;
-  size_t max;
-};
+/**
+ * Set a socket to non-blocking mode
+ * @param sock filedescriptor of socket
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+os_net_set_nonblocking(int sock) {
+  int state;
 
-/* internal functions that are not exported to the user */
-void _pbb_tlv_writer_init(struct pbb_tlv_writer_data *data, size_t max, size_t mtu);
+  /* put socket into non-blocking mode */
+  if ((state = fcntl(sock, F_GETFL)) == -1) {
+    return -1;
+  }
 
-enum pbb_result _pbb_tlv_writer_add(struct pbb_tlv_writer_data *data,
-    uint8_t type, uint8_t exttype, const void *value, size_t length);
-enum pbb_result _pbb_tlv_writer_allocate(struct pbb_tlv_writer_data *data,
-    bool has_exttype, size_t length);
-enum pbb_result _pbb_tlv_writer_set(struct pbb_tlv_writer_data *data,
-    uint8_t type, uint8_t exttype, const void *value, size_t length);
-
-#endif /* PBB_TLV_WRITER_H_ */
+  if (fcntl(sock, F_SETFL, state | O_NONBLOCK) < 0) {
+    return -1;
+  }
+  return 0;
+}

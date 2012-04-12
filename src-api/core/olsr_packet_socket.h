@@ -49,11 +49,19 @@
 #include "olsr_netaddr_acl.h"
 #include "olsr_socket.h"
 
+#ifndef _WIN32
+#include <net/if.h>
+#else
+#define IF_NAMESIZE 16
+#endif
+
 struct olsr_packet_socket;
 
 struct olsr_packet_config {
   void *input_buffer;
   size_t input_buffer_length;
+
+  unsigned interface;
 
   void (*receive_data)(struct olsr_packet_socket *,
       union netaddr_socket *from, size_t length);
@@ -79,8 +87,9 @@ struct olsr_packet_managed {
 
 struct olsr_packet_managed_config {
   struct olsr_netaddr_acl acl;
-  struct netaddr bindto_v4;
-  struct netaddr bindto_v6;
+  char interface[IF_NAMESIZE];
+  struct netaddr bindto_v4, multicast_v4;
+  struct netaddr bindto_v6, multicast_v6;
   uint16_t port;
 };
 

@@ -51,6 +51,7 @@
 #include "common/string.h"
 #include "builddata/data.h"
 #include "os_system.h"
+#include "os_syslog.h"
 #include "olsr_logging.h"
 #include "olsr.h"
 
@@ -473,5 +474,5 @@ void
 olsr_log_syslog(struct log_handler_entry *entry __attribute__ ((unused)),
     struct log_parameters *param)
 {
-  os_system_log(param->severity, param->buffer + param->timeLength);
+  os_syslog_log(param->severity, param->buffer + param->timeLength);
 }

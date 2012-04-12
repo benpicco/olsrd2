@@ -61,6 +61,7 @@
 #include "os_clock.h"
 #include "os_net.h"
 #include "os_system.h"
+#include "os_syslog.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_http.h"
@@ -234,7 +235,7 @@ main(int argc, char **argv) {
   }
 
   /* initialize basic framework */
-  os_system_openlog();
+  os_syslog_init();
   olsr_memcookie_init();
   if (os_clock_init()) {
     goto olsrd_cleanup;
@@ -328,7 +329,7 @@ olsrd_cleanup:
   olsr_clock_cleanup();
   os_clock_cleanup();
   olsr_memcookie_cleanup();
-  os_system_closelog();
+  os_syslog_cleanup();
   olsr_logcfg_cleanup();
 
   /* free configuration resources */

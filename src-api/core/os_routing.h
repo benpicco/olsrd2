@@ -52,25 +52,6 @@
 #include "olsr_timer.h"
 #include "os_system.h"
 
-/*
- * Set one of the following defines in the os specific os_routing includes
- * to OS_SPECIFIC to define that the os code is implementing the function
- * itself and does not use the generic function
- * Set it to OS_GENERIC to define that the code use the default implementation.
- *
- * Example from os_system_linux.h:
- *
- * #define OS_SYSTEM_INIT         OS_SPECIFIC
- * #define OS_SYSTEM_INIT_IF      OS_SPECIFIC
- * #define OS_SYSTEM_SET_IFSTATE  OS_SPECIFIC
- * #define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
- * #define OS_SYSTEM_LOG          OS_GENERIC
- */
-
-/* set the guard macro so we can include the os specific settings */
-#define OS_NET_SPECIFIC_INCLUDE
-#include "os_helper.h"
-
 #if defined(__linux__)
 #include "os_linux/os_routing_linux.h"
 #elif defined (BSD)
@@ -80,8 +61,6 @@
 #else
 #error "Unknown operation system"
 #endif
-
-#undef OS_NET_SPECIFIC_INCLUDE
 
 /* make sure default values for routing are there */
 #ifndef RTPROT_UNSPEC

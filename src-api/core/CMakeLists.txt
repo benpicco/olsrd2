@@ -12,14 +12,18 @@ SET(OONF_CORE_SRCS olsr_cfg.c
                    olsr_stream_socket.c
                    olsr_telnet.c
                    olsr_timer.c
-                   olsr.c
-                   os_net_generic.c
-                   os_system_generic.c)
+                   olsr.c)
 
 # add os_specific source files
 # TODO: add BSD and WIN32
 IF(LINUX)
     SET(OONF_CORE_SRCS ${OONF_CORE_SRCS}
+                       os_generic/os_net_generic_configsocket.c
+                       os_generic/os_net_generic_getsocket.c
+                       os_generic/os_net_generic_join_mcast.c
+                       os_generic/os_net_generic_sendto.c
+                       os_generic/os_net_generic_set_nonblocking.c
+                       os_generic/os_syslog_generic.c
                        os_linux/os_net_linux.c
                        os_linux/os_system_linux.c
                        os_linux/os_routing_linux.c

@@ -105,6 +105,23 @@ os_net_cleanup(void) {
 }
 
 /**
+ * Receive data from a socket.
+ * @param fd filedescriptor
+ * @param buf buffer for incoming data
+ * @param length length of buffer
+ * @param source pointer to netaddr socket object to store source of packet
+ * @param interface limit received data to certain interface
+ *   (only used if socket cannot be bound to interface)
+ * @return same as recvfrom()
+ */
+int
+os_recvfrom(int fd, void *buf, size_t length,
+    union netaddr_socket *source, unsigned interface __attribute__((unused))) {
+  socklen_t len = sizeof(*source);
+  return recvfrom(fd, buf, length, 0, &source->std, &len);
+}
+
+/**
  * Updates the data of an interface.
  * @param interf pointer to interface object.
  * @param name name of interface

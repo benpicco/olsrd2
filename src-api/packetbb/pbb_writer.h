@@ -366,18 +366,18 @@ struct pbb_writer {
 
 /* functions that can be called from addAddress callback */
 EXPORT struct pbb_writer_address *pbb_writer_add_address(struct pbb_writer *writer,
-    struct pbb_writer_message *msg, uint8_t *addr, uint8_t prefix);
+    struct pbb_writer_message *msg, const void *addr, uint8_t prefix);
 EXPORT enum pbb_result pbb_writer_add_addrtlv(struct pbb_writer *writer,
     struct pbb_writer_address *addr, struct pbb_writer_tlvtype *tlvtype,
     void *value, size_t length, bool allow_dup);
 
 /* functions that can be called from add/finishMessageTLVs callback */
 EXPORT enum pbb_result pbb_writer_add_messagetlv(struct pbb_writer *writer,
-    uint8_t type, uint8_t exttype, void *value, size_t length);
+    uint8_t type, uint8_t exttype, const void *value, size_t length);
 EXPORT enum pbb_result pbb_writer_allocate_messagetlv(struct pbb_writer *writer,
     bool has_exttype, size_t length);
 EXPORT enum pbb_result pbb_writer_set_messagetlv(struct pbb_writer *writer,
-    uint8_t type, uint8_t exttype, void *value, size_t length);
+    uint8_t type, uint8_t exttype, const void *value, size_t length);
 
 /* functions that can be called from add/finishMessageHeader callback */
 EXPORT void pbb_writer_set_msg_addrlen(struct pbb_writer *writer,
@@ -386,7 +386,7 @@ EXPORT void pbb_writer_set_msg_header(struct pbb_writer *writer,
     struct pbb_writer_message *msg, bool has_originator,
     bool has_hopcount, bool has_hoplimit, bool has_seqno);
 EXPORT void pbb_writer_set_msg_originator(struct pbb_writer *writer,
-    struct pbb_writer_message *msg, uint8_t *originator);
+    struct pbb_writer_message *msg, const void *originator);
 EXPORT void pbb_writer_set_msg_hopcount(struct pbb_writer *writer,
     struct pbb_writer_message *msg, uint8_t hopcount);
 EXPORT void pbb_writer_set_msg_hoplimit(struct pbb_writer *writer,

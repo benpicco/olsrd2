@@ -51,9 +51,9 @@
 #endif
 
 /**
- * casts an embedded node of a list/tree into the surrounding struct
+ * casts an embedded element of a struct into the surrounding struct
  * this macro returns bad results if ptr is NULL
- * @param ptr pointer to node
+ * @param ptr pointer to embedded element
  * @param type data type of surrounding struct
  * @param member name of node inside struct
  * @return pointer to surrounding struct

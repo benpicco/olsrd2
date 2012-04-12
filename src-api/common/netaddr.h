@@ -184,6 +184,24 @@ netaddr_socket_cmp(const union netaddr_socket *s1, const union netaddr_socket *s
 }
 
 /**
+ * @param n pointer to netaddr
+ * @return pointer to start of binary address
+ */
+static INLINE const void *
+netaddr_get_binptr(const struct netaddr *n) {
+  return &n->addr[0];
+}
+
+/**
+ * @param n pointer to netaddr
+ * @return number of bytes of binary address
+ */
+static INLINE size_t
+netaddr_get_binlength(const struct netaddr *n) {
+  return netaddr_get_maxprefix(n) >> 3;
+}
+
+/**
  * @param s pointer to netaddr socket
  * @return address family of socket
  */

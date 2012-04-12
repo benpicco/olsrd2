@@ -42,22 +42,10 @@
 #ifndef OS_SYSTEM_LINUX_H_
 #define OS_SYSTEM_LINUX_H_
 
-#ifndef OS_NET_SPECIFIC_INCLUDE
-#error "DO not include this file directly, always use 'os_system.h'"
-#endif
-
 #include <linux/netlink.h>
 
 #include "common/netaddr.h"
 #include "olsr_socket.h"
-#include "os_helper.h"
-
-/* Linux os_system runs on "all default" except for init/cleanup */
-#define OS_SYSTEM_INIT         OS_SPECIFIC
-#define OS_SYSTEM_INIT_IF      OS_SPECIFIC
-#define OS_SYSTEM_SET_IFSTATE  OS_SPECIFIC
-#define OS_SYSTEM_GETTIMEOFDAY OS_GENERIC
-#define OS_SYSTEM_LOG          OS_GENERIC
 
 struct os_system_netlink {
   struct olsr_socket_entry socket;

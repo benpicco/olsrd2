@@ -46,7 +46,7 @@
 
 static size_t _calc_tlv_size(bool exttype, size_t length);
 static void _write_tlv(uint8_t *ptr, uint8_t type, uint8_t exttype,
-    uint8_t idx1, uint8_t idx2, void *value, size_t length);
+    uint8_t idx1, uint8_t idx2, const void *value, size_t length);
 
 /**
  * Internal function to initialize a data buffer (message or packet)
@@ -84,7 +84,7 @@ _pbb_tlv_writer_init(struct pbb_tlv_writer_data *data, size_t max,
  */
 enum pbb_result
 _pbb_tlv_writer_add(struct pbb_tlv_writer_data *data,
-    uint8_t type, uint8_t exttype, void *value, size_t length) {
+    uint8_t type, uint8_t exttype, const void *value, size_t length) {
   size_t s;
 
   s = _calc_tlv_size(exttype != 0, length);
@@ -136,7 +136,7 @@ _pbb_tlv_writer_allocate(struct pbb_tlv_writer_data *data,
  */
 enum pbb_result
 _pbb_tlv_writer_set(struct pbb_tlv_writer_data *data,
-    uint8_t type, uint8_t exttype, void *value, size_t length) {
+    uint8_t type, uint8_t exttype, const void *value, size_t length) {
   size_t s;
 
   s = _calc_tlv_size(exttype != 0, length);
@@ -185,7 +185,7 @@ static size_t _calc_tlv_size(bool exttype, size_t length) {
  */
 static void
 _write_tlv(uint8_t *ptr, uint8_t type, uint8_t exttype,
-    uint8_t idx1, uint8_t idx2, void *value, size_t length) {
+    uint8_t idx1, uint8_t idx2, const void *value, size_t length) {
   uint8_t flags = 0;
 
   /* calculate flags field */
