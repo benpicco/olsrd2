@@ -103,7 +103,8 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
   int s = -1;
 
   /* Init socket */
-  s = os_net_getsocket(local, OS_SOCKET_UDP | OS_SOCKET_MULTICAST, 0, LOG_SOCKET_PACKET);
+  // TODO: add interface selection
+  s = os_net_getsocket(local, false, 0, NULL, LOG_SOCKET_PACKET);
   if (s < 0) {
     return -1;
   }
@@ -326,14 +327,14 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
 #endif
 
   OLSR_DEBUG(LOG_SOCKET_PACKET, "UDP event.");
-
   if (event_read) {
     uint8_t *buf;
 
     /* handle incoming data */
     buf = pktsocket->config.input_buffer;
 
-    result = os_recvfrom(fd, buf, pktsocket->config.input_buffer_length-1, &sock);
+    result = os_recvfrom(fd, buf, pktsocket->config.input_buffer_length-1, &sock,
+        pktsocket->config.interface);
     if (result > 0 && pktsocket->config.receive_data != NULL) {
       /* null terminate it */
       buf[result] = 0;

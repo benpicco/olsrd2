@@ -214,8 +214,9 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
  */
 struct pbb_writer_address *
 pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
-    struct pbb_writer_message *msg, uint8_t *addr, uint8_t prefix) {
+    struct pbb_writer_message *msg, const void *_addr, uint8_t prefix) {
   struct pbb_writer_address *address;
+  const uint8_t *addr;
 #if CLEAR_ADDRESS_POSTFIX == true
   int i, p;
   uint8_t cleaned_addr[PBB_MAX_ADDRLEN];
@@ -225,6 +226,7 @@ pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
   assert(writer->_state == PBB_WRITER_ADD_ADDRESSES);
 #endif
 
+  addr = _addr;
 #if CLEAR_ADDRESS_POSTFIX == true
   /* only copy prefix part of address */
   for (p = prefix, i=0; i < _msg->addr_len; i++, p -= 8) {

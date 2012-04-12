@@ -147,7 +147,7 @@ olsr_stream_add(struct olsr_stream_socket *stream_socket,
   /* server socket not necessary for outgoing connections */
   if (netaddr_socket_get_port(local) != 0) {
     /* Init socket */
-    s = os_net_getsocket(local, OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
+    s = os_net_getsocket(local, true, 0, NULL, LOG_SOCKET_STREAM);
     if (s < 0) {
       goto add_stream_error;
     }
@@ -250,7 +250,7 @@ olsr_stream_connect_to(struct olsr_stream_socket *stream_socket,
 #endif
 
   s = os_net_getsocket(&stream_socket->local_socket,
-      OS_SOCKET_TCP, 0, LOG_SOCKET_STREAM);
+      true, 0, NULL, LOG_SOCKET_STREAM);
   if (s < 0) {
     return NULL;
   }
@@ -627,7 +627,7 @@ _cb_parse_connection(int fd, void *data, bool event_read, bool event_write) {
 
   /* read data if necessary */
   if (session->state == STREAM_SESSION_ACTIVE && event_read) {
-    len = os_recvfrom(fd, buffer, sizeof(buffer), NULL);
+    len = os_recvfrom(fd, buffer, sizeof(buffer), NULL, 0);
     if (len > 0) {
       OLSR_DEBUG(LOG_SOCKET_STREAM, "  recv returned %d\n", len);
       if (abuf_memcpy(&session->in, buffer, len)) {

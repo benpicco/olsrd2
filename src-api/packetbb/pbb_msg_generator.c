@@ -474,7 +474,7 @@ pbb_writer_forward_msg(struct pbb_writer *writer, uint8_t *msg, size_t len,
  */
 enum pbb_result
 pbb_writer_add_messagetlv(struct pbb_writer *writer,
-    uint8_t type, uint8_t exttype, void *value, size_t length) {
+    uint8_t type, uint8_t exttype, const void *value, size_t length) {
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_ADD_MSGTLV);
 #endif
@@ -512,7 +512,7 @@ pbb_writer_allocate_messagetlv(struct pbb_writer *writer,
  */
 enum pbb_result
 pbb_writer_set_messagetlv(struct pbb_writer *writer,
-    uint8_t type, uint8_t exttype, void *value, size_t length) {
+    uint8_t type, uint8_t exttype, const void *value, size_t length) {
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_FINISH_MSGTLV);
 #endif
@@ -538,7 +538,7 @@ pbb_writer_set_msg_addrlen(struct pbb_writer *writer __attribute__ ((unused)),
 
   if (msg->has_origaddr && msg->addr_len != addrlen) {
     /*
-     * we might need to fix the calculated header length if set_msg_header
+     * we have to fix the calculated header length when set_msg_header
      * was called before this function
      */
     writer->_msg.header = writer->_msg.header + addrlen - msg->addr_len;
@@ -598,7 +598,7 @@ pbb_writer_set_msg_header(struct pbb_writer *writer, struct pbb_writer_message *
  */
 void
 pbb_writer_set_msg_originator(struct pbb_writer *writer __attribute__ ((unused)),
-    struct pbb_writer_message *msg, uint8_t *originator) {
+    struct pbb_writer_message *msg, const void *originator) {
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_ADD_HEADER || writer->_state == PBB_WRITER_FINISH_HEADER);
 #endif

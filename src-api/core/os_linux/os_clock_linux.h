@@ -42,14 +42,16 @@
 #ifndef OS_CLOCK_LINUX_H_
 #define OS_CLOCK_LINUX_H_
 
-#ifndef OS_NET_SPECIFIC_INCLUDE
-#error "DO not include this file directly, always use 'os_system.h'"
-#endif
+#include <os_clock.h>
 
-#include "os_helper.h"
-
-/* Linux os_system runs on "all default" except for init/cleanup */
-#define OS_CLOCK_GETTIMEOFDAY  OS_GENERIC
-#define OS_CLOCK_INIT          OS_SPECIFIC
+/**
+ * Inline wrapper around gettimeofday
+ * @param tv pointer to target timeval object
+ * @return -1 if an error happened, 0 otherwise
+ */
+static INLINE int
+os_clock_gettimeofday(struct timeval *tv) {
+  return gettimeofday(tv, NULL);
+}
 
 #endif /* OS_CLOCK_LINUX_H_ */
