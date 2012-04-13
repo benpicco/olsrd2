@@ -162,9 +162,9 @@ static struct cfg_schema_section _dlep_section = {
 };
 
 static struct cfg_schema_entry _dlep_entries[] = {
-  CFG_MAP_STRING_LEN(_dlep_config, dlep_if, "dlep_if", "lo",
+  CFG_MAP_STRING_ARRAY(_dlep_config, dlep_if, "dlep_if", "lo",
     "List of interfaces to sent DLEP broadcasts to", IF_NAMESIZE),
-  CFG_MAP_STRING_LEN(_dlep_config, radio_if, "radio_id", "wlan0",
+  CFG_MAP_STRING_ARRAY(_dlep_config, radio_if, "radio_id", "wlan0",
     "List of interfaces to to query link layer data from", IF_NAMESIZE),
 
   CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "127.0.0.1",
@@ -177,10 +177,13 @@ static struct cfg_schema_entry _dlep_entries[] = {
     "ipv4 multicast address of this socket", false),
   CFG_MAP_NETADDR_V6(_dlep_config, socket.multicast_v6, "multicast_v6", "ff01::2",
     "ipv6 multicast address of this socket", false),
-  CFG_MAP_INT_MINMAX(_dlep_config, socket.multicast_port, "port", "2001",
+  CFG_MAP_INT_MINMAX(_dlep_config, socket.port, "port", "2001",
     "Multicast Network port for dlep interface", 1, 65535),
   CFG_MAP_STRING_ARRAY(_dlep_config, socket.interface, "interface", "",
     "Specifies socket interface (necessary for linklocal communication)", IF_NAMESIZE),
+  CFG_MAP_BOOL(_dlep_config, socket.loop_multicast, "loop_multicast", "false",
+    "Allow discovery broadcasts to be received by clients on the same node"),
+
   CFG_MAP_STRING_ARRAY(_dlep_config, peer_type, "peer_type", "",
     "String for identifying this DLEP service", 80),
 
@@ -214,9 +217,9 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
-  [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
   [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
-  [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .match_length = true },
+  [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
   [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
 };
 
@@ -352,6 +355,7 @@ _cb_plugin_enable(void) {
 
   olsr_timer_add(&_tinfo_interface_discovery);
   olsr_timer_add(&_tinfo_address_update);
+  olsr_timer_add(&_tinfo_metric_update);
 
   pbb_reader_init(&_dlep_reader);
   pbb_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
@@ -376,6 +380,12 @@ _cb_plugin_disable(void) {
       _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs));
   pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
   pbb_writer_cleanup(&_dlep_writer);
+
+  olsr_timer_remove(&_tinfo_interface_discovery);
+  olsr_timer_remove(&_tinfo_address_update);
+  olsr_timer_remove(&_tinfo_metric_update);
+
+  olsr_acl_remove(&_config.socket.acl);
   return 0;
 }
 
@@ -439,7 +449,9 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
     return PBB_DROP_MESSAGE;
   }
 
-  _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->single_value[0];
+  _msg_order = DLEP_ORDER_INTERFACE_DISCOVERY;
+
+  _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
   switch (_current_order) {
     /* received by both interface and router */
     case DLEP_ORDER_DISCONNECT:
@@ -449,6 +461,9 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
     case DLEP_ORDER_CONNECT_ROUTER:
       return _parse_order_connect_router();
 
+    case DLEP_ORDER_INTERFACE_DISCOVERY:
+      /* ignore our own discovery packets if we work with multicast loop */
+      return PBB_OKAY;
 #if 0
     /* only received by DLEP-router */
     case DLEP_ORDER_INTERFACE_DISCOVERY:
@@ -470,7 +485,15 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
 static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+  size_t i;
   OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP message were not fulfilled!");
+
+  for (i=0; i < ARRAYSIZE(_dlep_message_tlvs); i++) {
+    OLSR_WARN(LOG_PLUGINS, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
+    if (_dlep_message_tlvs[i].tlv) {
+      OLSR_WARN_NH(LOG_PLUGINS, "\tvalue length: %u", _dlep_message_tlvs[i].tlv->length);
+    }
+  }
   return PBB_OKAY;
 }
 
@@ -485,7 +508,11 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
       union netaddr_socket *from,
       size_t length __attribute__((unused))) {
   enum pbb_result result;
-  OLSR_DEBUG(LOG_PLUGINS, "Parsing DLEP packet");
+#if !defined(REMOVE_LOG_DEBUG)
+  struct netaddr_str buf;
+#endif
+  OLSR_DEBUG(LOG_PLUGINS, "Parsing DLEP packet from %s",
+      netaddr_socket_to_string(&buf, from));
 
   _peer_socket = from;
 
@@ -633,10 +660,12 @@ static void
 _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf __attribute__((unused)),
     void *ptr, size_t len) {
-  if (olsr_packet_send_managed_multicast(&_dlep_socket, true, ptr, len)) {
+  if (config_global.ipv4
+      && olsr_packet_send_managed_multicast(&_dlep_socket, true, ptr, len) < 0) {
     OLSR_WARN(LOG_PLUGINS, "Could not sent DLEP IPv4 packet to socket");
   }
-  if (olsr_packet_send_managed_multicast(&_dlep_socket, false, ptr, len)) {
+  if (config_global.ipv6
+      && olsr_packet_send_managed_multicast(&_dlep_socket, false, ptr, len) < 0) {
     OLSR_WARN(LOG_PLUGINS, "Could not sent DLEP IPv6 packet to socket");
   }
 }
@@ -651,9 +680,6 @@ _cb_config_changed(void) {
     OLSR_WARN(LOG_CONFIG, "Could not convert dlep_listener config to bin");
     return;
   }
-
-  /* copy multicast port, we do not want a random source port */
-  _config.socket.port = _config.socket.multicast_port;
 
   /* configure socket */
   olsr_packet_apply_managed(&_dlep_socket, &_config.socket);

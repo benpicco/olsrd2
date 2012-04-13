@@ -172,10 +172,12 @@ static struct cfg_schema_entry _dlep_entries[] = {
     "Bind dlep ipv6 socket to this address", false),
   CFG_MAP_NETADDR_V4(_dlep_config, socket.multicast_v4, "multicast_v4", "224.0.0.2",
     "ipv4 multicast address of this socket", false),
-  CFG_MAP_NETADDR_V6(_dlep_config, socket.multicast_v6, "multicast_v6", "ff02::2",
+  CFG_MAP_NETADDR_V6(_dlep_config, socket.multicast_v6, "multicast_v6", "ff01::2",
     "ipv6 multicast address of this socket", false),
   CFG_MAP_INT_MINMAX(_dlep_config, socket.multicast_port, "port", "2001",
     "Multicast Network port for dlep interface", 1, 65535),
+  CFG_MAP_STRING_ARRAY(_dlep_config, socket.interface, "interface", "",
+    "Specifies socket interface (necessary for linklocal communication)", IF_NAMESIZE),
 
   CFG_MAP_STRING_ARRAY(_dlep_config, peer_type, "peer_type", "",
     "String for identifying this DLEP service", 80),
@@ -202,7 +204,7 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
-  [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .match_length = true },
+  [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 1, .max_length = 80, .match_length = true },
   [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
 };
 
@@ -455,7 +457,12 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
 static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+  size_t i;
   OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP message were not fulfilled!");
+
+  for (i=0; i < ARRAYSIZE(_dlep_message_tlvs); i++) {
+    OLSR_WARN(LOG_PLUGINS, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
+  }
   return PBB_OKAY;
 }
 
