@@ -41,6 +41,7 @@
 
 #include "config/cfg_schema.h"
 #include "packetbb/pbb_reader.h"
+#include "packetbb/pbb_writer.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_layer2.h"
@@ -54,7 +55,8 @@
 #include "olsr.h"
 
 /* constants */
-#define _CFG_SECTION "dlep"
+#define _CFG_SECTION "dlep_client"
+#define DLEP_PKT_BUFFER_SIZE 1500
 
 #define DLEP_MESSAGE_ID 42
 
@@ -63,7 +65,7 @@ enum dlep_orders {
   DLEP_ORDER_CONNECT_ROUTER,
   DLEP_ORDER_DISCONNECT,
   DLEP_ORDER_NEIGHBOR_UP,
-  DLEP_ORDER_NEIGHBOR_DOWN,
+//   DLEP_ORDER_NEIGHBOR_DOWN,
   DLEP_ORDER_NEIGHBOR_UPDATE,
 };
 
@@ -95,25 +97,23 @@ enum dlep_tlv_idx {
 //  IDX_TLV_MAX_BC_RATE,
 };
 
-enum dlep_addrtlv_idx {
-  IDX_ADDRTLV_CUR_RATE,
-  IDX_ADDRTLV_THROUGHPUT,
-//  IDX_ADDRTLV_MAX_RATE,
-//  IDX_ADDRTLV_IPv4,
-//  IDX_ADDRTLV_IPv6,
-};
-
 /* definitions */
 struct _dlep_config {
-  char dlep_if[IF_NAMESIZE];
-  char radio_if[IF_NAMESIZE];
-
   struct olsr_packet_managed_config socket;
-
   char peer_type[81];
 
-  uint64_t discovery_interval, discovery_validity;
-  uint64_t neighbor_interval, neighbor_validity;
+  uint64_t connect_interval, connect_validity;
+};
+
+struct _dlep_session {
+  struct avl_node _node;
+
+  union netaddr_socket interface_socket;
+  struct pbb_writer_interface out_if;
+
+  struct netaddr radio_mac;
+  struct olsr_timer_entry interface_vtime;
+  uint16_t seqno;
 };
 
 /* prototypes */
@@ -128,19 +128,21 @@ static enum pbb_result _cb_parse_dlep_message(
 static enum pbb_result _cb_parse_dlep_message_failed(
     struct pbb_reader_tlvblock_consumer *consumer,
     struct pbb_reader_tlvblock_context *context);
-static enum pbb_result _cb_parse_dlep_address(
-    struct pbb_reader_tlvblock_consumer *consumer,
-    struct pbb_reader_tlvblock_context *context);
-static enum pbb_result _cb_parse_dlep_address_failed(
-    struct pbb_reader_tlvblock_consumer *consumer,
-    struct pbb_reader_tlvblock_context *context);
 static void _cb_receive_dlep(struct olsr_packet_socket *,
       union netaddr_socket *from, size_t length);
-static void _cb_config_changed(void);
 
-static void _cb_dlep_router_timerout(void *);
-static void _cb_interface_discovery(void *);
-static void _cb_neighbor_update(void *);
+static void _cb_addMessageHeader(struct pbb_writer *,
+    struct pbb_writer_message *);
+static void _cb_addMessageTLVs(struct pbb_writer *,
+    struct pbb_writer_content_provider *);
+
+static void _cb_send_dlep(struct pbb_writer *,
+    struct pbb_writer_interface *, void *, size_t);
+
+static void _cb_dlep_interface_timerout(void *);
+static void _cb_router_connect(void *);
+
+static void _cb_config_changed(void);
 
 /* plugin declaration */
 OLSR_PLUGIN7 {
@@ -162,32 +164,26 @@ static struct cfg_schema_section _dlep_section = {
 };
 
 static struct cfg_schema_entry _dlep_entries[] = {
-  CFG_MAP_STRING_LEN(_dlep_config, dlep_if, "dlep_if", "lo",
-      "List of interfaces to sent DLEP broadcasts to", IF_NAMESIZE),
-  CFG_MAP_STRING_LEN(_dlep_config, radio_if, "radio_id", "wlan0",
-      "List of interfaces to to query link layer data from", IF_NAMESIZE),
-
-  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "127.0.0.1",
-      "Access control list for dlep interface"),
+  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", NULL,
+    "Access control list for dlep client"),
   CFG_MAP_NETADDR_V4(_dlep_config, socket.bindto_v4, "bindto_v4", "127.0.0.1",
-      "Bind dlep ipv4 socket to this address", false),
+    "Bind dlep ipv4 socket to this address", false),
   CFG_MAP_NETADDR_V6(_dlep_config, socket.bindto_v6, "bindto_v6", "::1",
-      "Bind dlep ipv6 socket to this address", false),
-  CFG_MAP_INT_MINMAX(_dlep_config, socket.port, "port", "2001",
-      "Network port for dlep interface", 1, 65535),
+    "Bind dlep ipv6 socket to this address", false),
+  CFG_MAP_NETADDR_V4(_dlep_config, socket.multicast_v4, "multicast_v4", "224.0.0.2",
+    "ipv4 multicast address of this socket", false),
+  CFG_MAP_NETADDR_V6(_dlep_config, socket.multicast_v6, "multicast_v6", "ff02::2",
+    "ipv6 multicast address of this socket", false),
+  CFG_MAP_INT_MINMAX(_dlep_config, socket.multicast_port, "port", "2001",
+    "Multicast Network port for dlep interface", 1, 65535),
 
   CFG_MAP_STRING_ARRAY(_dlep_config, peer_type, "peer_type", "",
     "String for identifying this DLEP service", 80),
 
-  CFG_MAP_CLOCK_MIN(_dlep_config, discovery_interval, "discovery_interval", "0",
-    "Interval in seconds between interface discovery messages", 100),
-  CFG_MAP_CLOCK_MIN(_dlep_config, discovery_validity, "discovery_validity", "0",
-    "Validity time in seconds for interface discovery messages", 100),
-
-  CFG_MAP_CLOCK_MIN(_dlep_config, neighbor_interval, "neighbor_interval", "0",
-    "Interval in seconds between neighbor up/update messages", 100),
-  CFG_MAP_CLOCK_MIN(_dlep_config, neighbor_validity, "neighbor_validity", "0",
-    "Validity time in seconds for neighbor up/update messages", 100),
+  CFG_MAP_CLOCK_MIN(_dlep_config, connect_interval, "connect_interval", "0.000",
+    "Interval in seconds between router connect messages", 100),
+  CFG_MAP_CLOCK_MIN(_dlep_config, connect_validity, "connect_validity", "5.000",
+    "Validity time in seconds for router connect messages", 100),
 };
 
 static struct _dlep_config _config;
@@ -203,11 +199,6 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
   .block_callback_failed_constraints = _cb_parse_dlep_message_failed,
 };
 
-static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
-  .block_callback = _cb_parse_dlep_address,
-  .block_callback_failed_constraints = _cb_parse_dlep_address_failed,
-};
-
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
@@ -215,9 +206,29 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
 };
 
-static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
-  [IDX_ADDRTLV_CUR_RATE] =   { .type = DLEP_ADDRTLV_CUR_RATE, .min_length = 8, .match_length = true },
-  [IDX_ADDRTLV_THROUGHPUT] = { .type = DLEP_ADDRTLV_THROUGHPUT, .min_length = 8, .match_length = true },
+/* DLEP writer data */
+static uint8_t _msg_buffer[1500];
+static uint8_t _msg_addrtlvs[5000];
+
+static enum dlep_orders _msg_order;
+static struct _dlep_session *_msg_session;
+
+static struct pbb_writer _dlep_writer = {
+  .msg_buffer = _msg_buffer,
+  .msg_size = sizeof(_msg_buffer),
+  .addrtlv_buffer = _msg_addrtlvs,
+  .addrtlv_size = sizeof(_msg_addrtlvs),
+};
+
+static struct pbb_writer_message *_dlep_message = NULL;
+
+static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
+  .msg_type = DLEP_MESSAGE_ID,
+  .addMessageTLVs = _cb_addMessageTLVs,
+};
+
+static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
+  { .type = DLEP_ADDRTLV_CUR_RATE },
 };
 
 /* temporary variables for parsing DLEP messages */
@@ -225,35 +236,21 @@ static enum dlep_orders _current_order;
 static union netaddr_socket *_peer_socket;
 
 /* DLEP session data */
-struct _dlep_session {
-  struct avl_node _node;
-
-  union netaddr_socket router_socket;
-  struct olsr_timer_entry router_vtime;
-};
-
 static struct avl_tree _session_tree;
 
 /* infrastructure */
-struct olsr_timer_info _tinfo_router_vtime = {
-  .name = "dlep router vtime",
-  .callback = _cb_dlep_router_timerout,
+struct olsr_timer_info _tinfo_interface_vtime = {
+  .name = "dlep interface vtime",
+  .callback = _cb_dlep_interface_timerout,
 };
 
-struct olsr_timer_info _tinfo_interface_discovery = {
+struct olsr_timer_info _tinfo_router_connect = {
   .name = "dlep interface discovery",
-  .callback = _cb_interface_discovery,
+  .callback = _cb_router_connect,
+  .periodic = true,
 };
-struct olsr_timer_entry _tentry_interface_discovery = {
-  .info = &_tinfo_interface_discovery,
-};
-
-struct olsr_timer_info _tinfo_neighbor_update = {
-  .name = "dlep neighbor update",
-  .callback = _cb_neighbor_update,
-};
-struct olsr_timer_entry _tentry_neighbor_update = {
-  .info = &_tinfo_neighbor_update,
+struct olsr_timer_entry _tentry_router_connect = {
+  .info = &_tinfo_router_connect,
 };
 
 /**
@@ -284,21 +281,33 @@ _cb_plugin_unload(void) {
  */
 static int
 _cb_plugin_enable(void) {
+  pbb_writer_init(&_dlep_writer);
+
+  _dlep_message = pbb_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
+  if (_dlep_message == NULL) {
+    OLSR_WARN(LOG_PLUGINS, "Could not register DLEP message");
+    pbb_writer_cleanup(&_dlep_writer);
+    return -1;
+  }
+  _dlep_message->addMessageHeader = _cb_addMessageHeader;
+
+  if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
+      &_dlep_msgcontent_provider, _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs))) {
+    OLSR_WARN(LOG_PLUGINS, "Count not register DLEP msg contentprovider");
+    pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
+    pbb_writer_cleanup(&_dlep_writer);
+    return -1;
+  }
+
   avl_init(&_session_tree, netaddr_socket_avlcmp, false, NULL);
 
-  olsr_timer_add(&_tinfo_interface_discovery);
-  olsr_timer_add(&_tinfo_neighbor_update);
+  olsr_timer_add(&_tinfo_router_connect);
 
   pbb_reader_init(&_dlep_reader);
-
   pbb_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
 
-  pbb_reader_add_address_consumer(&_dlep_reader, &_dlep_address_consumer,
-      _dlep_address_tlvs, ARRAYSIZE(_dlep_address_tlvs), DLEP_MESSAGE_ID, 0);
-
   olsr_packet_add_managed(&_dlep_socket);
-
   return 0;
 }
 
@@ -308,11 +317,26 @@ _cb_plugin_enable(void) {
  */
 static int
 _cb_plugin_disable(void) {
+  struct _dlep_session *session, *s_it;
+
+  /* remove all running sessions */
+  avl_for_each_element_safe(&_session_tree, session, _node, s_it) {
+    olsr_timer_stop(&session->interface_vtime);
+    _cb_dlep_interface_timerout(session);
+  }
+
+  /* remove UDP socket */
   olsr_packet_remove_managed(&_dlep_socket, true);
 
-  pbb_reader_remove_address_consumer(&_dlep_reader, &_dlep_address_consumer);
+  /* remove pbb reader */
   pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
   pbb_reader_cleanup(&_dlep_reader);
+
+  /* remove pbb writer */
+  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
+      _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs));
+  pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
+  pbb_writer_cleanup(&_dlep_writer);
   return 0;
 }
 
@@ -327,14 +351,14 @@ _parse_order_disconnect(void) {
   }
 
   /* call vtime callback */
-  olsr_timer_stop(&session->router_vtime);
-  _cb_dlep_router_timerout(session);
+  olsr_timer_stop(&session->interface_vtime);
+  _cb_dlep_interface_timerout(session);
 
   return PBB_OKAY;
 }
 
 static enum pbb_result
-_parse_order_connect_router(void) {
+_parse_order_interface_discovery(struct netaddr *radio_mac) {
   struct _dlep_session *session;
   uint8_t encoded_vtime;
   uint64_t vtime;
@@ -353,16 +377,34 @@ _parse_order_connect_router(void) {
       return PBB_DROP_MESSAGE;
     }
 
-    /* initialize new session */
-    session->_node.key = &session->router_socket;
-    memcpy(&session->router_socket, _peer_socket, sizeof(*_peer_socket));
+    session->out_if.packet_buffer = calloc(1, DLEP_PKT_BUFFER_SIZE);
+    if (session->out_if.packet_buffer == NULL) {
+      free(session);
+      OLSR_WARN_OOM(LOG_PLUGINS);
+      return PBB_DROP_MESSAGE;
+    }
+    session->out_if.packet_size = DLEP_PKT_BUFFER_SIZE;
 
-    session->router_vtime.cb_context = session;
-    session->router_vtime.info = &_tinfo_router_vtime;
+    /* initialize new session */
+    session->_node.key = &session->radio_mac;
+    memcpy(&session->interface_socket, _peer_socket, sizeof(*_peer_socket));
+    memcpy(&session->radio_mac, radio_mac, sizeof(*radio_mac));
+    avl_insert(&_session_tree, &session->_node);
+
+    session->interface_vtime.cb_context = session;
+    session->interface_vtime.info = &_tinfo_interface_vtime;
+
+    /* initialize interface */
+    session->out_if.packet_buffer = NULL;
+    session->out_if.packet_size = 0;
+    session->out_if.sendPacket =_cb_send_dlep,
+
+    /* register packetbb outgoing queue */
+    pbb_writer_register_interface(&_dlep_writer, &session->out_if);
   }
 
   /* reset validity time for router session */
-  olsr_timer_set(&session->router_vtime, vtime);
+  olsr_timer_set(&session->interface_vtime, vtime);
 
   return PBB_OKAY;
 }
@@ -370,30 +412,39 @@ _parse_order_connect_router(void) {
 static enum pbb_result
 _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+  struct netaddr radio_mac;
+
   if (context->addr_len != 6) {
     OLSR_WARN(LOG_PLUGINS, "Address length of DLEP message should be 6 (but was %d)",
         context->addr_len);
     return PBB_DROP_MESSAGE;
   }
 
+  if (netaddr_from_binary(&radio_mac, context->orig_addr, context->addr_len, AF_MAC48)) {
+    OLSR_WARN(LOG_PLUGINS, "Cannot parse DLEP originator address");
+    return PBB_DROP_MESSAGE;
+  }
+
   _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->single_value[0];
   switch (_current_order) {
+    /* received by both interface and router */
     case DLEP_ORDER_DISCONNECT:
       return _parse_order_disconnect();
-#if 1 /* only received by DLEP-interface */
+
+#if 0
+    /* only received by DLEP-interface */
     case DLEP_ORDER_CONNECT_ROUTER:
       return _parse_order_connect_router();
+
 #endif
-#if 0 /* only received by DLEP-router */
+    /* only received by DLEP-router */
     case DLEP_ORDER_INTERFACE_DISCOVERY:
-      break;
+      return _parse_order_interface_discovery(&radio_mac);
     case DLEP_ORDER_NEIGHBOR_UP:
-      break;
-    case DLEP_ORDER_NEIGHBOR_DOWN:
       break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       break;
-#endif
+
     default:
       OLSR_WARN(LOG_PLUGINS, "Unknown order in DLEP message: %d", _current_order);
       return PBB_DROP_MESSAGE;
@@ -402,29 +453,9 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
 }
 
 static enum pbb_result
-_cb_parse_dlep_address(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
-      struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
-  if (_current_order != DLEP_ORDER_NEIGHBOR_UP
-      && _current_order != DLEP_ORDER_NEIGHBOR_DOWN
-      && _current_order != DLEP_ORDER_NEIGHBOR_UPDATE) {
-    /* ignnore addresses except for neighbor orders */
-    return PBB_OKAY;
-  }
-
-  return PBB_OKAY;
-}
-
-static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP message were not fulfilled!");
-  return PBB_OKAY;
-}
-
-static enum pbb_result
-_cb_parse_dlep_address_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
-      struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
-  OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP address were not fulfilled!");
   return PBB_OKAY;
 }
 
@@ -439,38 +470,92 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
       union netaddr_socket *from,
       size_t length __attribute__((unused))) {
   enum pbb_result result;
-  uint8_t dummy[] __attribute__((unused)) = {
-      /* packet header */
-      0x00,
-
-      /* message header */
-      DLEP_MESSAGE_ID, 0x10, 0x00, 24, 0x11, 0x11,
-
-      /* tlv block */
-      0x00, 16,
-
-      /* order TLV */
-      DLEP_TLV_ORDER, 0x10, 1, DLEP_ORDER_CONNECT_ROUTER,
-
-      /* VTIME tlv */
-      MSGTLV_VTIME, 0x10, 1, 0x10,
-
-      /* peer type tlv */
-      DLEP_TLV_PEER_TYPE, 0x10, 5, 'h', 'e', 'l', 'l', 'o',
-  };
-
   OLSR_DEBUG(LOG_PLUGINS, "Parsing DLEP packet");
 
   _peer_socket = from;
 
-  //  result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
-  result = pbb_reader_handle_packet(&_dlep_reader, dummy, sizeof(dummy));
+  result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
   if (result) {
     OLSR_WARN(LOG_PLUGINS, "Error while parsing DLEP packet: %s (%d)",
         pbb_strerror(result), result);
   }
 
   _peer_socket = NULL;
+}
+
+static void
+_add_connectrouter_msgtlvs(void) {
+  uint8_t encoded_vtime = 0;
+
+  // TODO: calculate encoded vtime
+  pbb_writer_add_messagetlv(&_dlep_writer,
+      MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+
+  if (_config.peer_type[0]) {
+    pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
+        _config.peer_type, strlen(_config.peer_type));
+  }
+}
+
+static void
+_cb_addMessageHeader(struct pbb_writer *writer, struct pbb_writer_message *msg) {
+  pbb_writer_set_msg_header(writer, msg, false, false, false, true);
+  pbb_writer_set_msg_seqno(writer, msg, _msg_session->seqno++);
+}
+
+static void
+_cb_addMessageTLVs(struct pbb_writer *writer,
+    struct pbb_writer_content_provider *prv __attribute__((unused))) {
+
+  pbb_writer_add_messagetlv(writer,
+      DLEP_TLV_ORDER, _msg_order, NULL, 0);
+
+  switch (_msg_order) {
+    case DLEP_ORDER_CONNECT_ROUTER:
+      _add_connectrouter_msgtlvs();
+      break;
+    default:
+      OLSR_WARN(LOG_PLUGINS, "DLEP Message order %d not implemented yet", _msg_order);
+      break;
+  }
+}
+static void
+_cb_dlep_interface_timerout(void *ptr) {
+  struct _dlep_session *session = ptr;
+
+  OLSR_DEBUG(LOG_PLUGINS, "Removing DLEP session");
+
+  pbb_writer_unregister_interface(&_dlep_writer, &session->out_if);
+  free(session->out_if.packet_buffer);
+
+  avl_remove(&_session_tree, &session->_node);
+  free(session);
+}
+
+static void
+_cb_router_connect(void *ptr __attribute__((unused))) {
+  if (avl_is_empty(&_session_tree))
+    return;
+
+  _msg_order = DLEP_ORDER_CONNECT_ROUTER;
+
+  avl_for_each_element(&_session_tree, _msg_session, _node) {
+    pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_msg_session->out_if);
+    pbb_writer_flush(&_dlep_writer, &_msg_session->out_if, false);
+  }
+}
+
+static void
+_cb_send_dlep(struct pbb_writer *writer __attribute__((unused)),
+    struct pbb_writer_interface *interf,
+    void *ptr, size_t len) {
+  struct _dlep_session *session;
+
+  session = container_of(interf, struct _dlep_session, out_if);
+
+  if (olsr_packet_send_managed(&_dlep_socket, &session->interface_socket, ptr, len)) {
+    OLSR_WARN(LOG_PLUGINS, "Could not sent DLEP packet to socket");
+  }
 }
 
 /**
@@ -488,25 +573,5 @@ _cb_config_changed(void) {
   olsr_packet_apply_managed(&_dlep_socket, &_config.socket);
 
   /* reconfigure timers */
-  olsr_timer_set(&_tentry_interface_discovery, _config.discovery_interval);
-  olsr_timer_set(&_tentry_neighbor_update, _config.neighbor_interval);
-}
-
-static void
-_cb_dlep_router_timerout(void *ptr) {
-  struct _dlep_session *session = ptr;
-
-  OLSR_DEBUG(LOG_PLUGINS, "Removing DLEP session");
-  avl_remove(&_session_tree, &session->_node);
-  free(session);
-}
-
-static void
-_cb_interface_discovery(void *ptr __attribute__((unused))) {
-
-}
-
-static void
-_cb_neighbor_update(void *ptr __attribute__((unused))) {
-
+  olsr_timer_set(&_tentry_router_connect, _config.connect_interval);
 }
