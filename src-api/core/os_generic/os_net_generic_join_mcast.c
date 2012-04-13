@@ -68,14 +68,18 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
   struct ipv6_mreq v6_mreq;
 
   if (multicast->type == AF_INET) {
+    const struct netaddr *src;
+
+    src = oif == NULL ? &NETADDR_IPV4_ANY : &oif->if_v4;
+
     OLSR_DEBUG(log_src,
         "Socket on interface %s joining multicast %s (src %s)\n",
-        oif->name,
+        oif ? oif->name : "*",
         netaddr_to_string(&buf2, multicast),
-        netaddr_to_string(&buf1, &oif->if_v4));
+        netaddr_to_string(&buf1, src));
 
     netaddr_to_binary(&v4_mreq.imr_multiaddr, multicast, 4);
-    netaddr_to_binary(&v4_mreq.imr_interface, &oif->if_v4, 4);
+    netaddr_to_binary(&v4_mreq.imr_interface, src, 4);
 
     if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
         &v4_mreq, sizeof(v4_mreq)) < 0) {
@@ -84,14 +88,17 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
     }
   }
   else {
+    int if_index;
+
+    if_index = oif == NULL ? 0 : oif->index;
+
     OLSR_DEBUG(log_src,
-        "Socket on interface %s joining multicast %s (src %s)\n",
-        oif->name,
-        netaddr_to_string(&buf2, multicast),
-        netaddr_to_string(&buf1, &oif->linklocal_v6));
+        "Socket on interface %s joining multicast %s (if %d)\n",
+        oif ? oif->name : "*",
+        netaddr_to_string(&buf2, multicast), if_index);
 
     netaddr_to_binary(&v6_mreq.ipv6mr_multiaddr, multicast, 16);
-    v6_mreq.ipv6mr_interface = oif->index;
+    v6_mreq.ipv6mr_interface = if_index;
 
     if (setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP,
         &v6_mreq, sizeof(v6_mreq)) < 0) {
@@ -114,7 +121,7 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
 int
 os_net_join_mcast_send(int sock,
     struct netaddr *multicast __attribute((unused)),
-    struct olsr_interface_data *oif,
+    struct olsr_interface_data *oif, bool loop,
     enum log_source log_src __attribute__((unused))) {
 #if !defined (REMOVE_LOG_DEBUG)
   struct netaddr_str buf1, buf2;
@@ -135,7 +142,7 @@ os_net_join_mcast_send(int sock,
       return -1;
     }
 
-    p = 0;
+    p = loop ? 1 : 0;
     if(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&p, sizeof(p)) < 0) {
       OLSR_WARN(log_src, "Cannot deactivate local loop of multicast interface: %s (%d)\n",
           strerror(errno), errno);

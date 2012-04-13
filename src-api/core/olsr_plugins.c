@@ -75,10 +75,8 @@ static const char *dlopen_keys[5] = {
 static const char *dlopen_patterns[] = {
   "%PATH%/%PRE%%LIB%%POST%.%VER%",
   "%PATH%/%PRE%%LIB%%POST%",
-  "%PATH%/%LIB%",
   "%PRE%%LIB%%POST%.%VER%",
   "%PRE%%LIB%%POST%",
-  "%LIB%",
 };
 
 static void _init_plugin_tree(void);
@@ -221,20 +219,21 @@ olsr_plugins_load(const char *libname)
     /* plugin should be in the tree now */
     if ((plugin = olsr_plugins_get(libname)) == NULL) {
       OLSR_WARN(LOG_PLUGINLOADER, "dynamic library loading failed: \"%s\"!\n", dlerror());
+      dlclose(dlhandle);
       return NULL;
     }
 
-    plugin->int_dlhandle = dlhandle;
+    plugin->_dlhandle = dlhandle;
   }
 
-  if (!plugin->int_loaded && plugin->load != NULL) {
+  if (!plugin->_loaded && plugin->load != NULL) {
     if (plugin->load()) {
       OLSR_WARN(LOG_PLUGINLOADER, "Load callback failed for plugin %s\n", plugin->name);
       return NULL;
     }
     OLSR_DEBUG(LOG_PLUGINLOADER, "Load callback of plugin %s successful\n", plugin->name);
   }
-  plugin->int_loaded = true;
+  plugin->_loaded = true;
   return plugin;
 }
 
@@ -245,12 +244,12 @@ olsr_plugins_load(const char *libname)
  */
 int
 olsr_plugins_enable(struct olsr_plugin *plugin) {
-  if (plugin->int_enabled) {
+  if (plugin->_enabled) {
     OLSR_DEBUG(LOG_PLUGINLOADER, "Plugin %s is already active.\n", plugin->name);
     return 0;
   }
 
-  if (!plugin->int_loaded && plugin->load != NULL) {
+  if (!plugin->_loaded && plugin->load != NULL) {
     if (plugin->load()) {
       OLSR_WARN(LOG_PLUGINLOADER, "Error, pre init failed for plugin %s\n", plugin->name);
       return -1;
@@ -258,7 +257,7 @@ olsr_plugins_enable(struct olsr_plugin *plugin) {
     OLSR_DEBUG(LOG_PLUGINLOADER, "Pre initialization of plugin %s successful\n", plugin->name);
   }
 
-  plugin->int_loaded = true;
+  plugin->_loaded = true;
 
   if (plugin->enable != NULL) {
     if (plugin->enable()) {
@@ -267,7 +266,7 @@ olsr_plugins_enable(struct olsr_plugin *plugin) {
     }
     OLSR_DEBUG(LOG_PLUGINLOADER, "Post initialization of plugin %s successful\n", plugin->name);
   }
-  plugin->int_enabled = true;
+  plugin->_enabled = true;
 
   if (plugin->author != NULL && plugin->descr != NULL) {
     OLSR_INFO(LOG_PLUGINLOADER, "Plugin '%s' (%s) by %s activated successfully\n",
@@ -287,7 +286,7 @@ olsr_plugins_enable(struct olsr_plugin *plugin) {
  */
 int
 olsr_plugins_disable(struct olsr_plugin *plugin) {
-  if (!plugin->int_enabled) {
+  if (!plugin->_enabled) {
     OLSR_DEBUG(LOG_PLUGINLOADER, "Plugin %s is not active.\n", plugin->name);
     return 0;
   }
@@ -307,7 +306,7 @@ olsr_plugins_disable(struct olsr_plugin *plugin) {
     OLSR_DEBUG(LOG_PLUGINLOADER, "Pre cleanup of plugin %s successful\n", plugin->name);
   }
 
-  plugin->int_enabled = false;
+  plugin->_enabled = false;
   return 0;
 }
 
@@ -343,12 +342,12 @@ _init_plugin_tree(void) {
  */
 static int
 _unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
-  if (plugin->int_enabled) {
+  if (plugin->_enabled) {
     /* deactivate first if necessary */
     olsr_plugins_disable(plugin);
   }
 
-  if (plugin->int_dlhandle == NULL && !cleanup) {
+  if (plugin->_dlhandle == NULL && !cleanup) {
     /*
      * this is a static plugin and OLSR is not shutting down,
      * so it cannot be unloaded
@@ -366,8 +365,8 @@ _unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
   avl_delete(&plugin_tree, &plugin->p_node);
 
   /* cleanup */
-  if (plugin->int_dlhandle) {
-    dlclose(plugin->int_dlhandle);
+  if (plugin->_dlhandle) {
+    dlclose(plugin->_dlhandle);
   }
 
   return false;
@@ -407,6 +406,10 @@ _open_plugin(const char *filename) {
 
     OLSR_DEBUG(LOG_PLUGINLOADER, "Trying to load library: %s", abuf_getptr(&abuf));
     result = dlopen(abuf_getptr(&abuf), RTLD_NOW);
+    if (result == NULL) {
+      OLSR_DEBUG(LOG_PLUGINLOADER, "Loading of plugin file %s failed: %s",
+          abuf_getptr(&abuf), dlerror());
+    }
   }
   if (result == NULL) {
     OLSR_WARN(LOG_PLUGINLOADER, "Loading of plugin %s failed.\n", filename);

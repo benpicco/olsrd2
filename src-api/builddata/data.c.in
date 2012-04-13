@@ -56,7 +56,7 @@ static struct olsr_builddata _builddata = {
   .builddate = __DATE__" "__TIME__,
   .buildsystem = "${CMAKE_SYSTEM}",
   
-  .sharedlibrary_prefix = "${CMAKE_SHARED_LIBRARY_PREFIX}",
+  .sharedlibrary_prefix = "${CMAKE_SHARED_LIBRARY_PREFIX}${OONF_LIBPREFIX}_",
   .sharedlibrary_postfix = "${CMAKE_SHARED_LIBRARY_SUFFIX}",
 };
 

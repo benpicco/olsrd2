@@ -279,7 +279,7 @@ olsr_cfg_apply(void) {
 
   /* enable all plugins */
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-    if (plugin->int_enabled)
+    if (plugin->_enabled)
       continue;
     if (olsr_plugins_enable(plugin) != 0
         && config_global.failfast) {
@@ -318,7 +318,7 @@ olsr_cfg_apply(void) {
 apply_failed:
   /* look for loaded but not enabled plugins and unload them */
   OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-    if (plugin->int_loaded && !plugin->int_enabled) {
+    if (plugin->_loaded && !plugin->_enabled) {
       olsr_plugins_unload(plugin);
     }
   }
