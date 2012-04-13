@@ -43,6 +43,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <net/if.h>
 
 #include "common/common_types.h"
 #include "common/string.h"
@@ -518,9 +519,19 @@ netaddr_socket_to_string(struct netaddr_str *dst, const union netaddr_socket *sr
         ntohs(src->v4.sin_port));
   }
   else if (src->std.sa_family == AF_INET6) {
-    snprintf(dst->buf, sizeof(*dst), "[%s]:%d",
-        inet_ntop(AF_INET6, &src->v6.sin6_addr, buf.buf, sizeof(buf)),
-        ntohs(src->v6.sin6_port));
+    if (src->v6.sin6_scope_id) {
+      char scope_buf[IF_NAMESIZE];
+
+      snprintf(dst->buf, sizeof(*dst), "[%s]:%d%%%s",
+          inet_ntop(AF_INET6, &src->v6.sin6_addr, buf.buf, sizeof(buf)),
+          ntohs(src->v6.sin6_port),
+          if_indextoname(src->v6.sin6_scope_id, scope_buf));
+    }
+    else {
+      snprintf(dst->buf, sizeof(*dst), "[%s]:%d",
+          inet_ntop(AF_INET6, &src->v6.sin6_addr, buf.buf, sizeof(buf)),
+          ntohs(src->v6.sin6_port));
+    }
   }
   else {
     /* unknown address type */
