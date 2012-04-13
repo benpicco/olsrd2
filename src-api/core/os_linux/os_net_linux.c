@@ -115,8 +115,8 @@ os_net_cleanup(void) {
  * @return same as recvfrom()
  */
 int
-os_recvfrom(int fd, void *buf, size_t length,
-    union netaddr_socket *source, unsigned interface __attribute__((unused))) {
+os_recvfrom(int fd, void *buf, size_t length, union netaddr_socket *source,
+    struct olsr_interface_data *ifd __attribute__((unused))) {
   socklen_t len = sizeof(*source);
   return recvfrom(fd, buf, length, 0, &source->std, &len);
 }

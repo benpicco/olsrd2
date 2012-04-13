@@ -58,10 +58,15 @@ static char input_buffer[65536];
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_packet_state);
 
+static int _apply_managed(struct olsr_packet_managed *managed,
+    struct olsr_packet_managed_config *config);
 static int _apply_managed_socket(struct olsr_packet_managed *managed,
     struct olsr_packet_socket *stream,
-    struct netaddr *bindto, uint16_t port);
+    struct netaddr *bindto, uint16_t port,
+    struct olsr_interface_data *data);
 static void _cb_packet_event(int fd, void *data, bool r, bool w);
+static void _cb_interface_listener(
+    struct olsr_interface_listener *l, struct olsr_interface_data *old);
 
 /**
  * Initialize packet socket handler
@@ -99,16 +104,16 @@ olsr_packet_cleanup(void) {
  */
 int
 olsr_packet_add(struct olsr_packet_socket *pktsocket,
-    union netaddr_socket *local) {
+    union netaddr_socket *local, struct olsr_interface_data *interf) {
   int s = -1;
 
   /* Init socket */
-  // TODO: add interface selection
-  s = os_net_getsocket(local, false, 0, NULL, LOG_SOCKET_PACKET);
+  s = os_net_getsocket(local, false, 0, interf, LOG_SOCKET_PACKET);
   if (s < 0) {
     return -1;
   }
 
+  pktsocket->interface = interf;
   pktsocket->scheduler_entry.fd = s;
   pktsocket->scheduler_entry.process = _cb_packet_event;
   pktsocket->scheduler_entry.event_read = true;
@@ -200,6 +205,9 @@ olsr_packet_add_managed(struct olsr_packet_managed *managed) {
     managed->config.input_buffer = input_buffer;
     managed->config.input_buffer_length = sizeof(input_buffer);
   }
+
+  managed->_if_listener.process = _cb_interface_listener;
+  managed->_if_listener.name = managed->interface;
 }
 
 /**
@@ -211,7 +219,10 @@ void
 olsr_packet_remove_managed(struct olsr_packet_managed *managed, bool forced) {
   olsr_packet_remove(&managed->socket_v4, forced);
   olsr_packet_remove(&managed->socket_v6, forced);
+  olsr_packet_remove(&managed->multicast_v4, forced);
+  olsr_packet_remove(&managed->multicast_v6, forced);
 
+  olsr_interface_remove_listener(&managed->_if_listener);
   olsr_acl_remove(&managed->acl);
 }
 
@@ -227,26 +238,20 @@ olsr_packet_apply_managed(struct olsr_packet_managed *managed,
     struct olsr_packet_managed_config *config) {
   olsr_acl_copy(&managed->acl, &config->acl);
 
-  if (config_global.ipv4) {
-    if (_apply_managed_socket(managed,
-        &managed->socket_v4, &config->bindto_v4, config->port)) {
-      return -1;
+  if (strcmp(config->interface, managed->interface) != 0) {
+    /* interface changed, remove old listener if necessary */
+    olsr_interface_remove_listener(&managed->_if_listener);
+
+    /* copy interface name */
+    strscpy(managed->interface, config->interface, sizeof(managed->interface));
+
+    if (*managed->interface) {
+      /* create new interface listener */
+      olsr_interface_add_listener(&managed->_if_listener);
     }
-  }
-  else {
-    olsr_packet_remove(&managed->socket_v4, true);
   }
 
-  if (config_global.ipv6) {
-    if (_apply_managed_socket(managed,
-        &managed->socket_v6, &config->bindto_v6, config->port)) {
-      return -1;
-    }
-  }
-  else {
-    olsr_packet_remove(&managed->socket_v6, true);
-  }
-  return 0;
+  return _apply_managed(managed, config);
 }
 
 /**
@@ -271,6 +276,111 @@ olsr_packet_send_managed(struct olsr_packet_managed *managed,
 }
 
 /**
+ * Send a packet out over one of the managed sockets, depending on the
+ * address family type of the remote address
+ * @param managed pointer to managed packet socket
+ * @param remote pointer to remote socket
+ * @param data pointer to data to send
+ * @param length length of data
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+olsr_packet_send_managed_multicast(struct olsr_packet_managed *managed,
+    bool ipv4, const void *data, size_t length) {
+  if (config_global.ipv4 && ipv4 && list_is_node_added(&managed->multicast_v4.node)) {
+    return olsr_packet_send(&managed->socket_v4, &managed->multicast_v4.local_socket, data, length);
+  }
+  if (config_global.ipv6 && !ipv4 && list_is_node_added(&managed->multicast_v6.node)) {
+    return olsr_packet_send(&managed->socket_v6, &managed->multicast_v6.local_socket, data, length);
+  }
+  return -1;
+}
+
+/**
+ * Apply a new configuration to all attached sockets
+ * @param managed pointer to managed socket
+ * @param config pointer to configuration
+ * @return -1 if an error happened, 0 otherwise
+ */
+static int
+_apply_managed(struct olsr_packet_managed *managed,
+    struct olsr_packet_managed_config *config) {
+  struct olsr_interface_data *data = NULL;
+  bool mc_ipv4, mc_ipv6;
+  uint16_t mc_port;
+  int result = 0;
+
+  /* get multicast port, copy from unicast port if necessary */
+  mc_port = config->multicast_port;
+  if (mc_port == 0) {
+    mc_port = config->port;
+  }
+
+  /* check if we have to handle multicast */
+  mc_ipv4 = netaddr_is_in_subnet(&NETADDR_IPV4_MULTICAST, &config->multicast_v4);
+  mc_ipv6 = netaddr_is_in_subnet(&NETADDR_IPV6_MULTICAST, &config->multicast_v6);
+
+  /* get interface */
+  if (managed->_if_listener.interface) {
+    data = &managed->_if_listener.interface->data;
+  }
+
+  if (config_global.ipv4) {
+    /* unicast v4 */
+    result += _apply_managed_socket(managed,
+        &managed->socket_v4, &config->bindto_v4, config->port, data);
+
+    if (mc_ipv4 && data != NULL) {
+      /* restrict multicast output to interface */
+      os_net_join_mcast_send(managed->socket_v4.scheduler_entry.fd,
+          &config->multicast_v4, data, LOG_SOCKET_PACKET);
+    }
+  }
+  else {
+    olsr_packet_remove(&managed->socket_v4, true);
+  }
+
+  if (config_global.ipv4 && mc_ipv4) {
+    /* multicast v4*/
+    result += _apply_managed_socket(managed,
+        &managed->multicast_v4, &config->multicast_v4, mc_port, data);
+    os_net_join_mcast_recv(managed->multicast_v4.scheduler_entry.fd,
+        &config->multicast_v4, data, LOG_SOCKET_PACKET);
+  }
+  else {
+    olsr_packet_remove(&managed->multicast_v4, true);
+  }
+
+  if (config_global.ipv6) {
+    /* unicast v6 */
+    result += _apply_managed_socket(managed,
+        &managed->socket_v6, &config->bindto_v6, config->port, data);
+
+    if (mc_ipv4 && data != NULL) {
+      /* restrict multicast output to interface */
+      os_net_join_mcast_send(managed->socket_v6.scheduler_entry.fd,
+          &config->multicast_v6, data, LOG_SOCKET_PACKET);
+    }
+  }
+  else {
+    olsr_packet_remove(&managed->socket_v6, true);
+  }
+
+  if (config_global.ipv6 && mc_ipv6) {
+    /* multicast v6*/
+    result += _apply_managed_socket(managed,
+        &managed->multicast_v6, &config->multicast_v6, mc_port, data);
+    os_net_join_mcast_recv(managed->multicast_v6.scheduler_entry.fd,
+        &config->multicast_v6, data, LOG_SOCKET_PACKET);
+  }
+  else {
+    olsr_packet_remove(&managed->multicast_v6, true);
+  }
+
+  return result == 0 ? 0 : -1;
+}
+
+/**
  * Apply new configuration to a managed stream socket
  * @param managed pointer to managed stream
  * @param stream pointer to TCP stream to configure
@@ -281,30 +391,44 @@ olsr_packet_send_managed(struct olsr_packet_managed *managed,
 static int
 _apply_managed_socket(struct olsr_packet_managed *managed,
     struct olsr_packet_socket *packet,
-    struct netaddr *bindto, uint16_t port) {
+    struct netaddr *bindto, uint16_t port,
+    struct olsr_interface_data *data) {
   union netaddr_socket sock;
 #if !defined(REMOVE_LOG_WARN)
   struct netaddr_str buf;
 #endif
-
-  if (netaddr_socket_init(&sock, bindto, port)) {
+  if (bindto->type == AF_UNSPEC) {
+    /* we are just reinitializing the socket because of an interface event */
+    memcpy(&sock, &packet->local_socket, sizeof(sock));
+  }
+  else if (netaddr_socket_init(&sock, bindto, port)) {
     OLSR_WARN(LOG_SOCKET_STREAM, "Cannot create managed socket address: %s/%u",
         netaddr_to_string(&buf, bindto), port);
     return -1;
   }
 
-  if (memcmp(&sock, &packet->local_socket, sizeof(sock)) == 0) {
+  if (list_is_node_added(&packet->node)
+      && memcmp(&sock, &packet->local_socket, sizeof(sock)) == 0
+      && data == packet->interface) {
     /* nothing changed */
     return 0;
   }
 
+  /* remove old socket */
   olsr_packet_remove(packet, true);
-  if (olsr_packet_add(packet, &sock)) {
-    return -1;
+
+  if (data != NULL && !data->up) {
+    return 0;
   }
 
   /* copy configuration */
   memcpy(&packet->config, &managed->config, sizeof(packet->config));
+
+  /* create new socket */
+  if (olsr_packet_add(packet, &sock, data)) {
+    return -1;
+  }
+
   return 0;
 }
 
@@ -334,7 +458,7 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
     buf = pktsocket->config.input_buffer;
 
     result = os_recvfrom(fd, buf, pktsocket->config.input_buffer_length-1, &sock,
-        pktsocket->config.interface);
+        pktsocket->interface);
     if (result > 0 && pktsocket->config.receive_data != NULL) {
       /* null terminate it */
       buf[result] = 0;
@@ -382,4 +506,17 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
     /* nothing left to send, disable outgoing events */
     olsr_socket_set_write(&pktsocket->scheduler_entry, false);
   }
+}
+
+static void
+_cb_interface_listener(struct olsr_interface_listener *l,
+    struct olsr_interface_data *old __attribute__((unused))) {
+  struct olsr_packet_managed *managed;
+  struct olsr_packet_managed_config cfg;
+
+  /* calculate managed socket for this event */
+  managed = container_of(l, struct olsr_packet_managed, _if_listener);
+
+  memset(&cfg, 0, sizeof(cfg));
+  _apply_managed(managed, &cfg);
 }
