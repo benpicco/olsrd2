@@ -120,7 +120,10 @@ struct olsr_interface_listener {
   bool mesh;
 
   /* callback for interface change */
-  void (*process)(struct olsr_interface *, struct olsr_interface_data *old);
+  void (*process)(struct olsr_interface_listener *, struct olsr_interface_data *old);
+
+  /* will be set by the service before the process() function is called */
+  struct olsr_interface *interface;
 };
 
 #define OLSR_FOR_ALL_INTERFACES(interf, ptr) avl_for_each_element_safe(&olsr_interface_tree, interf, node, ptr)
@@ -129,8 +132,7 @@ EXPORT extern struct avl_tree olsr_interface_tree;
 EXPORT int olsr_interface_init(void) __attribute__((warn_unused_result));
 EXPORT void olsr_interface_cleanup(void);
 
-EXPORT struct olsr_interface *olsr_interface_add_listener(
-    struct olsr_interface_listener *);
+EXPORT int olsr_interface_add_listener(struct olsr_interface_listener *);
 EXPORT void olsr_interface_remove_listener(struct olsr_interface_listener *);
 
 EXPORT struct olsr_interface_data *olsr_interface_get_data(const char *name);

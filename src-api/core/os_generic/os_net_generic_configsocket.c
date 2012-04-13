@@ -59,15 +59,19 @@
  * @return -1 if an error happened, 0 otherwise
  */
 int
-os_net_configsocket(int sock, union netaddr_socket *bindto, int recvbuf,
+os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
     struct olsr_interface_data *data __attribute__((unused)),
     enum log_source log_src __attribute__((unused))) {
   int yes;
   socklen_t addrlen;
+  union netaddr_socket bindto;
 
 #if !defined(REMOVE_LOG_WARN)
   struct netaddr_str buf;
 #endif
+
+  /* temporary copy bindto address */
+  memcpy(&bindto, _bindto, sizeof(bindto));
 
   if (os_net_set_nonblocking(sock)) {
     return 0;
@@ -87,36 +91,17 @@ os_net_configsocket(int sock, union netaddr_socket *bindto, int recvbuf,
   yes = 1;
   if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
     OLSR_WARN(log_src, "Cannot reuse address for %s: %s (%d)\n",
-        netaddr_socket_to_string(&buf, bindto), strerror(errno), errno);
+        netaddr_socket_to_string(&buf, &bindto), strerror(errno), errno);
     return -1;
   }
 #endif
 
 #if defined(IP_RECVIF)
-  if (setsockopt(sock, IPPROTO_IP, IP_RECVIF, &yes, sizeof(yes)) < 0) {
+  if (data != NULL
+      && setsockopt(sock, IPPROTO_IP, IP_RECVIF, &yes, sizeof(yes)) < 0) {
     OLSR_WARN(log_src, "Cannot apply IP_RECVIF for %s: %s (%d)\n",
-        netaddr_socket_to_string(&buf, bindto), strerror(errno), errno);
+        netaddr_socket_to_string(&buf, &bindto), strerror(errno), errno);
     return -1;
-  }
-#endif
-
-#if defined(IP_PKTINFO)
-  if (bindto->std.sa_family == AF_INET) {
-    if (setsockopt(sock, IPPROTO_IP, IP_PKTINFO, &yes, sizeof(yes)) < 0) {
-      OLSR_WARN(log_src, "Cannot apply IP_PKTINFO for %s: %s (%d)\n",
-          netaddr_socket_to_string(&buf, bindto), strerror(errno), errno);
-      return -1;
-    }
-  }
-#endif
-
-#if defined(IPV6_PKTINFO)
-  if (bindto->std.sa_family == AF_INET6) {
-    if (setsockopt(sock, IPPROTO_IP, IPV6_PKTINFO, &yes, sizeof(yes)) < 0) {
-      OLSR_WARN(log_src, "Cannot apply IPV6_PKTINFO for %s: %s (%d)\n",
-          netaddr_socket_to_string(&buf, bindto), strerror(errno), errno);
-      return -1;
-    }
   }
 #endif
 
@@ -133,17 +118,22 @@ os_net_configsocket(int sock, union netaddr_socket *bindto, int recvbuf,
 
     if (recvbuf < 8192) {
       OLSR_WARN(log_src, "Cannot setup receive buffer size for %s: %s (%d)\n",
-          netaddr_socket_to_string(&buf, bindto), strerror(errno), errno);
+          netaddr_socket_to_string(&buf, &bindto), strerror(errno), errno);
       return -1;
     }
   }
 #endif
 
+  /* add ipv6 interface scope if necessary */
+  if (data != NULL && netaddr_socket_get_addressfamily(&bindto) == AF_INET6) {
+    bindto.v6.sin6_scope_id = data->index;
+  }
+
   /* bind the socket to the port number */
-  addrlen = sizeof(*bindto);
-  if (bind(sock, &bindto->std, addrlen) < 0) {
-    OLSR_WARN(log_src, "Cannot bind socket to %s: %s (%d)\n",
-        netaddr_socket_to_string(&buf, bindto), strerror(errno), errno);
+  addrlen = sizeof(bindto);
+  if (bind(sock, &bindto.std, addrlen) < 0) {
+    OLSR_WARN(log_src, "Cannot bind socket to address %s: %s (%d)\n",
+        netaddr_socket_to_string(&buf, &bindto), strerror(errno), errno);
     return -1;
   }
   return 0;

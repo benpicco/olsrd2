@@ -46,6 +46,7 @@
 #include "common/list.h"
 #include "common/autobuf.h"
 #include "common/netaddr.h"
+#include "olsr_interface.h"
 #include "olsr_netaddr_acl.h"
 #include "olsr_socket.h"
 
@@ -61,8 +62,6 @@ struct olsr_packet_config {
   void *input_buffer;
   size_t input_buffer_length;
 
-  unsigned interface;
-
   void (*receive_data)(struct olsr_packet_socket *,
       union netaddr_socket *from, size_t length);
 };
@@ -74,15 +73,20 @@ struct olsr_packet_socket {
   union netaddr_socket local_socket;
   struct autobuf out;
 
+  struct olsr_interface_data *interface;
+
   struct olsr_packet_config config;
 };
 
 struct olsr_packet_managed {
-  struct olsr_packet_socket socket_v4;
-  struct olsr_packet_socket socket_v6;
+  struct olsr_packet_socket socket_v4, multicast_v4;
+  struct olsr_packet_socket socket_v6, multicast_v6;
   struct olsr_netaddr_acl acl;
 
   struct olsr_packet_config config;
+
+  struct olsr_interface_listener _if_listener;
+  char interface[IF_NAMESIZE];
 };
 
 struct olsr_packet_managed_config {
@@ -90,20 +94,23 @@ struct olsr_packet_managed_config {
   char interface[IF_NAMESIZE];
   struct netaddr bindto_v4, multicast_v4;
   struct netaddr bindto_v6, multicast_v6;
-  uint16_t port;
+  uint16_t port, multicast_port;
 };
 
 EXPORT void olsr_packet_init(void);
 EXPORT void olsr_packet_cleanup(void);
 
 EXPORT int olsr_packet_add(struct olsr_packet_socket *,
-    union netaddr_socket *local);
+    union netaddr_socket *local, struct olsr_interface_data *);
 EXPORT void olsr_packet_remove(struct olsr_packet_socket *, bool);
 
 EXPORT int olsr_packet_send(struct olsr_packet_socket *,
     union netaddr_socket *remote, const void *data, size_t length);
 EXPORT int olsr_packet_send_managed(struct olsr_packet_managed *,
     union netaddr_socket *remote, const void *data, size_t length);
+EXPORT int olsr_packet_send_managed_multicast(
+    struct olsr_packet_managed *managed,
+    bool ipv4, const void *data, size_t length);
 
 EXPORT void olsr_packet_add_managed(struct olsr_packet_managed *);
 EXPORT int olsr_packet_apply_managed(struct olsr_packet_managed *,

@@ -112,19 +112,21 @@ olsr_interface_cleanup(void) {
 /**
  * Add a listener to a specific interface
  * @param listener initialized listener object
- * @return pointer to olsr_interface struct, NULL if an error happened
+ * @return -1 if an error happened, 0 otherwise
  */
-struct olsr_interface *
+int
 olsr_interface_add_listener(
     struct olsr_interface_listener *listener) {
-  struct olsr_interface *interf;
+  if (listener->interface) {
+    return 0;
+  }
 
-  interf = _interface_add(listener->name, listener->mesh);
-  if (interf != NULL && listener->process != NULL) {
+  listener->interface = _interface_add(listener->name, listener->mesh);
+  if (listener->interface != NULL && listener->process != NULL) {
     list_add_tail(&_interface_listener, &listener->node);
   }
 
-  return interf;
+  return listener->interface == NULL ? -1 : 0;
 }
 
 /**
@@ -134,10 +136,14 @@ olsr_interface_add_listener(
 void
 olsr_interface_remove_listener(
     struct olsr_interface_listener *listener) {
+  if (!listener->interface)
+    return;
+
   if (listener->process) {
     list_remove(&listener->node);
   }
   _interface_remove(listener->name, listener->mesh);
+  listener->interface = NULL;
 }
 
 /**
@@ -288,7 +294,9 @@ _cb_change_handler(void *ptr) {
   list_for_each_element_safe(&_interface_listener, listener, node, l_it) {
     if (listener->process != NULL
         && strcasecmp(listener->name, interf->data.name) == 0) {
-      listener->process(interf, &old_data);
+      listener->interface = interf;
+      listener->process(listener, &old_data);
+      listener->interface = NULL;
     }
   }
 }
