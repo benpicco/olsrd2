@@ -1077,7 +1077,7 @@ _handle_message(struct pbb_reader *parser,
   struct pbb_reader_tlvblock_consumer *consumer, *same_order[2];
   struct list_entity addr_head;
   struct pbb_reader_addrblock_entry *addr, *safe;
-  uint8_t *start, *end;
+  uint8_t *start, *end = NULL;
   uint8_t flags;
   uint16_t size;
 
