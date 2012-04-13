@@ -95,6 +95,7 @@ struct olsr_packet_managed_config {
   struct netaddr bindto_v4, multicast_v4;
   struct netaddr bindto_v6, multicast_v6;
   uint16_t port, multicast_port;
+  bool loop_multicast;
 };
 
 EXPORT void olsr_packet_init(void);

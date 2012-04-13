@@ -84,13 +84,13 @@ struct olsr_plugin {
   int (*unload) (void);
 
   /* pointer to dlopen handle */
-  void *int_dlhandle;
+  void *_dlhandle;
 
   /* true if the plugin has been loaded */
-  bool int_loaded;
+  bool _loaded;
 
   /* true if the plugin has been enables */
-  bool int_enabled;
+  bool _enabled;
 };
 
 #define OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, iterator) avl_for_each_element_safe(&plugin_tree, plugin, p_node, iterator)
@@ -115,7 +115,7 @@ EXPORT int olsr_plugins_disable(struct olsr_plugin *);
  */
 static inline bool
 olsr_plugins_is_static(struct olsr_plugin *p) {
-  return p->int_dlhandle == NULL;
+  return p->_dlhandle == NULL;
 }
 
 /**
@@ -124,7 +124,7 @@ olsr_plugins_is_static(struct olsr_plugin *p) {
  */
 static inline bool
 olsr_plugins_is_enabled(struct olsr_plugin *p) {
-  return p->int_enabled;
+  return p->_enabled;
 }
 
 #endif

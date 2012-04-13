@@ -58,7 +58,7 @@
 #define OLSR_INTERFACE_CHANGE_INTERVAL 100
 
 static struct olsr_interface *_interface_add(const char *, bool mesh);
-static void _interface_remove(const char *, bool mesh);
+static void _interface_remove(struct olsr_interface *interf, bool mesh);
 static void _cb_change_handler(void *);
 static void _trigger_change_timer(struct olsr_interface *);
 
@@ -117,16 +117,19 @@ olsr_interface_cleanup(void) {
 int
 olsr_interface_add_listener(
     struct olsr_interface_listener *listener) {
-  if (listener->interface) {
+  if (list_is_node_added(&listener->node)) {
     return 0;
   }
 
-  listener->interface = _interface_add(listener->name, listener->mesh);
-  if (listener->interface != NULL && listener->process != NULL) {
-    list_add_tail(&_interface_listener, &listener->node);
+  if (listener->name) {
+    listener->interface = _interface_add(listener->name, listener->mesh);
+    if (listener->interface == NULL) {
+      return -1;
+    }
   }
 
-  return listener->interface == NULL ? -1 : 0;
+  list_add_tail(&_interface_listener, &listener->node);
+  return 0;
 }
 
 /**
@@ -136,14 +139,15 @@ olsr_interface_add_listener(
 void
 olsr_interface_remove_listener(
     struct olsr_interface_listener *listener) {
-  if (!listener->interface)
+  if (!list_is_node_added(&listener->node)) {
     return;
-
-  if (listener->process) {
-    list_remove(&listener->node);
   }
-  _interface_remove(listener->name, listener->mesh);
-  listener->interface = NULL;
+
+  if (listener->interface) {
+    _interface_remove(listener->interface, listener->mesh);
+  }
+
+  list_remove(&listener->node);
 }
 
 /**
@@ -232,18 +236,10 @@ _interface_add(const char *name, bool mesh) {
 /**
  * Remove an interface from the listener system. If multiple listeners
  * share an interface, this will only decrease the reference counter.
- * @param if_index index of interface
- * @param mesh true if interface is used for mesh traffic
+ * @param interf pointer to olsr_interface
  */
 static void
-_interface_remove(const char *name, bool mesh) {
-  struct olsr_interface *interf;
-
-  interf = avl_find_element(&olsr_interface_tree, name, interf, node);
-  if (!interf) {
-    return;
-  }
-
+_interface_remove(struct olsr_interface *interf, bool mesh) {
   interf->usage_counter--;
   if (mesh) {
     interf->mesh_counter--;
@@ -258,6 +254,8 @@ _interface_remove(const char *name, bool mesh) {
   }
 
   avl_remove(&olsr_interface_tree, &interf->node);
+
+  olsr_timer_stop(&interf->change_timer);
   free(interf);
 }
 

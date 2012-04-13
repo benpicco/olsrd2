@@ -327,13 +327,15 @@ _apply_managed(struct olsr_packet_managed *managed,
 
   if (config_global.ipv4) {
     /* unicast v4 */
-    result += _apply_managed_socket(managed,
-        &managed->socket_v4, &config->bindto_v4, config->port, data);
-
-    if (mc_ipv4 && data != NULL) {
+    if (_apply_managed_socket(managed,
+        &managed->socket_v4, &config->bindto_v4, config->port, data)) {
+      result = -1;
+    }
+    else if (mc_ipv4 && data != NULL) {
       /* restrict multicast output to interface */
       os_net_join_mcast_send(managed->socket_v4.scheduler_entry.fd,
-          &config->multicast_v4, data, LOG_SOCKET_PACKET);
+          &config->multicast_v4, data,
+          config->loop_multicast, LOG_SOCKET_PACKET);
     }
   }
   else {
@@ -342,10 +344,14 @@ _apply_managed(struct olsr_packet_managed *managed,
 
   if (config_global.ipv4 && mc_ipv4) {
     /* multicast v4*/
-    result += _apply_managed_socket(managed,
-        &managed->multicast_v4, &config->multicast_v4, mc_port, data);
-    os_net_join_mcast_recv(managed->multicast_v4.scheduler_entry.fd,
-        &config->multicast_v4, data, LOG_SOCKET_PACKET);
+    if (_apply_managed_socket(managed,
+        &managed->multicast_v4, &config->multicast_v4, mc_port, data)) {
+      result = -1;
+    }
+    else {
+      os_net_join_mcast_recv(managed->multicast_v4.scheduler_entry.fd,
+          &config->multicast_v4, data, LOG_SOCKET_PACKET);
+    }
   }
   else {
     olsr_packet_remove(&managed->multicast_v4, true);
@@ -353,13 +359,15 @@ _apply_managed(struct olsr_packet_managed *managed,
 
   if (config_global.ipv6) {
     /* unicast v6 */
-    result += _apply_managed_socket(managed,
-        &managed->socket_v6, &config->bindto_v6, config->port, data);
-
-    if (mc_ipv4 && data != NULL) {
+    if (_apply_managed_socket(managed,
+        &managed->socket_v6, &config->bindto_v6, config->port, data)) {
+      result = -1;
+    }
+    else if (mc_ipv4 && data != NULL) {
       /* restrict multicast output to interface */
       os_net_join_mcast_send(managed->socket_v6.scheduler_entry.fd,
-          &config->multicast_v6, data, LOG_SOCKET_PACKET);
+          &config->multicast_v6, data,
+          config->loop_multicast, LOG_SOCKET_PACKET);
     }
   }
   else {
@@ -368,16 +376,20 @@ _apply_managed(struct olsr_packet_managed *managed,
 
   if (config_global.ipv6 && mc_ipv6) {
     /* multicast v6*/
-    result += _apply_managed_socket(managed,
-        &managed->multicast_v6, &config->multicast_v6, mc_port, data);
-    os_net_join_mcast_recv(managed->multicast_v6.scheduler_entry.fd,
+    if (_apply_managed_socket(managed,
+        &managed->multicast_v6, &config->multicast_v6, mc_port, data)) {
+      result = -1;
+    }
+    else {
+      os_net_join_mcast_recv(managed->multicast_v6.scheduler_entry.fd,
         &config->multicast_v6, data, LOG_SOCKET_PACKET);
+    }
   }
   else {
     olsr_packet_remove(&managed->multicast_v6, true);
   }
 
-  return result == 0 ? 0 : -1;
+  return result;
 }
 
 /**
@@ -402,7 +414,7 @@ _apply_managed_socket(struct olsr_packet_managed *managed,
     memcpy(&sock, &packet->local_socket, sizeof(sock));
   }
   else if (netaddr_socket_init(&sock, bindto, port)) {
-    OLSR_WARN(LOG_SOCKET_STREAM, "Cannot create managed socket address: %s/%u",
+    OLSR_WARN(LOG_SOCKET_PACKET, "Cannot create managed socket address: %s/%u",
         netaddr_to_string(&buf, bindto), port);
     return -1;
   }
