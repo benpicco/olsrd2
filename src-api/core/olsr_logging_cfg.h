@@ -48,9 +48,15 @@
 
 #include "olsr_logging.h"
 
+#define CFG_VALIDATE_LOGSOURCE(p_name, p_def, p_help, args...) _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_logcfg_schema_validate, .cb_valhelp = olsr_logcfg_schema_help, ##args )
+
 EXPORT void olsr_logcfg_init(enum log_source *debug_lvl_1, size_t length);
 EXPORT void olsr_logcfg_cleanup(void);
-EXPORT void olsr_logcfg_addschema(struct cfg_schema *schema);
 EXPORT int olsr_logcfg_apply(struct cfg_db *db) __attribute__((warn_unused_result));
+
+EXPORT int olsr_logcfg_schema_validate(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
+EXPORT void olsr_logcfg_schema_help(
+    const struct cfg_schema_entry *entry, struct autobuf *out);
 
 #endif /* OLSR_LOGGING_CFG_H_ */

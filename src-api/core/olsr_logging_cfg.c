@@ -75,18 +75,17 @@ static struct cfg_schema_section logging_section = {
   .cb_delta_handler = _cb_logcfg_apply,
 };
 
-static const char *_dummy[0];
 static struct cfg_schema_entry logging_entries[] = {
   /* the next three parameters are configured to a different list during runtime */
-  CFG_VALIDATE_CHOICE(LOG_DEBUG_ENTRY, "",
+  CFG_VALIDATE_LOGSOURCE(LOG_DEBUG_ENTRY, "",
       "Set logging sources that display debug, info and warnings",
-      _dummy, .list = true),
-  CFG_VALIDATE_CHOICE(LOG_INFO_ENTRY, "",
+      .list = true),
+  CFG_VALIDATE_LOGSOURCE(LOG_INFO_ENTRY, "",
       "Set logging sources that display info and warnings",
-      _dummy, .list = true),
-  CFG_VALIDATE_CHOICE(LOG_WARN_ENTRY, "",
+      .list = true),
+  CFG_VALIDATE_LOGSOURCE(LOG_WARN_ENTRY, "",
       "Set logging sources that display warnings",
-      _dummy, .list = true),
+      .list = true),
 
   CFG_VALIDATE_INT_MINMAX(LOG_LEVEL_ENTRY, "0", "Set debug level template", -2, 3),
   CFG_VALIDATE_BOOL(LOG_STDERR_ENTRY, "false", "Set to true to activate logging to stderr"),
@@ -98,7 +97,7 @@ static enum log_source *debug_lvl_1 = NULL;
 static size_t debug_lvl_1_count = 0;
 
 /* global logger configuration */
-static struct log_handler_mask_entry *logging_cfg;
+static uint8_t logging_cfg[LOG_MAXIMUM_SOURCES];
 static struct log_handler_entry stderr_handler = {
   .handler = olsr_log_stderr
 };
@@ -125,10 +124,10 @@ olsr_logcfg_init(enum log_source *debug_lvl_1_ptr, size_t length) {
   debug_lvl_1 = debug_lvl_1_ptr;
   debug_lvl_1_count = length;
 
-  logging_cfg = olsr_log_allocate_mask();
-  stderr_handler.bitmask = logging_cfg;
-  syslog_handler.bitmask = logging_cfg;
-  file_handler.bitmask = logging_cfg;
+  memset(logging_cfg, 0, LOG_MAXIMUM_SOURCES);
+
+  cfg_schema_add_section(olsr_cfg_get_schema(), &logging_section,
+      logging_entries, ARRAYSIZE(logging_entries));
 }
 
 /**
@@ -155,25 +154,6 @@ olsr_logcfg_cleanup(void) {
 
     olsr_log_removehandler(&file_handler);
   }
-
-  olsr_log_free_mask(logging_cfg);
-}
-
-/**
- * Add logging section to global configuration schema
- * @param schema pointer to schema
- */
-void
-olsr_logcfg_addschema(struct cfg_schema *schema) {
-  int i;
-
-  for (i=0; i<3; i++) {
-    logging_entries[i].validate_params.p_i1 = olsr_log_get_sourcecount();
-    logging_entries[i].validate_params.p_ptr = LOG_SOURCE_NAMES;
-  }
-
-  cfg_schema_add_section(schema, &logging_section,
-      logging_entries, ARRAYSIZE(logging_entries));
 }
 
 /**
@@ -190,7 +170,7 @@ olsr_logcfg_apply(struct cfg_db *db) {
   bool activate_syslog, activate_file, activate_stderr;
 
   /* clean up logging mask */
-  olsr_log_clear_mask(logging_cfg);
+  olsr_log_mask_clear(logging_cfg);
 
   /* first apply debug level */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_LEVEL_ENTRY)->value;
@@ -200,22 +180,22 @@ olsr_logcfg_apply(struct cfg_db *db) {
       break;
     case 0:
       /* only warnings */
-      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_WARN] = true;
+      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_WARN);
       break;
     case 1:
       /* warnings and some info */
-      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_WARN] = true;
+      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_WARN);
       for (i=0; i<debug_lvl_1_count; i++) {
-        logging_cfg[debug_lvl_1[i]].log_for_severity[SEVERITY_INFO] = true;
+        olsr_log_mask_set(logging_cfg, debug_lvl_1[i], SEVERITY_INFO);
       }
       break;
     case 2:
       /* warning and info */
-      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_INFO] = true;
+      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_INFO);
       break;
     case 3:
       /* all logging messages */
-      logging_cfg[LOG_ALL].log_for_severity[SEVERITY_DEBUG] = true;
+      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_DEBUG);
       break;
     default:
       break;
@@ -228,6 +208,10 @@ olsr_logcfg_apply(struct cfg_db *db) {
     _apply_log_setting(named, LOG_INFO_ENTRY, SEVERITY_INFO);
     _apply_log_setting(named, LOG_DEBUG_ENTRY, SEVERITY_DEBUG);
   }
+
+  olsr_log_mask_copy(syslog_handler.bitmask, logging_cfg);
+  olsr_log_mask_copy(stderr_handler.bitmask, logging_cfg);
+  olsr_log_mask_copy(file_handler.bitmask, logging_cfg);
 
   /* load settings which loggershould be activated */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_SYSLOG_ENTRY)->value;
@@ -299,6 +283,59 @@ olsr_logcfg_apply(struct cfg_db *db) {
 }
 
 /**
+ * Schema entry validator for a configuration sources
+ * List selection will be case insensitive.
+ * See CFG_VALIDATE_LOGSOURCE() macro in olsr_logging_cfg.h
+ * @param entry pointer to schema entry
+ * @param section_name name of section type and name
+ * @param value value of schema entry
+ * @param out pointer to autobuffer for validator output
+ * @return 0 if validation found no problems, -1 otherwise
+ */
+int
+olsr_logcfg_schema_validate(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
+  int i;
+
+  for (i=0; i<LOG_MAXIMUM_SOURCES; i++) {
+    if (LOG_SOURCE_NAMES[i] != 0 && strcasecmp(value, LOG_SOURCE_NAMES[i]) == 0) {
+      return 0;
+    }
+  }
+
+  cfg_append_printable_line(out, "Unknown value '%s'"
+      " for entry '%s' in section %s",
+      value, entry->key.entry, section_name);
+  return -1;
+}
+
+/**
+ * Help generator for a configuration sources
+ * List selection will be case insensitive.
+ * See CFG_VALIDATE_LOGSOURCE() macro in olsr_logging_cfg.h
+ * @param entry pointer to schema entry
+ * @param out pointer to autobuffer for validator output
+ */
+void
+olsr_logcfg_schema_help(
+    const struct cfg_schema_entry *entry __attribute__((unused)),
+    struct autobuf *out) {
+  int i;
+
+  cfg_append_printable_line(out, "    Parameter must be on of the following list:");
+
+  abuf_puts(out, "    ");
+  for (i=0; i<LOG_MAXIMUM_SOURCES; i++) {
+    if (LOG_SOURCE_NAMES[i] == NULL) {
+      continue;
+    }
+    abuf_appendf(out, "%s'%s'",
+        i==0 ? "" : ", ", LOG_SOURCE_NAMES[i]);
+  }
+  abuf_puts(out, "\n");
+}
+
+/**
  * Apply the logging options of one severity setting to the logging mask
  * @param named pointer to configuration section
  * @param entry_name name of setting (debug, info, warn)
@@ -314,8 +351,11 @@ _apply_log_setting(struct cfg_named_section *named,
   entry = cfg_db_get_entry(named, entry_name);
   if (entry) {
     FOR_ALL_STRINGS(&entry->val, ptr) {
-      i = cfg_get_choice_index(ptr, LOG_SOURCE_NAMES, olsr_log_get_sourcecount());
-      logging_cfg[i].log_for_severity[severity] = true;
+      for (i=0; i<LOG_MAXIMUM_SOURCES; i++) {
+        if (LOG_SOURCE_NAMES[i] != 0 && strcasecmp(ptr, LOG_SOURCE_NAMES[i]) == 0) {
+          olsr_log_mask_set(logging_cfg, i, severity);
+        }
+      }
     }
   }
 }

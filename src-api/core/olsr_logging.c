@@ -57,23 +57,17 @@
 
 #define FOR_ALL_LOGHANDLERS(handler, iterator) list_for_each_element_safe(&_handler_list, handler, node, iterator)
 
-struct log_handler_mask_entry *log_global_mask;
-const char **LOG_SOURCE_NAMES;
-static size_t _total_source_count;
+uint8_t log_global_mask[LOG_MAXIMUM_SOURCES];
 
 static struct list_entity _handler_list;
 static struct autobuf _logbuffer;
 static const struct olsr_builddata *_builddata;
+static uint8_t _default_mask;
+static size_t _max_sourcetext_len, _max_severitytext_len, _source_count;
 
-const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_COUNT] = {
-  "DEBUG",
-  "INFO",
-  "WARN",
-};
+static const char OUT_OF_MEMORY_ERROR[] = "Out of memory error!";
 
-const char OUT_OF_MEMORY_ERROR[] = "Out of memory error!";
-
-static const char *_LOG_SOURCE_NAMES[LOG_CORESOURCE_COUNT] = {
+const char *LOG_SOURCE_NAMES[LOG_MAXIMUM_SOURCES] = {
   "all",
   "logging",
   "config",
@@ -100,33 +94,20 @@ OLSR_SUBSYSTEM_STATE(_logging_state);
  * Initialize logging system
  * @param data builddata defined by application
  * @param def_severity default severity level
- * @param lognames array of string pointers with logging labels
- * @param level_count number of custom logging levels
  * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_log_init(const struct olsr_builddata *data, enum log_severity def_severity,
-    const char **lognames, size_t level_count)
+olsr_log_init(const struct olsr_builddata *data, enum log_severity def_severity)
 {
   enum log_severity sev;
   enum log_source src;
+  size_t len;
 
   if (olsr_subsystem_is_initialized(&_logging_state))
     return 0;
 
   _builddata = data;
-
-  _total_source_count = LOG_CORESOURCE_COUNT + level_count;
-  log_global_mask = olsr_log_allocate_mask();
-
-  /* concat the core name list and the custom one of the user */
-  LOG_SOURCE_NAMES = calloc(_total_source_count, sizeof(char *));
-  memcpy(LOG_SOURCE_NAMES, _LOG_SOURCE_NAMES,
-      LOG_CORESOURCE_COUNT * sizeof (char *));
-  if (lognames) {
-    memcpy(LOG_SOURCE_NAMES + LOG_CORESOURCE_COUNT, lognames,
-        level_count * sizeof(char *));
-  }
+  _source_count = LOG_CORESOURCE_COUNT;
 
   list_init_head(&_handler_list);
 
@@ -135,12 +116,34 @@ olsr_log_init(const struct olsr_builddata *data, enum log_severity def_severity,
     return -1;
   }
 
-  /* clear global mask */
-  for (sev = def_severity; sev < LOG_SEVERITY_COUNT; sev++) {
-    for (src = 0; src < _total_source_count; src++) {
-      log_global_mask[src].log_for_severity[sev] = true;
+  /* initialize maximum severity length */
+  _max_severitytext_len = 0;
+  OLSR_FOR_ALL_LOGSEVERITIES(sev) {
+    len = strlen(olsr_log_getseverityname(sev));
+    if (len > _max_severitytext_len) {
+      _max_severitytext_len = len;
     }
   }
+
+  /* initialize maximum source length */
+  _max_sourcetext_len = 0;
+  for (src = 0; src < LOG_CORESOURCE_COUNT; src++) {
+    len = strlen(LOG_SOURCE_NAMES[src]);
+    if (len > _max_sourcetext_len) {
+      _max_sourcetext_len = len;
+    }
+  }
+
+  /* set default mask */
+  _default_mask = 0;
+  OLSR_FOR_ALL_LOGSEVERITIES(sev) {
+    if (sev >= def_severity) {
+      _default_mask |= sev;
+    }
+  }
+
+  /* clear global mask */
+  memset(&log_global_mask, _default_mask, sizeof(log_global_mask));
 
   olsr_subsystem_init(&_logging_state);
   return 0;
@@ -153,6 +156,7 @@ void
 olsr_log_cleanup(void)
 {
   struct log_handler_entry *h, *iterator;
+  enum log_source src;
 
   if (olsr_subsystem_cleanup(&_logging_state))
     return;
@@ -162,21 +166,37 @@ olsr_log_cleanup(void)
     olsr_log_removehandler(h);
   }
 
-  olsr_log_free_mask (log_global_mask);
-  free (LOG_SOURCE_NAMES);
+  for (src = LOG_CORESOURCE_COUNT; src < LOG_MAXIMUM_SOURCES; src++) {
+    free ((void *)LOG_SOURCE_NAMES[src]);
+    LOG_SOURCE_NAMES[src] = NULL;
+  }
   abuf_free(&_logbuffer);
+}
+
+const char *
+olsr_log_getseverityname(enum log_severity sev) {
+  switch (sev) {
+    case SEVERITY_DEBUG:
+      return "DEBUG";
+    case SEVERITY_INFO:
+      return "INFO";
+    case SEVERITY_WARN:
+      return "WARN";
+    default:
+      return "UNKNOWN";
+  }
 }
 
 /**
  * Registers a custom logevent handler. Handler and bitmask_ptr have to
  * be initialized.
  * @param h pointer to log event handler struct
+ * @return -1 if an out of memory error happened, 0 otherwise
  */
 void
 olsr_log_addhandler(struct log_handler_entry *h)
 {
   list_add_tail(&_handler_list, &h->node);
-  h->int_bitmask = olsr_log_allocate_mask();
   olsr_log_updatemask();
 }
 
@@ -188,8 +208,57 @@ void
 olsr_log_removehandler(struct log_handler_entry *h)
 {
   list_remove(&h->node);
-  olsr_log_free_mask(h->int_bitmask);
   olsr_log_updatemask();
+}
+
+/**
+ * register a new logging source in the logger
+ * @param name pointer to the name of the logging source
+ * @return index of the new logging source, LOG_MAIN if out of memory
+ */
+int
+olsr_log_register_source(const char *name) {
+  size_t i, len;
+
+  /* maybe the source is already there ? */
+  for (i=0; i<_source_count; i++) {
+    if (strcmp(name, LOG_SOURCE_NAMES[i]) == 0) {
+      return i;
+    }
+  }
+
+  if (i == LOG_MAXIMUM_SOURCES) {
+    OLSR_WARN(LOG_LOGGING, "Maximum number of logging sources reached,"
+        " cannot allocate %s", name);
+    return LOG_MAIN;
+  }
+
+  if ((LOG_SOURCE_NAMES[i] = strdup(name)) == NULL) {
+    OLSR_WARN_OOM(LOG_LOGGING);
+    return LOG_MAIN;
+  }
+
+  _source_count++;
+  len = strlen(name);
+  if (len > _max_sourcetext_len) {
+    _max_sourcetext_len = len;
+  }
+  return i;
+}
+
+size_t
+olsr_log_get_max_severitytextlen(void) {
+  return _max_severitytext_len;
+}
+
+size_t
+olsr_log_get_max_sourcetextlen(void) {
+  return _max_sourcetext_len;
+}
+
+size_t
+olsr_log_get_sourcecount(void) {
+  return _source_count;
 }
 
 /**
@@ -198,14 +267,6 @@ olsr_log_removehandler(struct log_handler_entry *h)
 const struct olsr_builddata *
 olsr_log_get_builddata(void) {
   return _builddata;
-}
-
-/**
- * @return total number of logging sources
- */
-enum log_source
-olsr_log_get_sourcecount(void) {
-  return _total_source_count;
 }
 
 /**
@@ -233,47 +294,26 @@ olsr_log_printversion(struct autobuf *abuf) {
 void
 olsr_log_updatemask(void)
 {
-  enum log_severity sev;
   enum log_source src;
   struct log_handler_entry *h, *iterator;
 
   /* first copy bitmasks to internal memory */
+  /* and reset global mask */
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    olsr_log_copy_mask(h->int_bitmask, h->bitmask);
+    memcpy(h->_bitmask, h->bitmask, LOG_MAXIMUM_SOURCES);
   }
+  memset(log_global_mask, 0, LOG_MAXIMUM_SOURCES);
 
   /* second propagate source ALL to all other sources for each logger */
+  /* third, propagate events from debug to info and from info to warn */
+  /* finally, calculate the global logging bitmask */
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    for (sev = 0; sev < LOG_SEVERITY_COUNT; sev++) {
-      if (h->int_bitmask[LOG_ALL].log_for_severity[sev]) {
-        for (src = 0; src < _total_source_count; src++) {
-          h->int_bitmask[src].log_for_severity[sev] = true;
-        }
-      }
-    }
-  }
+    for (src = 1; src < LOG_MAXIMUM_SOURCES; src++) {
+      h->_bitmask[src] |= h->_bitmask[0];
+      h->_bitmask[src] |= h->bitmask[src] << 1;
+      h->_bitmask[src] |= h->bitmask[src] << 1;
 
-  /* third, propagate events from debug to info to warn to error */
-  FOR_ALL_LOGHANDLERS(h, iterator) {
-    for (src = 0; src < _total_source_count; src++) {
-      bool active = false;
-
-      for (sev = 0; sev < LOG_SEVERITY_COUNT; sev++) {
-        active |= h->int_bitmask[src].log_for_severity[sev];
-        h->int_bitmask[src].log_for_severity[sev] = active;
-      }
-    }
-  }
-
-  /* finally calculate the global logging bitmask */
-  for (sev = 0; sev < LOG_SEVERITY_COUNT; sev++) {
-    for (src = 0; src < _total_source_count; src++) {
-      log_global_mask[src].log_for_severity[sev] = false;
-
-      FOR_ALL_LOGHANDLERS(h, iterator) {
-        log_global_mask[src].log_for_severity[sev]
-             |= h->int_bitmask[src].log_for_severity[sev];
-      }
+      log_global_mask[src] |= h->_bitmask[src];
     }
   }
 }
@@ -319,12 +359,6 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   va_list ap;
   int p1 = 0, p2 = 0, p3 = 0;
 
-  /* test if event is consumed by any log handler */
-  if (!log_global_mask[source].log_for_severity[severity]) {
-    /* no log handler is interested in this event, so drop it */
-    return;
-  }
-
   va_start(ap, format);
 
   /* generate log string */
@@ -332,7 +366,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   if (!no_header) {
     p1 = abuf_appendf(&_logbuffer, "%s ", olsr_log_get_walltime());
     p2 = abuf_appendf(&_logbuffer, "%s(%s) %s %d: ",
-        LOG_SEVERITY_NAMES[severity], LOG_SOURCE_NAMES[source], file, line);
+        olsr_log_getseverityname(severity), LOG_SOURCE_NAMES[source], file, line);
   }
   p3 = abuf_vappendf(&_logbuffer, format, ap);
 
@@ -358,7 +392,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
 
   /* call all log handlers */
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    if (h->int_bitmask[source].log_for_severity[severity]) {
+    if (olsr_log_mask_test(h->_bitmask, source, severity)) {
       h->handler(h, &param);
     }
   }
@@ -384,16 +418,10 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
   int i,j;
   char *ptr;
 
-  /* test if event is consumed by any log handler */
-  if (!log_global_mask[source].log_for_severity[severity]) {
-    /* no log handler is interested in this event, so drop it */
-    return;
-  }
-
   /* generate OOM log string */
   ptr = abuf_getptr(&_logbuffer);
   ptr[0] = 0;
-  strscat(ptr, LOG_SEVERITY_NAMES[severity], abuf_getmax(&_logbuffer));
+  strscat(ptr, olsr_log_getseverityname(severity), abuf_getmax(&_logbuffer));
   strscat(ptr, " ", abuf_getmax(&_logbuffer));
   strscat(ptr, LOG_SOURCE_NAMES[source], abuf_getmax(&_logbuffer));
   strscat(ptr, " ", abuf_getmax(&_logbuffer));
@@ -429,7 +457,7 @@ olsr_log_oom(enum log_severity severity, enum log_source source,
 
   /* call all log handlers */
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    if (h->int_bitmask[source].log_for_severity[severity]) {
+    if (olsr_log_mask_test(h->_bitmask, source, severity)) {
       h->handler(h, &param);
     }
   }

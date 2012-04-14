@@ -164,8 +164,7 @@ main(int argc, char **argv) {
   setup_signalhandler();
 
   /* initialize logger */
-  if (olsr_log_init(olsr_builddata_get(), SEVERITY_WARN,
-      olsr_setup_get_lognames(), olsr_setup_get_logcount())) {
+  if (olsr_log_init(olsr_builddata_get(), SEVERITY_WARN)) {
     goto olsrd_cleanup;
   }
 
@@ -176,9 +175,6 @@ main(int argc, char **argv) {
 
   /* add custom configuration definitions */
   olsr_logcfg_init(olsr_setup_get_level1_logs(), olsr_setup_get_level1count());
-
-  /* initialize logging schema */
-  olsr_logcfg_addschema(olsr_cfg_get_schema());
 
   /* prepare plugin initialization */
   olsr_plugins_init();

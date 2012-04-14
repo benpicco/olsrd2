@@ -52,16 +52,17 @@ struct log_handler_entry;
 #include "common/list.h"
 #include "builddata/data.h"
 
+#define LOG_MAXIMUM_SOURCES 64
+
 /**
  * defines the severity of a logging event
  */
 enum log_severity {
-  SEVERITY_DEBUG,                      //!< SEVERITY_DEBUG
-  SEVERITY_INFO,                       //!< SEVERITY_INFO
-  SEVERITY_WARN,                       //!< SEVERITY_WARN
-
-  /* this one must be the last of the enums ! */
-  LOG_SEVERITY_COUNT                   //!< LOG_SEVERITY_COUNT
+  SEVERITY_MIN   = 1<<0,
+  SEVERITY_DEBUG = 1<<0,
+  SEVERITY_INFO  = 1<<1,
+  SEVERITY_WARN  = 1<<2,
+  SEVERITY_MAX   = 1<<2,
 };
 
 /*
@@ -120,7 +121,7 @@ struct log_parameters {
  * without allocating more memory.
  */
 
-#define _OLSR_LOG(severity, source, no_header, format, args...) do { if (log_global_mask[source].log_for_severity[severity]) olsr_log(severity, source, no_header, __FILE__, __LINE__, format, ##args); } while(0)
+#define _OLSR_LOG(severity, source, no_header, format, args...) do { if (olsr_log_mask_test(log_global_mask, source, severity)) olsr_log(severity, source, no_header, __FILE__, __LINE__, format, ##args); } while(0)
 
 #ifdef REMOVE_LOG_DEBUG
 #define OLSR_DEBUG(source, format, args...) do { } while(0)
@@ -147,43 +148,46 @@ struct log_parameters {
 #define OLSR_WARN(source, format, args...) _OLSR_LOG(SEVERITY_WARN, source, false, format, ##args)
 #define OLSR_WARN_NH(source, format, args...) _OLSR_LOG(SEVERITY_WARN, source, true, format, ##args)
 
-#define OLSR_WARN_OOM(source) do { if (log_global_mask[source].log_for_severity[SEVERITY_WARN]) olsr_log_oom(SEVERITY_WARN, source, __FILE__, __LINE__); } while(0)
+#define OLSR_WARN_OOM(source) do { if (olsr_log_mask_test(log_global_mask, source, SEVERITY_WARN)) olsr_log_oom(SEVERITY_WARN, source, __FILE__, __LINE__); } while(0)
 #endif
 
 typedef void log_handler_cb(struct log_handler_entry *, struct log_parameters *);
-
-struct log_handler_mask_entry {
-  bool log_for_severity[LOG_SEVERITY_COUNT];
-};
 
 struct log_handler_entry {
   struct list_entity node;
   log_handler_cb *handler;
 
   /* pointer to handlers own bitmask */
-  struct log_handler_mask_entry *bitmask;
+  uint8_t bitmask[LOG_MAXIMUM_SOURCES];
 
-  /* internal bitmask copy */
-  struct log_handler_mask_entry *int_bitmask;
+  /* internal copy of bitmask */
+  uint8_t _bitmask[LOG_MAXIMUM_SOURCES];
 
-  /* custom pointer for log handler */
+  /* custom data for user */
   void *custom;
 };
 
-EXPORT extern struct log_handler_mask_entry *log_global_mask;
-EXPORT extern const char **LOG_SOURCE_NAMES;
-EXPORT extern const char *LOG_SEVERITY_NAMES[];
+#define OLSR_FOR_ALL_LOGSEVERITIES(sev) for (sev = SEVERITY_MIN; sev <= SEVERITY_MAX; sev <<= 1)
 
-EXPORT int olsr_log_init(const struct olsr_builddata *, enum log_severity,
-    const char **lognames, size_t level_count)
+EXPORT extern uint8_t log_global_mask[LOG_MAXIMUM_SOURCES];
+EXPORT extern const char *LOG_SOURCE_NAMES[LOG_MAXIMUM_SOURCES];
+
+EXPORT int olsr_log_init(const struct olsr_builddata *, enum log_severity)
   __attribute__((warn_unused_result));
 EXPORT void olsr_log_cleanup(void);
 
+EXPORT const char *olsr_log_getseverityname(enum log_severity);
+EXPORT size_t olsr_log_get_max_severitytextlen(void);
+EXPORT size_t olsr_log_get_max_sourcetextlen(void);
+EXPORT size_t olsr_log_get_sourcecount(void);
+
 EXPORT void olsr_log_addhandler(struct log_handler_entry *);
 EXPORT void olsr_log_removehandler(struct log_handler_entry *);
+EXPORT int olsr_log_register_source(const char *name);
+EXPORT void olsr_log_unregister_source(int index);
+
 EXPORT void olsr_log_updatemask(void);
 
-EXPORT enum log_source olsr_log_get_sourcecount(void);
 EXPORT const struct olsr_builddata *olsr_log_get_builddata(void);
 EXPORT void olsr_log_printversion(struct autobuf *abuf);
 
@@ -202,40 +206,58 @@ EXPORT void olsr_log_file(struct log_handler_entry *,
     struct log_parameters *);
 
 /**
- * Allocates an empty logging mask.
- * @return pointer to logging mask, NULL if not enough memory
+ *
+ * @param mask
  */
-static INLINE struct log_handler_mask_entry *
-olsr_log_allocate_mask(void) {
-  return calloc(olsr_log_get_sourcecount(), sizeof(struct log_handler_mask_entry));
+static INLINE void
+olsr_log_mask_clear(uint8_t *mask) {
+  memset(mask, 0, LOG_MAXIMUM_SOURCES);
 }
 
 /**
- * Free the memory of an allocated logging mask.
- * @param mask pointer to mask
+ *
+ * @param dst
+ * @param src
  */
 static INLINE void
-olsr_log_free_mask(struct log_handler_mask_entry *mask) {
-  free(mask);
+olsr_log_mask_copy(uint8_t *dst, uint8_t *src) {
+  memcpy(dst, src, LOG_MAXIMUM_SOURCES);
 }
 
 /**
- * Copies a logging mask
- * @param dst destination logging mask
- * @param src source logging mask
+ *
+ * @param mask
+ * @param src
+ * @param sev
+ * @param set
  */
 static INLINE void
-olsr_log_copy_mask(struct log_handler_mask_entry *dst, struct log_handler_mask_entry *src) {
-  memcpy(dst, src, sizeof(struct log_handler_mask_entry) * olsr_log_get_sourcecount());
+olsr_log_mask_set(uint8_t *mask, enum log_source src, enum log_severity sev) {
+  mask[src] |= sev;
 }
 
 /**
- * Clears a logging mask
- * @param mask logging mask to be cleared
+ *
+ * @param mask
+ * @param src
+ * @param sev
+ * @param set
  */
 static INLINE void
-olsr_log_clear_mask(struct log_handler_mask_entry *mask) {
-  memset(mask, 0, sizeof(struct log_handler_mask_entry) * olsr_log_get_sourcecount());
+olsr_log_mask_reset(uint8_t *mask, enum log_source src, enum log_severity sev) {
+  mask[src] &= ~sev;
+}
+
+/**
+ *
+ * @param mask
+ * @param src
+ * @param sev
+ * @return
+ */
+static INLINE bool
+olsr_log_mask_test(uint8_t *mask, enum log_source src, enum log_severity sev) {
+  return (mask[src] & sev) != 0;
 }
 
 #endif /* OLSR_LOGGING_H_ */

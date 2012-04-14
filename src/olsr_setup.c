@@ -49,12 +49,6 @@ static enum log_source _level_1_sources[] = {
   LOG_MAIN,
 };
 
-static const char *_CUSTOM_LOG_NAMES[] = {
-  /* add your custom logging names here */
-
-  /* "custom-1", */
-};
-
 /* remember if initialized or not */
 OLSR_SUBSYSTEM_STATE(_setup_state);
 
@@ -100,20 +94,4 @@ olsr_setup_get_level1count(void) {
 enum log_source *
 olsr_setup_get_level1_logs(void) {
   return _level_1_sources;
-}
-
-/**
- * @return number of custom logging sources
- */
-size_t
-olsr_setup_get_logcount(void) {
-  return ARRAYSIZE(_CUSTOM_LOG_NAMES);
-}
-
-/**
- * @return array of cutom logging source names
- */
-const char **
-olsr_setup_get_lognames(void) {
-  return _CUSTOM_LOG_NAMES;
 }
