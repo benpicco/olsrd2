@@ -164,7 +164,7 @@ static struct cfg_schema_section _dlep_section = {
 };
 
 static struct cfg_schema_entry _dlep_entries[] = {
-  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", NULL,
+  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "default_first",
     "Access control list for dlep client"),
   CFG_MAP_NETADDR_V4(_dlep_config, socket.bindto_v4, "bindto_v4", "127.0.0.1",
     "Bind dlep ipv4 socket to this address", false),

@@ -167,7 +167,7 @@ static struct cfg_schema_entry _dlep_entries[] = {
   CFG_MAP_STRING_ARRAY(_dlep_config, radio_if, "radio_id", "wlan0",
     "List of interfaces to to query link layer data from", IF_NAMESIZE),
 
-  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "127.0.0.1",
+  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "default_first",
     "Access control list for dlep interface"),
   CFG_MAP_NETADDR_V4(_dlep_config, socket.bindto_v4, "bindto_v4", "127.0.0.1",
     "Bind dlep ipv4 socket to this address", false),
