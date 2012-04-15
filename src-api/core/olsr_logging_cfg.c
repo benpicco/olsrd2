@@ -320,15 +320,12 @@ void
 olsr_logcfg_schema_help(
     const struct cfg_schema_entry *entry __attribute__((unused)),
     struct autobuf *out) {
-  int i;
+  size_t i;
 
   cfg_append_printable_line(out, "    Parameter must be on of the following list:");
 
   abuf_puts(out, "    ");
-  for (i=0; i<LOG_MAXIMUM_SOURCES; i++) {
-    if (LOG_SOURCE_NAMES[i] == NULL) {
-      continue;
-    }
+  for (i=0; i<olsr_log_get_sourcecount(); i++) {
     abuf_appendf(out, "%s'%s'",
         i==0 ? "" : ", ", LOG_SOURCE_NAMES[i]);
   }
