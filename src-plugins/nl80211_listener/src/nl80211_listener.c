@@ -153,6 +153,9 @@ struct olsr_timer_entry _transmission_timer = {
   .info = &_transmission_timer_info
 };
 
+/* logging source */
+enum log_source LOG_NL80211;
+
 /**
  * Constructor of plugin
  * @return 0 if initialization was successful, -1 otherwise
@@ -164,9 +167,11 @@ _cb_plugin_load(void) {
 
   strarray_init(&_config.interf);
 
+  LOG_NL80211 = olsr_log_register_source("nl80211");
+
   _msgbuf = calloc(1, UIO_MAXIOV);
   if (_msgbuf == NULL) {
-    OLSR_WARN_OOM(LOG_PLUGINS);
+    OLSR_WARN(LOG_NL80211, "Not enough memory for nl80211 memory buffer");
     return -1;
   }
   return 0;
@@ -243,16 +248,16 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
 
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       attrs, CTRL_ATTR_MAX, ctrl_policy) < 0) {
-    OLSR_WARN(LOG_PLUGINS, "Cannot parse netlink CTRL_CMD_NEWFAMILY message");
+    OLSR_WARN(LOG_NL80211, "Cannot parse netlink CTRL_CMD_NEWFAMILY message");
     return;
   }
 
   if (attrs[CTRL_ATTR_FAMILY_ID] == NULL) {
-    OLSR_WARN(LOG_PLUGINS, "Missing Family ID in CTRL_CMD_NEWFAMILY");
+    OLSR_WARN(LOG_NL80211, "Missing Family ID in CTRL_CMD_NEWFAMILY");
     return;
   }
   if (attrs[CTRL_ATTR_FAMILY_NAME] == NULL) {
-    OLSR_WARN(LOG_PLUGINS, "Missing Family Name in CTRL_CMD_NEWFAMILY");
+    OLSR_WARN(LOG_NL80211, "Missing Family Name in CTRL_CMD_NEWFAMILY");
     return;
   }
 
@@ -297,17 +302,17 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
 
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
-    OLSR_WARN(LOG_PLUGINS, "Cannot parse netlink NL80211_CMD_NEW_STATION message");
+    OLSR_WARN(LOG_NL80211, "Cannot parse netlink NL80211_CMD_NEW_STATION message");
     return -1;
   }
 
   if (!tb[NL80211_ATTR_STA_INFO]) {
-    OLSR_WARN(LOG_PLUGINS, "Cannot find station info attribute");
+    OLSR_WARN(LOG_NL80211, "Cannot find station info attribute");
     return -1;
   }
   if (nla_parse_nested(sinfo, NL80211_STA_INFO_MAX,
            tb[NL80211_ATTR_STA_INFO], stats_policy)) {
-    OLSR_WARN(LOG_PLUGINS, "Cannot parse station info attribute");
+    OLSR_WARN(LOG_NL80211, "Cannot parse station info attribute");
     return -1;
   }
 
@@ -324,7 +329,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
 
   neigh = olsr_layer2_add_neighbor(&if_data->mac, &mac, if_index);
   if (neigh == NULL) {
-    OLSR_WARN_OOM(LOG_PLUGINS);
+    OLSR_WARN(LOG_NL80211, "Not enough memory for new layer2 neighbor");
     return -1;
   }
 
@@ -444,23 +449,23 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
 
   if (nlmsg_parse(msg, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
-    OLSR_WARN(LOG_PLUGINS, "Cannot parse netlink NL80211_CMD_NEW_SCAN_RESULT message");
+    OLSR_WARN(LOG_NL80211, "Cannot parse netlink NL80211_CMD_NEW_SCAN_RESULT message");
     return -1;
   }
 
   if (!tb[NL80211_ATTR_BSS]) {
-    OLSR_WARN(LOG_PLUGINS, "bss info missing!\n");
+    OLSR_WARN(LOG_NL80211, "bss info missing!\n");
     return -1;
   }
   if (nla_parse_nested(bss, NL80211_BSS_MAX,
            tb[NL80211_ATTR_BSS],
            bss_policy)) {
-    OLSR_WARN(LOG_PLUGINS, "failed to parse nested attributes!\n");
+    OLSR_WARN(LOG_NL80211, "failed to parse nested attributes!\n");
     return -1;
   }
 
   if (!bss[NL80211_BSS_BSSID]) {
-    OLSR_WARN(LOG_PLUGINS, "No BSSID found");
+    OLSR_WARN(LOG_NL80211, "No BSSID found");
     return -1;
   }
 
@@ -481,7 +486,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
 
   net = olsr_layer2_add_network(&if_data->mac, if_index);
   if (net == NULL) {
-    OLSR_WARN_OOM(LOG_PLUGINS);
+    OLSR_WARN(LOG_NL80211, "Not enough memory for new layer2 network");
     return -1;
   }
 
@@ -637,7 +642,7 @@ _cb_nl_message(struct nlmsghdr *hdr) {
     }
   }
 
-  OLSR_WARN(LOG_PLUGINS, "Unhandled incoming netlink message type %u cmd %u\n",
+  OLSR_WARN(LOG_NL80211, "Unhandled incoming netlink message type %u cmd %u\n",
       hdr->nlmsg_type, gen_hdr->cmd);
 }
 
@@ -714,7 +719,7 @@ _cb_transmission_event(void *ptr __attribute__((unused))) {
   }
 
   FOR_ALL_STRINGS(&_config.interf, interf) {
-    OLSR_DEBUG(LOG_PLUGINS, "NL80211 Query: %s", interf);
+    OLSR_DEBUG(LOG_NL80211, "NL80211 Query: %s", interf);
 
     if ((data = olsr_interface_get_data(interf)) == NULL) {
       continue;
@@ -1031,7 +1036,7 @@ _cb_config_changed(void) {
   memset(&cfg, 0, sizeof(cfg));
   if (cfg_schema_tobin(&cfg, _nl80211_section.post,
       _nl80211_entries, ARRAYSIZE(_nl80211_entries))) {
-    OLSR_WARN(LOG_PLUGINS, "Could not convert nl80211_listener config to bin");
+    OLSR_WARN(LOG_NL80211, "Could not convert nl80211_listener config to bin");
     return;
   }
 
@@ -1043,7 +1048,7 @@ _cb_config_changed(void) {
 
   cfg.if_listener = calloc(i, sizeof(struct olsr_interface_listener));
   if (cfg.if_listener == NULL) {
-    OLSR_WARN_OOM(LOG_PLUGINS);
+    OLSR_WARN(LOG_NL80211, "Not enough memory for nl80211 interface listener");
     return;
   }
 

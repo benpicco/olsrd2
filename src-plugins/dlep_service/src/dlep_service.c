@@ -303,6 +303,9 @@ struct olsr_timer_entry _tentry_metric_update = {
   .info = &_tinfo_metric_update,
 };
 
+/* dlep service logging source */
+enum log_source LOG_DLEP_SERVICE;
+
 /**
  * Constructor of plugin
  * @return 0 if initialization was successful, -1 otherwise
@@ -312,6 +315,7 @@ _cb_plugin_load(void) {
   cfg_schema_add_section(olsr_cfg_get_schema(), &_dlep_section,
       _dlep_entries, ARRAYSIZE(_dlep_entries));
 
+  LOG_DLEP_SERVICE = olsr_log_register_source("dlep-service");
   return 0;
 }
 
@@ -335,7 +339,7 @@ _cb_plugin_enable(void) {
 
   _dlep_message = pbb_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
   if (_dlep_message == NULL) {
-    OLSR_WARN(LOG_PLUGINS, "Could not register DLEP message");
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not register DLEP message");
     pbb_writer_cleanup(&_dlep_writer);
     return -1;
   }
@@ -343,7 +347,7 @@ _cb_plugin_enable(void) {
 
   if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
       &_dlep_msgcontent_provider, _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs))) {
-    OLSR_WARN(LOG_PLUGINS, "Count not register DLEP msg contentprovider");
+    OLSR_WARN(LOG_DLEP_SERVICE, "Count not register DLEP msg contentprovider");
     pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
     pbb_writer_cleanup(&_dlep_writer);
     return -1;
@@ -395,7 +399,7 @@ _parse_order_disconnect(void) {
 
   session = avl_find_element(&_session_tree, _peer_socket, session, _node);
   if (session == NULL) {
-    OLSR_INFO(LOG_PLUGINS, "Received DLEP disconnect from unknown peer");
+    OLSR_INFO(LOG_DLEP_SERVICE, "Received DLEP disconnect from unknown peer");
     return PBB_DROP_MESSAGE;
   }
 
@@ -422,7 +426,7 @@ _parse_order_connect_router(void) {
     /* allocate new session */
     session = calloc(1, sizeof(*session));
     if (session == NULL) {
-      OLSR_WARN_OOM(LOG_PLUGINS);
+      OLSR_WARN(LOG_DLEP_SERVICE, "Not enough memory for new dlep session");
       return PBB_DROP_MESSAGE;
     }
 
@@ -444,7 +448,7 @@ static enum pbb_result
 _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   if (context->addr_len != 6) {
-    OLSR_WARN(LOG_PLUGINS, "Address length of DLEP message should be 6 (but was %d)",
+    OLSR_WARN(LOG_DLEP_SERVICE, "Address length of DLEP message should be 6 (but was %d)",
         context->addr_len);
     return PBB_DROP_MESSAGE;
   }
@@ -476,7 +480,7 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
       break;
 #endif
     default:
-      OLSR_WARN(LOG_PLUGINS, "Unknown order in DLEP message: %d", _current_order);
+      OLSR_WARN(LOG_DLEP_SERVICE, "Unknown order in DLEP message: %d", _current_order);
       return PBB_DROP_MESSAGE;
   }
   return PBB_OKAY;
@@ -486,12 +490,12 @@ static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   size_t i;
-  OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP message were not fulfilled!");
+  OLSR_WARN(LOG_DLEP_SERVICE, "Constraints of incoming DLEP message were not fulfilled!");
 
   for (i=0; i < ARRAYSIZE(_dlep_message_tlvs); i++) {
-    OLSR_WARN(LOG_PLUGINS, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
+    OLSR_WARN(LOG_DLEP_SERVICE, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
     if (_dlep_message_tlvs[i].tlv) {
-      OLSR_WARN_NH(LOG_PLUGINS, "\tvalue length: %u", _dlep_message_tlvs[i].tlv->length);
+      OLSR_WARN_NH(LOG_DLEP_SERVICE, "\tvalue length: %u", _dlep_message_tlvs[i].tlv->length);
     }
   }
   return PBB_OKAY;
@@ -511,14 +515,14 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
 #if !defined(REMOVE_LOG_DEBUG)
   struct netaddr_str buf;
 #endif
-  OLSR_DEBUG(LOG_PLUGINS, "Parsing DLEP packet from %s",
+  OLSR_DEBUG(LOG_DLEP_SERVICE, "Parsing DLEP packet from %s",
       netaddr_socket_to_string(&buf, from));
 
   _peer_socket = from;
 
   result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
   if (result) {
-    OLSR_WARN(LOG_PLUGINS, "Error while parsing DLEP packet: %s (%d)",
+    OLSR_WARN(LOG_DLEP_SERVICE, "Error while parsing DLEP packet: %s (%d)",
         pbb_strerror(result), result);
   }
 
@@ -569,8 +573,9 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
       break;
     case DLEP_ORDER_NEIGHBOR_UP:
       _add_neighborup_msgtlvs();
+      break;
     default:
-      OLSR_WARN(LOG_PLUGINS, "DLEP Message order %d not implemented yet", _msg_order);
+      OLSR_WARN(LOG_DLEP_SERVICE, "DLEP Message order %d not implemented yet", _msg_order);
       break;
   }
 }
@@ -596,8 +601,9 @@ _cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
       break;
     case DLEP_ORDER_NEIGHBOR_UP:
       _add_neighborup_addresses();
+      break;
     default:
-      OLSR_WARN(LOG_PLUGINS, "DLEP Message order %d not implemented yet", _msg_order);
+      OLSR_WARN(LOG_DLEP_SERVICE, "DLEP Message order %d not implemented yet", _msg_order);
       break;
   }
 }
@@ -606,7 +612,7 @@ static void
 _cb_dlep_router_timerout(void *ptr) {
   struct _dlep_session *session = ptr;
 
-  OLSR_DEBUG(LOG_PLUGINS, "Removing DLEP session");
+  OLSR_DEBUG(LOG_DLEP_SERVICE, "Removing DLEP session");
   avl_remove(&_session_tree, &session->_node);
   free(session);
 }
@@ -618,7 +624,7 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
 
   _msg_order = DLEP_ORDER_INTERFACE_DISCOVERY;
   OLSR_FOR_ALL_LAYER2_NETWORKS(_msg_network, net_it) {
-    OLSR_DEBUG(LOG_PLUGINS, "Send interface discovery for radio %s",
+    OLSR_DEBUG(LOG_DLEP_SERVICE, "Send interface discovery for radio %s",
         netaddr_to_string(&buf, &_msg_network->radio_id));
     pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
     pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
@@ -635,7 +641,7 @@ _cb_address_update(void *ptr __attribute__((unused))) {
 
   _msg_order = DLEP_ORDER_NEIGHBOR_UP;
   OLSR_FOR_ALL_LAYER2_NETWORKS(_msg_network, net_it) {
-    OLSR_DEBUG(LOG_PLUGINS, "Send neighbor up for radio %s",
+    OLSR_DEBUG(LOG_DLEP_SERVICE, "Send neighbor up for radio %s",
         netaddr_to_string(&buf, &_msg_network->radio_id));
     pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
     pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
@@ -662,11 +668,11 @@ _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
     void *ptr, size_t len) {
   if (config_global.ipv4
       && olsr_packet_send_managed_multicast(&_dlep_socket, true, ptr, len) < 0) {
-    OLSR_WARN(LOG_PLUGINS, "Could not sent DLEP IPv4 packet to socket");
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket");
   }
   if (config_global.ipv6
       && olsr_packet_send_managed_multicast(&_dlep_socket, false, ptr, len) < 0) {
-    OLSR_WARN(LOG_PLUGINS, "Could not sent DLEP IPv6 packet to socket");
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv6 packet to socket");
   }
 }
 

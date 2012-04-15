@@ -255,6 +255,10 @@ struct olsr_timer_entry _tentry_router_connect = {
   .info = &_tinfo_router_connect,
 };
 
+/* dlep client logging source */
+enum log_source LOG_DLEP_CLIENT;
+
+
 /**
  * Constructor of plugin
  * @return 0 if initialization was successful, -1 otherwise
@@ -263,6 +267,8 @@ static int
 _cb_plugin_load(void) {
   cfg_schema_add_section(olsr_cfg_get_schema(), &_dlep_section,
       _dlep_entries, ARRAYSIZE(_dlep_entries));
+
+  LOG_DLEP_CLIENT = olsr_log_register_source("dlep-client");
 
   return 0;
 }
@@ -287,7 +293,7 @@ _cb_plugin_enable(void) {
 
   _dlep_message = pbb_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
   if (_dlep_message == NULL) {
-    OLSR_WARN(LOG_PLUGINS, "Could not register DLEP message");
+    OLSR_WARN(LOG_DLEP_CLIENT, "Could not register DLEP message");
     pbb_writer_cleanup(&_dlep_writer);
     return -1;
   }
@@ -295,7 +301,7 @@ _cb_plugin_enable(void) {
 
   if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
       &_dlep_msgcontent_provider, _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs))) {
-    OLSR_WARN(LOG_PLUGINS, "Count not register DLEP msg contentprovider");
+    OLSR_WARN(LOG_DLEP_CLIENT, "Count not register DLEP msg contentprovider");
     pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
     pbb_writer_cleanup(&_dlep_writer);
     return -1;
@@ -348,7 +354,7 @@ _parse_order_disconnect(void) {
 
   session = avl_find_element(&_session_tree, _peer_socket, session, _node);
   if (session == NULL) {
-    OLSR_INFO(LOG_PLUGINS, "Received DLEP disconnect from unknown peer");
+    OLSR_INFO(LOG_DLEP_CLIENT, "Received DLEP disconnect from unknown peer");
     return PBB_DROP_MESSAGE;
   }
 
@@ -375,14 +381,14 @@ _parse_order_interface_discovery(struct netaddr *radio_mac) {
     /* allocate new session */
     session = calloc(1, sizeof(*session));
     if (session == NULL) {
-      OLSR_WARN_OOM(LOG_PLUGINS);
+      OLSR_WARN(LOG_DLEP_CLIENT, "Not enough memory for new dlep client session");
       return PBB_DROP_MESSAGE;
     }
 
     session->out_if.packet_buffer = calloc(1, DLEP_PKT_BUFFER_SIZE);
     if (session->out_if.packet_buffer == NULL) {
       free(session);
-      OLSR_WARN_OOM(LOG_PLUGINS);
+      OLSR_WARN(LOG_DLEP_CLIENT, "Not enough memory for packetbb output buffer");
       return PBB_DROP_MESSAGE;
     }
     session->out_if.packet_size = DLEP_PKT_BUFFER_SIZE;
@@ -417,13 +423,13 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
   struct netaddr radio_mac;
 
   if (context->addr_len != 6) {
-    OLSR_WARN(LOG_PLUGINS, "Address length of DLEP message should be 6 (but was %d)",
+    OLSR_WARN(LOG_DLEP_CLIENT, "Address length of DLEP message should be 6 (but was %d)",
         context->addr_len);
     return PBB_DROP_MESSAGE;
   }
 
   if (netaddr_from_binary(&radio_mac, context->orig_addr, context->addr_len, AF_MAC48)) {
-    OLSR_WARN(LOG_PLUGINS, "Cannot parse DLEP originator address");
+    OLSR_WARN(LOG_DLEP_CLIENT, "Cannot parse DLEP originator address");
     return PBB_DROP_MESSAGE;
   }
 
@@ -448,7 +454,7 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
       break;
 
     default:
-      OLSR_WARN(LOG_PLUGINS, "Unknown order in DLEP message: %d", _current_order);
+      OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _current_order);
       return PBB_DROP_MESSAGE;
   }
   return PBB_OKAY;
@@ -458,10 +464,10 @@ static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   size_t i;
-  OLSR_WARN(LOG_PLUGINS, "Constraints of incoming DLEP message were not fulfilled!");
+  OLSR_WARN(LOG_DLEP_CLIENT, "Constraints of incoming DLEP message were not fulfilled!");
 
   for (i=0; i < ARRAYSIZE(_dlep_message_tlvs); i++) {
-    OLSR_WARN(LOG_PLUGINS, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
+    OLSR_WARN(LOG_DLEP_CLIENT, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
   }
   return PBB_OKAY;
 }
@@ -477,13 +483,13 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
       union netaddr_socket *from,
       size_t length __attribute__((unused))) {
   enum pbb_result result;
-  OLSR_DEBUG(LOG_PLUGINS, "Parsing DLEP packet");
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Parsing DLEP packet");
 
   _peer_socket = from;
 
   result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
   if (result) {
-    OLSR_WARN(LOG_PLUGINS, "Error while parsing DLEP packet: %s (%d)",
+    OLSR_WARN(LOG_DLEP_CLIENT, "Error while parsing DLEP packet: %s (%d)",
         pbb_strerror(result), result);
   }
 
@@ -522,7 +528,7 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
       _add_connectrouter_msgtlvs();
       break;
     default:
-      OLSR_WARN(LOG_PLUGINS, "DLEP Message order %d not implemented yet", _msg_order);
+      OLSR_WARN(LOG_DLEP_CLIENT, "DLEP Message order %d not implemented yet", _msg_order);
       break;
   }
 }
@@ -530,7 +536,7 @@ static void
 _cb_dlep_interface_timerout(void *ptr) {
   struct _dlep_session *session = ptr;
 
-  OLSR_DEBUG(LOG_PLUGINS, "Removing DLEP session");
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Removing DLEP session");
 
   pbb_writer_unregister_interface(&_dlep_writer, &session->out_if);
   free(session->out_if.packet_buffer);
@@ -561,7 +567,7 @@ _cb_send_dlep(struct pbb_writer *writer __attribute__((unused)),
   session = container_of(interf, struct _dlep_session, out_if);
 
   if (olsr_packet_send_managed(&_dlep_socket, &session->interface_socket, ptr, len)) {
-    OLSR_WARN(LOG_PLUGINS, "Could not sent DLEP packet to socket");
+    OLSR_WARN(LOG_DLEP_CLIENT, "Could not sent DLEP packet to socket");
   }
 }
 
