@@ -83,6 +83,72 @@ struct olsr_layer2_neighbor {
   uint32_t tx_retries, tx_failed;
 };
 
+enum olsr_layer2_network_data {
+  OLSR_L2NET_SSID = 1<<0,
+  OLSR_L2NET_LAST_SEEN = 1<<1,
+  OLSR_L2NET_FREQUENCY = 1<<2,
+  OLSR_L2NET_SUPPORTED_RATES = 1<<3,
+};
+
+struct olsr_layer2_network {
+  struct avl_node _node;
+
+  struct netaddr radio_id;
+  uint32_t if_index;
+
+  enum olsr_layer2_network_data _available_data;
+
+  struct netaddr ssid;
+
+  uint64_t last_seen;
+
+  uint64_t frequency;
+
+  uint64_t *supported_rates;
+  size_t rate_count;
+};
+
+EXPORT extern struct avl_tree olsr_layer2_network_tree;
+EXPORT extern struct avl_tree olsr_layer2_neighbor_tree;
+
+#define OLSR_FOR_ALL_LAYER2_NETWORKS(network, iterator) avl_for_each_element_safe(&olsr_layer2_network_tree, network, _node, iterator)
+#define OLSR_FOR_ALL_LAYER2_NEIGHBORS(neighbor, iterator) avl_for_each_element_safe(&olsr_layer2_neighbor_tree, neighbor, _node, iterator)
+
+EXPORT void olsr_layer2_init(void);
+EXPORT void olsr_layer2_cleanup(void);
+
+EXPORT struct olsr_layer2_network *olsr_layer2_add_network(
+    struct netaddr *ssid, uint32_t if_index);
+EXPORT void olsr_layer2_remove_network(struct olsr_layer2_network *);
+
+EXPORT struct olsr_layer2_neighbor *olsr_layer2_get_neighbor(
+    struct netaddr *radio_id, struct netaddr *neigh_mac);
+EXPORT struct olsr_layer2_neighbor *olsr_layer2_add_neighbor(
+    struct netaddr *radio_id, struct netaddr *neigh_mac, uint32_t if_index);
+EXPORT void olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *);
+
+EXPORT int olsr_layer2_network_set_supported_rates(
+    struct olsr_layer2_network *net,
+    uint64_t *rate_array, size_t rate_count);
+
+/**
+ * Retrieve a layer2 network entry from the database
+ * @param if_index local interface index of network
+ * @return pointer to layer2 network, NULL if not found
+ */
+static INLINE struct olsr_layer2_network *
+olsr_layer2_get_network(uint32_t if_index) {
+  struct olsr_layer2_network *net;
+  return avl_find_element(&olsr_layer2_network_tree, &if_index, net, _node);
+}
+
+/*
+ * The following inline functions should be used to set and test for
+ * data in the layer 2 neighbor and network data. Reading can be done
+ * by directly accessing the data fields (after testing if they contain
+ * data at all).
+ */
+
 /**
  * @param neigh pointer to layer2 neighbor data
  * @return true if data contains signal strength, false otherwise
@@ -290,31 +356,6 @@ olsr_layer2_neighbor_set_tx_fails(struct olsr_layer2_neighbor *neigh, uint32_t f
   neigh->tx_failed = failed;
 }
 
-enum olsr_layer2_network_data {
-  OLSR_L2NET_SSID = 1<<0,
-  OLSR_L2NET_LAST_SEEN = 1<<1,
-  OLSR_L2NET_FREQUENCY = 1<<2,
-  OLSR_L2NET_SUPPORTED_RATES = 1<<3,
-};
-
-struct olsr_layer2_network {
-  struct avl_node _node;
-
-  struct netaddr radio_id;
-  uint32_t if_index;
-
-  enum olsr_layer2_network_data _available_data;
-
-  struct netaddr ssid;
-
-  uint64_t last_seen;
-
-  uint64_t frequency;
-
-  uint64_t *supported_rates;
-  size_t rate_count;
-};
-
 /**
  * @param neigh pointer to layer2 network data
  * @return true if data contains timestamp when network
@@ -392,40 +433,6 @@ static INLINE void
 olsr_layer2_network_set_frequency(struct olsr_layer2_network *net, uint64_t frequency) {
   net->_available_data |= OLSR_L2NET_FREQUENCY;
   net->frequency = frequency;
-}
-
-EXPORT extern struct avl_tree olsr_layer2_network_tree;
-EXPORT extern struct avl_tree olsr_layer2_neighbor_tree;
-
-#define OLSR_FOR_ALL_LAYER2_NETWORKS(network, iterator) avl_for_each_element_safe(&olsr_layer2_network_tree, network, _node, iterator)
-#define OLSR_FOR_ALL_LAYER2_NEIGHBORS(neighbor, iterator) avl_for_each_element_safe(&olsr_layer2_neighbor_tree, neighbor, _node, iterator)
-
-EXPORT void olsr_layer2_init(void);
-EXPORT void olsr_layer2_cleanup(void);
-
-EXPORT struct olsr_layer2_network *olsr_layer2_add_network(
-    struct netaddr *ssid, uint32_t if_index);
-EXPORT void olsr_layer2_remove_network(struct olsr_layer2_network *);
-
-EXPORT struct olsr_layer2_neighbor *olsr_layer2_get_neighbor(
-    struct netaddr *radio_id, struct netaddr *neigh_mac);
-EXPORT struct olsr_layer2_neighbor *olsr_layer2_add_neighbor(
-    struct netaddr *radio_id, struct netaddr *neigh_mac, uint32_t if_index);
-EXPORT void olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *);
-
-EXPORT int olsr_layer2_network_set_supported_rates(
-    struct olsr_layer2_network *net,
-    uint64_t *rate_array, size_t rate_count);
-
-/**
- * Retrieve a layer2 network entry from the database
- * @param if_index local interface index of network
- * @return pointer to layer2 network, NULL if not found
- */
-static INLINE struct olsr_layer2_network *
-olsr_layer2_get_network(uint32_t if_index) {
-  struct olsr_layer2_network *net;
-  return avl_find_element(&olsr_layer2_network_tree, &if_index, net, _node);
 }
 
 #endif /* OLSR_LAYER2_H_ */

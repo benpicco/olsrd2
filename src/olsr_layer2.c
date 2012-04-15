@@ -244,6 +244,13 @@ olsr_layer2_network_set_supported_rates(struct olsr_layer2_network *net,
   return 0;
 }
 
+/**
+ * AVL comparator for layer2 neighbor nodes
+ * @param k1 pointer to first layer2 neighbor
+ * @param k2 pointer to second layer2 neighbor
+ * @param ptr unused
+ * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
+ */
 static int
 _avl_comp_l2neigh(const void *k1, const void *k2,
     void *ptr __attribute__((unused))) {
