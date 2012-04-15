@@ -65,8 +65,6 @@ static const struct olsr_builddata *_builddata;
 static uint8_t _default_mask;
 static size_t _max_sourcetext_len, _max_severitytext_len, _source_count;
 
-static const char OUT_OF_MEMORY_ERROR[] = "Out of memory error!";
-
 const char *LOG_SOURCE_NAMES[LOG_MAXIMUM_SOURCES] = {
   "all",
   "logging",
@@ -85,6 +83,12 @@ const char *LOG_SOURCE_NAMES[LOG_MAXIMUM_SOURCES] = {
   "telnet",
   "plugins",
   "http",
+};
+
+const char *LOG_SEVERITY_NAMES[SEVERITY_MAX+1] = {
+  [SEVERITY_DEBUG] = "DEBUG",
+  [SEVERITY_INFO]  = "INFO",
+  [SEVERITY_WARN]  = "WARN",
 };
 
 /* remember if initialized or not */
@@ -119,7 +123,7 @@ olsr_log_init(const struct olsr_builddata *data, enum log_severity def_severity)
   /* initialize maximum severity length */
   _max_severitytext_len = 0;
   OLSR_FOR_ALL_LOGSEVERITIES(sev) {
-    len = strlen(olsr_log_getseverityname(sev));
+    len = strlen(LOG_SEVERITY_NAMES[sev]);
     if (len > _max_severitytext_len) {
       _max_severitytext_len = len;
     }
@@ -173,20 +177,6 @@ olsr_log_cleanup(void)
   abuf_free(&_logbuffer);
 }
 
-const char *
-olsr_log_getseverityname(enum log_severity sev) {
-  switch (sev) {
-    case SEVERITY_DEBUG:
-      return "DEBUG";
-    case SEVERITY_INFO:
-      return "INFO";
-    case SEVERITY_WARN:
-      return "WARN";
-    default:
-      return "UNKNOWN";
-  }
-}
-
 /**
  * Registers a custom logevent handler. Handler and bitmask_ptr have to
  * be initialized.
@@ -234,7 +224,7 @@ olsr_log_register_source(const char *name) {
   }
 
   if ((LOG_SOURCE_NAMES[i] = strdup(name)) == NULL) {
-    OLSR_WARN_OOM(LOG_LOGGING);
+    OLSR_WARN(LOG_LOGGING, "Not enough memory for duplicating source name %s", name);
     return LOG_MAIN;
   }
 
@@ -246,16 +236,25 @@ olsr_log_register_source(const char *name) {
   return i;
 }
 
+/**
+ * @return maximum text length of a log severity string
+ */
 size_t
 olsr_log_get_max_severitytextlen(void) {
   return _max_severitytext_len;
 }
 
+/**
+ * @return maximum text length of a log source string
+ */
 size_t
 olsr_log_get_max_sourcetextlen(void) {
   return _max_sourcetext_len;
 }
 
+/**
+ * @return current number of logging sources
+ */
 size_t
 olsr_log_get_sourcecount(void) {
   return _source_count;
@@ -318,6 +317,9 @@ olsr_log_updatemask(void)
   }
 }
 
+/**
+ * @return pointer to string containing the current walltime
+ */
 const char *
 olsr_log_get_walltime(void) {
   static char buf[sizeof("00:00:00.000")];
@@ -366,7 +368,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
   if (!no_header) {
     p1 = abuf_appendf(&_logbuffer, "%s ", olsr_log_get_walltime());
     p2 = abuf_appendf(&_logbuffer, "%s(%s) %s %d: ",
-        olsr_log_getseverityname(severity), LOG_SOURCE_NAMES[source], file, line);
+        LOG_SEVERITY_NAMES[severity], LOG_SOURCE_NAMES[source], file, line);
   }
   p3 = abuf_vappendf(&_logbuffer, format, ap);
 
@@ -397,70 +399,6 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
     }
   }
   va_end(ap);
-}
-
-/**
- * This function should not be called directly, use the macro OLSR_OOM_WARN
- *
- * Generates a logfile entry and calls all log handler to store/output it.
- *
- * @param severity severity of the logging event
- * @param source source of the log event (LOG_LOGGING, ... )
- * @param file filename where the logging macro have been called
- * @param line line number where the logging macro have been called
- */
-void
-olsr_log_oom(enum log_severity severity, enum log_source source,
-    const char *file, int line)
-{
-  struct log_handler_entry *h, *iterator;
-  struct log_parameters param;
-  int i,j;
-  char *ptr;
-
-  /* generate OOM log string */
-  ptr = abuf_getptr(&_logbuffer);
-  ptr[0] = 0;
-  strscat(ptr, olsr_log_getseverityname(severity), abuf_getmax(&_logbuffer));
-  strscat(ptr, " ", abuf_getmax(&_logbuffer));
-  strscat(ptr, LOG_SOURCE_NAMES[source], abuf_getmax(&_logbuffer));
-  strscat(ptr, " ", abuf_getmax(&_logbuffer));
-  strscat(ptr, file, abuf_getmax(&_logbuffer));
-  strscat(ptr, " ", abuf_getmax(&_logbuffer));
-
-  j = strlen(ptr) + 4;
-
-  for (i=0; i < 5; i++) {
-    ptr[j-i] = '0' + (line % 10);
-    line /= 10;
-  }
-  ptr[++j] = ' ';
-  ptr[++j] = 0;
-
-  strscat(ptr, OUT_OF_MEMORY_ERROR, abuf_getmax(&_logbuffer));
-
-  param.severity = severity;
-  param.source = source;
-  param.no_header = true;
-  param.file = file;
-  param.line = line;
-  param.buffer = ptr;
-  param.timeLength = 0;
-  param.prefixLength = 0;
-
-
-  /* use stderr logger if nothing has been configured */
-  if (list_is_empty(&_handler_list)) {
-    olsr_log_stderr(NULL, &param);
-    return;
-  }
-
-  /* call all log handlers */
-  FOR_ALL_LOGHANDLERS(h, iterator) {
-    if (olsr_log_mask_test(h->_bitmask, source, severity)) {
-      h->handler(h, &param);
-    }
-  }
 }
 
 /**

@@ -337,7 +337,7 @@ _update_logfilter(struct olsr_telnet_data *data,
   enum log_severity sev;
 
   OLSR_FOR_ALL_LOGSEVERITIES(sev) {
-    if ((next = str_hasnextword(param, olsr_log_getseverityname(sev))) != NULL) {
+    if ((next = str_hasnextword(param, LOG_SEVERITY_NAMES[sev])) != NULL) {
       break;
     }
   }
@@ -457,9 +457,9 @@ _cb_handle_log(struct olsr_telnet_data *data) {
   if (strcasecmp(data->parameter, "show") == 0) {
     abuf_appendf(data->out, "%*s %*s %*s %*s\n",
         (int)olsr_log_get_max_sourcetextlen(), "",
-        (int)olsr_log_get_max_severitytextlen(), olsr_log_getseverityname(SEVERITY_DEBUG),
-        (int)olsr_log_get_max_severitytextlen(), olsr_log_getseverityname(SEVERITY_INFO),
-        (int)olsr_log_get_max_severitytextlen(), olsr_log_getseverityname(SEVERITY_WARN));
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[SEVERITY_DEBUG],
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[SEVERITY_INFO],
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[SEVERITY_WARN]);
 
     for (src=0; src<olsr_log_get_sourcecount(); src++) {
       abuf_appendf(data->out, "%*s %*s %*s %*s\n",
@@ -729,7 +729,6 @@ _cb_handle_route(struct olsr_telnet_data *data) {
     /* allocate permanent route datastructure for continous output */
     session = _get_remotecontrol_session(data);
     if (session == NULL) {
-      OLSR_WARN_OOM(LOG_PLUGINS);
       return TELNET_RESULT_INTERNAL_ERROR;
     }
     memcpy(&session->route, &route, sizeof(route));
@@ -789,7 +788,7 @@ _get_remotecontrol_session(struct olsr_telnet_data *data) {
   /* create new telnet */
   cl = calloc(1, sizeof(*cl));
   if (cl == NULL) {
-    OLSR_WARN_OOM(LOG_PLUGINS);
+    OLSR_WARN(LOG_PLUGINS, "Not enough memory for remotecontrol session");
     return NULL;
   }
 

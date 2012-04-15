@@ -226,13 +226,13 @@ os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multi
   }
 
   if (abuf_init(&nl->out)) {
-    OLSR_WARN_OOM(LOG_OS_SYSTEM);
+    OLSR_WARN(LOG_OS_SYSTEM, "Not enough memory for netlink output buffer");
     goto os_add_netlink_fail;
   }
 
   nl->in = calloc(1, getpagesize());
   if (nl->in == NULL) {
-    OLSR_WARN_OOM(LOG_OS_SYSTEM);
+    OLSR_WARN(LOG_OS_SYSTEM, "Not enough memory for netlink input buffer");
     goto os_add_netlink_fail;
   }
   nl->in_len = getpagesize();
@@ -450,7 +450,7 @@ netlink_rcv_retry:
     }
     ptr = realloc(nl->in, size);
     if (!ptr) {
-      OLSR_WARN_OOM(LOG_OS_SYSTEM);
+      OLSR_WARN(LOG_OS_SYSTEM, "Not enough memory to increase netlink input buffer");
       return;
     }
     nl->in = ptr;

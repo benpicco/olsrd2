@@ -200,7 +200,7 @@ _interface_add(const char *name, bool mesh) {
     /* allocate new interface */
     interf = calloc(1, sizeof(*interf));
     if (interf == NULL) {
-      OLSR_WARN_OOM(LOG_INTERFACE);
+      OLSR_WARN(LOG_INTERFACE, "Not enough memory for interface structure");
       return NULL;
     }
 

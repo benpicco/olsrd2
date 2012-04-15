@@ -39,18 +39,21 @@
  *
  */
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <time.h>
+#include <unistd.h>
 
 #ifdef WIN32
 #include <winsock2.h>
 #endif
 
 #include "common/autobuf.h"
+
+#define AUTOBUFCHUNK getpagesize()
 
 /**
  * @param val original size
@@ -73,12 +76,11 @@ int
 abuf_init(struct autobuf *autobuf)
 {
   autobuf->_len = 0;
-  autobuf->_total = AUTOBUFCHUNK;
-  autobuf->_buf = calloc(1, autobuf->_total);
+  autobuf->_buf = calloc(1, AUTOBUFCHUNK);
   if (autobuf->_buf == NULL) {
-    autobuf->_total = 0;
     return -1;
   }
+  autobuf->_total = AUTOBUFCHUNK;
   *autobuf->_buf = '\0';
   return 0;
 }

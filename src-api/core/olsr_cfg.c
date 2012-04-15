@@ -240,7 +240,7 @@ olsr_cfg_apply(void) {
   int result;
 
   if (abuf_init(&log)) {
-    OLSR_WARN_OOM(LOG_CONFIG);
+    OLSR_WARN(LOG_CONFIG, "Not enough memory for logging autobuffer");
     return -1;
   }
 
@@ -268,7 +268,7 @@ olsr_cfg_apply(void) {
   /* create new configuration database with correct values */
   _olsr_work_db = cfg_db_duplicate(_olsr_raw_db);
   if (_olsr_work_db == NULL) {
-    OLSR_WARN_OOM(LOG_CONFIG);
+    OLSR_WARN(LOG_CONFIG, "Not enough memory for duplicating work db");
     _olsr_work_db = old_db;
     old_db = NULL;
     goto apply_failed;
