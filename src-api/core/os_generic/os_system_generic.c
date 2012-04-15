@@ -143,14 +143,14 @@ os_system_log(enum log_severity severity, const char *msg) {
   int log_sev;
 
   switch (severity) {
-    case SEVERITY_DEBUG:
+    case LOG_SEVERITY_DEBUG:
       log_sev = LOG_DEBUG;
       break;
-    case SEVERITY_INFO:
+    case LOG_SEVERITY_INFO:
       log_sev = LOG_DEBUG;
       break;
     default:
-    case SEVERITY_WARN:
+    case LOG_SEVERITY_WARN:
       log_sev = LOG_WARNING;
       break;
   }

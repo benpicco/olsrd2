@@ -48,8 +48,6 @@
 
 #include "common/common_types.h"
 
-static const size_t AUTOBUFCHUNK = 4096;
-
 /**
  * Auto-sized buffer handler, mostly used for generation of
  * large string buffers.

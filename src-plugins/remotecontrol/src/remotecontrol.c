@@ -71,7 +71,7 @@ struct _remotecontrol_session {
   struct list_entity node;
   struct olsr_telnet_cleanup cleanup;
 
-  struct log_handler_mask_entry *mask;
+  uint8_t mask[LOG_MAXIMUM_SOURCES];
 
   struct os_route route;
 };
@@ -87,7 +87,7 @@ static enum olsr_telnet_result _cb_handle_route(struct olsr_telnet_data *data);
 static enum olsr_telnet_result _cb_handle_log(struct olsr_telnet_data *data);
 static enum olsr_telnet_result _cb_handle_config(struct olsr_telnet_data *data);
 static enum olsr_telnet_result _update_logfilter(struct olsr_telnet_data *data,
-    struct log_handler_mask_entry *mask, const char *current, bool value);
+    uint8_t *mask, const char *current, bool value);
 
 static int _print_memory(struct autobuf *buf);
 static int _print_timer(struct autobuf *buf);
@@ -182,9 +182,6 @@ static struct olsr_telnet_command _telnet_cmds[] = {
       .acl = &_remotecontrol_config.acl),
 };
 
-/* variables for log access */
-static int _log_source_maxlen, _log_severity_maxlen;
-
 /* list of telnet sessions with logging mask data */
 static struct list_entity _remote_sessions;
 
@@ -222,30 +219,7 @@ static int
 _cb_plugin_enable(void)
 {
   size_t i;
-  enum log_source src;
-  enum log_severity sev;
-
   list_init_head(&_remote_sessions);
-
-  /* calculate maximum length of log source names */
-  _log_source_maxlen = 0;
-  for (src=1; src<olsr_log_get_sourcecount(); src++) {
-    int len = strlen(LOG_SOURCE_NAMES[src]);
-
-    if (len > _log_source_maxlen) {
-      _log_source_maxlen = len;
-    }
-  }
-
-  /* calculate maximum length of log severity names */
-  _log_severity_maxlen = 0;
-  for (sev=1; sev<LOG_SEVERITY_COUNT; sev++) {
-    int len = strlen(LOG_SEVERITY_NAMES[sev]);
-
-    if (len > _log_severity_maxlen) {
-      _log_severity_maxlen = len;
-    }
-  }
 
   for (i=0; i<ARRAYSIZE(_telnet_cmds); i++) {
     olsr_telnet_add(&_telnet_cmds[i]);
@@ -357,17 +331,17 @@ _cb_handle_resource(struct olsr_telnet_data *data) {
  */
 static enum olsr_telnet_result
 _update_logfilter(struct olsr_telnet_data *data,
-    struct log_handler_mask_entry *mask, const char *param, bool value) {
+    uint8_t *mask, const char *param, bool value) {
   const char *next;
   enum log_source src;
   enum log_severity sev;
 
-  for (sev = 0; sev < LOG_SEVERITY_COUNT; sev++) {
+  OLSR_FOR_ALL_LOGSEVERITIES(sev) {
     if ((next = str_hasnextword(param, LOG_SEVERITY_NAMES[sev])) != NULL) {
       break;
     }
   }
-  if (sev == LOG_SEVERITY_COUNT) {
+  if (sev == LOG_SEVERITY_MAX) {
     abuf_appendf(data->out, "Error, unknown severity level: %s\n", param);
     return TELNET_RESULT_ACTIVE;
   }
@@ -376,8 +350,12 @@ _update_logfilter(struct olsr_telnet_data *data,
   while (param && *param) {
     for (src = 0; src < olsr_log_get_sourcecount(); src++) {
       if ((next = str_hasnextword(param, LOG_SOURCE_NAMES[src])) != NULL) {
-        mask[src].log_for_severity[sev] = value;
-        value = false;
+        if (value) {
+          olsr_log_mask_set(mask, src, sev);
+        }
+        else {
+          olsr_log_mask_reset(mask, src, sev);
+        }
         break;
       }
     }
@@ -441,7 +419,7 @@ _start_logging(struct olsr_telnet_data *data,
     return TELNET_RESULT_INTERNAL_ERROR;
   }
 
-  log_handler->bitmask = rc_session->mask;
+  olsr_log_mask_copy(log_handler->bitmask, rc_session->mask);
   log_handler->custom = data;
   log_handler->handler = _cb_print_log;
 
@@ -477,21 +455,21 @@ _cb_handle_log(struct olsr_telnet_data *data) {
   }
 
   if (strcasecmp(data->parameter, "show") == 0) {
-    abuf_appendf(data->out, "%*s %6s %6s %6s\n",
-        _log_source_maxlen, "",
-        LOG_SEVERITY_NAMES[SEVERITY_DEBUG],
-        LOG_SEVERITY_NAMES[SEVERITY_INFO],
-        LOG_SEVERITY_NAMES[SEVERITY_WARN]);
+    abuf_appendf(data->out, "%*s %*s %*s %*s\n",
+        (int)olsr_log_get_max_sourcetextlen(), "",
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[LOG_SEVERITY_DEBUG],
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[LOG_SEVERITY_INFO],
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[LOG_SEVERITY_WARN]);
 
     for (src=0; src<olsr_log_get_sourcecount(); src++) {
       abuf_appendf(data->out, "%*s %*s %*s %*s\n",
-        _log_source_maxlen, LOG_SOURCE_NAMES[src],
-        (int)sizeof(LOG_SEVERITY_NAMES[SEVERITY_DEBUG]),
-        rc_session->mask[src].log_for_severity[SEVERITY_DEBUG] ? "*" : "",
-        (int)sizeof(LOG_SEVERITY_NAMES[SEVERITY_INFO]),
-        rc_session->mask[src].log_for_severity[SEVERITY_INFO] ? "*" : "",
-        (int)sizeof(LOG_SEVERITY_NAMES[SEVERITY_WARN]),
-        rc_session->mask[src].log_for_severity[SEVERITY_WARN] ? "*" : "");
+          (int)olsr_log_get_max_sourcetextlen(), LOG_SOURCE_NAMES[src],
+          (int)olsr_log_get_max_severitytextlen(),
+          olsr_log_mask_test(rc_session->mask, src, LOG_SEVERITY_DEBUG) ? "*" : "",
+          (int)olsr_log_get_max_severitytextlen(),
+          olsr_log_mask_test(rc_session->mask, src, LOG_SEVERITY_INFO) ? "*" : "",
+          (int)olsr_log_get_max_severitytextlen(),
+          olsr_log_mask_test(rc_session->mask, src, LOG_SEVERITY_WARN) ? "*" : "");
     }
     return TELNET_RESULT_ACTIVE;
   }
@@ -751,7 +729,6 @@ _cb_handle_route(struct olsr_telnet_data *data) {
     /* allocate permanent route datastructure for continous output */
     session = _get_remotecontrol_session(data);
     if (session == NULL) {
-      OLSR_WARN_OOM(LOG_PLUGINS);
       return TELNET_RESULT_INTERNAL_ERROR;
     }
     memcpy(&session->route, &route, sizeof(route));
@@ -811,7 +788,7 @@ _get_remotecontrol_session(struct olsr_telnet_data *data) {
   /* create new telnet */
   cl = calloc(1, sizeof(*cl));
   if (cl == NULL) {
-    OLSR_WARN_OOM(LOG_PLUGINS);
+    OLSR_WARN(LOG_PLUGINS, "Not enough memory for remotecontrol session");
     return NULL;
   }
 
@@ -820,8 +797,7 @@ _get_remotecontrol_session(struct olsr_telnet_data *data) {
   olsr_telnet_add_cleanup(data, &cl->cleanup);
 
   /* copy global mask */
-  cl->mask = olsr_log_allocate_mask();
-  olsr_log_copy_mask(cl->mask, log_global_mask);
+  olsr_log_mask_copy(cl->mask, log_global_mask);
 
   /* add to remote telnet list */
   list_add_tail(&_remote_sessions, &cl->node);
@@ -839,6 +815,5 @@ _cb_handle_session_cleanup(struct olsr_telnet_cleanup *cleanup) {
 
   session = cleanup->custom;
   list_remove(&session->node);
-  olsr_log_free_mask(session->mask);
   free(session);
 }

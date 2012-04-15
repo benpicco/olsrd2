@@ -386,7 +386,7 @@ _open_plugin(const char *filename) {
   int indexCount;
 
   if (abuf_init(&abuf)) {
-    OLSR_WARN_OOM(LOG_PLUGINLOADER);
+    OLSR_WARN(LOG_PLUGINLOADER, "Not enough memory for plugin name generation");
     return NULL;
   }
 
