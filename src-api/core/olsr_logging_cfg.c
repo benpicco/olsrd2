@@ -180,22 +180,22 @@ olsr_logcfg_apply(struct cfg_db *db) {
       break;
     case 0:
       /* only warnings */
-      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_WARN);
+      olsr_log_mask_set(logging_cfg, LOG_ALL, LOG_SEVERITY_WARN);
       break;
     case 1:
       /* warnings and some info */
-      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_WARN);
+      olsr_log_mask_set(logging_cfg, LOG_ALL, LOG_SEVERITY_WARN);
       for (i=0; i<debug_lvl_1_count; i++) {
-        olsr_log_mask_set(logging_cfg, debug_lvl_1[i], SEVERITY_INFO);
+        olsr_log_mask_set(logging_cfg, debug_lvl_1[i], LOG_SEVERITY_INFO);
       }
       break;
     case 2:
       /* warning and info */
-      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_INFO);
+      olsr_log_mask_set(logging_cfg, LOG_ALL, LOG_SEVERITY_INFO);
       break;
     case 3:
       /* all logging messages */
-      olsr_log_mask_set(logging_cfg, LOG_ALL, SEVERITY_DEBUG);
+      olsr_log_mask_set(logging_cfg, LOG_ALL, LOG_SEVERITY_DEBUG);
       break;
     default:
       break;
@@ -204,9 +204,9 @@ olsr_logcfg_apply(struct cfg_db *db) {
   /* now apply specific settings */
   named = cfg_db_find_namedsection(db, LOG_SECTION, NULL);
   if (named != NULL) {
-    _apply_log_setting(named, LOG_WARN_ENTRY, SEVERITY_WARN);
-    _apply_log_setting(named, LOG_INFO_ENTRY, SEVERITY_INFO);
-    _apply_log_setting(named, LOG_DEBUG_ENTRY, SEVERITY_DEBUG);
+    _apply_log_setting(named, LOG_WARN_ENTRY, LOG_SEVERITY_WARN);
+    _apply_log_setting(named, LOG_INFO_ENTRY, LOG_SEVERITY_INFO);
+    _apply_log_setting(named, LOG_DEBUG_ENTRY, LOG_SEVERITY_DEBUG);
   }
 
   olsr_log_mask_copy(syslog_handler.bitmask, logging_cfg);
@@ -366,6 +366,6 @@ _apply_log_setting(struct cfg_named_section *named,
 static void
 _cb_logcfg_apply(void) {
   if (olsr_logcfg_apply(olsr_cfg_get_db())) {
-    os_syslog_log(SEVERITY_WARN, "Could not open logging file");
+    os_syslog_log(LOG_SEVERITY_WARN, "Could not open logging file");
   }
 }

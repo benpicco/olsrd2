@@ -164,7 +164,7 @@ main(int argc, char **argv) {
   setup_signalhandler();
 
   /* initialize logger */
-  if (olsr_log_init(olsr_builddata_get(), SEVERITY_WARN)) {
+  if (olsr_log_init(olsr_builddata_get(), LOG_SEVERITY_WARN)) {
     goto olsrd_cleanup;
   }
 

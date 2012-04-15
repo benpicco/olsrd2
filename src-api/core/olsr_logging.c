@@ -65,30 +65,31 @@ static const struct olsr_builddata *_builddata;
 static uint8_t _default_mask;
 static size_t _max_sourcetext_len, _max_severitytext_len, _source_count;
 
+/* names for buildin logging targets */
 const char *LOG_SOURCE_NAMES[LOG_MAXIMUM_SOURCES] = {
-  "all",
-  "logging",
-  "config",
-  "main",
-  "socket",
-  "timer",
-  "memcookie",
-  "socket-stream",
-  "socket-packet",
-  "interface",
-  "os-net",
-  "os-system",
-  "os-routing",
-  "plugin-loader",
-  "telnet",
-  "plugins",
-  "http",
+  [LOG_ALL]           = "all",
+  [LOG_LOGGING]       = "logging",
+  [LOG_CONFIG]        = "config",
+  [LOG_MAIN]          = "main",
+  [LOG_SOCKET]        = "socket",
+  [LOG_TIMER]         = "timer",
+  [LOG_MEMCOOKIE]     = "memcookie",
+  [LOG_SOCKET_STREAM] = "socket-stream",
+  [LOG_SOCKET_PACKET] = "socket-packet",
+  [LOG_INTERFACE]     = "interface",
+  [LOG_OS_NET]        = "os-net",
+  [LOG_OS_SYSTEM]     = "os-system",
+  [LOG_OS_ROUTING]    = "os-routing",
+  [LOG_PLUGINLOADER]  = "plugin-loader",
+  [LOG_TELNET]        = "telnet",
+  [LOG_PLUGINS]       = "plugins",
+  [LOG_HTTP]          = "http",
 };
 
-const char *LOG_SEVERITY_NAMES[SEVERITY_MAX+1] = {
-  [SEVERITY_DEBUG] = "DEBUG",
-  [SEVERITY_INFO]  = "INFO",
-  [SEVERITY_WARN]  = "WARN",
+const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_MAX+1] = {
+  [LOG_SEVERITY_DEBUG] = "DEBUG",
+  [LOG_SEVERITY_INFO]  = "INFO",
+  [LOG_SEVERITY_WARN]  = "WARN",
 };
 
 /* remember if initialized or not */
@@ -345,7 +346,7 @@ olsr_log_get_walltime(void) {
  *
  * Generates a logfile entry and calls all log handler to store/output it.
  *
- * @param severity severity of the log event (SEVERITY_DEBUG to SEVERITY_WARN)
+ * @param severity severity of the log event (LOG_SEVERITY_DEBUG to LOG_SEVERITY_WARN)
  * @param source source of the log event (LOG_LOGGING, ... )
  * @param no_header true if time header should not be created
  * @param file filename where the logging macro have been called

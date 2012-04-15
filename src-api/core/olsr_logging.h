@@ -52,25 +52,18 @@ struct log_handler_entry;
 #include "common/list.h"
 #include "builddata/data.h"
 
-/* maximum number of logging sources */
-#define LOG_MAXIMUM_SOURCES 64
-
 /**
  * defines the severity of a logging event
  */
 enum log_severity {
-  SEVERITY_MIN   = 1<<0,
-  SEVERITY_DEBUG = 1<<0,
-  SEVERITY_INFO  = 1<<1,
-  SEVERITY_WARN  = 1<<2,
-  SEVERITY_MAX   = 1<<2,
+  LOG_SEVERITY_MIN   = 1<<0,
+  LOG_SEVERITY_DEBUG = 1<<0,
+  LOG_SEVERITY_INFO  = 1<<1,
+  LOG_SEVERITY_WARN  = 1<<2,
+  LOG_SEVERITY_MAX   = 1<<2,
 };
 
-/*
- * Defines the source of a logging event.
- * Keep this in the same order as the log_source and
- * log_severity enums (see olsr_logging_sources.h).
- */
+/* Defines the builtin sources of a logging event. */
 enum log_source {
   LOG_ALL,
   LOG_LOGGING,
@@ -90,8 +83,11 @@ enum log_source {
   LOG_PLUGINS,
   LOG_HTTP,
 
-  /* this one must be the last of the enums ! */
-  LOG_CORESOURCE_COUNT
+  /* this one must be the last ones of the normal enums ! */
+  LOG_CORESOURCE_COUNT,
+
+  /* maximum number of logging sources supported by API */
+  LOG_MAXIMUM_SOURCES = 64,
 };
 
 struct log_parameters {
@@ -117,9 +113,6 @@ struct log_parameters {
  * from XXX.XXX.XXX.XXX".
  *
  * OLSR_WARN should be used for all error messages.
- *
- * OLSR_WARN_OOM should be called in an out-of-memory event to display some warning
- * without allocating more memory.
  */
 
 #define _OLSR_LOG(severity, source, no_header, format, args...) do { if (olsr_log_mask_test(log_global_mask, source, severity)) olsr_log(severity, source, no_header, __FILE__, __LINE__, format, ##args); } while(0)
@@ -128,16 +121,16 @@ struct log_parameters {
 #define OLSR_DEBUG(source, format, args...) do { } while(0)
 #define OLSR_DEBUG_NH(source, format, args...) do { } while(0)
 #else
-#define OLSR_DEBUG(source, format, args...) _OLSR_LOG(SEVERITY_DEBUG, source, false, format, ##args)
-#define OLSR_DEBUG_NH(source, format, args...) _OLSR_LOG(SEVERITY_DEBUG, source, true, format, ##args)
+#define OLSR_DEBUG(source, format, args...) _OLSR_LOG(LOG_SEVERITY_DEBUG, source, false, format, ##args)
+#define OLSR_DEBUG_NH(source, format, args...) _OLSR_LOG(LOG_SEVERITY_DEBUG, source, true, format, ##args)
 #endif
 
 #ifdef REMOVE_LOG_INFO
 #define OLSR_INFO(source, format, args...) do { } while(0)
 #define OLSR_INFO_NH(source, format, args...) do { } while(0)
 #else
-#define OLSR_INFO(source, format, args...) _OLSR_LOG(SEVERITY_INFO, source, false, format, ##args)
-#define OLSR_INFO_NH(source, format, args...) _OLSR_LOG(SEVERITY_INFO, source, true, format, ##args)
+#define OLSR_INFO(source, format, args...) _OLSR_LOG(LOG_SEVERITY_INFO, source, false, format, ##args)
+#define OLSR_INFO_NH(source, format, args...) _OLSR_LOG(LOG_SEVERITY_INFO, source, true, format, ##args)
 #endif
 
 #ifdef REMOVE_LOG_WARN
@@ -146,8 +139,8 @@ struct log_parameters {
 
 #define OLSR_WARN_OOM(source) do { } while(0)
 #else
-#define OLSR_WARN(source, format, args...) _OLSR_LOG(SEVERITY_WARN, source, false, format, ##args)
-#define OLSR_WARN_NH(source, format, args...) _OLSR_LOG(SEVERITY_WARN, source, true, format, ##args)
+#define OLSR_WARN(source, format, args...) _OLSR_LOG(LOG_SEVERITY_WARN, source, false, format, ##args)
+#define OLSR_WARN_NH(source, format, args...) _OLSR_LOG(LOG_SEVERITY_WARN, source, true, format, ##args)
 #endif
 
 typedef void log_handler_cb(struct log_handler_entry *, struct log_parameters *);
@@ -166,11 +159,11 @@ struct log_handler_entry {
   void *custom;
 };
 
-#define OLSR_FOR_ALL_LOGSEVERITIES(sev) for (sev = SEVERITY_MIN; sev <= SEVERITY_MAX; sev <<= 1)
+#define OLSR_FOR_ALL_LOGSEVERITIES(sev) for (sev = LOG_SEVERITY_MIN; sev <= LOG_SEVERITY_MAX; sev <<= 1)
 
 EXPORT extern uint8_t log_global_mask[LOG_MAXIMUM_SOURCES];
 EXPORT extern const char *LOG_SOURCE_NAMES[LOG_MAXIMUM_SOURCES];
-EXPORT extern const char *LOG_SEVERITY_NAMES[SEVERITY_MAX+1];
+EXPORT extern const char *LOG_SEVERITY_NAMES[LOG_SEVERITY_MAX+1];
 
 EXPORT int olsr_log_init(const struct olsr_builddata *, enum log_severity)
   __attribute__((warn_unused_result));

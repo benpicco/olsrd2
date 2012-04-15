@@ -341,7 +341,7 @@ _update_logfilter(struct olsr_telnet_data *data,
       break;
     }
   }
-  if (sev == SEVERITY_MAX) {
+  if (sev == LOG_SEVERITY_MAX) {
     abuf_appendf(data->out, "Error, unknown severity level: %s\n", param);
     return TELNET_RESULT_ACTIVE;
   }
@@ -457,19 +457,19 @@ _cb_handle_log(struct olsr_telnet_data *data) {
   if (strcasecmp(data->parameter, "show") == 0) {
     abuf_appendf(data->out, "%*s %*s %*s %*s\n",
         (int)olsr_log_get_max_sourcetextlen(), "",
-        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[SEVERITY_DEBUG],
-        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[SEVERITY_INFO],
-        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[SEVERITY_WARN]);
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[LOG_SEVERITY_DEBUG],
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[LOG_SEVERITY_INFO],
+        (int)olsr_log_get_max_severitytextlen(), LOG_SEVERITY_NAMES[LOG_SEVERITY_WARN]);
 
     for (src=0; src<olsr_log_get_sourcecount(); src++) {
       abuf_appendf(data->out, "%*s %*s %*s %*s\n",
           (int)olsr_log_get_max_sourcetextlen(), LOG_SOURCE_NAMES[src],
           (int)olsr_log_get_max_severitytextlen(),
-          olsr_log_mask_test(rc_session->mask, src, SEVERITY_DEBUG) ? "*" : "",
+          olsr_log_mask_test(rc_session->mask, src, LOG_SEVERITY_DEBUG) ? "*" : "",
           (int)olsr_log_get_max_severitytextlen(),
-          olsr_log_mask_test(rc_session->mask, src, SEVERITY_INFO) ? "*" : "",
+          olsr_log_mask_test(rc_session->mask, src, LOG_SEVERITY_INFO) ? "*" : "",
           (int)olsr_log_get_max_severitytextlen(),
-          olsr_log_mask_test(rc_session->mask, src, SEVERITY_WARN) ? "*" : "");
+          olsr_log_mask_test(rc_session->mask, src, LOG_SEVERITY_WARN) ? "*" : "");
     }
     return TELNET_RESULT_ACTIVE;
   }
