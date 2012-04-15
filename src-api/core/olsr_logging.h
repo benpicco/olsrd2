@@ -44,7 +44,6 @@
 
 struct log_handler_entry;
 
-#include "stdlib.h"
 #include "string.h"
 
 #include "common/common_types.h"
@@ -102,7 +101,9 @@ struct log_parameters {
 };
 
 /**
- * these four macros should be used to generate OLSR logging output
+ * these macros should be used to generate OLSR logging output
+ * the OLSR_severity_NH() variants don't print the timestamp/file/line header,
+ * which can be used for multiline output.
  *
  * OLSR_DEBUG should be used for all output that is only usefull for debugging a specific
  * part of the code. This could be information about the internal progress of a function,
@@ -136,8 +137,6 @@ struct log_parameters {
 #ifdef REMOVE_LOG_WARN
 #define OLSR_WARN(source, format, args...) do { } while(0)
 #define OLSR_WARN_NH(source, format, args...) do { } while(0)
-
-#define OLSR_WARN_OOM(source) do { } while(0)
 #else
 #define OLSR_WARN(source, format, args...) _OLSR_LOG(LOG_SEVERITY_WARN, source, false, format, ##args)
 #define OLSR_WARN_NH(source, format, args...) _OLSR_LOG(LOG_SEVERITY_WARN, source, true, format, ##args)
