@@ -73,7 +73,7 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
     src = oif == NULL ? &NETADDR_IPV4_ANY : &oif->if_v4;
 
     OLSR_DEBUG(log_src,
-        "Socket on interface %s joining multicast %s (src %s)\n",
+        "Socket on interface %s joining receiving multicast %s (src %s)\n",
         oif ? oif->name : "*",
         netaddr_to_string(&buf2, multicast),
         netaddr_to_string(&buf1, src));
@@ -131,7 +131,7 @@ os_net_join_mcast_send(int sock,
 
   if (multicast->type == AF_INET) {
     OLSR_DEBUG(log_src,
-        "Socket on interface %s joining multicast %s (src %s)\n",
+        "Socket on interface %s joining sending multicast %s (src %s)\n",
         oif->name,
         netaddr_to_string(&buf2, multicast),
         netaddr_to_string(&buf1, &oif->if_v4));

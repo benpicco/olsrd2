@@ -225,8 +225,8 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
   else {
     /* The cookie is used for debugging to traceback the originator */
     timer->info->usage++;
-    timer->info->changes++;
   }
+  timer->info->changes++;
 
   /*
    * Compute random numbers only once.
