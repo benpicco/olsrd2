@@ -64,7 +64,9 @@ static int _apply_managed_socket(struct olsr_packet_managed *managed,
     struct olsr_packet_socket *stream,
     struct netaddr *bindto, uint16_t port,
     struct olsr_interface_data *data);
-static void _cb_packet_event(int fd, void *data, bool r, bool w);
+static void _cb_packet_event_unicast(int fd, void *data, bool r, bool w);
+static void _cb_packet_event_multicast(int fd, void *data, bool r, bool w);
+static void _cb_packet_event(int fd, void *data, bool r, bool w, bool mc);
 static void _cb_interface_listener(
     struct olsr_interface_listener *l, struct olsr_interface_data *old);
 
@@ -115,7 +117,7 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
 
   pktsocket->interface = interf;
   pktsocket->scheduler_entry.fd = s;
-  pktsocket->scheduler_entry.process = _cb_packet_event;
+  pktsocket->scheduler_entry.process = _cb_packet_event_unicast;
   pktsocket->scheduler_entry.event_read = true;
   pktsocket->scheduler_entry.event_write = false;
   pktsocket->scheduler_entry.data = pktsocket;
@@ -349,6 +351,7 @@ _apply_managed(struct olsr_packet_managed *managed,
       result = -1;
     }
     else {
+      managed->multicast_v4.scheduler_entry.process = _cb_packet_event_multicast;
       os_net_join_mcast_recv(managed->multicast_v4.scheduler_entry.fd,
           &config->multicast_v4, data, LOG_SOCKET_PACKET);
     }
@@ -381,6 +384,7 @@ _apply_managed(struct olsr_packet_managed *managed,
       result = -1;
     }
     else {
+      managed->multicast_v6.scheduler_entry.process = _cb_packet_event_multicast;
       os_net_join_mcast_recv(managed->multicast_v6.scheduler_entry.fd,
         &config->multicast_v6, data, LOG_SOCKET_PACKET);
     }
@@ -444,6 +448,16 @@ _apply_managed_socket(struct olsr_packet_managed *managed,
   return 0;
 }
 
+static void
+_cb_packet_event_unicast(int fd, void *data, bool event_read, bool event_write) {
+  _cb_packet_event(fd, data, event_read, event_write, false);
+}
+
+static void
+_cb_packet_event_multicast(int fd, void *data, bool event_read, bool event_write) {
+  _cb_packet_event(fd, data, event_read, event_write, true);
+}
+
 /**
  * Callback to handle data from the olsr socket scheduler
  * @param fd filedescriptor to read data from
@@ -452,7 +466,7 @@ _apply_managed_socket(struct olsr_packet_managed *managed,
  * @param event_write true if write-event is incoming
  */
 static void
-_cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
+_cb_packet_event(int fd, void *data, bool event_read, bool event_write, bool multicast) {
   struct olsr_packet_socket *pktsocket = data;
   union netaddr_socket *skt, sock;
   uint16_t length;
@@ -462,9 +476,12 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write) {
   struct netaddr_str netbuf;
 #endif
 
-  OLSR_DEBUG(LOG_SOCKET_PACKET, "UDP event.");
+  OLSR_DEBUG(LOG_SOCKET_PACKET, "UDP event (%s).", multicast ? "multicast" : "unicast");
   if (event_read) {
     uint8_t *buf;
+
+    /* clear recvfrom memory */
+    memset(&sock, 0, sizeof(sock));
 
     /* handle incoming data */
     buf = pktsocket->config.input_buffer;
