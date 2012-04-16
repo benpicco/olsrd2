@@ -209,9 +209,9 @@ olsr_logcfg_apply(struct cfg_db *db) {
     _apply_log_setting(named, LOG_DEBUG_ENTRY, LOG_SEVERITY_DEBUG);
   }
 
-  olsr_log_mask_copy(syslog_handler.bitmask, logging_cfg);
-  olsr_log_mask_copy(stderr_handler.bitmask, logging_cfg);
-  olsr_log_mask_copy(file_handler.bitmask, logging_cfg);
+  olsr_log_mask_copy(syslog_handler.user_bitmask, logging_cfg);
+  olsr_log_mask_copy(stderr_handler.user_bitmask, logging_cfg);
+  olsr_log_mask_copy(file_handler.user_bitmask, logging_cfg);
 
   /* load settings which loggershould be activated */
   ptr = cfg_db_get_entry_value(db, LOG_SECTION, NULL, LOG_SYSLOG_ENTRY)->value;
@@ -348,8 +348,8 @@ _apply_log_setting(struct cfg_named_section *named,
   entry = cfg_db_get_entry(named, entry_name);
   if (entry) {
     FOR_ALL_STRINGS(&entry->val, ptr) {
-      for (i=0; i<LOG_MAXIMUM_SOURCES; i++) {
-        if (LOG_SOURCE_NAMES[i] != 0 && strcasecmp(ptr, LOG_SOURCE_NAMES[i]) == 0) {
+      for (i=0; i<olsr_log_get_sourcecount(); i++) {
+        if (strcasecmp(ptr, LOG_SOURCE_NAMES[i]) == 0) {
           olsr_log_mask_set(logging_cfg, i, severity);
         }
       }

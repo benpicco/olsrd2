@@ -419,7 +419,7 @@ _start_logging(struct olsr_telnet_data *data,
     return TELNET_RESULT_INTERNAL_ERROR;
   }
 
-  olsr_log_mask_copy(log_handler->bitmask, rc_session->mask);
+  olsr_log_mask_copy(log_handler->user_bitmask, rc_session->mask);
   log_handler->custom = data;
   log_handler->handler = _cb_print_log;
 

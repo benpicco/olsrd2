@@ -302,12 +302,12 @@ olsr_log_updatemask(void)
   olsr_log_mask_clear(log_global_mask);
 
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    for (src = 1; src < LOG_MAXIMUM_SOURCES; src++) {
+    for (src = 0; src < LOG_MAXIMUM_SOURCES; src++) {
       /* copy user defined mask */
-      mask = h->_bitmask[src];
+      mask = h->user_bitmask[src];
 
       /* apply 'all' source mask */
-      mask |= h->_bitmask[LOG_ALL];
+      mask |= h->user_bitmask[LOG_ALL];
 
       /* propagate severities from lower to higher level */
       mask |= mask << 1;
@@ -322,7 +322,7 @@ olsr_log_updatemask(void)
 #endif
 
       /* write calculated mask into internal buffer */
-      h->_bitmask[src] = mask;
+      h->_processed_bitmask[src] = mask;
 
       /* apply calculated mask to the global one */
       log_global_mask[src] |= mask;
@@ -407,7 +407,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
 
   /* call all log handlers */
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    if (olsr_log_mask_test(h->_bitmask, source, severity)) {
+    if (olsr_log_mask_test(h->_processed_bitmask, source, severity)) {
       h->handler(h, &param);
     }
   }
