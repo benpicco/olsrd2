@@ -187,12 +187,12 @@ static struct cfg_schema_entry _dlep_entries[] = {
   CFG_MAP_STRING_ARRAY(_dlep_config, peer_type, "peer_type", "",
     "String for identifying this DLEP service", 80),
 
-  CFG_MAP_CLOCK_MIN(_dlep_config, discovery_interval, "discovery_interval", "0.000",
+  CFG_MAP_CLOCK_MIN(_dlep_config, discovery_interval, "discovery_interval", "2.000",
     "Interval in seconds between interface discovery messages", 100),
   CFG_MAP_CLOCK_MIN(_dlep_config, discovery_validity, "discovery_validity", "5.000",
     "Validity time in seconds for interface discovery messages", 100),
 
-  CFG_MAP_CLOCK_MIN(_dlep_config, address_interval, "address_interval", "0.000",
+  CFG_MAP_CLOCK_MIN(_dlep_config, address_interval, "address_interval", "2.000",
     "Interval in seconds between neighbor up messages", 100),
   CFG_MAP_CLOCK_MIN(_dlep_config, address_validity, "address_validity", "5.000",
     "Validity time in seconds for neighbor up messages", 100),
@@ -403,8 +403,9 @@ _parse_order_disconnect(void) {
     return PBB_DROP_MESSAGE;
   }
 
+  OLSR_DEBUG(LOG_DLEP_SERVICE, "DLEP disconnect");
+
   /* call vtime callback */
-  olsr_timer_stop(&session->router_vtime);
   _cb_dlep_router_timerout(session);
 
   return PBB_OKAY;
@@ -415,14 +416,18 @@ _parse_order_connect_router(void) {
   struct _dlep_session *session;
   uint8_t encoded_vtime;
   uint64_t vtime;
+  struct netaddr_str buf;
 
   encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
 
   /* TODO: decode vtime according to RFC 5497 */
-  vtime = 0 * encoded_vtime + 5000;
+  vtime = 0 * encoded_vtime + 10000;
 
   session = avl_find_element(&_session_tree, _peer_socket, session, _node);
   if (session == NULL) {
+    OLSR_DEBUG(LOG_DLEP_SERVICE, "New DLEP router session for %s",
+        netaddr_socket_to_string(&buf, _peer_socket));
+
     /* allocate new session */
     session = calloc(1, sizeof(*session));
     if (session == NULL) {
@@ -436,11 +441,12 @@ _parse_order_connect_router(void) {
 
     session->router_vtime.cb_context = session;
     session->router_vtime.info = &_tinfo_router_vtime;
+
+    avl_insert(&_session_tree, &session->_node);
   }
 
   /* reset validity time for router session */
   olsr_timer_set(&session->router_vtime, vtime);
-
   return PBB_OKAY;
 }
 
@@ -613,6 +619,10 @@ _cb_dlep_router_timerout(void *ptr) {
   struct _dlep_session *session = ptr;
 
   OLSR_DEBUG(LOG_DLEP_SERVICE, "Removing DLEP session");
+
+  /* might have been called directly */
+  olsr_timer_stop(&session->router_vtime);
+
   avl_remove(&_session_tree, &session->_node);
   free(session);
 }
