@@ -463,28 +463,19 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
 
   _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
   switch (_current_order) {
-    /* received by both interface and router */
     case DLEP_ORDER_DISCONNECT:
       return _parse_order_disconnect();
-
-    /* only received by DLEP-interface */
     case DLEP_ORDER_CONNECT_ROUTER:
       return _parse_order_connect_router();
-
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       /* ignore our own discovery packets if we work with multicast loop */
       return PBB_OKAY;
-#if 0
-    /* only received by DLEP-router */
-    case DLEP_ORDER_INTERFACE_DISCOVERY:
-      break;
     case DLEP_ORDER_NEIGHBOR_UP:
-      break;
-    case DLEP_ORDER_NEIGHBOR_DOWN:
+      /* ignore our own discovery packets if we work with multicast loop */
       break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
+      /* ignore our own discovery packets if we work with multicast loop */
       break;
-#endif
     default:
       OLSR_WARN(LOG_DLEP_SERVICE, "Unknown order in DLEP message: %d", _current_order);
       return PBB_DROP_MESSAGE;

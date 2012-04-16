@@ -74,14 +74,13 @@ enum dlep_msgtlv_types {
   MSGTLV_VTIME = 1,
   DLEP_TLV_ORDER = 192,
   DLEP_TLV_PEER_TYPE,
-  DLEP_TLV_STATUS,
+//  DLEP_TLV_STATUS,
 //  DLEP_TLV_CUR_BC_RATE,
 //  DLEP_TLV_MAX_BC_RATE,
 };
 
 enum dlep_addrtlv_types {
   DLEP_ADDRTLV_CUR_RATE = 192,
-  DLEP_ADDRTLV_THROUGHPUT,
 //  DLEP_ADDRTLV_MAX_RATE,
 //  DLEP_ADDRTLV_IPv4,
 //  DLEP_ADDRTLV_IPv6,
@@ -92,10 +91,18 @@ enum dlep_tlv_idx {
   IDX_TLV_ORDER,
   IDX_TLV_VTIME,
   IDX_TLV_PEER_TYPE,
-  IDX_TLV_STATUS,
+//  IDX_TLV_STATUS,
 //  IDX_TLV_CUR_BC_RATE,
 //  IDX_TLV_MAX_BC_RATE,
 };
+
+enum dlep_addrtlv_idx {
+  IDX_ADDRTLV_CUR_RATE = 192,
+//  IDX_ADDRTLV_MAX_RATE,
+//  IDX_ADDRTLV_IPv4,
+//  IDX_ADDRTLV_IPv6,
+};
+
 
 /* definitions */
 struct _dlep_config {
@@ -126,6 +133,12 @@ static enum pbb_result _cb_parse_dlep_message(
     struct pbb_reader_tlvblock_consumer *consumer,
     struct pbb_reader_tlvblock_context *context);
 static enum pbb_result _cb_parse_dlep_message_failed(
+    struct pbb_reader_tlvblock_consumer *consumer,
+    struct pbb_reader_tlvblock_context *context);
+static enum pbb_result _cb_parse_dlep_addresses(
+    struct pbb_reader_tlvblock_consumer *consumer,
+    struct pbb_reader_tlvblock_context *context);
+static enum pbb_result _cb_parse_dlep_addresses_failed(
     struct pbb_reader_tlvblock_consumer *consumer,
     struct pbb_reader_tlvblock_context *context);
 static void _cb_receive_dlep(struct olsr_packet_socket *,
@@ -205,7 +218,15 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
   [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 1, .max_length = 80, .match_length = true },
-  [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
+};
+
+static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
+  .block_callback = _cb_parse_dlep_addresses,
+  .block_callback_failed_constraints = _cb_parse_dlep_addresses_failed,
+};
+
+static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
+  [DLEP_ADDRTLV_CUR_RATE] = { .type = DLEP_ADDRTLV_CUR_RATE, .min_length = 8 },
 };
 
 /* DLEP writer data */
@@ -314,7 +335,8 @@ _cb_plugin_enable(void) {
   pbb_reader_init(&_dlep_reader);
   pbb_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
-
+  pbb_reader_add_address_consumer(&_dlep_reader, &_dlep_address_consumer,
+      _dlep_address_tlvs, ARRAYSIZE(_dlep_address_tlvs), DLEP_MESSAGE_ID, 1);
   olsr_packet_add_managed(&_dlep_socket);
   return 0;
 }
@@ -338,6 +360,7 @@ _cb_plugin_disable(void) {
   olsr_packet_remove_managed(&_dlep_socket, true);
 
   /* remove pbb reader */
+  pbb_reader_remove_address_consumer(&_dlep_reader, &_dlep_address_consumer);
   pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
   pbb_reader_cleanup(&_dlep_reader);
 
@@ -419,8 +442,8 @@ _parse_order_interface_discovery(struct netaddr *radio_mac) {
 }
 
 static enum pbb_result
-_cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
-      struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute__ ((unused)),
+      struct pbb_reader_tlvblock_context *context) {
   struct netaddr radio_mac;
 
   if (context->addr_len != 6) {
@@ -436,29 +459,56 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
 
   _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
   switch (_current_order) {
-    /* received by both interface and router */
     case DLEP_ORDER_DISCONNECT:
       return _parse_order_disconnect();
-
-#if 0
-    /* only received by DLEP-interface */
-    case DLEP_ORDER_CONNECT_ROUTER:
-      return _parse_order_connect_router();
-
-#endif
-    /* only received by DLEP-router */
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       return _parse_order_interface_discovery(&radio_mac);
-    case DLEP_ORDER_NEIGHBOR_UP:
-      break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       break;
-
+    case DLEP_ORDER_NEIGHBOR_UP:
+      /* we are not interested in the message TLVs */
+      return PBB_OKAY;
     default:
       OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _current_order);
       return PBB_DROP_MESSAGE;
   }
   return PBB_OKAY;
+}
+
+static enum pbb_result
+_cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribute__ ((unused)),
+    struct pbb_reader_tlvblock_context *context) {
+  struct netaddr radio_mac;
+
+  if (context->addr_len != 6) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "Address length of DLEP message should be 6 (but was %d)",
+        context->addr_len);
+    return PBB_DROP_MESSAGE;
+  }
+
+  if (netaddr_from_binary(&radio_mac, context->orig_addr, context->addr_len, AF_MAC48)) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "Cannot parse DLEP originator address");
+    return PBB_DROP_MESSAGE;
+  }
+
+  /* current order has already been read by message parsing */
+  switch (_current_order) {
+    case DLEP_ORDER_DISCONNECT:
+    case DLEP_ORDER_INTERFACE_DISCOVERY:
+      /* not interested in addresses */
+      break;
+    case DLEP_ORDER_NEIGHBOR_UPDATE:
+      // TODO
+      break;
+    case DLEP_ORDER_NEIGHBOR_UP:
+      // TODO
+      return PBB_OKAY;
+    default:
+      OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _current_order);
+      return PBB_DROP_MESSAGE;
+  }
+  return PBB_OKAY;
+
 }
 
 static enum pbb_result
@@ -473,7 +523,22 @@ _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __a
       OLSR_WARN_NH(LOG_DLEP_CLIENT, "\tvalue length: %u", _dlep_message_tlvs[i].tlv->length);
     }
   }
-  return PBB_OKAY;
+  return PBB_DROP_MESSAGE;
+}
+
+static enum pbb_result
+_cb_parse_dlep_addresses_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
+    struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+  size_t i;
+  OLSR_WARN(LOG_DLEP_CLIENT, "Constraints of incoming DLEP message were not fulfilled!");
+
+  for (i=0; i < ARRAYSIZE(_dlep_message_tlvs); i++) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
+    if (_dlep_message_tlvs[i].tlv) {
+      OLSR_WARN_NH(LOG_DLEP_CLIENT, "\tvalue length: %u", _dlep_message_tlvs[i].tlv->length);
+    }
+  }
+  return PBB_DROP_ADDRESS;
 }
 
 /**
