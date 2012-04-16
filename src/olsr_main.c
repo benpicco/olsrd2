@@ -571,12 +571,14 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         olsr_builddata_get()->default_config, NULL);
   }
 
+#if 0
   if (return_code == -1) {
     /* validate configuration */
     if (cfg_schema_validate(db, false, true, &log)) {
       return_code = 1;
     }
   }
+#endif
 
   if (abuf_getlen(&log) > 0) {
     if (reload_only) {

@@ -309,7 +309,8 @@ cfg_schema_validate(struct cfg_db *db,
  * @param named pointer to named section
  * @param _entries pointer to array of schema _entries
  * @param count number of schema _entries
- * @return 0 if conversion was successful, -1 if an error happened.
+ * @return 0 if conversion was successful, -(1+index) of the
+ *   failed conversion array entry if an error happened.
  *   An error might result in a partial initialized target buffer.
  */
 int
@@ -340,7 +341,7 @@ cfg_schema_tobin(void *target, struct cfg_named_section *named,
 
     if (entries[i].cb_to_binary(&entries[i], value, ptr + entries[i].bin_offset)) {
       /* error in conversion */
-      return -1;
+      return -1-i;
     }
   }
   return 0;
