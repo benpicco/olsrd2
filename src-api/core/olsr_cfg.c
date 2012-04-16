@@ -255,7 +255,7 @@ olsr_cfg_apply(void) {
   }
 
   /*** phase 2: check configuration and apply it ***/
-  /* re-validate configuration data */
+  /* validate configuration data */
   if (cfg_schema_validate(_olsr_raw_db, false, true, &log)) {
     OLSR_WARN(LOG_CONFIG, "Configuration validation failed");
     OLSR_WARN_NH(LOG_CONFIG, "%s", abuf_getptr(&log));
