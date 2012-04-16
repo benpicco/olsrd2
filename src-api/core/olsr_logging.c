@@ -296,24 +296,36 @@ olsr_log_updatemask(void)
 {
   enum log_source src;
   struct log_handler_entry *h, *iterator;
+  uint8_t mask;
 
-  /* first copy bitmasks to internal memory */
-  /* and reset global mask */
+  /* first reset global mask */
+  olsr_log_mask_clear(log_global_mask);
+
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    memcpy(h->_bitmask, h->bitmask, LOG_MAXIMUM_SOURCES);
-  }
-  memset(log_global_mask, 0, LOG_MAXIMUM_SOURCES);
+    for (src = 0; src < LOG_MAXIMUM_SOURCES; src++) {
+      /* copy user defined mask */
+      mask = h->user_bitmask[src];
 
-  /* second propagate source ALL to all other sources for each logger */
-  /* third, propagate events from debug to info and from info to warn */
-  /* finally, calculate the global logging bitmask */
-  FOR_ALL_LOGHANDLERS(h, iterator) {
-    for (src = 1; src < LOG_MAXIMUM_SOURCES; src++) {
-      h->_bitmask[src] |= h->_bitmask[0];
-      h->_bitmask[src] |= h->bitmask[src] << 1;
-      h->_bitmask[src] |= h->bitmask[src] << 1;
+      /* apply 'all' source mask */
+      mask |= h->user_bitmask[LOG_ALL];
 
-      log_global_mask[src] |= h->_bitmask[src];
+      /* propagate severities from lower to higher level */
+      mask |= mask << 1;
+      mask |= mask << 2;
+
+      /*
+       * we don't need the third shift because we have
+       * 4 or less severity level
+       */
+#if 0
+      mask |= mask << 4;
+#endif
+
+      /* write calculated mask into internal buffer */
+      h->_processed_bitmask[src] = mask;
+
+      /* apply calculated mask to the global one */
+      log_global_mask[src] |= mask;
     }
   }
 }
@@ -395,7 +407,7 @@ olsr_log(enum log_severity severity, enum log_source source, bool no_header,
 
   /* call all log handlers */
   FOR_ALL_LOGHANDLERS(h, iterator) {
-    if (olsr_log_mask_test(h->_bitmask, source, severity)) {
+    if (olsr_log_mask_test(h->_processed_bitmask, source, severity)) {
       h->handler(h, &param);
     }
   }

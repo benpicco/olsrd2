@@ -148,11 +148,11 @@ struct log_handler_entry {
   struct list_entity node;
   log_handler_cb *handler;
 
-  /* pointer to handlers own bitmask */
-  uint8_t bitmask[LOG_MAXIMUM_SOURCES];
+  /* user_bitmask */
+  uint8_t user_bitmask[LOG_MAXIMUM_SOURCES];
 
-  /* internal copy of bitmask */
-  uint8_t _bitmask[LOG_MAXIMUM_SOURCES];
+  /* internal copy of user_bitmask */
+  uint8_t _processed_bitmask[LOG_MAXIMUM_SOURCES];
 
   /* custom data for user */
   void *custom;
