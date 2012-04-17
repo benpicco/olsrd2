@@ -126,7 +126,6 @@ os_net_join_mcast_send(int sock,
 #if !defined (REMOVE_LOG_DEBUG)
   struct netaddr_str buf1, buf2;
 #endif
-  char p;
   unsigned i;
 
   if (multicast->type == AF_INET) {
@@ -142,8 +141,8 @@ os_net_join_mcast_send(int sock,
       return -1;
     }
 
-    p = loop ? 1 : 0;
-    if(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&p, sizeof(p)) < 0) {
+    i = loop ? 1 : 0;
+    if(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&i, sizeof(i)) < 0) {
       OLSR_WARN(log_src, "Cannot deactivate local loop of multicast interface: %s (%d)\n",
           strerror(errno), errno);
       return -1;

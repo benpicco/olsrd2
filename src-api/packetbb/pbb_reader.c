@@ -60,9 +60,10 @@ static bool _has_same_tlvtype(int int_type1, int int_type2);
 static uint8_t _pbb_get_u8(uint8_t **ptr, uint8_t *end, enum pbb_result *result);
 static uint16_t _pbb_get_u16(uint8_t **ptr, uint8_t *end, enum pbb_result *result);
 static void _free_tlvblock(struct pbb_reader *parser, struct avl_tree *entries);
-static int _parse_tlv(struct pbb_reader_tlvblock_entry *entry, uint8_t **ptr, uint8_t *eob);
+static int _parse_tlv(struct pbb_reader_tlvblock_entry *entry, uint8_t **ptr,
+    uint8_t *eob, uint8_t addr_count);
 static int _parse_tlvblock(struct pbb_reader *parser,
-    struct avl_tree *tlvblock, uint8_t **ptr, uint8_t *eob);
+    struct avl_tree *tlvblock, uint8_t **ptr, uint8_t *eob, uint8_t addr_count);
 static int _schedule_tlvblock(struct pbb_reader_tlvblock_consumer *consumer,
     struct pbb_reader_tlvblock_context *context, struct avl_tree *entries, uint8_t idx);
 static int _parse_addrblock(struct pbb_reader_addrblock_entry *addr_entry,
@@ -176,7 +177,7 @@ pbb_reader_handle_packet(struct pbb_reader *parser, uint8_t *buffer, size_t leng
   /* check for packet tlv */
   has_tlv = (context.pkt_flags & PBB_PKT_FLAG_TLV) != 0;
   if (has_tlv) {
-    result = _parse_tlvblock(parser, &entries, &ptr, eob);
+    result = _parse_tlvblock(parser, &entries, &ptr, eob, 0);
     if (result != PBB_OKAY) {
       /*
        * error while parsing TLV block, do not jump to cleanup_parse packet because
@@ -479,10 +480,12 @@ _free_tlvblock(struct pbb_reader *parser, struct avl_tree *entries) {
  *   incremented to the first byte after the TLV if no error happened.
  *   Will be set to eob if an error happened.
  * @param eob pointer to first byte after the datastream
+ * @param addr_count number of addresses corresponding to tlvblock, 0 if message or
+ *   packet tlv
  * @return -1 if an error happened, 0 otherwise
  */
 static enum pbb_result
-_parse_tlv(struct pbb_reader_tlvblock_entry *entry, uint8_t **ptr, uint8_t *eob) {
+_parse_tlv(struct pbb_reader_tlvblock_entry *entry, uint8_t **ptr, uint8_t *eob, uint8_t addr_count) {
   enum pbb_result result = PBB_OKAY;
   uint8_t masked, count;
 
@@ -506,7 +509,7 @@ _parse_tlv(struct pbb_reader_tlvblock_entry *entry, uint8_t **ptr, uint8_t *eob)
   masked = entry->flags & (PBB_TLV_FLAG_SINGLE_IDX | PBB_TLV_FLAG_MULTI_IDX);
   if (masked == 0) {
     entry->index1 = 0;
-    entry->index2 = 255;
+    entry->index2 = addr_count-1;
   }
   else if (masked == PBB_TLV_FLAG_SINGLE_IDX) {
     entry->index1 = entry->index2 = _pbb_get_u8(ptr, eob, &result);
@@ -581,11 +584,12 @@ _parse_tlv(struct pbb_reader_tlvblock_entry *entry, uint8_t **ptr, uint8_t *eob)
  *   incremented to the first byte after the block if no error happened.
  *   Will be set to eob if an error happened.
  * @param eob pointer to first byte after the datastream
- * @return -1 if an error happened, 0 otherwise
+ * @param addr_count number of addresses corresponding to tlvblock, 0 if message or
+ *   packet tlv * @return -1 if an error happened, 0 otherwise
  */
 static enum pbb_result
 _parse_tlvblock(struct pbb_reader *parser,
-    struct avl_tree *tlvblock, uint8_t **ptr, uint8_t *eob) {
+    struct avl_tree *tlvblock, uint8_t **ptr, uint8_t *eob, uint8_t addr_count) {
   enum pbb_result result = PBB_OKAY;
   struct pbb_reader_tlvblock_entry *tlv1 = NULL;
   struct pbb_reader_tlvblock_entry entry;
@@ -607,7 +611,7 @@ _parse_tlvblock(struct pbb_reader *parser,
   /* parse tlvs */
   while (*ptr < end) {
     /* parse next TLV into static buffer */
-    if ((result = _parse_tlv(&entry, ptr, eob)) != PBB_OKAY) {
+    if ((result = _parse_tlv(&entry, ptr, eob, addr_count)) != PBB_OKAY) {
       /* error while parsing TLV */
       goto cleanup_parse_tlvblock;
     }
@@ -1141,7 +1145,7 @@ _handle_message(struct pbb_reader *parser,
   }
 
   /* parse message TLV block */
-  result = _parse_tlvblock(parser, &tlv_entries, ptr, end);
+  result = _parse_tlvblock(parser, &tlv_entries, ptr, end, 0);
   if (result != PBB_OKAY) {
     /* error while allocating tlvblock data */
     goto cleanup_parse_message;
@@ -1166,7 +1170,7 @@ _handle_message(struct pbb_reader *parser,
     }
 
     /* ... and corresponding tlvblock */
-    result = _parse_tlvblock(parser, &addr->tlvblock, ptr, end);
+    result = _parse_tlvblock(parser, &addr->tlvblock, ptr, end, addr->num_addr);
     if (result != PBB_OKAY) {
       parser->free_addrblock_entry(addr);
       goto cleanup_parse_message;
