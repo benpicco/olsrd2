@@ -147,6 +147,7 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
     net->if_index = if_index;
 
     net->_valitity_timer.info = &_network_vtime_info;
+    net->_valitity_timer.cb_context = net;
 
     avl_insert(&olsr_layer2_network_tree, &net->_node);
   }
@@ -212,6 +213,7 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
 
     neigh->_node.key = &neigh->key;
     neigh->_valitity_timer.info = &_neighbor_vtime_info;
+    neigh->_valitity_timer.cb_context = neigh;
 
     avl_insert(&olsr_layer2_neighbor_tree, &neigh->_node);
   }
