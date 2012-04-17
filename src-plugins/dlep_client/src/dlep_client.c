@@ -255,8 +255,9 @@ static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
 };
 
 /* temporary variables for parsing DLEP messages */
-static enum dlep_orders _current_order;
-static union netaddr_socket *_peer_socket;
+static enum dlep_orders _message_order;
+static union netaddr_socket *_message_peer_socket;
+uint64_t _message_vtime;
 
 /* DLEP session data */
 static struct avl_tree _session_tree;
@@ -373,10 +374,10 @@ _cb_plugin_disable(void) {
 }
 
 static enum pbb_result
-_parse_order_disconnect(void) {
+_parse_msg_disconnect(void) {
   struct _dlep_session *session;
 
-  session = avl_find_element(&_session_tree, _peer_socket, session, _node);
+  session = avl_find_element(&_session_tree, _message_peer_socket, session, _node);
   if (session == NULL) {
     OLSR_INFO(LOG_DLEP_CLIENT, "Received DLEP disconnect from unknown peer");
     return PBB_DROP_MESSAGE;
@@ -389,16 +390,9 @@ _parse_order_disconnect(void) {
 }
 
 static enum pbb_result
-_parse_order_interface_discovery(struct netaddr *radio_mac) {
+_parse_msg_interface_discovery(struct netaddr *radio_mac) {
   struct _dlep_session *session;
-  uint8_t encoded_vtime;
-  uint64_t vtime;
   struct netaddr_str buf;
-
-  encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
-
-  /* TODO: decode vtime according to RFC 5497 */
-  vtime = 0 * encoded_vtime + 10000;
 
   session = avl_find_element(&_session_tree, radio_mac, session, _node);
   if (session == NULL) {
@@ -422,7 +416,7 @@ _parse_order_interface_discovery(struct netaddr *radio_mac) {
 
     /* initialize new session */
     session->_node.key = &session->radio_mac;
-    memcpy(&session->interface_socket, _peer_socket, sizeof(*_peer_socket));
+    memcpy(&session->interface_socket, _message_peer_socket, sizeof(*_message_peer_socket));
     memcpy(&session->radio_mac, radio_mac, sizeof(*radio_mac));
     avl_insert(&_session_tree, &session->_node);
 
@@ -437,7 +431,7 @@ _parse_order_interface_discovery(struct netaddr *radio_mac) {
   }
 
   /* reset validity time for router session */
-  olsr_timer_set(&session->interface_vtime, vtime);
+  olsr_timer_set(&session->interface_vtime, _message_vtime);
   return PBB_OKAY;
 }
 
@@ -445,6 +439,7 @@ static enum pbb_result
 _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context) {
   struct netaddr radio_mac;
+  uint8_t encoded_vtime;
 
   if (context->addr_len != 6) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Address length of DLEP message should be 6 (but was %d)",
@@ -457,20 +452,64 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
     return PBB_DROP_MESSAGE;
   }
 
-  _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
-  switch (_current_order) {
+  encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
+
+  /* TODO: decode vtime according to RFC 5497 */
+  _message_vtime = 0 * encoded_vtime + 10000;
+
+  _message_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
+  switch (_message_order) {
     case DLEP_ORDER_DISCONNECT:
-      return _parse_order_disconnect();
+      return _parse_msg_disconnect();
     case DLEP_ORDER_INTERFACE_DISCOVERY:
-      return _parse_order_interface_discovery(&radio_mac);
+      return _parse_msg_interface_discovery(&radio_mac);
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       break;
     case DLEP_ORDER_NEIGHBOR_UP:
       /* we are not interested in the message TLVs */
       return PBB_OKAY;
     default:
-      OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _current_order);
+      OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _message_order);
       return PBB_DROP_MESSAGE;
+  }
+  return PBB_OKAY;
+}
+
+static enum pbb_result
+_parse_addr_neighbor_up(struct netaddr *radio_mac, struct netaddr *neigh_mac) {
+  struct netaddr_str buf1, buf2;
+
+  olsr_layer2_add_neighbor(radio_mac, neigh_mac, 0, _message_vtime);
+
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Got layer2 neighbor %s (seen by %s)",
+      netaddr_to_string(&buf1, neigh_mac), netaddr_to_string(&buf2, radio_mac));
+
+  return PBB_OKAY;
+}
+
+static enum pbb_result
+_parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac) {
+  struct olsr_layer2_neighbor *neigh;
+  struct netaddr_str buf1, buf2;
+
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Got layer2 neighbor %s (seen by %s)",
+      netaddr_to_string(&buf1, neigh_mac), netaddr_to_string(&buf2, radio_mac));
+
+  neigh = olsr_layer2_add_neighbor(radio_mac, neigh_mac, 0, _message_vtime);
+  if (neigh == NULL) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "Cannot allocate new layer2 neighbor");
+    return PBB_DROP_MESSAGE;
+  }
+
+  if (_dlep_address_tlvs[IDX_ADDRTLV_CUR_RATE].tlv) {
+    uint64_t rate;
+
+    // TODO: ntohll ?
+    memcpy(&rate, _dlep_address_tlvs[IDX_ADDRTLV_CUR_RATE].tlv->single_value, sizeof(rate));
+    olsr_layer2_neighbor_set_tx_bitrate(neigh, rate);
+
+    OLSR_DEBUG(LOG_DLEP_CLIENT, "Set bitrate of %s (measured by %s) to %"PRIu64,
+        netaddr_to_string(&buf1, neigh_mac), netaddr_to_string(&buf2, radio_mac), rate);
   }
   return PBB_OKAY;
 }
@@ -479,6 +518,7 @@ static enum pbb_result
 _cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribute__ ((unused)),
     struct pbb_reader_tlvblock_context *context) {
   struct netaddr radio_mac;
+  struct netaddr neigh_mac;
 
   if (context->addr_len != 6) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Address length of DLEP message should be 6 (but was %d)",
@@ -491,20 +531,24 @@ _cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribu
     return PBB_DROP_MESSAGE;
   }
 
+  if (netaddr_from_binary(&neigh_mac, context->addr, context->addr_len, AF_MAC48)) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "Cannot parse DLEP neighbor address");
+    return PBB_DROP_MESSAGE;
+  }
+
   /* current order has already been read by message parsing */
-  switch (_current_order) {
+  switch (_message_order) {
     case DLEP_ORDER_DISCONNECT:
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       /* not interested in addresses */
       break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
-      // TODO
+      return _parse_addr_neighbor_update(&radio_mac, &neigh_mac);
       break;
     case DLEP_ORDER_NEIGHBOR_UP:
-      // TODO
-      return PBB_OKAY;
+      return _parse_addr_neighbor_up(&radio_mac, &neigh_mac);
     default:
-      OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _current_order);
+      OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _message_order);
       return PBB_DROP_MESSAGE;
   }
   return PBB_OKAY;
@@ -558,7 +602,7 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
   OLSR_DEBUG(LOG_DLEP_CLIENT, "Parsing DLEP packet from %s",
       netaddr_socket_to_string(&buf, from));
 
-  _peer_socket = from;
+  _message_peer_socket = from;
 
   result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
   if (result) {
@@ -566,7 +610,7 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
         pbb_strerror(result), result);
   }
 
-  _peer_socket = NULL;
+  _message_peer_socket = NULL;
 }
 
 static void

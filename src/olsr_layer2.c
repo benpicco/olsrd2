@@ -44,9 +44,12 @@
 #include "common/common_types.h"
 
 #include "olsr_memcookie.h"
+#include "olsr_timer.h"
 #include "olsr.h"
 #include "olsr_layer2.h"
 
+static void _cb_neighbor_timeout(void *ptr);
+static void _cb_network_timeout(void *ptr);
 static int _avl_comp_l2neigh(const void *k1, const void *k2, void *);
 
 struct avl_tree olsr_layer2_network_tree;
@@ -60,6 +63,16 @@ static struct olsr_memcookie_info _network_cookie = {
 static struct olsr_memcookie_info _neighbor_cookie = {
   .name = "layer2 neighbors",
   .size = sizeof(struct olsr_layer2_neighbor),
+};
+
+static struct olsr_timer_info _network_vtime_info = {
+  .name = "layer2 network vtime",
+  .callback = _cb_network_timeout,
+};
+
+static struct olsr_timer_info _neighbor_vtime_info = {
+  .name = "layer2 neighbor vtime",
+  .callback = _cb_neighbor_timeout,
 };
 
 OLSR_SUBSYSTEM_STATE(_layer2_state);
@@ -76,28 +89,11 @@ olsr_layer2_init(void) {
   olsr_memcookie_add(&_network_cookie);
   olsr_memcookie_add(&_neighbor_cookie);
 
+  olsr_timer_add(&_network_vtime_info);
+  olsr_timer_add(&_neighbor_vtime_info);
+
   avl_init(&olsr_layer2_network_tree, avl_comp_netaddr, false, NULL);
   avl_init(&olsr_layer2_neighbor_tree, _avl_comp_l2neigh, false, NULL);
-
-  // TODO: remove!
-  {
-    struct netaddr radio_mac, n1_mac, n2_mac;
-    struct olsr_layer2_network *net;
-    struct olsr_layer2_neighbor *neigh1, *neigh2;
-
-    if (netaddr_from_string(&radio_mac, "10:00:00:00:00:01")) {;}
-    if (netaddr_from_string(&n1_mac, "20:00:00:00:00:01")) {;}
-    if (netaddr_from_string(&n2_mac, "20:00:00:00:00:02")) {;}
-
-    net = olsr_layer2_add_network(&radio_mac, 1);
-    olsr_layer2_network_set_last_seen(net, 1000);
-
-    neigh1 = olsr_layer2_add_neighbor(&radio_mac, &n1_mac, 1);
-    olsr_layer2_neighbor_set_tx_bitrate(neigh1, 1000000);
-
-    neigh2 = olsr_layer2_add_neighbor(&radio_mac, &n2_mac, 1);
-    olsr_layer2_neighbor_set_tx_bitrate(neigh2, 2000000);
-  }
 }
 
 /**
@@ -119,6 +115,8 @@ olsr_layer2_cleanup(void) {
     olsr_layer2_remove_neighbor(neigh);
   }
 
+  olsr_timer_remove(&_network_vtime_info);
+  olsr_timer_remove(&_neighbor_vtime_info);
   olsr_memcookie_remove(&_network_cookie);
   olsr_memcookie_remove(&_neighbor_cookie);
 }
@@ -129,24 +127,31 @@ olsr_layer2_cleanup(void) {
  * function and no new entry will be created.
  * @param radio_id ID of the radio
  * @param if_index local interface index of network
+ * @param vtime validity time of data
  * @return pointer to layer2 network data, NULL if OOM
  */
 struct olsr_layer2_network *
-olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index) {
+olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
+    uint64_t vtime) {
   struct olsr_layer2_network *net;
 
   net = olsr_layer2_get_network(if_index);
   if (!net) {
     net = olsr_memcookie_malloc(&_network_cookie);
-    if (net) {
-      net->_node.key = &net->radio_id;
-      memcpy (&net->radio_id, radio_id, sizeof(*radio_id));
-
-      avl_insert(&olsr_layer2_network_tree, &net->_node);
-
-      net->if_index = if_index;
+    if (!net) {
+      return NULL;
     }
+
+    net->_node.key = &net->radio_id;
+    memcpy (&net->radio_id, radio_id, sizeof(*radio_id));
+    net->if_index = if_index;
+
+    net->_valitity_timer.info = &_network_vtime_info;
+
+    avl_insert(&olsr_layer2_network_tree, &net->_node);
   }
+
+  olsr_timer_set(&net->_valitity_timer, vtime);
   return net;
 }
 
@@ -157,6 +162,7 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index) {
 void
 olsr_layer2_remove_network(struct olsr_layer2_network *net) {
   avl_remove(&olsr_layer2_network_tree, &net->_node);
+  olsr_timer_stop(&net->_valitity_timer);
   free (net->supported_rates);
   olsr_memcookie_free(&_network_cookie, net);
 }
@@ -185,26 +191,32 @@ olsr_layer2_get_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac) {
  * @param radio_id pointer to radio_id of network
  * @param neigh_mac layer2 address of neighbor
  * @param if_index local interface index of the neighbor
+ * @param vtime validity time of data
  * @return pointer to layer2 neighbor data, NULL if OOM
  */
 struct olsr_layer2_neighbor *
 olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
-    uint32_t if_index) {
+    uint32_t if_index, uint64_t vtime) {
   struct olsr_layer2_neighbor *neigh;
 
   neigh = olsr_layer2_get_neighbor(radio_id, neigh_mac);
   if (!neigh) {
     neigh = olsr_memcookie_malloc(&_neighbor_cookie);
-    if (neigh) {
-      neigh->if_index = if_index;
-      memcpy(&neigh->key.radio_mac, radio_id, sizeof(*radio_id));
-      memcpy(&neigh->key.neighbor_mac, neigh_mac, sizeof(*neigh_mac));
-
-      neigh->_node.key = &neigh->key;
-
-      avl_insert(&olsr_layer2_neighbor_tree, &neigh->_node);
+    if (!neigh) {
+      return NULL;
     }
+
+    neigh->if_index = if_index;
+    memcpy(&neigh->key.radio_mac, radio_id, sizeof(*radio_id));
+    memcpy(&neigh->key.neighbor_mac, neigh_mac, sizeof(*neigh_mac));
+
+    neigh->_node.key = &neigh->key;
+    neigh->_valitity_timer.info = &_neighbor_vtime_info;
+
+    avl_insert(&olsr_layer2_neighbor_tree, &neigh->_node);
   }
+
+  olsr_timer_set(&neigh->_valitity_timer, vtime);
   return neigh;
 }
 
@@ -215,6 +227,7 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
 void
 olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *neigh) {
   avl_remove(&olsr_layer2_neighbor_tree, &neigh->_node);
+  olsr_timer_stop(&neigh->_valitity_timer);
   olsr_memcookie_free(&_neighbor_cookie, neigh);
 }
 
@@ -244,6 +257,16 @@ olsr_layer2_network_set_supported_rates(struct olsr_layer2_network *net,
   return 0;
 }
 
+static void
+_cb_neighbor_timeout(void *ptr) {
+  olsr_layer2_remove_neighbor(ptr);
+}
+
+static void
+_cb_network_timeout(void *ptr) {
+  olsr_layer2_remove_network(ptr);
+}
+
 /**
  * AVL comparator for layer2 neighbor nodes
  * @param k1 pointer to first layer2 neighbor
@@ -262,7 +285,7 @@ _avl_comp_l2neigh(const void *k1, const void *k2,
 
   result = netaddr_cmp(&key1->radio_mac, &key2->radio_mac);
   if (!result) {
-    result = netaddr_cmp(&key1->neighbor_mac, &key1->neighbor_mac);
+    result = netaddr_cmp(&key1->neighbor_mac, &key2->neighbor_mac);
   }
   return result;
 }

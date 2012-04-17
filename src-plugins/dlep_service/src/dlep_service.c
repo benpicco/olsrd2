@@ -80,7 +80,7 @@ enum dlep_msgtlv_types {
 
 enum dlep_addrtlv_types {
   DLEP_ADDRTLV_CUR_RATE = 192,
-  DLEP_ADDRTLV_THROUGHPUT,
+// v DLEP_ADDRTLV_THROUGHPUT,
 //  DLEP_ADDRTLV_MAX_RATE,
 //  DLEP_ADDRTLV_IPv4,
 //  DLEP_ADDRTLV_IPv6,
@@ -95,6 +95,15 @@ enum dlep_tlv_idx {
 //  IDX_TLV_CUR_BC_RATE,
 //  IDX_TLV_MAX_BC_RATE,
 };
+
+enum dlep_addrtlv_idx {
+  IDX_ADDRTLV_CUR_RATE,
+//  IDX_ADDRTLV_THROUGHPUT,
+//  IDX_ADDRTLV_MAX_RATE,
+//  IDX_ADDRTLV_IPv4,
+//  IDX_ADDRTLV_IPv6,
+};
+
 
 /* definitions */
 struct _dlep_config {
@@ -192,12 +201,12 @@ static struct cfg_schema_entry _dlep_entries[] = {
   CFG_MAP_CLOCK_MIN(_dlep_config, discovery_validity, "discovery_validity", "5.000",
     "Validity time in seconds for interface discovery messages", 100),
 
-  CFG_MAP_CLOCK_MIN(_dlep_config, address_interval, "address_interval", "2.000",
+  CFG_MAP_CLOCK_MIN(_dlep_config, address_interval, "address_interval", "0.000",
     "Interval in seconds between neighbor up messages", 100),
   CFG_MAP_CLOCK_MIN(_dlep_config, address_validity, "address_validity", "5.000",
     "Validity time in seconds for neighbor up messages", 100),
 
-  CFG_MAP_CLOCK_MIN(_dlep_config, metric_interval, "metric_interval", "0.000",
+  CFG_MAP_CLOCK_MIN(_dlep_config, metric_interval, "metric_interval", "1.000",
     "Interval in seconds between neighbor update messages", 100),
   CFG_MAP_CLOCK_MIN(_dlep_config, metric_validity, "metric_validity", "5.000",
     "Validity time in seconds for neighbor update messages", 100),
@@ -246,7 +255,7 @@ static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
 };
 
 static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
-  { .type = DLEP_ADDRTLV_CUR_RATE },
+  [IDX_ADDRTLV_CUR_RATE] = { .type = DLEP_ADDRTLV_CUR_RATE },
 };
 
 static uint8_t _packet_buffer[256];
@@ -366,6 +375,28 @@ _cb_plugin_enable(void) {
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
 
   olsr_packet_add_managed(&_dlep_socket);
+
+
+  // TODO: remove!
+  {
+    struct netaddr radio_mac, n1_mac, n2_mac;
+    struct olsr_layer2_network *net;
+    struct olsr_layer2_neighbor *neigh1, *neigh2;
+
+    if (netaddr_from_string(&radio_mac, "1:00:00:00:00:01")) {;}
+    if (netaddr_from_string(&n1_mac, "2:00:00:00:00:01")) {;}
+    if (netaddr_from_string(&n2_mac, "2:00:00:00:00:02")) {;}
+
+    net = olsr_layer2_add_network(&radio_mac, 1, 0);
+    olsr_layer2_network_set_last_seen(net, 1000);
+
+    neigh1 = olsr_layer2_add_neighbor(&radio_mac, &n1_mac, 1, 0);
+    olsr_layer2_neighbor_set_tx_bitrate(neigh1, 1000000);
+
+    neigh2 = olsr_layer2_add_neighbor(&radio_mac, &n2_mac, 1, 0);
+    olsr_layer2_neighbor_set_tx_bitrate(neigh2, 2000000);
+  }
+
   return 0;
 }
 
@@ -375,6 +406,12 @@ _cb_plugin_enable(void) {
  */
 static int
 _cb_plugin_disable(void) {
+  struct _dlep_session *session, *s_it;
+
+  avl_for_each_element_safe(&_session_tree, session, _node, s_it) {
+    _cb_dlep_router_timerout(session);
+  }
+
   olsr_packet_remove_managed(&_dlep_socket, true);
 
   pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
@@ -550,6 +587,15 @@ _add_neighborup_msgtlvs(void) {
 }
 
 static void
+_add_neighborupdate_msgtlvs(void) {
+  uint8_t encoded_vtime = 0;
+
+  // TODO: calculate encoded vtime
+  pbb_writer_add_messagetlv(&_dlep_writer,
+      MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+}
+
+static void
 _cb_addMessageHeader(struct pbb_writer *writer, struct pbb_writer_message *msg) {
   static uint16_t seqno = 0;
   pbb_writer_set_msg_header(writer, msg, true, false, false, true);
@@ -571,6 +617,9 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
     case DLEP_ORDER_NEIGHBOR_UP:
       _add_neighborup_msgtlvs();
       break;
+    case DLEP_ORDER_NEIGHBOR_UPDATE:
+      _add_neighborupdate_msgtlvs();
+      break;
     default:
       OLSR_WARN(LOG_DLEP_SERVICE, "DLEP Message order %d not implemented yet", _msg_order);
       break;
@@ -580,11 +629,53 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
 static void
 _add_neighborup_addresses(void) {
   struct olsr_layer2_neighbor *neigh, *neigh_it;
+  struct netaddr_str buf1, buf2;
 
   OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
     if (netaddr_cmp(&_msg_network->radio_id, &neigh->key.radio_mac) == 0) {
       pbb_writer_add_address(&_dlep_writer, _dlep_message,
           netaddr_get_binptr(&neigh->key.neighbor_mac), 48);
+
+      OLSR_DEBUG(LOG_DLEP_SERVICE, "Added neighbor %s (seen by %s) to neigh-up",
+          netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
+          netaddr_to_string(&buf2, &neigh->key.radio_mac));
+    }
+  }
+}
+
+static void
+_add_neighborupdate_addresses(void) {
+  struct olsr_layer2_neighbor *neigh, *neigh_it;
+  struct pbb_writer_address *addr;
+  struct netaddr_str buf1, buf2;
+
+  OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
+    if (netaddr_cmp(&_msg_network->radio_id, &neigh->key.radio_mac) != 0) {
+      continue;
+    }
+
+    addr = pbb_writer_add_address(&_dlep_writer, _dlep_message,
+          netaddr_get_binptr(&neigh->key.neighbor_mac), 48);
+    if (addr == NULL) {
+      OLSR_WARN(LOG_DLEP_SERVICE, "Could not allocate address for neighbor update");
+      break;
+    }
+
+    OLSR_DEBUG(LOG_DLEP_SERVICE, "Added neighbor %s (seen by %s) to neigh-up",
+        netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
+        netaddr_to_string(&buf2, &neigh->key.radio_mac));
+
+    if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
+      uint64_t rate;
+
+      rate = neigh->tx_bitrate;
+      // TODO: htonll ?
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_CUR_RATE]._tlvtype, &rate, sizeof(rate), false);
+
+      OLSR_DEBUG(LOG_DLEP_SERVICE, "Added bitrate of %s (measured by %s): %"PRIu64,
+          netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
+          netaddr_to_string(&buf2, &neigh->key.radio_mac), rate);
     }
   }
 }
@@ -594,10 +685,14 @@ _cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_content_provider *cpr __attribute__((unused))) {
   switch (_msg_order) {
     case DLEP_ORDER_INTERFACE_DISCOVERY:
+    case DLEP_ORDER_DISCONNECT:
       /* no addresses and address TLVs */
       break;
     case DLEP_ORDER_NEIGHBOR_UP:
       _add_neighborup_addresses();
+      break;
+    case DLEP_ORDER_NEIGHBOR_UPDATE:
+      _add_neighborupdate_addresses();
       break;
     default:
       OLSR_WARN(LOG_DLEP_SERVICE, "DLEP Message order %d not implemented yet", _msg_order);

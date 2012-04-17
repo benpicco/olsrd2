@@ -327,7 +327,8 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
     return -1;
   }
 
-  neigh = olsr_layer2_add_neighbor(&if_data->mac, &mac, if_index);
+  neigh = olsr_layer2_add_neighbor(&if_data->mac, &mac, if_index,
+      _config.interval + _config.interval / 4);
   if (neigh == NULL) {
     OLSR_WARN(LOG_NL80211, "Not enough memory for new layer2 neighbor");
     return -1;
@@ -484,7 +485,8 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
     return -1;
   }
 
-  net = olsr_layer2_add_network(&if_data->mac, if_index);
+  net = olsr_layer2_add_network(&if_data->mac, if_index,
+      _config.interval + _config.interval / 4);
   if (net == NULL) {
     OLSR_WARN(LOG_NL80211, "Not enough memory for new layer2 network");
     return -1;

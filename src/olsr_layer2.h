@@ -47,6 +47,7 @@
 #include "common/netaddr.h"
 
 #include "olsr_clock.h"
+#include "olsr_timer.h"
 
 enum olsr_layer2_neighbor_data {
   OLSR_L2NEIGH_SIGNAL = 1<<0,
@@ -71,6 +72,7 @@ struct olsr_layer2_neighbor {
   struct olsr_layer2_neighbor_key key;
   uint32_t if_index;
 
+  struct olsr_timer_entry _valitity_timer;
   enum olsr_layer2_neighbor_data _available_data;
 
   uint16_t signal;
@@ -96,6 +98,7 @@ struct olsr_layer2_network {
   struct netaddr radio_id;
   uint32_t if_index;
 
+  struct olsr_timer_entry _valitity_timer;
   enum olsr_layer2_network_data _available_data;
 
   struct netaddr ssid;
@@ -118,13 +121,14 @@ EXPORT void olsr_layer2_init(void);
 EXPORT void olsr_layer2_cleanup(void);
 
 EXPORT struct olsr_layer2_network *olsr_layer2_add_network(
-    struct netaddr *ssid, uint32_t if_index);
+    struct netaddr *ssid, uint32_t if_index, uint64_t vtime);
 EXPORT void olsr_layer2_remove_network(struct olsr_layer2_network *);
 
 EXPORT struct olsr_layer2_neighbor *olsr_layer2_get_neighbor(
     struct netaddr *radio_id, struct netaddr *neigh_mac);
 EXPORT struct olsr_layer2_neighbor *olsr_layer2_add_neighbor(
-    struct netaddr *radio_id, struct netaddr *neigh_mac, uint32_t if_index);
+    struct netaddr *radio_id, struct netaddr *neigh_mac, uint32_t if_index,
+    uint64_t vtime);
 EXPORT void olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *);
 
 EXPORT int olsr_layer2_network_set_supported_rates(
