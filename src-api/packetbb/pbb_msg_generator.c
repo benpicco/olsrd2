@@ -1052,12 +1052,12 @@ _write_addresses(struct pbb_writer *writer, struct pbb_writer_message *msg,
           *flag |= PBB_TLV_FLAG_MULTI_IDX;
           *ptr++ = tlv_start->address->index - addr_start->index;
           *ptr++ = tlv_end->address->index - addr_start->index;
+        }
 
-          /* length field is single_length*num for multivalue tlvs */
-          if (!same_value) {
-            total_len = total_len * ((tlv_end->address->index - tlv_start->address->index) + 1);
-            *flag |= PBB_TLV_FLAG_MULTIVALUE;
-          }
+        /* length field is single_length*num for multivalue tlvs */
+        if (!same_value) {
+          total_len = total_len * ((tlv_end->address->index - tlv_start->address->index) + 1);
+          *flag |= PBB_TLV_FLAG_MULTIVALUE;
         }
 
 
