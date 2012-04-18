@@ -60,6 +60,11 @@ struct _l2viewer_config {
   struct olsr_netaddr_acl acl;
 };
 
+struct _routing_filter {
+  struct netaddr mac;
+  unsigned if_index;
+};
+
 /* prototypes */
 static int _cb_plugin_load(void);
 static int _cb_plugin_unload(void);
@@ -151,164 +156,128 @@ _cb_plugin_disable(void) {
   return 0;
 }
 
-struct olsr_number_buf {
-    char buf[48];
-};
-
-static const char *
-_print_human_readable_number(
-    struct olsr_number_buf *out, uint64_t number, const char *unit, int maxfraction, bool binary) {
-  static const char symbol[] = " kMGTPE";
-  uint64_t step, multiplier, print, n;
-  const char *unit_modifier;
-  size_t idx, len;
-
-  step = binary ? 1024 : 1000;
-  multiplier = 1;
-  unit_modifier = symbol;
-
-  while (*unit_modifier != 0 && number >= multiplier * step) {
-    multiplier *= step;
-    unit_modifier++;
-  }
-
-  /* print whole */
-  idx = snprintf(out->buf, sizeof(*out), "%"PRIu64, number / multiplier);
-  len = idx;
-
-  out->buf[len++] = '.';
-  n = number;
-
-  while (true) {
-    n = n % multiplier;
-    if (n == 0 || maxfraction == 0) {
-      break;
-    }
-    maxfraction--;
-    multiplier /= 10;
-
-    print = n / multiplier;
-    assert (print < 10);
-    out->buf[len++] = (char)'0' + (char)(print);
-    if (print) {
-      idx = len;
-    }
-  }
-
-  out->buf[idx++] = ' ';
-  out->buf[idx++] = *unit_modifier;
-  out->buf[idx++] = 0;
-  strscat(out->buf, unit, sizeof(*out));
-
-  return out->buf;
-}
-
+/**
+ * Print the data of a layer2 network to the telnet stream
+ * @param out pointer to output stream
+ * @param net pointer to layer2 network data
+ * @return -1 if an error happened, 0 otherwise
+ */
 static int
 _print_network(struct autobuf *out, struct olsr_layer2_network *net) {
   struct netaddr_str netbuf;
   struct timeval_buf tvbuf;
-  struct olsr_number_buf numbuf;
+  struct human_readable_str numbuf;
+  int result = 0;
 
-  abuf_appendf(out, "Radio-ID: %s\n", netaddr_to_string(&netbuf, &net->radio_id));
+  result |= abuf_appendf(out, "Radio-ID: %s\n", netaddr_to_string(&netbuf, &net->radio_id));
 
   if (net->if_index) {
-    abuf_appendf(out, "If-Index: %u\n", net->if_index);
+    result |= abuf_appendf(out, "If-Index: %u\n", net->if_index);
   }
 
   if (olsr_layer2_network_has_ssid(net)) {
-    abuf_appendf(out, "SSID: %s\n", netaddr_to_string(&netbuf, &net->ssid));
+    result |= abuf_appendf(out, "SSID: %s\n", netaddr_to_string(&netbuf, &net->ssid));
   }
 
   if (olsr_layer2_network_has_last_seen(net)) {
     int64_t relative;
 
     relative = olsr_clock_get_relative(net->last_seen);
-    abuf_appendf(out, "Last seen: %s seconds ago\n",
+    result |= abuf_appendf(out, "Last seen: %s seconds ago\n",
         olsr_clock_toIntervalString(&tvbuf, -relative));
   }
   if (olsr_layer2_network_has_frequency(net)) {
-    abuf_appendf(out, "Frequency: %s\n",
-        _print_human_readable_number(&numbuf, net->frequency, "Hz", 3, false));
+    result |= abuf_appendf(out, "Frequency: %s\n",
+        str_get_human_readable_number(&numbuf, net->frequency, "Hz", 3, false));
   }
   if (olsr_layer2_network_has_supported_rates(net)) {
     size_t i;
 
     for (i=0; i<net->rate_count; i++) {
-      abuf_appendf(out, "Supported rate: %s\n",
-          _print_human_readable_number(&numbuf, net->supported_rates[i], "bit/s", 3, true));
+      result |= abuf_appendf(out, "Supported rate: %s\n",
+          str_get_human_readable_number(&numbuf, net->supported_rates[i], "bit/s", 3, true));
     }
   }
-  return 0;
+  return result;
 }
 
+/**
+ * Print the data of a layer2 neighbor to the telnet stream
+ * @param out pointer to output stream
+ * @param net pointer to layer2 neighbor data
+ * @return -1 if an error happened, 0 otherwise
+ */
 static int
 _print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
   struct netaddr_str netbuf1, netbuf2;
   struct timeval_buf tvbuf;
-  struct olsr_number_buf numbuf;
+  struct human_readable_str numbuf;
+  int result = 0;
 
-  abuf_appendf(out,
+  result |= abuf_appendf(out,
       "Neighbor MAC: %s\n"
       "Radio Mac: %s",
       netaddr_to_string(&netbuf1, &neigh->key.neighbor_mac),
       netaddr_to_string(&netbuf2, &neigh->key.radio_mac));
 
   if (neigh->if_index) {
-    abuf_appendf(out, "(index: %u)", neigh->if_index);
+    result |= abuf_appendf(out, "(index: %u)", neigh->if_index);
   }
-  abuf_puts(out, "\n");
+  result |= abuf_puts(out, "\n");
 
   if (olsr_layer2_neighbor_has_last_seen(neigh)) {
     int64_t relative;
 
     relative = olsr_clock_get_relative(neigh->last_seen);
-    abuf_appendf(out, "Last seen: %s seconds ago\n",
+    result |= abuf_appendf(out, "Last seen: %s seconds ago\n",
         olsr_clock_toIntervalString(&tvbuf, -relative));
   }
 
   if (olsr_layer2_neighbor_has_signal(neigh)) {
-    abuf_appendf(out, "RX bytes: %u dBm\n", neigh->signal);
+    result |= abuf_appendf(out, "RX bytes: %u dBm\n", neigh->signal);
   }
   if (olsr_layer2_neighbor_has_rx_bitrate(neigh)) {
-    abuf_appendf(out, "RX bitrate: %s\n",
-        _print_human_readable_number(&numbuf, neigh->rx_bitrate, "bit/s", 1, true));
+    result |= abuf_appendf(out, "RX bitrate: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->rx_bitrate, "bit/s", 1, true));
   }
   if (olsr_layer2_neighbor_has_rx_bytes(neigh)) {
-    abuf_appendf(out, "RX traffic: %s\n",
-        _print_human_readable_number(&numbuf, neigh->rx_bytes, "Byte", 1, true));
+    result |= abuf_appendf(out, "RX traffic: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->rx_bytes, "Byte", 1, true));
   }
   if (olsr_layer2_neighbor_has_rx_packets(neigh)) {
-    abuf_appendf(out, "RX packets: %s\n",
-        _print_human_readable_number(&numbuf, neigh->rx_packets, "", 0, true));
+    result |= abuf_appendf(out, "RX packets: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->rx_packets, "", 0, true));
   }
   if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
-    abuf_appendf(out, "TX bitrate: %s\n",
-        _print_human_readable_number(&numbuf, neigh->tx_bitrate, "bit/s", 1, true));
+    result |= abuf_appendf(out, "TX bitrate: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_bitrate, "bit/s", 1, true));
   }
   if (olsr_layer2_neighbor_has_tx_bytes(neigh)) {
-    abuf_appendf(out, "TX traffic: %s\n",
-        _print_human_readable_number(&numbuf, neigh->tx_bytes, "Byte", 1, true));
+    result |= abuf_appendf(out, "TX traffic: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_bytes, "Byte", 1, true));
   }
   if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    abuf_appendf(out, "TX packets: %s\n",
-        _print_human_readable_number(&numbuf, neigh->tx_packets, "", 0, true));
+    result |= abuf_appendf(out, "TX packets: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_packets, "", 0, true));
   }
   if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    abuf_appendf(out, "TX retries: %s\n",
-        _print_human_readable_number(&numbuf, neigh->tx_retries, "", 3, true));
+    result |= abuf_appendf(out, "TX retries: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_retries, "", 3, true));
   }
   if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    abuf_appendf(out, "TX failed: %s\n",
-        _print_human_readable_number(&numbuf, neigh->tx_failed, "", 3, true));
+    result |= abuf_appendf(out, "TX failed: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_failed, "", 3, true));
   }
-  return 0;
+  return result;
 }
 
-struct _routing_filter {
-  struct netaddr mac;
-  unsigned if_index;
-};
-
+/**
+ * Parse an input parameter which can either contain a network interface
+ * name or a mac address.
+ * @param filter pointer to filter to be initialized
+ * @param ptr pointer to input parameter
+ * @return -1 if parameter wasn't valid, 0 otherwise
+ */
 static int
 _parse_routing_filter(struct _routing_filter *filter, const char *ptr) {
   memset(filter, 0, sizeof(filter));
@@ -327,6 +296,14 @@ _parse_routing_filter(struct _routing_filter *filter, const char *ptr) {
   return 0;
 }
 
+/**
+ * Check if a combination of mac address and interface matchs
+ * a routing filter
+ * @param filter pointer to routing filter to be matched
+ * @param mac pointer to mac address
+ * @param if_index interface index
+ * @return -1 if an error happened, 0 otherwise
+ */
 static int
 _match_routing_filter(struct _routing_filter *filter,
     struct netaddr *mac, unsigned if_index) {
@@ -341,6 +318,11 @@ _match_routing_filter(struct _routing_filter *filter,
   return 0;
 }
 
+/**
+ * Implementation of 'layer2' telnet command
+ * @param data pointer to telnet data
+ * @return return code for telnet server
+ */
 static enum olsr_telnet_result
 _cb_handle_layer2(struct olsr_telnet_data *data) {
   const char *next = NULL, *ptr = NULL;

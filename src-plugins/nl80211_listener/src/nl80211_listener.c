@@ -121,17 +121,17 @@ static struct os_system_netlink _netlink_handler = {
   .cb_message = _cb_nl_message,
 };
 
+static struct nlmsghdr *_msgbuf;
+
+static int _nl80211_id = -1;
+
+/* timer for generating netlink requests */
 static struct olsr_timer_info _transmission_timer_info = {
   .name = "nl80211 listener timer",
   .callback = _cb_transmission_event,
   .periodic = true,
 };
 
-static struct nlmsghdr *_msgbuf;
-
-static int _nl80211_id = -1;
-
-/* timer for generating netlink requests */
 struct olsr_timer_entry _transmission_timer = {
   .info = &_transmission_timer_info
 };
@@ -213,6 +213,11 @@ _cb_plugin_disable(void) {
   return 0;
 }
 
+/**
+ * Parse the netlink message result that contains the list of available
+ * generic netlink families of the kernel.
+ * @param hdr pointer to netlink message
+ */
 static void
 _parse_cmd_newfamily(struct nlmsghdr *hdr) {
   static struct nla_policy ctrl_policy[CTRL_ATTR_MAX+1] = {
@@ -247,7 +252,11 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
   }
 }
 
-static int
+/**
+ * Parse result of station dump nl80211 command
+ * @param hdr pointer to netlink message
+ */
+static void
 _parse_cmd_new_station(struct nlmsghdr *hdr) {
   static struct nla_policy stats_policy[NL80211_STA_INFO_MAX + 1] = {
     [NL80211_STA_INFO_INACTIVE_TIME] = { .type = NLA_U32 },
@@ -284,35 +293,35 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
     OLSR_WARN(LOG_NL80211, "Cannot parse netlink NL80211_CMD_NEW_STATION message");
-    return -1;
+    return;
   }
 
   if (!tb[NL80211_ATTR_STA_INFO]) {
     OLSR_WARN(LOG_NL80211, "Cannot find station info attribute");
-    return -1;
+    return;
   }
   if (nla_parse_nested(sinfo, NL80211_STA_INFO_MAX,
            tb[NL80211_ATTR_STA_INFO], stats_policy)) {
     OLSR_WARN(LOG_NL80211, "Cannot parse station info attribute");
-    return -1;
+    return;
   }
 
   netaddr_from_binary(&mac, nla_data(tb[NL80211_ATTR_MAC]), 6, AF_MAC48);
   if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
   if (if_indextoname(if_index, if_name) == NULL) {
-    return -1;
+    return;
   }
   if_data = olsr_interface_get_data(if_name);
   if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
-    return -1;
+    return;
   }
 
   neigh = olsr_layer2_add_neighbor(&if_data->mac, &mac, if_index,
       _config.interval + _config.interval / 4);
   if (neigh == NULL) {
     OLSR_WARN(LOG_NL80211, "Not enough memory for new layer2 neighbor");
-    return -1;
+    return;
   }
 
   /* reset all existing data */
@@ -387,7 +396,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
 #endif
     }
   }
-  return 0;
+  return;
 }
 
 #define WLAN_CAPABILITY_ESS   (1<<0)
@@ -404,7 +413,11 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
 #define WLAN_CAPABILITY_APSD    (1<<11)
 #define WLAN_CAPABILITY_DSSS_OFDM (1<<13)
 
-static int
+/**
+ * Parse the result of the passive scan of nl80211
+ * @param msg pointer to netlink message
+ */
+static void
 _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   static struct nla_policy bss_policy[NL80211_BSS_MAX + 1] = {
     [NL80211_BSS_TSF] = { .type = NLA_U64 },
@@ -432,45 +445,45 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   if (nlmsg_parse(msg, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
     OLSR_WARN(LOG_NL80211, "Cannot parse netlink NL80211_CMD_NEW_SCAN_RESULT message");
-    return -1;
+    return;
   }
 
   if (!tb[NL80211_ATTR_BSS]) {
     OLSR_WARN(LOG_NL80211, "bss info missing!\n");
-    return -1;
+    return;
   }
   if (nla_parse_nested(bss, NL80211_BSS_MAX,
            tb[NL80211_ATTR_BSS],
            bss_policy)) {
     OLSR_WARN(LOG_NL80211, "failed to parse nested attributes!\n");
-    return -1;
+    return;
   }
 
   if (!bss[NL80211_BSS_BSSID]) {
     OLSR_WARN(LOG_NL80211, "No BSSID found");
-    return -1;
+    return;
   }
 
   if (!bss[NL80211_BSS_STATUS]) {
     /* ignore different networks for the moment */
-    return 0;
+    return;
   }
   netaddr_from_binary(&mac, nla_data(bss[NL80211_BSS_BSSID]), 6, AF_MAC48);
   if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
 
   if (if_indextoname(if_index, if_name) == NULL) {
-    return -1;
+    return;
   }
   if_data = olsr_interface_get_data(if_name);
   if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
-    return -1;
+    return;
   }
 
   net = olsr_layer2_add_network(&if_data->mac, if_index,
       _config.interval + _config.interval / 4);
   if (net == NULL) {
     OLSR_WARN(LOG_NL80211, "Not enough memory for new layer2 network");
-    return -1;
+    return;
   }
 
 #if 0
@@ -601,9 +614,13 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
       }
     }
   }
-  return 0;
+  return;
 }
 
+/**
+ * Parse an incoming netlink message from the kernel
+ * @param hdr pointer to netlink message
+ */
 static void
 _cb_nl_message(struct nlmsghdr *hdr) {
   struct genlmsghdr *gen_hdr;
@@ -629,6 +646,9 @@ _cb_nl_message(struct nlmsghdr *hdr) {
       hdr->nlmsg_type, gen_hdr->cmd);
 }
 
+/**
+ * Request the list of generic netlink families from the kernel
+ */
 static void
 _send_genl_getfamily(void) {
   struct genlmsghdr *hdr;
@@ -649,6 +669,10 @@ _send_genl_getfamily(void) {
   os_system_netlink_send(&_netlink_handler, _msgbuf);
 }
 
+/**
+ * Request a station dump from nl80211
+ * @param if_idx interface index to be dumped
+ */
 static void
 _send_nl80211_get_station_dump(int if_idx) {
   struct genlmsghdr *hdr;
@@ -670,6 +694,10 @@ _send_nl80211_get_station_dump(int if_idx) {
   os_system_netlink_send(&_netlink_handler, _msgbuf);
 }
 
+/**
+ * Request a passive scan dump from nl80211
+ * @param if_idx interface index to be dumped
+ */
 static void
 _send_nl80211_get_scan_dump(int if_idx) {
   struct genlmsghdr *hdr;
@@ -691,6 +719,10 @@ _send_nl80211_get_scan_dump(int if_idx) {
   os_system_netlink_send(&_netlink_handler, _msgbuf);
 }
 
+/**
+ * Transmit the next netlink command to nl80211
+ * @param ptr unused
+ */
 static void
 _cb_transmission_event(void *ptr __attribute__((unused))) {
   static bool station_dump = false;
@@ -702,8 +734,6 @@ _cb_transmission_event(void *ptr __attribute__((unused))) {
   }
 
   FOR_ALL_STRINGS(&_config.interf, interf) {
-    OLSR_DEBUG(LOG_NL80211, "NL80211 Query: %s", interf);
-
     if ((data = olsr_interface_get_data(interf)) == NULL) {
       continue;
     }
@@ -711,6 +741,7 @@ _cb_transmission_event(void *ptr __attribute__((unused))) {
       continue;
     }
 
+    OLSR_DEBUG(LOG_NL80211, "Send Query to NL80211 interface %s", interf);
     if (station_dump) {
       _send_nl80211_get_station_dump(data->index);
     }
