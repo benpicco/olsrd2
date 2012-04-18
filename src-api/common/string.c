@@ -42,6 +42,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "common/string.h"
 
@@ -387,4 +388,69 @@ strarray_cmp(const struct strarray *a1, const struct strarray *a2) {
     }
   }
   return result;
+}
+
+/**
+ * Converts an unsigned 64 bit integer into a human readable number
+ * in string representation.
+ *
+ * '120000' will become '120 k' for example.
+ *
+ * @param out pointer to output buffer
+ * @param number number to convert.
+ * @param unit unit to be appended at the end, can be NULL
+ * @param maxfraction maximum number of fractional digits
+ * @param binary true if conversion should use 1024 as factor,
+ *   false for default 1000 conversion factor
+ * @return pointer to converted string
+ */
+const char *
+str_get_human_readable_number(struct human_readable_str *out,
+    uint64_t number, const char *unit, int maxfraction, bool binary) {
+  static const char symbol[] = " kMGTPE";
+  uint64_t step, multiplier, print, n;
+  const char *unit_modifier;
+  size_t idx, len;
+
+  step = binary ? 1024 : 1000;
+  multiplier = 1;
+  unit_modifier = symbol;
+
+  while (*unit_modifier != 0 && number >= multiplier * step) {
+    multiplier *= step;
+    unit_modifier++;
+  }
+
+  /* print whole */
+  idx = snprintf(out->buf, sizeof(*out), "%"PRIu64, number / multiplier);
+  len = idx;
+
+  out->buf[len++] = '.';
+  n = number;
+
+  while (true) {
+    n = n % multiplier;
+    if (n == 0 || maxfraction == 0) {
+      break;
+    }
+    maxfraction--;
+    multiplier /= 10;
+
+    print = n / multiplier;
+    assert (print < 10);
+    out->buf[len++] = (char)'0' + (char)(print);
+    if (print) {
+      idx = len;
+    }
+  }
+
+  out->buf[idx++] = ' ';
+  out->buf[idx++] = *unit_modifier;
+  out->buf[idx++] = 0;
+
+  if (unit) {
+    strscat(out->buf, unit, sizeof(*out));
+  }
+
+  return out->buf;
 }
