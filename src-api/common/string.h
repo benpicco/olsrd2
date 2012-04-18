@@ -76,6 +76,10 @@ struct const_strarray {
   const size_t length;
 };
 
+struct human_readable_str{
+    char buf[48];
+};
+
 EXPORT char *strscpy (char *dest, const char *src, size_t size);
 EXPORT char *strscat (char *dest, const char *src, size_t size);
 EXPORT char *str_trim (char *ptr);
@@ -91,6 +95,8 @@ EXPORT char *strarray_get(const struct strarray *array, size_t idx);
 EXPORT size_t strarray_get_count(const struct strarray *array);
 
 EXPORT int strarray_cmp(const struct strarray *a1, const struct strarray *a2);
+EXPORT const char *str_get_human_readable_number(struct human_readable_str *out,
+    uint64_t number, const char *unit, int maxfraction, bool binary);
 
 static INLINE int
 strarray_copy_c(struct strarray *dst, const struct const_strarray *src) {
