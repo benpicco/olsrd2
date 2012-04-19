@@ -192,7 +192,7 @@ _cb_plugin_unload(void) {
  */
 static int
 _cb_plugin_enable(void) {
-  if (os_system_netlink_add(&_netlink_handler, NETLINK_GENERIC, 0)) {
+  if (os_system_netlink_add(&_netlink_handler, NETLINK_GENERIC)) {
     return -1;
   }
 
