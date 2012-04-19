@@ -107,9 +107,6 @@ enum dlep_addrtlv_idx {
 
 /* definitions */
 struct _dlep_config {
-  char dlep_if[IF_NAMESIZE];
-  char radio_if[IF_NAMESIZE];
-
   struct olsr_packet_managed_config socket;
 
   char peer_type[81];
@@ -117,6 +114,13 @@ struct _dlep_config {
   uint64_t discovery_interval, discovery_validity;
   uint64_t address_interval, address_validity;
   uint64_t metric_interval, metric_validity;
+};
+
+struct _dlep_session {
+  struct avl_node _node;
+
+  union netaddr_socket router_socket;
+  struct olsr_timer_entry router_vtime;
 };
 
 /* prototypes */
@@ -171,11 +175,6 @@ static struct cfg_schema_section _dlep_section = {
 };
 
 static struct cfg_schema_entry _dlep_entries[] = {
-  CFG_MAP_STRING_ARRAY(_dlep_config, dlep_if, "dlep_if", "lo",
-    "List of interfaces to sent DLEP broadcasts to", IF_NAMESIZE),
-  CFG_MAP_STRING_ARRAY(_dlep_config, radio_if, "radio_id", "wlan0",
-    "List of interfaces to to query link layer data from", IF_NAMESIZE),
-
   CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "default_accept",
     "Access control list for dlep interface"),
   CFG_MAP_NETADDR_V4(_dlep_config, socket.bindto_v4, "bindto_v4", "127.0.0.1",
@@ -270,13 +269,6 @@ static enum dlep_orders _current_order;
 static union netaddr_socket *_peer_socket;
 
 /* DLEP session data */
-struct _dlep_session {
-  struct avl_node _node;
-
-  union netaddr_socket router_socket;
-  struct olsr_timer_entry router_vtime;
-};
-
 static struct avl_tree _session_tree;
 
 /* infrastructure */
