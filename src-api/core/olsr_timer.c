@@ -56,7 +56,7 @@
 #define BUCKET_DEPTH          3
 
 /* power of 2 for the number of elements in each bucket */
-#define BUCKET_COUNT_POW2     7ull
+#define BUCKET_COUNT_POW2     9ull
 
 /* power of 2 for the number of milliseconds each bucket represents */
 #define BUCKET_TIMESLICE_POW2 7ull
