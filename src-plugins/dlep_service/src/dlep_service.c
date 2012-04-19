@@ -39,6 +39,8 @@
  *
  */
 
+#include <errno.h>
+
 #include "config/cfg_schema.h"
 #include "packetbb/pbb_reader.h"
 #include "packetbb/pbb_writer.h"
@@ -755,12 +757,14 @@ _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf __attribute__((unused)),
     void *ptr, size_t len) {
   if (config_global.ipv4
-      && olsr_packet_send_managed_multicast(&_dlep_socket, true, ptr, len) < 0) {
-    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket");
+      && olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET) < 0) {
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket: %s (%d)",
+        strerror(errno), errno);
   }
   if (config_global.ipv6
-      && olsr_packet_send_managed_multicast(&_dlep_socket, false, ptr, len) < 0) {
-    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv6 packet to socket");
+      && olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET6) < 0) {
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv6 packet to socket: %s (%d)",
+        strerror(errno), errno);
   }
 }
 
