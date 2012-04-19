@@ -285,20 +285,22 @@ olsr_packet_send_managed(struct olsr_packet_managed *managed,
  * Send a packet out over one of the managed sockets, depending on the
  * address family type of the remote address
  * @param managed pointer to managed packet socket
- * @param remote pointer to remote socket
  * @param data pointer to data to send
  * @param length length of data
+ * @param af_type address family to send multicast
  * @return -1 if an error happened, 0 otherwise
  */
 int
 olsr_packet_send_managed_multicast(struct olsr_packet_managed *managed,
-    bool ipv4, const void *data, size_t length) {
-  if (config_global.ipv4 && ipv4 && list_is_node_added(&managed->multicast_v4.node)) {
+    const void *data, size_t length, int af_type) {
+  if (config_global.ipv4 && af_type == AF_INET) {
     return olsr_packet_send(&managed->socket_v4, &managed->multicast_v4.local_socket, data, length);
   }
-  if (config_global.ipv6 && !ipv4 && list_is_node_added(&managed->multicast_v6.node)) {
+  if (config_global.ipv6 && af_type == AF_INET6) {
     return olsr_packet_send(&managed->socket_v6, &managed->multicast_v6.local_socket, data, length);
   }
+
+  errno = ENXIO; /* error, no such device or address */
   return -1;
 }
 
