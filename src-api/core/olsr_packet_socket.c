@@ -60,10 +60,14 @@ OLSR_SUBSYSTEM_STATE(_packet_state);
 
 static int _apply_managed(struct olsr_packet_managed *managed,
     struct olsr_packet_managed_config *config);
-static int _apply_managed_socket(struct olsr_packet_managed *managed,
-    struct olsr_packet_socket *stream,
-    struct netaddr *bindto, uint16_t port,
-    struct olsr_interface_data *data);
+static int _apply_managed_socketpair(struct olsr_packet_managed *managed,
+    struct olsr_interface_data *data,
+    struct olsr_packet_socket *sock, struct netaddr *bind_ip, uint16_t port,
+    struct olsr_packet_socket *mc_sock, struct netaddr *mc_ip, uint16_t mc_port,
+    bool mc_loopback);
+static int _apply_managed_socket(struct olsr_packet_socket *stream,
+    struct netaddr *bindto, uint16_t port, struct olsr_interface_data *data,
+    struct olsr_packet_config *config);
 static void _cb_packet_event_unicast(int fd, void *data, bool r, bool w);
 static void _cb_packet_event_multicast(int fd, void *data, bool r, bool w);
 static void _cb_packet_event(int fd, void *data, bool r, bool w, bool mc);
@@ -299,6 +303,74 @@ olsr_packet_send_managed_multicast(struct olsr_packet_managed *managed,
 }
 
 /**
+ * Apply a new configuration to an unicast/multicast socket pair
+ * @param managed pointer to managed socket
+ * @param data pointer to interface to bind sockets, NULL if unbound socket
+ * @param sock pointer to unicast packet socket
+ * @param bind_ip address to bind unicast socket to
+ * @param port source port for unicast socket
+ * @param mc_sock pointer to multicast packet socket
+ * @param mc_ip multicast address
+ * @param mc_port multicast port
+ * @param mc_loopback
+ * @return
+ */
+static int
+_apply_managed_socketpair(struct olsr_packet_managed *managed,
+    struct olsr_interface_data *data,
+    struct olsr_packet_socket *sock, struct netaddr *bind_ip, uint16_t port,
+    struct olsr_packet_socket *mc_sock, struct netaddr *mc_ip, uint16_t mc_port,
+    bool mc_loopback) {
+  int result = 0;
+  bool real_multicast;
+
+  /* copy unicast port if necessary */
+  if (mc_port == 0) {
+    mc_port = port;
+  }
+
+  /* check if multicast IP is a real multicast (and not a broadcast) */
+  real_multicast = netaddr_is_in_subnet(
+      mc_ip->type == AF_INET ? &NETADDR_IPV4_MULTICAST : &NETADDR_IPV6_MULTICAST,
+      mc_ip);
+
+  if (_apply_managed_socket(sock, bind_ip, port, data, &managed->config)) {
+    /* error */
+    result = -1;
+  }
+  else if (real_multicast && data != NULL) {
+    /* restrict multicast output to interface */
+    os_net_join_mcast_send(sock->scheduler_entry.fd,
+        mc_ip, data, mc_loopback, LOG_SOCKET_PACKET);
+  }
+
+  if (real_multicast) {
+    /* multicast v4*/
+    if (_apply_managed_socket(mc_sock, mc_ip, mc_port, data, &managed->config)) {
+      /* error */
+      result = -1;
+    }
+    else {
+      mc_sock->scheduler_entry.process = _cb_packet_event_multicast;
+
+      /* join multicast group */
+      os_net_join_mcast_recv(mc_sock->scheduler_entry.fd,
+          mc_ip, data, LOG_SOCKET_PACKET);
+    }
+  }
+  else {
+    olsr_packet_remove(mc_sock, true);
+
+    /*
+     * initialize anyways because we use it for sending broadcasts with
+     * olsr_packet_send_managed_multicast()
+     */
+    netaddr_socket_init(&mc_sock->local_socket, mc_ip, mc_port);
+  }
+  return result;
+}
+
+/**
  * Apply a new configuration to all attached sockets
  * @param managed pointer to managed socket
  * @param config pointer to configuration
@@ -308,19 +380,7 @@ static int
 _apply_managed(struct olsr_packet_managed *managed,
     struct olsr_packet_managed_config *config) {
   struct olsr_interface_data *data = NULL;
-  bool mc_ipv4, mc_ipv6;
-  uint16_t mc_port;
   int result = 0;
-
-  /* get multicast port, copy from unicast port if necessary */
-  mc_port = config->multicast_port;
-  if (mc_port == 0) {
-    mc_port = config->port;
-  }
-
-  /* check if we have to handle multicast */
-  mc_ipv4 = netaddr_is_in_subnet(&NETADDR_IPV4_MULTICAST, &config->multicast_v4);
-  mc_ipv6 = netaddr_is_in_subnet(&NETADDR_IPV6_MULTICAST, &config->multicast_v6);
 
   /* get interface */
   if (managed->_if_listener.interface) {
@@ -328,87 +388,49 @@ _apply_managed(struct olsr_packet_managed *managed,
   }
 
   if (config_global.ipv4) {
-    /* unicast v4 */
-    if (_apply_managed_socket(managed,
-        &managed->socket_v4, &config->bindto_v4, config->port, data)) {
+    if (_apply_managed_socketpair(managed, data,
+        &managed->socket_v4, &config->bindto_v4, config->port,
+        &managed->multicast_v4, &config->multicast_v4, config->multicast_port,
+        config->loop_multicast)) {
       result = -1;
-    }
-    else if (mc_ipv4 && data != NULL) {
-      /* restrict multicast output to interface */
-      os_net_join_mcast_send(managed->socket_v4.scheduler_entry.fd,
-          &config->multicast_v4, data,
-          config->loop_multicast, LOG_SOCKET_PACKET);
     }
   }
   else {
     olsr_packet_remove(&managed->socket_v4, true);
-  }
-
-  if (config_global.ipv4 && mc_ipv4) {
-    /* multicast v4*/
-    if (_apply_managed_socket(managed,
-        &managed->multicast_v4, &config->multicast_v4, mc_port, data)) {
-      result = -1;
-    }
-    else {
-      managed->multicast_v4.scheduler_entry.process = _cb_packet_event_multicast;
-      os_net_join_mcast_recv(managed->multicast_v4.scheduler_entry.fd,
-          &config->multicast_v4, data, LOG_SOCKET_PACKET);
-    }
-  }
-  else {
     olsr_packet_remove(&managed->multicast_v4, true);
   }
 
   if (config_global.ipv6) {
-    /* unicast v6 */
-    if (_apply_managed_socket(managed,
-        &managed->socket_v6, &config->bindto_v6, config->port, data)) {
+    if (_apply_managed_socketpair(managed, data,
+        &managed->socket_v6, &config->bindto_v6, config->port,
+        &managed->multicast_v6, &config->multicast_v6, config->multicast_port,
+        config->loop_multicast)) {
       result = -1;
-    }
-    else if (mc_ipv4 && data != NULL) {
-      /* restrict multicast output to interface */
-      os_net_join_mcast_send(managed->socket_v6.scheduler_entry.fd,
-          &config->multicast_v6, data,
-          config->loop_multicast, LOG_SOCKET_PACKET);
     }
   }
   else {
     olsr_packet_remove(&managed->socket_v6, true);
-  }
-
-  if (config_global.ipv6 && mc_ipv6) {
-    /* multicast v6*/
-    if (_apply_managed_socket(managed,
-        &managed->multicast_v6, &config->multicast_v6, mc_port, data)) {
-      result = -1;
-    }
-    else {
-      managed->multicast_v6.scheduler_entry.process = _cb_packet_event_multicast;
-      os_net_join_mcast_recv(managed->multicast_v6.scheduler_entry.fd,
-        &config->multicast_v6, data, LOG_SOCKET_PACKET);
-    }
-  }
-  else {
     olsr_packet_remove(&managed->multicast_v6, true);
   }
 
   return result;
 }
 
+
 /**
  * Apply new configuration to a managed stream socket
  * @param managed pointer to managed stream
  * @param stream pointer to TCP stream to configure
  * @param bindto local address to bind socket to
+ *   set to AF_UNSPEC for simple reinitialization
  * @param port local port number
  * @return -1 if an error happened, 0 otherwise.
  */
 static int
-_apply_managed_socket(struct olsr_packet_managed *managed,
-    struct olsr_packet_socket *packet,
+_apply_managed_socket(struct olsr_packet_socket *packet,
     struct netaddr *bindto, uint16_t port,
-    struct olsr_interface_data *data) {
+    struct olsr_interface_data *data,
+    struct olsr_packet_config *config) {
   union netaddr_socket sock;
 #if !defined(REMOVE_LOG_WARN)
   struct netaddr_str buf;
@@ -438,7 +460,7 @@ _apply_managed_socket(struct olsr_packet_managed *managed,
   }
 
   /* copy configuration */
-  memcpy(&packet->config, &managed->config, sizeof(packet->config));
+  memcpy(&packet->config, config, sizeof(packet->config));
 
   /* create new socket */
   if (olsr_packet_add(packet, &sock, data)) {
@@ -448,11 +470,25 @@ _apply_managed_socket(struct olsr_packet_managed *managed,
   return 0;
 }
 
+/**
+ * callback for unicast events in socket scheduler
+ * @param fd
+ * @param data
+ * @param event_read
+ * @param event_write
+ */
 static void
 _cb_packet_event_unicast(int fd, void *data, bool event_read, bool event_write) {
   _cb_packet_event(fd, data, event_read, event_write, false);
 }
 
+/**
+ * callback for multicast events in socket scheduler
+ * @param fd
+ * @param data
+ * @param event_read
+ * @param event_write
+ */
 static void
 _cb_packet_event_multicast(int fd, void *data, bool event_read, bool event_write) {
   _cb_packet_event(fd, data, event_read, event_write, true);
@@ -537,6 +573,11 @@ _cb_packet_event(int fd, void *data, bool event_read, bool event_write, bool mul
   }
 }
 
+/**
+ * Callbacks for events on the interface
+ * @param l
+ * @param old
+ */
 static void
 _cb_interface_listener(struct olsr_interface_listener *l,
     struct olsr_interface_data *old __attribute__((unused))) {
