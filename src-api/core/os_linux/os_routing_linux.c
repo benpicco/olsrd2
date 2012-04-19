@@ -116,7 +116,7 @@ os_routing_init(void) {
   if (olsr_subsystem_is_initialized(&_os_routing_state))
     return 0;
 
-  if (os_system_netlink_add(&_rtnetlink_socket, NETLINK_ROUTE, 0)) {
+  if (os_system_netlink_add(&_rtnetlink_socket, NETLINK_ROUTE)) {
     return -1;
   }
 

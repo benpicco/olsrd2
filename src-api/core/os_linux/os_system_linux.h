@@ -68,10 +68,14 @@ struct os_system_netlink {
 };
 
 EXPORT int os_system_netlink_add(struct os_system_netlink *,
-    int protocol, uint32_t multicast);
+    int protocol);
 EXPORT void os_system_netlink_remove(struct os_system_netlink *);
 EXPORT int os_system_netlink_send(struct os_system_netlink *fd,
     struct nlmsghdr *nl_hdr);
+EXPORT int os_syste_netlink_add_mc(struct os_system_netlink *,
+    const int *groups, size_t groupcount);
+EXPORT int os_system_netlink_drop_mc(struct os_system_netlink *,
+    const int *groups, size_t groupcount);
 
 EXPORT int os_system_netlink_addreq(struct nlmsghdr *n,
     int type, const void *data, int len);

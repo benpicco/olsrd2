@@ -46,6 +46,7 @@
 #include <linux/types.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <linux/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
@@ -60,6 +61,10 @@
 #include "olsr_socket.h"
 #include "olsr.h"
 #include "os_system.h"
+
+#ifndef SOL_NETLINK
+#define SOL_NETLINK 270
+#endif
 
 #define OS_SYSTEM_NETLINK_TIMEOUT 100
 
@@ -120,6 +125,10 @@ static struct os_system_netlink _rtnetlink_receiver = {
   .cb_message = _handle_rtnetlink,
 };
 
+const int _rtnetlink_mcast[] = {
+  RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR, RTNLGRP_IPV6_IFADDR
+};
+
 OLSR_SUBSYSTEM_STATE(_os_system_state);
 
 /**
@@ -139,12 +148,16 @@ os_system_init(void) {
     return -1;
   }
 
-  if (os_system_netlink_add(&_rtnetlink_receiver, NETLINK_ROUTE,
-      RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR)) {
+  if (os_system_netlink_add(&_rtnetlink_receiver, NETLINK_ROUTE)) {
     close(_ioctl_fd);
     return -1;
   }
 
+  if (os_syste_netlink_add_mc(&_rtnetlink_receiver, _rtnetlink_mcast, ARRAYSIZE(_rtnetlink_mcast))) {
+    os_system_netlink_remove(&_rtnetlink_receiver);
+    close(_ioctl_fd);
+    return -1;
+  }
   olsr_timer_add(&_netlink_timer);
 
   olsr_subsystem_init(&_os_system_state);
@@ -215,7 +228,7 @@ os_system_set_interface_state(const char *dev, bool up) {
  * @return -1 if an error happened, 0 otherwise
  */
 int
-os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multicast) {
+os_system_netlink_add(struct os_system_netlink *nl, int protocol) {
   struct sockaddr_nl addr;
 
   nl->socket.fd = socket(PF_NETLINK, SOCK_RAW, protocol);
@@ -239,7 +252,6 @@ os_system_netlink_add(struct os_system_netlink *nl, int protocol, uint32_t multi
 
   memset(&addr, 0, sizeof(addr));
   addr.nl_family = AF_NETLINK;
-  addr.nl_groups = multicast;
 
   /* kernel will assign appropriate number instead of pid */
   /* addr.nl_pid = 0; */
@@ -301,6 +313,52 @@ os_system_netlink_send(struct os_system_netlink *nl,
   /* trigger write */
   olsr_socket_set_write(&nl->socket, true);
   return nl->seq_used;
+}
+
+/**
+ * Join a list of multicast groups for a netlink socket
+ * @param nl pointer to netlink handler
+ * @param groups pointer to array of multicast groups
+ * @param groupcount number of entries in groups array
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+os_syste_netlink_add_mc(struct os_system_netlink *nl,
+    const int *groups, size_t groupcount) {
+  size_t i;
+
+  for (i=0; i<groupcount; i++) {
+    if (setsockopt(nl->socket.fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
+             &groups[i], sizeof(groups[i]))) {
+      OLSR_WARN(LOG_OS_SYSTEM,
+          "Could not join netlink mc group: %x", groups[i]);
+      return -1;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Leave a list of multicast groups for a netlink socket
+ * @param nl pointer to netlink handler
+ * @param groups pointer to array of multicast groups
+ * @param groupcount number of entries in groups array
+ * @return -1 if an error happened, 0 otherwise
+ */
+int
+os_system_netlink_drop_mc(struct os_system_netlink *nl,
+    const int *groups, size_t groupcount) {
+  size_t i;
+
+  for (i=0; i<groupcount; i++) {
+    if (setsockopt(nl->socket.fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
+             &groups[i], sizeof(groups[i]))) {
+      OLSR_WARN(LOG_OS_SYSTEM,
+          "Could not drop netlink mc group: %x", groups[i]);
+      return -1;
+    }
+  }
+  return 0;
 }
 
 /**
