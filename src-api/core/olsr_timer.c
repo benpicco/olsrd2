@@ -56,7 +56,7 @@
 #define BUCKET_DEPTH          3
 
 /* power of 2 for the number of elements in each bucket */
-#define BUCKET_COUNT_POW2     9ull
+#define BUCKET_COUNT_POW2     7ull
 
 /* power of 2 for the number of milliseconds each bucket represents */
 #define BUCKET_TIMESLICE_POW2 7ull
@@ -69,7 +69,7 @@ const uint64_t BUCKET_TIMESLICE_MASK = ~((1ull << BUCKET_TIMESLICE_POW2) - 1);
 
 /* root of all timers */
 static struct list_entity _buckets[1ull << BUCKET_COUNT_POW2][BUCKET_DEPTH];
-static int _bucket_ptr[BUCKET_DEPTH];
+static uint32_t _bucket_ptr[BUCKET_DEPTH];
 
 /* time when the next timer will fire */
 static uint64_t _next_event;
@@ -249,8 +249,9 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
   /* and update internal time data */
   _total_timer_events++;
 
-  OLSR_DEBUG(LOG_TIMER, "TIMER: start timer '%s' firing in %s\n",
-             timer->info->name, olsr_clock_toClockString(&timebuf1, rel_time));
+  OLSR_DEBUG(LOG_TIMER, "TIMER: start timer '%s' firing in %s (%"PRIu64")\n",
+      timer->info->name,
+      olsr_clock_toClockString(&timebuf1, rel_time), timer->_clock);
 
   /* fix 'next event' pointers if necessary */
   if (_scheduling_now) {
@@ -260,6 +261,7 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
 
   if (timer->_clock <= _next_event) {
     /* we have a new 'earliest' event */
+    OLSR_DEBUG(LOG_TIMER, "Next event set to %"PRIu64" (timer_start", _next_event);
     _next_event = timer->_clock;
 
     if (new_slot != -1) {
@@ -420,6 +422,8 @@ _insert_into_bucket(struct olsr_timer_entry *timer) {
       slot &= (BUCKET_COUNT - 1);
       list_add_tail(&_buckets[slot][group], &timer->_node);
 
+      OLSR_DEBUG(LOG_TIMER, "Put timer %s (%"PRIu64") into bucket (%"PRIu64"/%d)",
+          timer->info->name, timer->_clock, slot, group);
       return group == 0 ? (int)slot : -1;
     }
   }
@@ -467,6 +471,9 @@ _copy_bucket(unsigned depth, unsigned idx) {
 
   assert (depth > 0 && depth < BUCKET_DEPTH && idx < BUCKET_COUNT);
 
+  OLSR_DEBUG(LOG_TIMER, "Copy bucket %u depth %u to depth %u",
+      idx, depth, depth-1);
+
   shift = BUCKET_TIMESLICE_POW2 + BUCKET_COUNT_POW2*depth;
   _bucket_ptr[depth] = idx+1;
 
@@ -482,17 +489,36 @@ static int
 _look_for_event(unsigned depth) {
   unsigned i;
   int idx;
+  bool overflow;
+  OLSR_DEBUG(LOG_TIMER, "Look for event depth %u, starting at bucket %d",
+      depth, _bucket_ptr[depth]);
 
   /* first look in existing data before we need to load another layer */
   for (i=_bucket_ptr[depth]; i < BUCKET_COUNT; i++) {
     if (!list_is_empty(&_buckets[i][depth])) {
+      OLSR_DEBUG(LOG_TIMER, "\tFound something in bucket %d", i);
       return i;
+    }
+  }
+
+  /* now look if the current depth contains data in the 'overflow' area */
+  overflow = false;
+  for (i = 0; i<_bucket_ptr[depth]; i++) {
+    if (!list_is_empty(&_buckets[i][depth])) {
+      overflow = true;
+      break;
     }
   }
 
   /* copy bucket from level higher if possible */
   if (depth < BUCKET_DEPTH - 1) {
-    idx = _look_for_event(depth+1);
+    if (overflow) {
+      idx = _bucket_ptr[depth + 1];
+    }
+    else {
+      idx = _look_for_event(depth+1);
+    }
+
     if (idx != -1) {
       _copy_bucket(depth+1, idx);
     }
@@ -501,6 +527,7 @@ _look_for_event(unsigned depth) {
   /* now look again for a full bucket */
   for (i=0; i < BUCKET_COUNT; i++) {
     if (!list_is_empty(&_buckets[i][depth])) {
+      OLSR_DEBUG(LOG_TIMER, "\tFound something in bucket %d", i);
       return i;
     }
   }
@@ -511,6 +538,7 @@ _look_for_event(unsigned depth) {
 static void
 _calculate_next_event(void) {
   struct olsr_timer_entry *timer;
+  int idx;
 
   /* prevent multiple recalculations */
   _next_event_valid = true;
@@ -521,10 +549,15 @@ _calculate_next_event(void) {
     return;
   }
 
-  _bucket_ptr[0] = _look_for_event(0);
-  assert (_bucket_ptr[0] != -1);
+  idx = _look_for_event(0);
+  assert (idx >= 0);
+
+  _bucket_ptr[0] = idx;
 
   /* get the timestamp when the first bucket will happen */
   timer = list_first_element(&_buckets[_bucket_ptr[0]][0], timer, _node);
+
+  OLSR_DEBUG(LOG_TIMER, "Next event moved from %"PRIu64" to %"PRIu64,
+      _next_event, timer->_clock);
   _next_event = timer->_clock;
 }
