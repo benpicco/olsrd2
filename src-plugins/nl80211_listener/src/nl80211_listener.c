@@ -231,6 +231,8 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
     [CTRL_ATTR_MCAST_GROUPS] = { .type = NLA_NESTED },
   };
   struct nlattr *attrs[CTRL_ATTR_MAX+1];
+  struct nlattr *mcgrp;
+  int iterator;
 
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       attrs, CTRL_ATTR_MAX, ctrl_policy) < 0) {
@@ -246,9 +248,35 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
     OLSR_WARN(LOG_NL80211, "Missing Family Name in CTRL_CMD_NEWFAMILY");
     return;
   }
+  if (strcmp(nla_get_string(attrs[CTRL_ATTR_FAMILY_NAME]), "nl80211") != 0) {
+    /* not interested in this one */
+    return;
+  }
+  _nl80211_id = nla_get_u32(attrs[CTRL_ATTR_FAMILY_ID]);
 
-  if (strcmp(nla_get_string(attrs[CTRL_ATTR_FAMILY_NAME]), "nl80211") == 0) {
-    _nl80211_id = nla_get_u32(attrs[CTRL_ATTR_FAMILY_ID]);
+  if (!attrs[CTRL_ATTR_MCAST_GROUPS]) {
+    /* no multicast groups */
+    return;
+  }
+
+  nla_for_each_nested(mcgrp, attrs[CTRL_ATTR_MCAST_GROUPS], iterator) {
+    struct nlattr *tb_mcgrp[CTRL_ATTR_MCAST_GRP_MAX + 1];
+
+    nla_parse(tb_mcgrp, CTRL_ATTR_MCAST_GRP_MAX,
+        nla_data(mcgrp), nla_len(mcgrp), NULL);
+
+    if (!tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME] ||
+        !tb_mcgrp[CTRL_ATTR_MCAST_GRP_ID])
+      continue;
+//    if (strscmp(nla_data(tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME]),
+//          grp->group, nla_len(tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME])))
+//      continue;
+
+    OLSR_DEBUG(LOG_NL80211, "Found multicast group %s: %d",
+        (char *)nla_data(tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME]),
+        nla_get_u32(tb_mcgrp[CTRL_ATTR_MCAST_GRP_ID]));
+    //grp->id = nla_get_u32(tb_mcgrp[CTRL_ATTR_MCAST_GRP_ID]);
+    //break;
   }
 }
 
