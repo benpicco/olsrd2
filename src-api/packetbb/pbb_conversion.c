@@ -37,13 +37,11 @@
  * the copyright holders.
  */
 
-#include <assert.h>
-
 #include "common/common_types.h"
 #include "packetbb/pbb_conversion.h"
 
 uint8_t
-pbb_encode_timetlv(uint32_t decoded) {
+pbb_encode_timetlv(uint64_t decoded) {
   uint32_t a, b;
   /*
    * t = (1 + a/8) * 2^b * 1000 / 1024
@@ -51,7 +49,12 @@ pbb_encode_timetlv(uint32_t decoded) {
    *   = (1000 + 125 * a) * 2 ^ (b-10)
    */
 
-  assert (decoded >= PBB_TIMETLV_MIN && decoded <= PBB_TIMETLV_MAX);
+  if (decoded < PBB_TIMETLV_MIN) {
+    return 0;
+  }
+  if (decoded > PBB_TIMETLV_MAX) {
+    return 255;
+  }
 
   b = 10;
   if (decoded >= 1000) {
@@ -74,7 +77,7 @@ pbb_encode_timetlv(uint32_t decoded) {
   return a + (b << 3);
 }
 
-uint32_t
+uint64_t
 pbb_decode_timetlv(uint8_t encoded) {
   /*
    * time-value := (1 + a/8) * 2^b * C
@@ -82,7 +85,10 @@ pbb_decode_timetlv(uint8_t encoded) {
    */
   uint8_t a,b;
 
-  assert (encoded > 0);
+  if (encoded == 0) {
+    /* minimum valid time interval */
+    return 1;
+  }
 
   a = encoded & 0x07;
   b = encoded >> 3;

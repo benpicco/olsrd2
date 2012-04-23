@@ -43,13 +43,13 @@
 #include "common/common_types.h"
 
 /* timetlv_max = 15 * 2^28 * 1000 / 1024 = 15000 << 18 = 3 932 160 000 ms */
-#define PBB_TIMETLV_MAX 3932160000ul
+#define PBB_TIMETLV_MAX 0xea600000
 
 /* timetlv_min = 1000/1024 ms */
-#define PBB_TIMETLV_MIN 1ul
+#define PBB_TIMETLV_MIN 0x00000001
 
 
-EXPORT uint8_t pbb_encode_timetlv(uint32_t);
-EXPORT uint32_t pbb_decode_timetlv(uint8_t);
+EXPORT uint8_t pbb_encode_timetlv(uint64_t);
+EXPORT uint64_t pbb_decode_timetlv(uint8_t);
 
 #endif /* PBB_CONVERSION_H_ */
