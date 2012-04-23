@@ -52,7 +52,7 @@
 static struct pbb_writer_tlvtype *_register_addrtlvtype(
     struct pbb_writer_message *msg, uint8_t tlv, uint8_t tlvext);
 static int _msgaddr_avl_comp(const void *k1, const void *k2, void *ptr);
-static void *_copy_addrtlv_value(struct pbb_writer *writer, void *value, size_t length);
+static void *_copy_addrtlv_value(struct pbb_writer *writer, const void *value, size_t length);
 static void _free_tlvtype_tlvs(struct pbb_writer *writer, struct pbb_writer_tlvtype *tlvtype);
 static void _lazy_free_message(struct pbb_writer *writer, struct pbb_writer_message *msg);
 static struct pbb_writer_message *_get_message(struct pbb_writer *writer, uint8_t msgid);
@@ -163,7 +163,7 @@ pbb_writer_cleanup(struct pbb_writer *writer) {
  */
 enum pbb_result
 pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *addr,
-    struct pbb_writer_tlvtype *tlvtype, void *value, size_t length, bool allow_dup) {
+    struct pbb_writer_tlvtype *tlvtype, const void *value, size_t length, bool allow_dup) {
   struct pbb_writer_addrtlv *addrtlv;
 
 #if WRITER_STATE_MACHINE == true
@@ -646,7 +646,7 @@ _msgaddr_avl_comp(const void *k1, const void *k2, void *ptr) {
  * @param length number of bytes of tlv value
  */
 static void *
-_copy_addrtlv_value(struct pbb_writer *writer, void *value, size_t length) {
+_copy_addrtlv_value(struct pbb_writer *writer, const void *value, size_t length) {
   void *ptr;
   if (writer->_addrtlv_used + length > writer->addrtlv_size) {
     /* not enough memory for addrtlv values */

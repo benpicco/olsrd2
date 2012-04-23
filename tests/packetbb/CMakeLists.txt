@@ -20,7 +20,8 @@ endfunction(compile_packetbb_test)
 set(TESTS test_packetbb_reader_blockcb
           test_packetbb_reader_dropcontext
           test_packetbb_writer_fragmentation
-          test_packetbb_writer_ifspecific)
+          test_packetbb_writer_ifspecific
+          test_packetbb_conversion)
 
 foreach(TEST ${TESTS})
     compile_packetbb_test(${TEST} ${TEST}.c)

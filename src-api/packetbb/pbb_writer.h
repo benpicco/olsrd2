@@ -369,7 +369,7 @@ EXPORT struct pbb_writer_address *pbb_writer_add_address(struct pbb_writer *writ
     struct pbb_writer_message *msg, const void *addr, uint8_t prefix);
 EXPORT enum pbb_result pbb_writer_add_addrtlv(struct pbb_writer *writer,
     struct pbb_writer_address *addr, struct pbb_writer_tlvtype *tlvtype,
-    void *value, size_t length, bool allow_dup);
+    const void *value, size_t length, bool allow_dup);
 
 /* functions that can be called from add/finishMessageTLVs callback */
 EXPORT enum pbb_result pbb_writer_add_messagetlv(struct pbb_writer *writer,
