@@ -40,6 +40,7 @@
  */
 
 #include "config/cfg_schema.h"
+#include "packetbb/pbb_conversion.h"
 #include "packetbb/pbb_reader.h"
 #include "packetbb/pbb_writer.h"
 #include "olsr_cfg.h"
@@ -64,8 +65,6 @@ enum dlep_orders {
   DLEP_ORDER_INTERFACE_DISCOVERY,
   DLEP_ORDER_CONNECT_ROUTER,
   DLEP_ORDER_DISCONNECT,
-  DLEP_ORDER_NEIGHBOR_UP,
-//   DLEP_ORDER_NEIGHBOR_DOWN,
   DLEP_ORDER_NEIGHBOR_UPDATE,
 };
 
@@ -74,12 +73,12 @@ enum dlep_msgtlv_types {
   MSGTLV_VTIME = 1,
   DLEP_TLV_ORDER = 192,
   DLEP_TLV_PEER_TYPE,
-//  DLEP_TLV_STATUS,
 //  DLEP_TLV_CUR_BC_RATE,
 //  DLEP_TLV_MAX_BC_RATE,
 };
 
 enum dlep_addrtlv_types {
+  ADDRTLV_LINK_STATUS = 3,
   DLEP_ADDRTLV_CUR_RATE = 192,
 //  DLEP_ADDRTLV_MAX_RATE,
 //  DLEP_ADDRTLV_IPv4,
@@ -97,12 +96,12 @@ enum dlep_tlv_idx {
 };
 
 enum dlep_addrtlv_idx {
-  IDX_ADDRTLV_CUR_RATE = 192,
+  IDX_ADDRTLV_LINK_STATUS,
+  IDX_ADDRTLV_CUR_RATE,
 //  IDX_ADDRTLV_MAX_RATE,
 //  IDX_ADDRTLV_IPv4,
 //  IDX_ADDRTLV_IPv6,
 };
-
 
 /* definitions */
 struct _dlep_config {
@@ -197,8 +196,8 @@ static struct cfg_schema_entry _dlep_entries[] = {
 
   CFG_MAP_CLOCK_MIN(_dlep_config, connect_interval, "connect_interval", "0.000",
     "Interval in seconds between router connect messages", 100),
-  CFG_MAP_CLOCK_MIN(_dlep_config, connect_validity, "connect_validity", "5.000",
-    "Validity time in seconds for router connect messages", 100),
+  CFG_MAP_CLOCK_MINMAX(_dlep_config, connect_validity, "connect_validity", "5.000",
+    "Validity time in seconds for router connect messages", 100, PBB_TIMETLV_MAX),
 };
 
 static struct _dlep_config _config;
@@ -226,7 +225,8 @@ static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
-  [DLEP_ADDRTLV_CUR_RATE] = { .type = DLEP_ADDRTLV_CUR_RATE, .min_length = 8 },
+  [IDX_ADDRTLV_LINK_STATUS] = { .type = ADDRTLV_LINK_STATUS, .min_length = 1 },
+  [IDX_ADDRTLV_CUR_RATE] =    { .type = DLEP_ADDRTLV_CUR_RATE, .min_length = 8 },
 };
 
 /* DLEP writer data */
@@ -454,8 +454,8 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
 
   encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
 
-  /* TODO: decode vtime according to RFC 5497 */
-  _message_vtime = 0 * encoded_vtime + 10000;
+  /* decode vtime according to RFC 5497 */
+  _message_vtime = pbb_decode_timetlv(encoded_vtime);
 
   _message_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
   switch (_message_order) {
@@ -465,25 +465,10 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
       return _parse_msg_interface_discovery(&radio_mac);
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       break;
-    case DLEP_ORDER_NEIGHBOR_UP:
-      /* we are not interested in the message TLVs */
-      return PBB_OKAY;
     default:
       OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _message_order);
       return PBB_DROP_MESSAGE;
   }
-  return PBB_OKAY;
-}
-
-static enum pbb_result
-_parse_addr_neighbor_up(struct netaddr *radio_mac, struct netaddr *neigh_mac) {
-  struct netaddr_str buf1, buf2;
-
-  olsr_layer2_add_neighbor(radio_mac, neigh_mac, 0, _message_vtime);
-
-  OLSR_DEBUG(LOG_DLEP_CLIENT, "Got layer2 neighbor %s (seen by %s)",
-      netaddr_to_string(&buf1, neigh_mac), netaddr_to_string(&buf2, radio_mac));
-
   return PBB_OKAY;
 }
 
@@ -504,8 +489,9 @@ _parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac
   if (_dlep_address_tlvs[IDX_ADDRTLV_CUR_RATE].tlv) {
     uint64_t rate;
 
-    // TODO: ntohll ?
     memcpy(&rate, _dlep_address_tlvs[IDX_ADDRTLV_CUR_RATE].tlv->single_value, sizeof(rate));
+
+    rate = be64toh(rate);
     olsr_layer2_neighbor_set_tx_bitrate(neigh, rate);
 
     OLSR_DEBUG(LOG_DLEP_CLIENT, "Set bitrate of %s (measured by %s) to %"PRIu64,
@@ -545,8 +531,6 @@ _cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribu
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       return _parse_addr_neighbor_update(&radio_mac, &neigh_mac);
       break;
-    case DLEP_ORDER_NEIGHBOR_UP:
-      return _parse_addr_neighbor_up(&radio_mac, &neigh_mac);
     default:
       OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _message_order);
       return PBB_DROP_MESSAGE;
@@ -615,9 +599,11 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
 
 static void
 _add_connectrouter_msgtlvs(void) {
-  uint8_t encoded_vtime = 0;
+  uint8_t encoded_vtime;
 
-  // TODO: calculate encoded vtime
+  /* encode vtime according to RFC 5497 */
+  encoded_vtime = pbb_encode_timetlv(_config.connect_validity);
+
   pbb_writer_add_messagetlv(&_dlep_writer,
       MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 

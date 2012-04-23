@@ -40,8 +40,10 @@
  */
 
 #include <errno.h>
+#include <endian.h>
 
 #include "config/cfg_schema.h"
+#include "packetbb/pbb_conversion.h"
 #include "packetbb/pbb_reader.h"
 #include "packetbb/pbb_writer.h"
 #include "olsr_cfg.h"
@@ -65,8 +67,6 @@ enum dlep_orders {
   DLEP_ORDER_INTERFACE_DISCOVERY,
   DLEP_ORDER_CONNECT_ROUTER,
   DLEP_ORDER_DISCONNECT,
-  DLEP_ORDER_NEIGHBOR_UP,
-//  DLEP_ORDER_NEIGHBOR_DOWN,
   DLEP_ORDER_NEIGHBOR_UPDATE,
 };
 
@@ -75,14 +75,13 @@ enum dlep_msgtlv_types {
   MSGTLV_VTIME = 1,
   DLEP_TLV_ORDER = 192,
   DLEP_TLV_PEER_TYPE,
-  DLEP_TLV_STATUS,
 //  DLEP_TLV_CUR_BC_RATE,
 //  DLEP_TLV_MAX_BC_RATE,
 };
 
 enum dlep_addrtlv_types {
+  ADDRTLV_LINK_STATUS = 3,
   DLEP_ADDRTLV_CUR_RATE = 192,
-// v DLEP_ADDRTLV_THROUGHPUT,
 //  DLEP_ADDRTLV_MAX_RATE,
 //  DLEP_ADDRTLV_IPv4,
 //  DLEP_ADDRTLV_IPv6,
@@ -93,14 +92,13 @@ enum dlep_tlv_idx {
   IDX_TLV_ORDER,
   IDX_TLV_VTIME,
   IDX_TLV_PEER_TYPE,
-  IDX_TLV_STATUS,
 //  IDX_TLV_CUR_BC_RATE,
 //  IDX_TLV_MAX_BC_RATE,
 };
 
 enum dlep_addrtlv_idx {
+  IDX_ADDRTLV_LINK_STATUS,
   IDX_ADDRTLV_CUR_RATE,
-//  IDX_ADDRTLV_THROUGHPUT,
 //  IDX_ADDRTLV_MAX_RATE,
 //  IDX_ADDRTLV_IPv4,
 //  IDX_ADDRTLV_IPv6,
@@ -114,7 +112,6 @@ struct _dlep_config {
   char peer_type[81];
 
   uint64_t discovery_interval, discovery_validity;
-  uint64_t address_interval, address_validity;
   uint64_t metric_interval, metric_validity;
 };
 
@@ -152,7 +149,6 @@ static void _cb_sendMulticast(struct pbb_writer *,
 
 static void _cb_dlep_router_timerout(void *);
 static void _cb_interface_discovery(void *);
-static void _cb_address_update(void *);
 static void _cb_metric_update(void *);
 
 static void _cb_config_changed(void);
@@ -199,18 +195,13 @@ static struct cfg_schema_entry _dlep_entries[] = {
 
   CFG_MAP_CLOCK_MIN(_dlep_config, discovery_interval, "discovery_interval", "2.000",
     "Interval in seconds between interface discovery messages", 100),
-  CFG_MAP_CLOCK_MIN(_dlep_config, discovery_validity, "discovery_validity", "5.000",
-    "Validity time in seconds for interface discovery messages", 100),
-
-  CFG_MAP_CLOCK_MIN(_dlep_config, address_interval, "address_interval", "0.000",
-    "Interval in seconds between neighbor up messages", 100),
-  CFG_MAP_CLOCK_MIN(_dlep_config, address_validity, "address_validity", "5.000",
-    "Validity time in seconds for neighbor up messages", 100),
+  CFG_MAP_CLOCK_MINMAX(_dlep_config, discovery_validity, "discovery_validity", "5.000",
+    "Validity time in seconds for interface discovery messages", 100, PBB_TIMETLV_MAX),
 
   CFG_MAP_CLOCK_MIN(_dlep_config, metric_interval, "metric_interval", "1.000",
     "Interval in seconds between neighbor update messages", 100),
-  CFG_MAP_CLOCK_MIN(_dlep_config, metric_validity, "metric_validity", "5.000",
-    "Validity time in seconds for neighbor update messages", 100),
+  CFG_MAP_CLOCK_MINMAX(_dlep_config, metric_validity, "metric_validity", "5.000",
+    "Validity time in seconds for neighbor update messages", 100, PBB_TIMETLV_MAX),
 };
 
 static struct _dlep_config _config;
@@ -230,7 +221,7 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
   [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
-  [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
+//  [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
 };
 
 /* DLEP writer data */
@@ -256,7 +247,8 @@ static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
 };
 
 static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
-  [IDX_ADDRTLV_CUR_RATE] = { .type = DLEP_ADDRTLV_CUR_RATE },
+  [IDX_ADDRTLV_LINK_STATUS] = { .type = ADDRTLV_LINK_STATUS },
+  [IDX_ADDRTLV_CUR_RATE] =    { .type = DLEP_ADDRTLV_CUR_RATE },
 };
 
 static uint8_t _packet_buffer[256];
@@ -286,15 +278,6 @@ struct olsr_timer_info _tinfo_interface_discovery = {
 };
 struct olsr_timer_entry _tentry_interface_discovery = {
   .info = &_tinfo_interface_discovery,
-};
-
-struct olsr_timer_info _tinfo_address_update = {
-  .name = "dlep address update",
-  .callback = _cb_address_update,
-  .periodic = true,
-};
-struct olsr_timer_entry _tentry_address_update = {
-  .info = &_tinfo_address_update,
 };
 
 struct olsr_timer_info _tinfo_metric_update = {
@@ -361,7 +344,6 @@ _cb_plugin_enable(void) {
   avl_init(&_session_tree, netaddr_socket_avlcmp, false, NULL);
 
   olsr_timer_add(&_tinfo_interface_discovery);
-  olsr_timer_add(&_tinfo_address_update);
   olsr_timer_add(&_tinfo_metric_update);
 
   pbb_reader_init(&_dlep_reader);
@@ -417,7 +399,6 @@ _cb_plugin_disable(void) {
   pbb_writer_cleanup(&_dlep_writer);
 
   olsr_timer_remove(&_tinfo_interface_discovery);
-  olsr_timer_remove(&_tinfo_address_update);
   olsr_timer_remove(&_tinfo_metric_update);
 
   olsr_acl_remove(&_config.socket.acl);
@@ -451,8 +432,8 @@ _parse_order_connect_router(void) {
 
   encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
 
-  /* TODO: decode vtime according to RFC 5497 */
-  vtime = 0 * encoded_vtime + 10000;
+  /* decode vtime according to RFC 5497 */
+  vtime = pbb_decode_timetlv(encoded_vtime);
 
   session = avl_find_element(&_session_tree, _peer_socket, session, _node);
   if (session == NULL) {
@@ -501,9 +482,6 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       /* ignore our own discovery packets if we work with multicast loop */
       return PBB_OKAY;
-    case DLEP_ORDER_NEIGHBOR_UP:
-      /* ignore our own discovery packets if we work with multicast loop */
-      break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       /* ignore our own discovery packets if we work with multicast loop */
       break;
@@ -559,9 +537,11 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
 
 static void
 _add_ifdiscovery_msgtlvs(void) {
-  uint8_t encoded_vtime = 0;
+  uint8_t encoded_vtime;
 
-  // TODO: calculate encoded vtime
+  /* encode vtime according to RFC 5497 */
+  encoded_vtime = pbb_encode_timetlv(_config.discovery_validity);
+
   pbb_writer_add_messagetlv(&_dlep_writer,
       MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 
@@ -572,19 +552,12 @@ _add_ifdiscovery_msgtlvs(void) {
 }
 
 static void
-_add_neighborup_msgtlvs(void) {
-  uint8_t encoded_vtime = 0;
-
-  // TODO: calculate encoded vtime
-  pbb_writer_add_messagetlv(&_dlep_writer,
-      MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
-}
-
-static void
 _add_neighborupdate_msgtlvs(void) {
-  uint8_t encoded_vtime = 0;
+  uint8_t encoded_vtime;
 
-  // TODO: calculate encoded vtime
+  /* encode vtime according to RFC 5497 */
+  encoded_vtime = pbb_encode_timetlv(_config.metric_validity);
+
   pbb_writer_add_messagetlv(&_dlep_writer,
       MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 }
@@ -608,9 +581,6 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       _add_ifdiscovery_msgtlvs();
       break;
-    case DLEP_ORDER_NEIGHBOR_UP:
-      _add_neighborup_msgtlvs();
-      break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       _add_neighborupdate_msgtlvs();
       break;
@@ -621,27 +591,11 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
 }
 
 static void
-_add_neighborup_addresses(void) {
-  struct olsr_layer2_neighbor *neigh, *neigh_it;
-  struct netaddr_str buf1, buf2;
-
-  OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
-    if (netaddr_cmp(&_msg_network->radio_id, &neigh->key.radio_mac) == 0) {
-      pbb_writer_add_address(&_dlep_writer, _dlep_message,
-          netaddr_get_binptr(&neigh->key.neighbor_mac), 48);
-
-      OLSR_DEBUG(LOG_DLEP_SERVICE, "Added neighbor %s (seen by %s) to neigh-up",
-          netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
-          netaddr_to_string(&buf2, &neigh->key.radio_mac));
-    }
-  }
-}
-
-static void
 _add_neighborupdate_addresses(void) {
   struct olsr_layer2_neighbor *neigh, *neigh_it;
   struct pbb_writer_address *addr;
   struct netaddr_str buf1, buf2;
+  const char LINK_STATUS_HEARD = 1;
 
   OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
     if (netaddr_cmp(&_msg_network->radio_id, &neigh->key.radio_mac) != 0) {
@@ -655,6 +609,11 @@ _add_neighborupdate_addresses(void) {
       break;
     }
 
+    /* LINK_HEARD */
+    pbb_writer_add_addrtlv(&_dlep_writer, addr,
+        _dlep_addrtlvs[IDX_ADDRTLV_LINK_STATUS]._tlvtype,
+        &LINK_STATUS_HEARD, sizeof(LINK_STATUS_HEARD), false);
+
     OLSR_DEBUG(LOG_DLEP_SERVICE, "Added neighbor %s (seen by %s) to neigh-up",
         netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
         netaddr_to_string(&buf2, &neigh->key.radio_mac));
@@ -662,8 +621,8 @@ _add_neighborupdate_addresses(void) {
     if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
       uint64_t rate;
 
-      rate = neigh->tx_bitrate;
-      // TODO: htonll ?
+      rate = htobe64(neigh->tx_bitrate);
+
       pbb_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_CUR_RATE]._tlvtype, &rate, sizeof(rate), false);
 
@@ -681,9 +640,6 @@ _cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
     case DLEP_ORDER_INTERFACE_DISCOVERY:
     case DLEP_ORDER_DISCONNECT:
       /* no addresses and address TLVs */
-      break;
-    case DLEP_ORDER_NEIGHBOR_UP:
-      _add_neighborup_addresses();
       break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       _add_neighborupdate_addresses();
@@ -715,23 +671,6 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
   _msg_order = DLEP_ORDER_INTERFACE_DISCOVERY;
   OLSR_FOR_ALL_LAYER2_NETWORKS(_msg_network, net_it) {
     OLSR_DEBUG(LOG_DLEP_SERVICE, "Send interface discovery for radio %s",
-        netaddr_to_string(&buf, &_msg_network->radio_id));
-    pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
-    pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
-  }
-}
-
-static void
-_cb_address_update(void *ptr __attribute__((unused))) {
-  struct olsr_layer2_network *net_it;
-  struct netaddr_str buf;
-
-  if (avl_is_empty(&_session_tree))
-    return;
-
-  _msg_order = DLEP_ORDER_NEIGHBOR_UP;
-  OLSR_FOR_ALL_LAYER2_NETWORKS(_msg_network, net_it) {
-    OLSR_DEBUG(LOG_DLEP_SERVICE, "Send neighbor up for radio %s",
         netaddr_to_string(&buf, &_msg_network->radio_id));
     pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
     pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
@@ -787,6 +726,5 @@ _cb_config_changed(void) {
 
   /* reconfigure timers */
   olsr_timer_set(&_tentry_interface_discovery, _config.discovery_interval);
-  olsr_timer_set(&_tentry_address_update, _config.address_interval);
   olsr_timer_set(&_tentry_metric_update, _config.metric_interval);
 }
