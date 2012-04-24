@@ -52,15 +52,19 @@ enum olsr_callback_event {
   CALLBACK_EVENT_REMOVE,
 };
 
+struct olsr_callback_str {
+  char buf[128];
+};
+
 struct olsr_callback_provider {
   /* name of callback provider */
-  char *name;
+  const char *name;
 
   /*
    * callback that convert pointer to object into char *,
    * which should contain the name/id of the object.
    */
-  const char *(*cb_getkey)(void *);
+  const char *(*cb_getkey)(struct olsr_callback_str *, void *);
 
   /* node for hooking this provider into the global tree */
   struct avl_node _node;
@@ -95,10 +99,10 @@ struct olsr_callback_consumer {
   struct list_entity _node;
 };
 
-#define OLSR_FOR_ALL_CALLBACK_PROVIDERS(provider, iterator) avl_for_each_element_safe(&callback_provider_tree, provider, _node, iterator)
+#define OLSR_FOR_ALL_CALLBACK_PROVIDERS(provider, iterator) avl_for_each_element_safe(&olsr_callback_provider_tree, provider, _node, iterator)
 #define OLSR_FOR_ALL_CALLBACK_CONSUMERS(provider, consumer, iterator) list_for_each_element_safe(&provider->_callbacks, consumer, _node, iterator)
 
-EXPORT extern struct avl_tree callback_provider_tree;
+EXPORT extern struct avl_tree olsr_callback_provider_tree;
 EXPORT const char *OLSR_CALLBACK_EVENTS[3];
 
 void olsr_callback_init(void);
@@ -112,9 +116,35 @@ void EXPORT(olsr_callback_unregister_consumer)(struct olsr_callback_consumer *);
 
 void EXPORT(olsr_callback_event)(struct olsr_callback_provider *, void *, enum olsr_callback_event);
 
+/**
+ * @param prv callback provider
+ * @return number of active elements for provider
+ */
 static INLINE uint32_t
 olsr_callback_get_objectcount(struct olsr_callback_provider *prv) {
   return prv->_obj_count;
+}
+
+/**
+ * @param name callback provider name
+ * @return pointer to callback provider, NULL if not found
+ */
+static INLINE struct olsr_callback_provider *
+olsr_callback_get_provider(const char *name) {
+  struct olsr_callback_provider *prv;
+  return avl_find_element(&olsr_callback_provider_tree, name, prv, _node);
+}
+
+/**
+ * @param buf pointer to callback provider buffer
+ * @param prv pointer to callback provider
+ * @param ptr pointer to callback provider object
+ * @return name of object
+ */
+static INLINE const char *
+olsr_callback_get_objectname(struct olsr_callback_str *buf,
+    struct olsr_callback_provider *prv, void *ptr) {
+  return prv->cb_getkey(buf, ptr);
 }
 
 #endif /* OLSR_CALLBACKS_H_ */

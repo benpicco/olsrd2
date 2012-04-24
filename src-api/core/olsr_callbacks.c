@@ -50,7 +50,7 @@
 #include "olsr_logging.h"
 #include "olsr_callbacks.h"
 
-static const char *_unknown_key(void *);
+static const char *_unknown_key(struct olsr_callback_str *, void *);
 
 const char *OLSR_CALLBACK_EVENTS[3] = {
   [CALLBACK_EVENT_CHANGE] = "change",
@@ -58,7 +58,7 @@ const char *OLSR_CALLBACK_EVENTS[3] = {
   [CALLBACK_EVENT_REMOVE] = "remove",
 };
 
-struct avl_tree callback_provider_tree;
+struct avl_tree olsr_callback_provider_tree;
 
 enum log_source LOG_CALLBACK;
 
@@ -67,7 +67,7 @@ enum log_source LOG_CALLBACK;
  */
 void
 olsr_callback_init(void) {
-  avl_init(&callback_provider_tree, avl_comp_strcasecmp, false, NULL);
+  avl_init(&olsr_callback_provider_tree, avl_comp_strcasecmp, false, NULL);
 
   LOG_CALLBACK = olsr_log_register_source("callback");
 }
@@ -93,7 +93,7 @@ olsr_callback_cleanup(void) {
 int
 olsr_callback_add(struct olsr_callback_provider *prv) {
   /* check if provider already exists */
-  if (avl_find(&callback_provider_tree, prv->name) != NULL) {
+  if (avl_find(&olsr_callback_provider_tree, prv->name) != NULL) {
     OLSR_WARN(LOG_CALLBACK,
         "Provider '%s' already exists. Not creating.\n", prv->name);
     return -1;
@@ -102,7 +102,7 @@ olsr_callback_add(struct olsr_callback_provider *prv) {
   OLSR_DEBUG(LOG_CALLBACK, "Create callback provider '%s'\n", prv->name);
 
   prv->_node.key = prv->name;
-  avl_insert(&callback_provider_tree, &prv->_node);
+  avl_insert(&olsr_callback_provider_tree, &prv->_node);
 
   if (prv->cb_getkey == NULL) {
     prv->cb_getkey = _unknown_key;
@@ -127,9 +127,7 @@ olsr_callback_remove(struct olsr_callback_provider *prv) {
     olsr_callback_unregister_consumer(cons);
   }
 
-  avl_delete(&callback_provider_tree, &prv->_node);
-  free(prv->name);
-  prv->name = NULL;
+  avl_delete(&olsr_callback_provider_tree, &prv->_node);
 }
 
 /**
@@ -143,7 +141,7 @@ int
 olsr_callback_register_consumer(struct olsr_callback_consumer *cons) {
   struct olsr_callback_provider *prv;
 
-  prv = avl_find_element(&callback_provider_tree, cons->provider, prv, _node);
+  prv = avl_find_element(&olsr_callback_provider_tree, cons->provider, prv, _node);
   if (prv == NULL) {
     OLSR_WARN(LOG_CALLBACK, "Could not find callback provider '%s'\n", cons->provider);
     return -1;
@@ -180,6 +178,7 @@ void
 olsr_callback_event(struct olsr_callback_provider *prv, void *obj,
     enum olsr_callback_event event) {
   struct olsr_callback_consumer *cons, *iterator;
+  struct olsr_callback_str buf;
 
   if (prv->_in_use) {
     OLSR_WARN(LOG_CALLBACK, "Warning, recursive use of callback %s. Skipping.\n",
@@ -190,7 +189,7 @@ olsr_callback_event(struct olsr_callback_provider *prv, void *obj,
   prv->_in_use = true;
   prv->_obj_count++;
   OLSR_DEBUG(LOG_CALLBACK, "object %s (%u) to callback '%s': %s event\n",
-      prv->cb_getkey(obj), prv->_obj_count, prv->name,
+      prv->cb_getkey(&buf, obj), prv->_obj_count, prv->name,
       OLSR_CALLBACK_EVENTS[event]);
 
   OLSR_FOR_ALL_CALLBACK_CONSUMERS(prv, cons, iterator) {
@@ -231,10 +230,8 @@ olsr_callback_event(struct olsr_callback_provider *prv, void *obj,
  * @return string representation of objects hexadecimal address
  */
 static const char *
-_unknown_key(void *obj) {
-  static char buffer[32];
-
-  snprintf(buffer, sizeof(buffer),
-      "0x%"PRINTF_SIZE_T_SPECIFIER"x", (size_t)obj);
-  return buffer;
+_unknown_key(struct olsr_callback_str *buf, void *obj) {
+  snprintf(buf->buf, sizeof(*buf),
+      "object=0x%"PRINTF_SIZE_T_SPECIFIER"x", (size_t)obj);
+  return buf->buf;
 }
