@@ -40,8 +40,18 @@
 #include "common/common_types.h"
 #include "packetbb/pbb_conversion.h"
 
+/**
+ * Converts a relative time value into its RFC 5497 (timetlv)
+ * representation.
+ * If the time value is larger than the largest timetlv encoding,
+ * the largest encoding (255) will be returned.
+ * If the time value is zero, the function returns zero.
+ *
+ * @param decoded relative timestamp in milliseconds
+ * @return RFC 5497 encoded time
+ */
 uint8_t
-pbb_encode_timetlv(uint64_t decoded) {
+pbb_timetlv_encode(uint64_t decoded) {
   uint32_t a, b;
   /*
    * t = (1 + a/8) * 2^b * 1000 / 1024
@@ -77,8 +87,15 @@ pbb_encode_timetlv(uint64_t decoded) {
   return a + (b << 3);
 }
 
+/**
+ * Decode an RFC 5497 encoding into a relative time value.
+ * If the encoded data is zero, the function returns 1.
+ *
+ * @param encoded RFC 5497 encoded time
+ * @return relative time in milliseconds
+ */
 uint64_t
-pbb_decode_timetlv(uint8_t encoded) {
+pbb_timetlv_decode(uint8_t encoded) {
   /*
    * time-value := (1 + a/8) * 2^b * C
    * time-code := 8 * b + a

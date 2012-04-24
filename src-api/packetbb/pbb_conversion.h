@@ -49,7 +49,7 @@
 #define PBB_TIMETLV_MIN 0x00000001
 
 
-EXPORT uint8_t pbb_encode_timetlv(uint64_t);
-EXPORT uint64_t pbb_decode_timetlv(uint8_t);
+EXPORT uint8_t pbb_timetlv_encode(uint64_t);
+EXPORT uint64_t pbb_timetlv_decode(uint8_t);
 
 #endif /* PBB_CONVERSION_H_ */
