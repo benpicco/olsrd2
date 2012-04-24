@@ -433,7 +433,7 @@ _parse_order_connect_router(void) {
   encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
 
   /* decode vtime according to RFC 5497 */
-  vtime = pbb_decode_timetlv(encoded_vtime);
+  vtime = pbb_timetlv_decode(encoded_vtime);
 
   session = avl_find_element(&_session_tree, _peer_socket, session, _node);
   if (session == NULL) {
@@ -540,7 +540,7 @@ _add_ifdiscovery_msgtlvs(void) {
   uint8_t encoded_vtime;
 
   /* encode vtime according to RFC 5497 */
-  encoded_vtime = pbb_encode_timetlv(_config.discovery_validity);
+  encoded_vtime = pbb_timetlv_encode(_config.discovery_validity);
 
   pbb_writer_add_messagetlv(&_dlep_writer,
       MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
@@ -556,7 +556,7 @@ _add_neighborupdate_msgtlvs(void) {
   uint8_t encoded_vtime;
 
   /* encode vtime according to RFC 5497 */
-  encoded_vtime = pbb_encode_timetlv(_config.metric_validity);
+  encoded_vtime = pbb_timetlv_encode(_config.metric_validity);
 
   pbb_writer_add_messagetlv(&_dlep_writer,
       MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));

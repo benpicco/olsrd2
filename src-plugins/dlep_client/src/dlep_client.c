@@ -455,7 +455,7 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
   encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
 
   /* decode vtime according to RFC 5497 */
-  _message_vtime = pbb_decode_timetlv(encoded_vtime);
+  _message_vtime = pbb_timetlv_decode(encoded_vtime);
 
   _message_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
   switch (_message_order) {
@@ -602,7 +602,7 @@ _add_connectrouter_msgtlvs(void) {
   uint8_t encoded_vtime;
 
   /* encode vtime according to RFC 5497 */
-  encoded_vtime = pbb_encode_timetlv(_config.connect_validity);
+  encoded_vtime = pbb_timetlv_encode(_config.connect_validity);
 
   pbb_writer_add_messagetlv(&_dlep_writer,
       MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
