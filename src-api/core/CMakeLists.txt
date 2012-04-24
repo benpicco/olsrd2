@@ -1,4 +1,5 @@
-SET(OONF_CORE_SRCS olsr_cfg.c
+SET(OONF_CORE_SRCS olsr_callbacks.c
+                   olsr_cfg.c
                    olsr_clock.c
                    olsr_http.c
                    olsr_interface.c
