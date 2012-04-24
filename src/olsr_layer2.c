@@ -43,6 +43,7 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 
+#include "olsr_callbacks.h"
 #include "olsr_logging.h"
 #include "olsr_memcookie.h"
 #include "olsr_timer.h"
@@ -52,6 +53,8 @@
 static void _cb_neighbor_timeout(void *ptr);
 static void _cb_network_timeout(void *ptr);
 static int _avl_comp_l2neigh(const void *k1, const void *k2, void *);
+static const char *_cb_get_neighbor_name(struct olsr_callback_str *buf,void *);
+static const char *_cb_get_network_name(struct olsr_callback_str *buf,void *);
 
 struct avl_tree olsr_layer2_network_tree;
 struct avl_tree olsr_layer2_neighbor_tree;
@@ -76,6 +79,16 @@ static struct olsr_timer_info _neighbor_vtime_info = {
   .callback = _cb_neighbor_timeout,
 };
 
+static struct olsr_callback_provider _network_callback = {
+  .name = CALLBACK_ID_LAYER2_NETWORK,
+  .cb_getkey = _cb_get_network_name,
+};
+
+static struct olsr_callback_provider _neighbor_callback = {
+  .name = CALLBACK_ID_LAYER2_NEIGHBOR,
+  .cb_getkey = _cb_get_neighbor_name,
+};
+
 OLSR_SUBSYSTEM_STATE(_layer2_state);
 
 /**
@@ -89,6 +102,9 @@ olsr_layer2_init(void) {
 
   olsr_memcookie_add(&_network_cookie);
   olsr_memcookie_add(&_neighbor_cookie);
+
+  olsr_callback_add(&_network_callback);
+  olsr_callback_add(&_neighbor_callback);
 
   olsr_timer_add(&_network_vtime_info);
   olsr_timer_add(&_neighbor_vtime_info);
@@ -118,6 +134,8 @@ olsr_layer2_cleanup(void) {
 
   olsr_timer_remove(&_network_vtime_info);
   olsr_timer_remove(&_neighbor_vtime_info);
+  olsr_callback_remove(&_network_callback);
+  olsr_callback_remove(&_neighbor_callback);
   olsr_memcookie_remove(&_network_cookie);
   olsr_memcookie_remove(&_neighbor_cookie);
 }
@@ -151,6 +169,8 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
     net->_valitity_timer.cb_context = net;
 
     avl_insert(&olsr_layer2_network_tree, &net->_node);
+
+    olsr_callback_event(&_network_callback, net, CALLBACK_EVENT_ADD);
   }
 
   OLSR_DEBUG(LOG_MAIN, "Reset validity of network timer: %"PRIu64,
@@ -165,6 +185,7 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
  */
 void
 olsr_layer2_remove_network(struct olsr_layer2_network *net) {
+  olsr_callback_event(&_network_callback, net, CALLBACK_EVENT_REMOVE);
   avl_remove(&olsr_layer2_network_tree, &net->_node);
   olsr_timer_stop(&net->_valitity_timer);
   free (net->supported_rates);
@@ -219,6 +240,7 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
     neigh->_valitity_timer.cb_context = neigh;
 
     avl_insert(&olsr_layer2_neighbor_tree, &neigh->_node);
+    olsr_callback_event(&_neighbor_callback, neigh, CALLBACK_EVENT_ADD);
   }
 
   olsr_timer_set(&neigh->_valitity_timer, vtime);
@@ -231,6 +253,7 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
  */
 void
 olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *neigh) {
+  olsr_callback_event(&_neighbor_callback, neigh, CALLBACK_EVENT_REMOVE);
   avl_remove(&olsr_layer2_neighbor_tree, &neigh->_node);
   olsr_timer_stop(&neigh->_valitity_timer);
   olsr_memcookie_free(&_neighbor_cookie, neigh);
@@ -293,4 +316,29 @@ _avl_comp_l2neigh(const void *k1, const void *k2,
     result = netaddr_cmp(&key1->neighbor_mac, &key2->neighbor_mac);
   }
   return result;
+}
+
+static const char *
+_cb_get_neighbor_name(struct olsr_callback_str *buf, void *ptr) {
+  struct netaddr_str buf1, buf2;
+  struct olsr_layer2_neighbor *nbr;
+
+  nbr = ptr;
+
+  snprintf(buf->buf, sizeof(*buf), "neigh=%s/radio=%s",
+      netaddr_to_string(&buf1, &nbr->key.neighbor_mac),
+      netaddr_to_string(&buf2, &nbr->key.radio_mac));
+  return buf->buf;
+}
+
+static const char *
+_cb_get_network_name(struct olsr_callback_str *buf, void *ptr) {
+  struct netaddr_str buf1;
+  struct olsr_layer2_network *net;
+
+  net = ptr;
+
+  snprintf(buf->buf, sizeof(*buf), "radio=%s",
+      netaddr_to_string(&buf1, &net->radio_id));
+  return buf->buf;
 }

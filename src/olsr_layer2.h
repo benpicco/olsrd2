@@ -49,6 +49,10 @@
 #include "olsr_clock.h"
 #include "olsr_timer.h"
 
+/* both callbacks support ADD and REMOVE events */
+#define CALLBACK_ID_LAYER2_NEIGHBOR "layer2-neighbor"
+#define CALLBACK_ID_LAYER2_NETWORK  "layer2-network"
+
 enum olsr_layer2_neighbor_data {
   OLSR_L2NEIGH_SIGNAL = 1<<0,
   OLSR_L2NEIGH_LAST_SEEN = 1<<1,
