@@ -37,6 +37,8 @@
  * the copyright holders.
  */
 
+#include <assert.h>
+
 #include "common/common_types.h"
 #include "packetbb/pbb_conversion.h"
 
@@ -70,16 +72,18 @@ pbb_timetlv_encode(uint64_t decoded) {
   if (decoded >= 1000) {
     /* this means b >= 10 */
     while (decoded > 1875) {
+      b++;
+
+      /* divide by 2 and round up */
       decoded++;
       decoded >>= 1;
-      b++;
     }
   }
   else { /* decoded < 1000 */
     /* b < 10 */
     while (decoded < 1000) {
-      decoded <<= 1;
       b--;
+      decoded <<= 1;
     }
   }
 
@@ -127,4 +131,58 @@ pbb_timetlv_decode(uint8_t encoded) {
     return (1000 + 125 * a) >> (10 - b);
   }
   return (1000 + 125 * a) << (b - 10);
+}
+
+/**
+ * Encode a metric value in OLSRv2 specified format.
+ * A metric value larger than the maximum will be encoded to 4095.
+ * Encoding for metric value 0 is not specified.
+ *
+ * @param decoded metric value.
+ * @return encoded metric value.
+ */
+uint16_t
+pbb_metric_encode(uint32_t decoded) {
+  uint8_t a,b;
+  /*
+   * metric-value := (257+b)2^a - 256
+   * metric-code := 256 * a + b
+   */
+
+  assert (decoded > 0);
+
+  /* metric-value + 256 = (257+b)<<a */
+  decoded += 256;
+
+  a = 0;
+  while (decoded > 512) {
+    a++;
+
+    /* divide by 2 and round up */
+    decoded++;
+    decoded >>= 1;
+  }
+
+  b = decoded - 257;
+
+  return (a << 8) + b;
+}
+
+/**
+ * Decode an OLSRv2 encoded metric value.
+ * @param encoded encoded metric
+ * @return decoded metric value
+ */
+uint32_t
+pbb_metric_decode(uint16_t encoded) {
+  uint8_t a,b;
+  /*
+   * metric-value := (257+b)2^a - 256
+   * metric-code := 256 * a + b
+   */
+
+  a = (encoded >> 8) & 0x0f;
+  b = encoded & 0xff;
+
+  return ((257 + b) << a) - 256;
 }
