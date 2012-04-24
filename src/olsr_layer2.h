@@ -141,9 +141,9 @@ EXPORT int olsr_layer2_network_set_supported_rates(
  * @return pointer to layer2 network, NULL if not found
  */
 static INLINE struct olsr_layer2_network *
-olsr_layer2_get_network(uint32_t if_index) {
+olsr_layer2_get_network(struct netaddr *radio) {
   struct olsr_layer2_network *net;
-  return avl_find_element(&olsr_layer2_network_tree, &if_index, net, _node);
+  return avl_find_element(&olsr_layer2_network_tree, radio, net, _node);
 }
 
 /*

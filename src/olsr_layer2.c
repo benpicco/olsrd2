@@ -43,6 +43,7 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 
+#include "olsr_logging.h"
 #include "olsr_memcookie.h"
 #include "olsr_timer.h"
 #include "olsr.h"
@@ -135,7 +136,7 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
     uint64_t vtime) {
   struct olsr_layer2_network *net;
 
-  net = olsr_layer2_get_network(if_index);
+  net = olsr_layer2_get_network(radio_id);
   if (!net) {
     net = olsr_memcookie_malloc(&_network_cookie);
     if (!net) {
@@ -152,6 +153,8 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
     avl_insert(&olsr_layer2_network_tree, &net->_node);
   }
 
+  OLSR_DEBUG(LOG_MAIN, "Reset validity of network timer: %"PRIu64,
+      vtime);
   olsr_timer_set(&net->_valitity_timer, vtime);
   return net;
 }

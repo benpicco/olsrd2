@@ -124,6 +124,7 @@ static struct os_system_netlink _netlink_handler = {
 static struct nlmsghdr *_msgbuf;
 
 static int _nl80211_id = -1;
+static bool _nl80211_mc_set = false;
 
 /* timer for generating netlink requests */
 static struct olsr_timer_info _transmission_timer_info = {
@@ -254,13 +255,14 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
   }
   _nl80211_id = nla_get_u32(attrs[CTRL_ATTR_FAMILY_ID]);
 
-  if (!attrs[CTRL_ATTR_MCAST_GROUPS]) {
+  if (_nl80211_mc_set || !attrs[CTRL_ATTR_MCAST_GROUPS]) {
     /* no multicast groups */
     return;
   }
 
   nla_for_each_nested(mcgrp, attrs[CTRL_ATTR_MCAST_GROUPS], iterator) {
     struct nlattr *tb_mcgrp[CTRL_ATTR_MCAST_GRP_MAX + 1];
+    uint32_t group;
 
     nla_parse(tb_mcgrp, CTRL_ATTR_MCAST_GRP_MAX,
         nla_data(mcgrp), nla_len(mcgrp), NULL);
@@ -268,15 +270,22 @@ _parse_cmd_newfamily(struct nlmsghdr *hdr) {
     if (!tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME] ||
         !tb_mcgrp[CTRL_ATTR_MCAST_GRP_ID])
       continue;
-//    if (strscmp(nla_data(tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME]),
-//          grp->group, nla_len(tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME])))
-//      continue;
+    if (strcmp(nla_data(tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME]), "mlme"))
+      continue;
 
+    group = nla_get_u32(tb_mcgrp[CTRL_ATTR_MCAST_GRP_ID]);
     OLSR_DEBUG(LOG_NL80211, "Found multicast group %s: %d",
         (char *)nla_data(tb_mcgrp[CTRL_ATTR_MCAST_GRP_NAME]),
-        nla_get_u32(tb_mcgrp[CTRL_ATTR_MCAST_GRP_ID]));
-    //grp->id = nla_get_u32(tb_mcgrp[CTRL_ATTR_MCAST_GRP_ID]);
-    //break;
+        group);
+
+    if (os_system_netlink_add_mc(&_netlink_handler, &group, 1)) {
+      OLSR_WARN(LOG_NL80211,
+          "Could not activate multicast group %d for nl80211", group);
+    }
+    else {
+      _nl80211_mc_set = true;
+    }
+    break;
   }
 }
 
@@ -317,6 +326,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   struct netaddr mac;
   unsigned if_index;
   char if_name[IF_NAMESIZE];
+  struct netaddr_str buf1, buf2;
 
   if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
@@ -344,6 +354,9 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
     return;
   }
+
+  OLSR_DEBUG(LOG_NL80211, "Add neighbor %s for network %s",
+      netaddr_to_string(&buf1, &mac), netaddr_to_string(&buf2, &if_data->mac));
 
   neigh = olsr_layer2_add_neighbor(&if_data->mac, &mac, if_index,
       _config.interval + _config.interval / 4);
@@ -427,6 +440,47 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
   return;
 }
 
+/**
+ * Parse result of station dump nl80211 command
+ * @param hdr pointer to netlink message
+ */
+static void
+_parse_cmd_del_station(struct nlmsghdr *hdr) {
+  struct nlattr *tb[NL80211_ATTR_MAX + 1];
+
+  struct olsr_interface_data *if_data;
+  struct olsr_layer2_neighbor *neigh;
+  struct netaddr mac;
+  unsigned if_index;
+  char if_name[IF_NAMESIZE];
+  struct netaddr_str buf1, buf2;
+
+  if (nlmsg_parse(hdr, sizeof(struct genlmsghdr),
+      tb, NL80211_ATTR_MAX, NULL) < 0) {
+    OLSR_WARN(LOG_NL80211, "Cannot parse netlink NL80211_CMD_NEW_STATION message");
+    return;
+  }
+
+  netaddr_from_binary(&mac, nla_data(tb[NL80211_ATTR_MAC]), 6, AF_MAC48);
+  if_index = nla_get_u32(tb[NL80211_ATTR_IFINDEX]);
+
+  if (if_indextoname(if_index, if_name) == NULL) {
+    return;
+  }
+  if_data = olsr_interface_get_data(if_name);
+  if (if_data == NULL || if_data->mac.type == AF_UNSPEC) {
+    return;
+  }
+
+  OLSR_DEBUG(LOG_NL80211, "Remove neighbor %s for network %s",
+      netaddr_to_string(&buf1, &mac), netaddr_to_string(&buf2, &if_data->mac));
+
+  neigh = olsr_layer2_get_neighbor(&if_data->mac, &mac);
+  if (neigh != NULL) {
+    olsr_layer2_remove_neighbor(neigh);
+  }
+}
+
 #define WLAN_CAPABILITY_ESS   (1<<0)
 #define WLAN_CAPABILITY_IBSS    (1<<1)
 #define WLAN_CAPABILITY_CF_POLLABLE (1<<2)
@@ -469,6 +523,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
   struct netaddr mac;
   unsigned if_index;
   char if_name[IF_NAMESIZE];
+  struct netaddr_str buf;
 
   if (nlmsg_parse(msg, sizeof(struct genlmsghdr),
       tb, NL80211_ATTR_MAX, NULL) < 0) {
@@ -514,6 +569,7 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
     return;
   }
 
+  OLSR_DEBUG(LOG_NL80211, "Add network %s", netaddr_to_string(&buf, &if_data->mac));
 #if 0
   if (bss[NL80211_BSS_STATUS]) {
     switch (nla_get_u32(bss[NL80211_BSS_STATUS])) {
@@ -663,6 +719,9 @@ _cb_nl_message(struct nlmsghdr *hdr) {
     if (gen_hdr->cmd == NL80211_CMD_NEW_STATION) {
       _parse_cmd_new_station(hdr);
       return;
+    }
+    if (gen_hdr->cmd == NL80211_CMD_DEL_STATION) {
+      _parse_cmd_del_station(hdr);
     }
     if (gen_hdr->cmd == NL80211_CMD_NEW_SCAN_RESULTS) {
       _parse_cmd_new_scan_result(hdr);
