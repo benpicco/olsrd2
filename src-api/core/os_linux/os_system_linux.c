@@ -125,7 +125,7 @@ static struct os_system_netlink _rtnetlink_receiver = {
   .cb_message = _handle_rtnetlink,
 };
 
-const int _rtnetlink_mcast[] = {
+const uint32_t _rtnetlink_mcast[] = {
   RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR, RTNLGRP_IPV6_IFADDR
 };
 
@@ -153,7 +153,7 @@ os_system_init(void) {
     return -1;
   }
 
-  if (os_syste_netlink_add_mc(&_rtnetlink_receiver, _rtnetlink_mcast, ARRAYSIZE(_rtnetlink_mcast))) {
+  if (os_system_netlink_add_mc(&_rtnetlink_receiver, _rtnetlink_mcast, ARRAYSIZE(_rtnetlink_mcast))) {
     os_system_netlink_remove(&_rtnetlink_receiver);
     close(_ioctl_fd);
     return -1;
@@ -323,8 +323,8 @@ os_system_netlink_send(struct os_system_netlink *nl,
  * @return -1 if an error happened, 0 otherwise
  */
 int
-os_syste_netlink_add_mc(struct os_system_netlink *nl,
-    const int *groups, size_t groupcount) {
+os_system_netlink_add_mc(struct os_system_netlink *nl,
+    const uint32_t *groups, size_t groupcount) {
   size_t i;
 
   for (i=0; i<groupcount; i++) {
