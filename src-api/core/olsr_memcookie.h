@@ -52,8 +52,6 @@
  * for locating memory corruption.
  */
 struct olsr_memcookie_info {
-  struct list_entity _node;
-
   /* Name of cookie */
   const char *name;
 
@@ -66,7 +64,10 @@ struct olsr_memcookie_info {
    */
   uint32_t min_free_count;
 
-  /** Statistics and internal bookkeeping */
+  /* Statistics and internal bookkeeping */
+
+  /* List node for memcookies */
+  struct list_entity _node;
 
   /* List head for recyclable blocks */
   struct list_entity _free_list;

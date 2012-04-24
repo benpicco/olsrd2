@@ -72,8 +72,8 @@ EXPORT int os_system_netlink_add(struct os_system_netlink *,
 EXPORT void os_system_netlink_remove(struct os_system_netlink *);
 EXPORT int os_system_netlink_send(struct os_system_netlink *fd,
     struct nlmsghdr *nl_hdr);
-EXPORT int os_syste_netlink_add_mc(struct os_system_netlink *,
-    const int *groups, size_t groupcount);
+EXPORT int os_system_netlink_add_mc(struct os_system_netlink *,
+    const uint32_t *groups, size_t groupcount);
 EXPORT int os_system_netlink_drop_mc(struct os_system_netlink *,
     const int *groups, size_t groupcount);
 

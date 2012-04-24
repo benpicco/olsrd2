@@ -90,7 +90,7 @@ void
 olsr_memcookie_add(struct olsr_memcookie_info *ci)
 {
   assert (ci->name);
-  assert (ci->size > 0);
+  assert (ci->size >= sizeof(struct list_entity));
 
   /* Init the free list */
   list_init_head(&ci->_free_list);
