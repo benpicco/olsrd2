@@ -55,7 +55,7 @@ test_decoding(void) {
   START_TEST();
 
   for (encoded = 1; encoded < 256; encoded++) {
-    decoded = pbb_decode_timetlv(encoded);
+    decoded = pbb_timetlv_decode(encoded);
     CHECK_TRUE(decoded == _table[encoded], "decode(%u) != %u", encoded, decoded);
   }
 
@@ -74,7 +74,7 @@ test_encoding_exact(void) {
     }
 
     decoded = _table[i];
-    encoded = pbb_encode_timetlv(decoded);
+    encoded = pbb_timetlv_encode(decoded);
 
     CHECK_TRUE(encoded == i, "encode(%u) != %u", decoded, i);
   }
@@ -86,7 +86,7 @@ static void
 _do_average_test(uint32_t decoded) {
   uint32_t encoded;
 
-  encoded = pbb_encode_timetlv(decoded);
+  encoded = pbb_timetlv_encode(decoded);
 
   CHECK_TRUE(_table[encoded] > decoded, "encode(%u)=%u, decode(%u)=%u, %u <= %u",
       decoded, encoded,
