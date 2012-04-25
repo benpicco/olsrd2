@@ -76,6 +76,8 @@ struct olsr_layer2_neighbor {
   struct olsr_layer2_neighbor_key key;
   uint32_t if_index;
 
+  bool active;
+
   struct olsr_timer_entry _valitity_timer;
   enum olsr_layer2_neighbor_data _available_data;
 
@@ -102,6 +104,8 @@ struct olsr_layer2_network {
   struct netaddr radio_id;
   uint32_t if_index;
 
+  bool active;
+
   struct olsr_timer_entry _valitity_timer;
   enum olsr_layer2_network_data _available_data;
 
@@ -120,6 +124,10 @@ EXPORT extern struct avl_tree olsr_layer2_neighbor_tree;
 
 #define OLSR_FOR_ALL_LAYER2_NETWORKS(network, iterator) avl_for_each_element_safe(&olsr_layer2_network_tree, network, _node, iterator)
 #define OLSR_FOR_ALL_LAYER2_NEIGHBORS(neighbor, iterator) avl_for_each_element_safe(&olsr_layer2_neighbor_tree, neighbor, _node, iterator)
+#define OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(network, iterator) OLSR_FOR_ALL_LAYER2_NETWORKS(network,iterator) if((network)->active)
+#define OLSR_FOR_ALL_LAYER2_ACTIVE_NEIGHBORS(neighbor, iterator) OLSR_FOR_ALL_LAYER2_NEIGHBORS(neighbor, iterator) if ((neighbor)->active)
+#define OLSR_FOR_ALL_LAYER2_LOST_NETWORKS(network, iterator) OLSR_FOR_ALL_LAYER2_NETWORKS(network,iterator) if(!(network)->active)
+#define OLSR_FOR_ALL_LAYER2_LOST_NEIGHBORS(neighbor, iterator) OLSR_FOR_ALL_LAYER2_NEIGHBORS(neighbor, iterator) if (!(neighbor)->active)
 
 EXPORT void olsr_layer2_init(void);
 EXPORT void olsr_layer2_cleanup(void);
@@ -131,8 +139,8 @@ EXPORT void olsr_layer2_remove_network(struct olsr_layer2_network *);
 EXPORT struct olsr_layer2_neighbor *olsr_layer2_get_neighbor(
     struct netaddr *radio_id, struct netaddr *neigh_mac);
 EXPORT struct olsr_layer2_neighbor *olsr_layer2_add_neighbor(
-    struct netaddr *radio_id, struct netaddr *neigh_mac, uint32_t if_index,
-    uint64_t vtime);
+    struct netaddr *radio_id, struct netaddr *neigh_mac,
+    uint32_t if_index, uint64_t vtime);
 EXPORT void olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *);
 
 EXPORT int olsr_layer2_network_set_supported_rates(

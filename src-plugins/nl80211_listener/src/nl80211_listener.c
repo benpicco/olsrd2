@@ -722,6 +722,7 @@ _cb_nl_message(struct nlmsghdr *hdr) {
     }
     if (gen_hdr->cmd == NL80211_CMD_DEL_STATION) {
       _parse_cmd_del_station(hdr);
+      return;
     }
     if (gen_hdr->cmd == NL80211_CMD_NEW_SCAN_RESULTS) {
       _parse_cmd_new_scan_result(hdr);

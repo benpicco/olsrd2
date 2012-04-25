@@ -169,7 +169,11 @@ _print_network(struct autobuf *out, struct olsr_layer2_network *net) {
   struct human_readable_str numbuf;
   int result = 0;
 
-  result |= abuf_appendf(out, "Radio-ID: %s\n", netaddr_to_string(&netbuf, &net->radio_id));
+  result |= abuf_appendf(out,
+      "Radio-ID: %s\n"
+      "Active: %s\n",
+      netaddr_to_string(&netbuf, &net->radio_id),
+      net->active ? "true" : "false");
 
   if (net->if_index) {
     result |= abuf_appendf(out, "If-Index: %u\n", net->if_index);
@@ -216,8 +220,10 @@ _print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
 
   result |= abuf_appendf(out,
       "Neighbor MAC: %s\n"
+      "Active: %s\n"
       "Radio Mac: %s",
       netaddr_to_string(&netbuf1, &neigh->key.neighbor_mac),
+      neigh->active ? "true" : "false",
       netaddr_to_string(&netbuf2, &neigh->key.radio_mac));
 
   if (neigh->if_index) {
@@ -344,7 +350,8 @@ _cb_handle_layer2(struct olsr_telnet_data *data) {
     if ((ptr = str_hasnextword(next, "net"))) {
       abuf_appendf(data->out, "Radio-id\tInterf.\n");
       OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
-        abuf_appendf(data->out, "%s\t%s\n",
+        abuf_appendf(data->out, "%c%s\t%s\n",
+            net->active ? ' ' : '-',
             netaddr_to_string(&buf1, &net->radio_id),
             net->if_index == 0 ? "" : if_indextoname(net->if_index, if_buffer));
       }

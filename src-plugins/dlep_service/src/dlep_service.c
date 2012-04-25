@@ -42,10 +42,13 @@
 #include <errno.h>
 #include <endian.h>
 
+#include "common/avl.h"
 #include "config/cfg_schema.h"
 #include "packetbb/pbb_conversion.h"
+#include "packetbb/pbb_iana.h"
 #include "packetbb/pbb_reader.h"
 #include "packetbb/pbb_writer.h"
+#include "olsr_callbacks.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_layer2.h"
@@ -66,13 +69,11 @@
 enum dlep_orders {
   DLEP_ORDER_INTERFACE_DISCOVERY,
   DLEP_ORDER_CONNECT_ROUTER,
-  DLEP_ORDER_DISCONNECT,
   DLEP_ORDER_NEIGHBOR_UPDATE,
 };
 
 /* DLEP TLV types */
 enum dlep_msgtlv_types {
-  MSGTLV_VTIME = 1,
   DLEP_TLV_ORDER = 192,
   DLEP_TLV_PEER_TYPE,
 //  DLEP_TLV_CUR_BC_RATE,
@@ -80,7 +81,6 @@ enum dlep_msgtlv_types {
 };
 
 enum dlep_addrtlv_types {
-  ADDRTLV_LINK_STATUS = 3,
   DLEP_ADDRTLV_CUR_RATE = 192,
 //  DLEP_ADDRTLV_MAX_RATE,
 //  DLEP_ADDRTLV_IPv4,
@@ -113,12 +113,15 @@ struct _dlep_config {
 
   uint64_t discovery_interval, discovery_validity;
   uint64_t metric_interval, metric_validity;
+
+  bool always_send;
 };
 
 struct _dlep_session {
   struct avl_node _node;
 
   union netaddr_socket router_socket;
+  struct netaddr radio_mac;
   struct olsr_timer_entry router_vtime;
 };
 
@@ -151,6 +154,8 @@ static void _cb_dlep_router_timerout(void *);
 static void _cb_interface_discovery(void *);
 static void _cb_metric_update(void *);
 
+static void _cb_neighbor_added(void *);
+static void _cb_neighbor_removed(void *);
 static void _cb_config_changed(void);
 
 /* plugin declaration */
@@ -202,6 +207,9 @@ static struct cfg_schema_entry _dlep_entries[] = {
     "Interval in seconds between neighbor update messages", 100),
   CFG_MAP_CLOCK_MINMAX(_dlep_config, metric_validity, "metric_validity", "5.000",
     "Validity time in seconds for neighbor update messages", 100, PBB_TIMETLV_MAX),
+
+  CFG_MAP_BOOL(_dlep_config, always_send, "always_send", "false",
+    "Set to true to send neighbor updates even without connected clients"),
 };
 
 static struct _dlep_config _config;
@@ -219,9 +227,8 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
-  [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_VTIME] =       { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
-//  [IDX_TLV_STATUS] =      { .type = DLEP_TLV_STATUS, .min_length = 1, .match_length = true },
 };
 
 /* DLEP writer data */
@@ -247,7 +254,7 @@ static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
 };
 
 static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
-  [IDX_ADDRTLV_LINK_STATUS] = { .type = ADDRTLV_LINK_STATUS },
+  [IDX_ADDRTLV_LINK_STATUS] = { .type = PBB_ADDRTLV_LINK_STATUS },
   [IDX_ADDRTLV_CUR_RATE] =    { .type = DLEP_ADDRTLV_CUR_RATE },
 };
 
@@ -283,10 +290,28 @@ struct olsr_timer_entry _tentry_interface_discovery = {
 struct olsr_timer_info _tinfo_metric_update = {
   .name = "dlep metric update",
   .callback = _cb_metric_update,
-  .periodic = true,
 };
 struct olsr_timer_entry _tentry_metric_update = {
   .info = &_tinfo_metric_update,
+};
+
+bool _triggered_metric_update = false;
+
+/* callback consumer for layer-2 data */
+struct olsr_callback_consumer _layer2_neighbor_consumer = {
+  .name = "dlep-service",
+  .provider = CALLBACK_ID_LAYER2_NEIGHBOR,
+
+  .cb_add = _cb_neighbor_added,
+  .cb_remove = _cb_neighbor_removed,
+};
+
+struct olsr_callback_consumer _layer2_network_consumer = {
+  .name = "dlep-service",
+  .provider = CALLBACK_ID_LAYER2_NETWORK,
+
+  .cb_add = NULL,
+  .cb_remove = NULL,
 };
 
 /* dlep service logging source */
@@ -346,6 +371,9 @@ _cb_plugin_enable(void) {
   olsr_timer_add(&_tinfo_interface_discovery);
   olsr_timer_add(&_tinfo_metric_update);
 
+  olsr_callback_register_consumer(&_layer2_neighbor_consumer);
+  olsr_callback_register_consumer(&_layer2_network_consumer);
+
   pbb_reader_init(&_dlep_reader);
   pbb_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
@@ -354,6 +382,7 @@ _cb_plugin_enable(void) {
 
 
   // TODO: remove!
+  if (0)
   {
     struct netaddr radio_mac, n1_mac, n2_mac;
     struct olsr_layer2_network *net;
@@ -398,29 +427,14 @@ _cb_plugin_disable(void) {
   pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
   pbb_writer_cleanup(&_dlep_writer);
 
+  olsr_callback_unregister_consumer(&_layer2_neighbor_consumer);
+  olsr_callback_unregister_consumer(&_layer2_network_consumer);
+
   olsr_timer_remove(&_tinfo_interface_discovery);
   olsr_timer_remove(&_tinfo_metric_update);
 
   olsr_acl_remove(&_config.socket.acl);
   return 0;
-}
-
-static enum pbb_result
-_parse_order_disconnect(void) {
-  struct _dlep_session *session;
-
-  session = avl_find_element(&_session_tree, _peer_socket, session, _node);
-  if (session == NULL) {
-    OLSR_INFO(LOG_DLEP_SERVICE, "Received DLEP disconnect from unknown peer");
-    return PBB_DROP_MESSAGE;
-  }
-
-  OLSR_DEBUG(LOG_DLEP_SERVICE, "DLEP disconnect");
-
-  /* call vtime callback */
-  _cb_dlep_router_timerout(session);
-
-  return PBB_OKAY;
 }
 
 static enum pbb_result
@@ -475,8 +489,6 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
 
   _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
   switch (_current_order) {
-    case DLEP_ORDER_DISCONNECT:
-      return _parse_order_disconnect();
     case DLEP_ORDER_CONNECT_ROUTER:
       return _parse_order_connect_router();
     case DLEP_ORDER_INTERFACE_DISCOVERY:
@@ -543,7 +555,7 @@ _add_ifdiscovery_msgtlvs(void) {
   encoded_vtime = pbb_timetlv_encode(_config.discovery_validity);
 
   pbb_writer_add_messagetlv(&_dlep_writer,
-      MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+      PBB_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 
   if (_config.peer_type[0]) {
     pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
@@ -559,7 +571,7 @@ _add_neighborupdate_msgtlvs(void) {
   encoded_vtime = pbb_timetlv_encode(_config.metric_validity);
 
   pbb_writer_add_messagetlv(&_dlep_writer,
-      MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+      PBB_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 }
 
 static void
@@ -595,7 +607,7 @@ _add_neighborupdate_addresses(void) {
   struct olsr_layer2_neighbor *neigh, *neigh_it;
   struct pbb_writer_address *addr;
   struct netaddr_str buf1, buf2;
-  const char LINK_STATUS_HEARD = 1;
+  char link_status;
 
   OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
     if (netaddr_cmp(&_msg_network->radio_id, &neigh->key.radio_mac) != 0) {
@@ -610,25 +622,31 @@ _add_neighborupdate_addresses(void) {
     }
 
     /* LINK_HEARD */
+    link_status = neigh->active ? PBB_LINKSTATUS_HEARD : PBB_LINKSTATUS_LOST;
+
     pbb_writer_add_addrtlv(&_dlep_writer, addr,
         _dlep_addrtlvs[IDX_ADDRTLV_LINK_STATUS]._tlvtype,
-        &LINK_STATUS_HEARD, sizeof(LINK_STATUS_HEARD), false);
+        &link_status, sizeof(link_status), false);
 
     OLSR_DEBUG(LOG_DLEP_SERVICE, "Added neighbor %s (seen by %s) to neigh-up",
         netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
         netaddr_to_string(&buf2, &neigh->key.radio_mac));
 
+    if (!neigh->active)
+      continue;
+
     if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
       uint64_t rate;
+
+      OLSR_DEBUG(LOG_DLEP_SERVICE, "Add bitrate of %s (measured by %s): %"PRIu64,
+          netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
+          netaddr_to_string(&buf2, &neigh->key.radio_mac), neigh->tx_bitrate);
 
       rate = htobe64(neigh->tx_bitrate);
 
       pbb_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_CUR_RATE]._tlvtype, &rate, sizeof(rate), false);
 
-      OLSR_DEBUG(LOG_DLEP_SERVICE, "Added bitrate of %s (measured by %s): %"PRIu64,
-          netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
-          netaddr_to_string(&buf2, &neigh->key.radio_mac), rate);
     }
   }
 }
@@ -638,8 +656,7 @@ _cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_content_provider *cpr __attribute__((unused))) {
   switch (_msg_order) {
     case DLEP_ORDER_INTERFACE_DISCOVERY:
-    case DLEP_ORDER_DISCONNECT:
-      /* no addresses and address TLVs */
+      /* no addresses in interface discovery */
       break;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       _add_neighborupdate_addresses();
@@ -669,7 +686,7 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
   struct netaddr_str buf;
 
   _msg_order = DLEP_ORDER_INTERFACE_DISCOVERY;
-  OLSR_FOR_ALL_LAYER2_NETWORKS(_msg_network, net_it) {
+  OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
     OLSR_DEBUG(LOG_DLEP_SERVICE, "Send interface discovery for radio %s",
         netaddr_to_string(&buf, &_msg_network->radio_id));
     pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
@@ -680,15 +697,22 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
 static void
 _cb_metric_update(void *ptr __attribute__((unused))) {
   struct olsr_layer2_network *net_it;
+  struct netaddr_str buf;
 
-  if (avl_is_empty(&_session_tree))
+  _triggered_metric_update = false;
+
+  if (!_config.always_send && avl_is_empty(&_session_tree))
     return;
 
   _msg_order = DLEP_ORDER_NEIGHBOR_UPDATE;
-  OLSR_FOR_ALL_LAYER2_NETWORKS(_msg_network, net_it) {
+  OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
+    OLSR_DEBUG(LOG_DLEP_SERVICE, "Send metric update for radio %s",
+        netaddr_to_string(&buf, &_msg_network->radio_id));
     pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
     pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
   }
+
+  olsr_timer_start(&_tentry_metric_update, _config.metric_interval);
 }
 
 static void
@@ -704,6 +728,40 @@ _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
       && olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET6) < 0) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv6 packet to socket: %s (%d)",
         strerror(errno), errno);
+  }
+}
+
+static void
+_cb_neighbor_added(void *ptr) {
+  struct olsr_layer2_neighbor *nbr;
+  struct netaddr_str buf1, buf2;
+
+  nbr = ptr;
+
+  OLSR_DEBUG(LOG_DLEP_SERVICE, "Layer 2 neighbor %s added on radio %s",
+      netaddr_to_string(&buf1, &nbr->key.neighbor_mac),
+      netaddr_to_string(&buf2, &nbr->key.radio_mac));
+
+  if (!_triggered_metric_update) {
+    _triggered_metric_update = true;
+    olsr_timer_start(&_tentry_metric_update, 1);
+  }
+}
+
+static void
+_cb_neighbor_removed(void *ptr) {
+  struct olsr_layer2_neighbor *nbr;
+  struct netaddr_str buf1, buf2;
+
+  nbr = ptr;
+
+  OLSR_DEBUG(LOG_DLEP_SERVICE, "Layer 2 neighbor %s removed on radio %s",
+      netaddr_to_string(&buf1, &nbr->key.neighbor_mac),
+      netaddr_to_string(&buf2, &nbr->key.radio_mac));
+
+  if (!_triggered_metric_update) {
+    _triggered_metric_update = true;
+    olsr_timer_start(&_tentry_metric_update, 1);
   }
 }
 

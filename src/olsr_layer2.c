@@ -50,6 +50,8 @@
 #include "olsr.h"
 #include "olsr_layer2.h"
 
+static void _remove_neighbor(struct olsr_layer2_neighbor *);
+static void _remove_network(struct olsr_layer2_network *);
 static void _cb_neighbor_timeout(void *ptr);
 static void _cb_network_timeout(void *ptr);
 static int _avl_comp_l2neigh(const void *k1, const void *k2, void *);
@@ -125,10 +127,12 @@ olsr_layer2_cleanup(void) {
     return;
 
   OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
+    net->active = false;
     olsr_layer2_remove_network(net);
   }
 
   OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
+    neigh->active = false;
     olsr_layer2_remove_neighbor(neigh);
   }
 
@@ -154,6 +158,8 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
     uint64_t vtime) {
   struct olsr_layer2_network *net;
 
+  assert (vtime > 0);
+
   net = olsr_layer2_get_network(radio_id);
   if (!net) {
     net = olsr_memcookie_malloc(&_network_cookie);
@@ -175,6 +181,7 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
 
   OLSR_DEBUG(LOG_MAIN, "Reset validity of network timer: %"PRIu64,
       vtime);
+  net->active = true;
   olsr_timer_set(&net->_valitity_timer, vtime);
   return net;
 }
@@ -185,11 +192,12 @@ olsr_layer2_add_network(struct netaddr *radio_id, uint32_t if_index,
  */
 void
 olsr_layer2_remove_network(struct olsr_layer2_network *net) {
-  olsr_callback_event(&_network_callback, net, CALLBACK_EVENT_REMOVE);
-  avl_remove(&olsr_layer2_network_tree, &net->_node);
-  olsr_timer_stop(&net->_valitity_timer);
-  free (net->supported_rates);
-  olsr_memcookie_free(&_network_cookie, net);
+  if (net->active) {
+    /* restart validity timer */
+    olsr_timer_set(&net->_valitity_timer,
+      olsr_timer_get_period(&net->_valitity_timer));
+  }
+  _remove_network(net);
 }
 
 /**
@@ -224,6 +232,8 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
     uint32_t if_index, uint64_t vtime) {
   struct olsr_layer2_neighbor *neigh;
 
+  assert (vtime > 0);
+
   neigh = olsr_layer2_get_neighbor(radio_id, neigh_mac);
   if (!neigh) {
     neigh = olsr_memcookie_malloc(&_neighbor_cookie);
@@ -243,6 +253,7 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
     olsr_callback_event(&_neighbor_callback, neigh, CALLBACK_EVENT_ADD);
   }
 
+  neigh->active = true;
   olsr_timer_set(&neigh->_valitity_timer, vtime);
   return neigh;
 }
@@ -253,10 +264,12 @@ olsr_layer2_add_neighbor(struct netaddr *radio_id, struct netaddr *neigh_mac,
  */
 void
 olsr_layer2_remove_neighbor(struct olsr_layer2_neighbor *neigh) {
-  olsr_callback_event(&_neighbor_callback, neigh, CALLBACK_EVENT_REMOVE);
-  avl_remove(&olsr_layer2_neighbor_tree, &neigh->_node);
-  olsr_timer_stop(&neigh->_valitity_timer);
-  olsr_memcookie_free(&_neighbor_cookie, neigh);
+  if (neigh->active) {
+    /* restart validity timer */
+    olsr_timer_set(&neigh->_valitity_timer,
+        olsr_timer_get_period(&neigh->_valitity_timer));
+  }
+  _remove_neighbor(neigh);
 }
 
 /**
@@ -285,14 +298,56 @@ olsr_layer2_network_set_supported_rates(struct olsr_layer2_network *net,
   return 0;
 }
 
+/**
+ * Remove a layer2 neighbor from the database
+ * @param neigh pointer to layer2 neighbor
+ */
 static void
-_cb_neighbor_timeout(void *ptr) {
-  olsr_layer2_remove_neighbor(ptr);
+_remove_neighbor(struct olsr_layer2_neighbor *neigh) {
+  if (neigh->active) {
+    olsr_callback_event(&_neighbor_callback, neigh, CALLBACK_EVENT_REMOVE);
+    neigh->active = false;
+    return;
+  }
+  avl_remove(&olsr_layer2_neighbor_tree, &neigh->_node);
+  olsr_timer_stop(&neigh->_valitity_timer);
+  olsr_memcookie_free(&_neighbor_cookie, neigh);
 }
 
+/**
+ * Remove a layer2 network from the database
+ * @param net pointer to layer2 network data
+ */
+static void
+_remove_network(struct olsr_layer2_network *net) {
+  if (net->active) {
+    olsr_callback_event(&_network_callback, net, CALLBACK_EVENT_REMOVE);
+    net->active = false;
+    return;
+  }
+
+  avl_remove(&olsr_layer2_network_tree, &net->_node);
+  olsr_timer_stop(&net->_valitity_timer);
+  free (net->supported_rates);
+  olsr_memcookie_free(&_network_cookie, net);
+}
+
+/**
+ * Validity time callback for neighbor entries
+ * @param ptr pointer to neighbor entry
+ */
+static void
+_cb_neighbor_timeout(void *ptr) {
+  _remove_neighbor(ptr);
+}
+
+/**
+ * Validity time callback for network entries
+ * @param ptr pointer to network entry
+ */
 static void
 _cb_network_timeout(void *ptr) {
-  olsr_layer2_remove_network(ptr);
+  _remove_network(ptr);
 }
 
 /**
@@ -318,6 +373,12 @@ _avl_comp_l2neigh(const void *k1, const void *k2,
   return result;
 }
 
+/**
+ * Construct human readable object id of neighbor for callbacks
+ * @param buf pointer to callback id output buffer
+ * @param ptr pointer to l2 neighbor
+ * @return pointer to id
+ */
 static const char *
 _cb_get_neighbor_name(struct olsr_callback_str *buf, void *ptr) {
   struct netaddr_str buf1, buf2;
@@ -331,6 +392,12 @@ _cb_get_neighbor_name(struct olsr_callback_str *buf, void *ptr) {
   return buf->buf;
 }
 
+/**
+ * Construct human readable object id of network for callbacks
+ * @param buf pointer to callback id output buffer
+ * @param ptr pointer to l2 neighbor
+ * @return pointer to id
+ */
 static const char *
 _cb_get_network_name(struct olsr_callback_str *buf, void *ptr) {
   struct netaddr_str buf1;

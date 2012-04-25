@@ -41,6 +41,7 @@
 
 #include "config/cfg_schema.h"
 #include "packetbb/pbb_conversion.h"
+#include "packetbb/pbb_iana.h"
 #include "packetbb/pbb_reader.h"
 #include "packetbb/pbb_writer.h"
 #include "olsr_cfg.h"
@@ -64,13 +65,11 @@
 enum dlep_orders {
   DLEP_ORDER_INTERFACE_DISCOVERY,
   DLEP_ORDER_CONNECT_ROUTER,
-  DLEP_ORDER_DISCONNECT,
   DLEP_ORDER_NEIGHBOR_UPDATE,
 };
 
 /* DLEP TLV types */
 enum dlep_msgtlv_types {
-  MSGTLV_VTIME = 1,
   DLEP_TLV_ORDER = 192,
   DLEP_TLV_PEER_TYPE,
 //  DLEP_TLV_CUR_BC_RATE,
@@ -78,7 +77,6 @@ enum dlep_msgtlv_types {
 };
 
 enum dlep_addrtlv_types {
-  ADDRTLV_LINK_STATUS = 3,
   DLEP_ADDRTLV_CUR_RATE = 192,
 //  DLEP_ADDRTLV_MAX_RATE,
 //  DLEP_ADDRTLV_IPv4,
@@ -214,9 +212,9 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
-  [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
-  [IDX_TLV_VTIME] =       { .type = MSGTLV_VTIME, .mandatory = true, .min_length = 1, .match_length = true },
-  [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 1, .max_length = 80, .match_length = true },
+  [IDX_TLV_ORDER] =     { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
+  [IDX_TLV_VTIME] =     { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_PEER_TYPE] = { .type = DLEP_TLV_PEER_TYPE, .min_length = 1, .max_length = 80, .match_length = true },
 };
 
 static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
@@ -225,7 +223,7 @@ static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
-  [IDX_ADDRTLV_LINK_STATUS] = { .type = ADDRTLV_LINK_STATUS, .min_length = 1 },
+  [IDX_ADDRTLV_LINK_STATUS] = { .type = PBB_ADDRTLV_LINK_STATUS, .min_length = 1 },
   [IDX_ADDRTLV_CUR_RATE] =    { .type = DLEP_ADDRTLV_CUR_RATE, .min_length = 8 },
 };
 
@@ -374,22 +372,6 @@ _cb_plugin_disable(void) {
 }
 
 static enum pbb_result
-_parse_msg_disconnect(void) {
-  struct _dlep_session *session;
-
-  session = avl_find_element(&_session_tree, _message_peer_socket, session, _node);
-  if (session == NULL) {
-    OLSR_INFO(LOG_DLEP_CLIENT, "Received DLEP disconnect from unknown peer");
-    return PBB_DROP_MESSAGE;
-  }
-
-  /* call vtime callback */
-  _cb_dlep_interface_timerout(session);
-
-  return PBB_OKAY;
-}
-
-static enum pbb_result
 _parse_msg_interface_discovery(struct netaddr *radio_mac) {
   struct _dlep_session *session;
   struct netaddr_str buf;
@@ -457,13 +439,14 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
   /* decode vtime according to RFC 5497 */
   _message_vtime = pbb_timetlv_decode(encoded_vtime);
 
+
   _message_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
   switch (_message_order) {
-    case DLEP_ORDER_DISCONNECT:
-      return _parse_msg_disconnect();
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       return _parse_msg_interface_discovery(&radio_mac);
     case DLEP_ORDER_NEIGHBOR_UPDATE:
+      /* write network into database */
+      olsr_layer2_add_network(&radio_mac, 0, _message_vtime);
       break;
     default:
       OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _message_order);
@@ -476,9 +459,28 @@ static enum pbb_result
 _parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac) {
   struct olsr_layer2_neighbor *neigh;
   struct netaddr_str buf1, buf2;
+  char link_status;
+
+  if (_dlep_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv == NULL) {
+    /* ignore */
+    return PBB_OKAY;
+  }
 
   OLSR_DEBUG(LOG_DLEP_CLIENT, "Got layer2 neighbor %s (seen by %s)",
       netaddr_to_string(&buf1, neigh_mac), netaddr_to_string(&buf2, radio_mac));
+
+  memcpy(&link_status,
+      _dlep_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv->single_value,
+      sizeof(link_status));
+
+  if (link_status == PBB_LINKSTATUS_LOST) {
+    /* remove entry from database */
+    neigh = olsr_layer2_get_neighbor(radio_mac, neigh_mac);
+    if (neigh != NULL && neigh->active) {
+      olsr_layer2_remove_neighbor(neigh);
+    }
+    return PBB_OKAY;
+  }
 
   neigh = olsr_layer2_add_neighbor(radio_mac, neigh_mac, 0, _message_vtime);
   if (neigh == NULL) {
@@ -524,7 +526,6 @@ _cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribu
 
   /* current order has already been read by message parsing */
   switch (_message_order) {
-    case DLEP_ORDER_DISCONNECT:
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       /* not interested in addresses */
       break;
@@ -604,8 +605,8 @@ _add_connectrouter_msgtlvs(void) {
   /* encode vtime according to RFC 5497 */
   encoded_vtime = pbb_timetlv_encode(_config.connect_validity);
 
-  pbb_writer_add_messagetlv(&_dlep_writer,
-      MSGTLV_VTIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+  pbb_writer_add_messagetlv(&_dlep_writer, PBB_MSGTLV_VALIDITY_TIME, 0,
+      &encoded_vtime, sizeof(encoded_vtime));
 
   if (_config.peer_type[0]) {
     pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
