@@ -7,7 +7,8 @@ SET(OLSRD_PACKETBB_SRCS pbb_context.c
                         pbb_reader.c
                         pbb_tlv_writer.c
                         pbb_writer.c
-                        pbb_conversion.c)
+                        pbb_conversion.c
+                        pbb_iana.c)
 
 ADD_LIBRARY(static_packetbb STATIC ${OLSRD_PACKETBB_SRCS})
 ADD_LIBRARY(${OONF_LIBPREFIX}_packetbb SHARED ${OLSRD_PACKETBB_SRCS})

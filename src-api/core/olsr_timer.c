@@ -210,15 +210,13 @@ olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
 #if !defined(REMOVE_LOG_DEBUG)
   struct timeval_buf timebuf1;
 #endif
-  uint64_t stored_time;
   int new_slot;
 
   assert(timer->info);
   assert(timer->jitter_pct <= 100);
   assert(rel_time > 0 && rel_time < TIMER_MAX_RELTIME);
 
-  stored_time = timer->_clock;
-  if (stored_time) {
+  if (timer->_clock) {
     list_remove(&timer->_node);
     _total_timer_events--;
   }
@@ -416,10 +414,17 @@ _insert_into_bucket(struct olsr_timer_entry *timer) {
   slot = timer->_clock >> BUCKET_TIMESLICE_POW2;
   relative = olsr_clock_get_relative(timer->_clock) >> BUCKET_TIMESLICE_POW2;
 
+  if (relative == 0) {
+    /* do not put new timer into current bucket ! */
+    relative = 1;
+    slot++;
+  }
+
   for (group = 0; group < BUCKET_DEPTH;
       group++, slot >>= BUCKET_COUNT_POW2, relative >>= BUCKET_COUNT_POW2) {
     if (relative < (int64_t)BUCKET_COUNT) {
       slot &= (BUCKET_COUNT - 1);
+
       list_add_tail(&_buckets[slot][group], &timer->_node);
 
       OLSR_DEBUG(LOG_TIMER, "Put timer %s (%"PRIu64") into bucket (%"PRIu64"/%d)",

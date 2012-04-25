@@ -135,7 +135,12 @@ EXPORT uint64_t olsr_timer_getNextEvent(void);
  */
 static INLINE bool
 olsr_timer_is_active(struct olsr_timer_entry *timer) {
-  return timer->_clock > 0ull;
+  return timer->_clock != 0ull;
+}
+
+static INLINE uint64_t
+olsr_timer_get_period(struct olsr_timer_entry *timer) {
+  return timer->_period;
 }
 
 #endif /* OLSR_TIMER_H_ */
