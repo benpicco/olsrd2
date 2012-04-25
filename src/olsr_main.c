@@ -62,6 +62,7 @@
 #include "os_net.h"
 #include "os_system.h"
 #include "os_syslog.h"
+#include "olsr_callbacks.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_http.h"
@@ -239,6 +240,7 @@ main(int argc, char **argv) {
   if (olsr_clock_init()) {
     goto olsrd_cleanup;
   }
+  olsr_callback_init();
   olsr_timer_init();
   olsr_socket_init();
   olsr_packet_init();
@@ -322,6 +324,7 @@ olsrd_cleanup:
   olsr_packet_cleanup();
   olsr_socket_cleanup();
   olsr_timer_cleanup();
+  olsr_callback_cleanup();
   olsr_clock_cleanup();
   os_clock_cleanup();
   olsr_memcookie_cleanup();
