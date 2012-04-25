@@ -371,6 +371,11 @@ _cb_plugin_disable(void) {
   return 0;
 }
 
+/**
+ * Parse message TLVs of incoming Interface Discovery DLEP messages
+ * @param radio_mac originator MAC of message
+ * @return PBB_OKAY if message was okay, PBB_DROP_MESSAGE otherwise
+ */
 static enum pbb_result
 _parse_msg_interface_discovery(struct netaddr *radio_mac) {
   struct _dlep_session *session;
@@ -417,6 +422,12 @@ _parse_msg_interface_discovery(struct netaddr *radio_mac) {
   return PBB_OKAY;
 }
 
+/**
+ * Callback for parsing message TLVs of incoming DLEP messages
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum pbb_result
 _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context) {
@@ -455,6 +466,12 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
   return PBB_OKAY;
 }
 
+/**
+ * Parse TLVs of one address for incoming DLEP Neighbor Updates
+ * @param radio_mac originator MAC of message
+ * @param neigh_mac address of TLVs
+ * @return PBB_OKAY if message was okay, PBB_DROP_MESSAGE otherwise
+ */
 static enum pbb_result
 _parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac) {
   struct olsr_layer2_neighbor *neigh;
@@ -502,6 +519,12 @@ _parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac
   return PBB_OKAY;
 }
 
+/**
+ * Callback for parsing addresses of incoming DLEP messages
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum pbb_result
 _cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribute__ ((unused)),
     struct pbb_reader_tlvblock_context *context) {
@@ -540,6 +563,13 @@ _cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribu
 
 }
 
+/**
+ * Debug callback for message TLVs that failed the set constraints
+ * TODO: Remove before shipping?
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
@@ -555,6 +585,13 @@ _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __a
   return PBB_DROP_MESSAGE;
 }
 
+/**
+ * Debug callback for address TLVs that failed the set constraints
+ * TODO: Remove before shipping?
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum pbb_result
 _cb_parse_dlep_addresses_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
     struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
@@ -598,6 +635,9 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
   _message_peer_socket = NULL;
 }
 
+/**
+ * Add message TLVs for Connect Router DLEP messages
+ */
 static void
 _add_connectrouter_msgtlvs(void) {
   uint8_t encoded_vtime;
@@ -614,12 +654,22 @@ _add_connectrouter_msgtlvs(void) {
   }
 }
 
+/**
+ * Add message header to outgoing DLEP messages
+ * @param writer
+ * @param msg
+ */
 static void
 _cb_addMessageHeader(struct pbb_writer *writer, struct pbb_writer_message *msg) {
   pbb_writer_set_msg_header(writer, msg, false, false, false, true);
   pbb_writer_set_msg_seqno(writer, msg, _msg_session->seqno++);
 }
 
+/**
+ * Callback for adding message TLVs to outgoing DLEP messages
+ * @param writer
+ * @param prv
+ */
 static void
 _cb_addMessageTLVs(struct pbb_writer *writer,
     struct pbb_writer_content_provider *prv __attribute__((unused))) {
@@ -636,6 +686,11 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
       break;
   }
 }
+
+/**
+ * Callback for DLEP interface timeouts
+ * @param ptr
+ */
 static void
 _cb_dlep_interface_timerout(void *ptr) {
   struct _dlep_session *session = ptr;
@@ -652,6 +707,10 @@ _cb_dlep_interface_timerout(void *ptr) {
   free(session);
 }
 
+/**
+ * Callback for periodic connect router message generation
+ * @param ptr
+ */
 static void
 _cb_router_connect(void *ptr __attribute__((unused))) {
   if (avl_is_empty(&_session_tree))
@@ -665,6 +724,13 @@ _cb_router_connect(void *ptr __attribute__((unused))) {
   }
 }
 
+/**
+ * Callback for sending out the generated DLEP packet
+ * @param writer
+ * @param interf
+ * @param ptr
+ * @param len
+ */
 static void
 _cb_send_dlep(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf,

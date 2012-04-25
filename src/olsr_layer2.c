@@ -113,6 +113,28 @@ olsr_layer2_init(void) {
 
   avl_init(&olsr_layer2_network_tree, avl_comp_netaddr, false, NULL);
   avl_init(&olsr_layer2_neighbor_tree, _avl_comp_l2neigh, false, NULL);
+
+  // TODO: remove testcode
+  if (0)
+  {
+    struct netaddr radio_mac, n1_mac, n2_mac;
+    struct olsr_layer2_network *net;
+    struct olsr_layer2_neighbor *neigh1, *neigh2;
+
+    if (netaddr_from_string(&radio_mac, "1:00:00:00:00:01")) {;}
+    if (netaddr_from_string(&n1_mac, "2:00:00:00:00:01")) {;}
+    if (netaddr_from_string(&n2_mac, "2:00:00:00:00:02")) {;}
+
+    net = olsr_layer2_add_network(&radio_mac, 1, 0);
+    olsr_layer2_network_set_last_seen(net, 1000);
+
+    neigh1 = olsr_layer2_add_neighbor(&radio_mac, &n1_mac, 1, 0);
+    olsr_layer2_neighbor_set_tx_bitrate(neigh1, 1000000);
+
+    neigh2 = olsr_layer2_add_neighbor(&radio_mac, &n2_mac, 1, 0);
+    olsr_layer2_neighbor_set_tx_bitrate(neigh2, 2000000);
+  }
+
 }
 
 /**

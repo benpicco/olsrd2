@@ -379,29 +379,6 @@ _cb_plugin_enable(void) {
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
 
   olsr_packet_add_managed(&_dlep_socket);
-
-
-  // TODO: remove!
-  if (0)
-  {
-    struct netaddr radio_mac, n1_mac, n2_mac;
-    struct olsr_layer2_network *net;
-    struct olsr_layer2_neighbor *neigh1, *neigh2;
-
-    if (netaddr_from_string(&radio_mac, "1:00:00:00:00:01")) {;}
-    if (netaddr_from_string(&n1_mac, "2:00:00:00:00:01")) {;}
-    if (netaddr_from_string(&n2_mac, "2:00:00:00:00:02")) {;}
-
-    net = olsr_layer2_add_network(&radio_mac, 1, 0);
-    olsr_layer2_network_set_last_seen(net, 1000);
-
-    neigh1 = olsr_layer2_add_neighbor(&radio_mac, &n1_mac, 1, 0);
-    olsr_layer2_neighbor_set_tx_bitrate(neigh1, 1000000);
-
-    neigh2 = olsr_layer2_add_neighbor(&radio_mac, &n2_mac, 1, 0);
-    olsr_layer2_neighbor_set_tx_bitrate(neigh2, 2000000);
-  }
-
   return 0;
 }
 
@@ -437,6 +414,11 @@ _cb_plugin_disable(void) {
   return 0;
 }
 
+/**
+ * parse message TLVs of "connect router" message and add it to
+ * session database
+ * @return PBB_OKAY if message was okay, PBB_DROP_MESSAGE otherwise
+ */
 static enum pbb_result
 _parse_order_connect_router(void) {
   struct _dlep_session *session;
@@ -476,6 +458,13 @@ _parse_order_connect_router(void) {
   return PBB_OKAY;
 }
 
+/**
+ * Callback for parsing the message TLVs incoming over the DLEP port
+ * (see packetbb reader API)
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum pbb_result
 _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
@@ -504,6 +493,13 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
   return PBB_OKAY;
 }
 
+/**
+ * Debugging callback for incoming messages that don't fulfill the contraints.
+ * TODO: Remove before shipping?
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum pbb_result
 _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
       struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
@@ -521,6 +517,7 @@ _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __a
 
 /**
  * Receive UDP data with DLEP protocol
+ * (see olsr socket packet)
  * @param
  * @param from
  * @param length
@@ -547,6 +544,9 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
   _peer_socket = NULL;
 }
 
+/**
+ * Add Message-TLVs for DLEP IF-Discovery message
+ */
 static void
 _add_ifdiscovery_msgtlvs(void) {
   uint8_t encoded_vtime;
@@ -563,6 +563,9 @@ _add_ifdiscovery_msgtlvs(void) {
   }
 }
 
+/**
+ * Add Message-TLVs for DLEP Neighbor-Update message
+ */
 static void
 _add_neighborupdate_msgtlvs(void) {
   uint8_t encoded_vtime;
@@ -574,6 +577,11 @@ _add_neighborupdate_msgtlvs(void) {
       PBB_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 }
 
+/**
+ * Initialize message header for DLEP messages
+ * @param writer
+ * @param msg
+ */
 static void
 _cb_addMessageHeader(struct pbb_writer *writer, struct pbb_writer_message *msg) {
   static uint16_t seqno = 0;
@@ -602,6 +610,9 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
   }
 }
 
+/**
+ * Add addresses for DLEP Neighbor-Update message
+ */
 static void
 _add_neighborupdate_addresses(void) {
   struct olsr_layer2_neighbor *neigh, *neigh_it;
@@ -651,6 +662,11 @@ _add_neighborupdate_addresses(void) {
   }
 }
 
+/**
+ * Callback for adding addresses to DLEP messages
+ * @param writer
+ * @param cpr
+ */
 static void
 _cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_content_provider *cpr __attribute__((unused))) {
@@ -667,11 +683,15 @@ _cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
   }
 }
 
+/**
+ * Callback for stored router session timeouts
+ * @param ptr
+ */
 static void
 _cb_dlep_router_timerout(void *ptr) {
   struct _dlep_session *session = ptr;
 
-  OLSR_DEBUG(LOG_DLEP_SERVICE, "Removing DLEP session");
+  OLSR_DEBUG(LOG_DLEP_SERVICE, "Removing DLEP router session");
 
   /* might have been called directly */
   olsr_timer_stop(&session->router_vtime);
@@ -680,6 +700,10 @@ _cb_dlep_router_timerout(void *ptr) {
   free(session);
 }
 
+/**
+ * Callback for periodic generation of Interface Discovery messages
+ * @param ptr
+ */
 static void
 _cb_interface_discovery(void *ptr __attribute__((unused))) {
   struct olsr_layer2_network *net_it;
@@ -694,6 +718,10 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
   }
 }
 
+/**
+ * Callback for periodic generation of Neighbor Update messages
+ * @param ptr
+ */
 static void
 _cb_metric_update(void *ptr __attribute__((unused))) {
   struct olsr_layer2_network *net_it;
@@ -715,6 +743,13 @@ _cb_metric_update(void *ptr __attribute__((unused))) {
   olsr_timer_start(&_tentry_metric_update, _config.metric_interval);
 }
 
+/**
+ * Callback for sending out the generated DLEP multicast packet
+ * @param writer
+ * @param interf
+ * @param ptr
+ * @param len
+ */
 static void
 _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf __attribute__((unused)),
@@ -731,6 +766,10 @@ _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
   }
 }
 
+/**
+ * Callback for receiving 'neighbor added' events from layer2 db
+ * @param ptr
+ */
 static void
 _cb_neighbor_added(void *ptr) {
   struct olsr_layer2_neighbor *nbr;
@@ -748,6 +787,10 @@ _cb_neighbor_added(void *ptr) {
   }
 }
 
+/**
+ * Callback for receiving 'neigbor removed' events from layer2 db
+ * @param ptr
+ */
 static void
 _cb_neighbor_removed(void *ptr) {
   struct olsr_layer2_neighbor *nbr;
