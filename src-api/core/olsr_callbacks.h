@@ -72,9 +72,6 @@ struct olsr_callback_provider {
   /* list of consumers */
   struct list_entity _callbacks;
 
-  /* number of existing objects */
-  uint32_t _obj_count;
-
   /* protection against recursive _callbacks */
   bool _in_use;
 };
@@ -115,15 +112,6 @@ int EXPORT(olsr_callback_register_consumer)(struct olsr_callback_consumer *);
 void EXPORT(olsr_callback_unregister_consumer)(struct olsr_callback_consumer *);
 
 void EXPORT(olsr_callback_event)(struct olsr_callback_provider *, void *, enum olsr_callback_event);
-
-/**
- * @param prv callback provider
- * @return number of active elements for provider
- */
-static INLINE uint32_t
-olsr_callback_get_objectcount(struct olsr_callback_provider *prv) {
-  return prv->_obj_count;
-}
 
 /**
  * @param name callback provider name

@@ -120,8 +120,8 @@ void
 olsr_callback_remove(struct olsr_callback_provider *prv) {
   struct olsr_callback_consumer *cons, *iterator;
 
-  OLSR_DEBUG(LOG_CALLBACK, "Destroying callback provider '%s' (object count %u)\n",
-      prv->name, prv->_obj_count);
+  OLSR_DEBUG(LOG_CALLBACK, "Destroying callback provider '%s'\n",
+      prv->name);
 
   OLSR_FOR_ALL_CALLBACK_CONSUMERS(prv, cons, iterator) {
     olsr_callback_unregister_consumer(cons);
@@ -187,38 +187,27 @@ olsr_callback_event(struct olsr_callback_provider *prv, void *obj,
   }
 
   prv->_in_use = true;
-  prv->_obj_count++;
-  OLSR_DEBUG(LOG_CALLBACK, "object %s (%u) to callback '%s': %s event\n",
-      prv->cb_getkey(&buf, obj), prv->_obj_count, prv->name,
+  OLSR_DEBUG(LOG_CALLBACK, "object %s to callback '%s': %s event\n",
+      prv->cb_getkey(&buf, obj), prv->name,
       OLSR_CALLBACK_EVENTS[event]);
 
   OLSR_FOR_ALL_CALLBACK_CONSUMERS(prv, cons, iterator) {
-    bool fire = false;
-
     switch (event) {
       case CALLBACK_EVENT_CHANGE:
         if (cons->cb_change) {
           cons->cb_add(obj);
-          fire = true;
         }
         break;
       case CALLBACK_EVENT_ADD:
         if (cons->cb_add) {
           cons->cb_add(obj);
-          fire = true;
         }
         break;
       case CALLBACK_EVENT_REMOVE:
         if (cons->cb_remove) {
           cons->cb_remove(obj);
-          fire = true;
         }
         break;
-    }
-
-    if (fire) {
-      OLSR_DEBUG_NH(LOG_CALLBACK, "Fired %s callback for provider %s",
-          OLSR_CALLBACK_EVENTS[event], cons->name);
     }
   }
   prv->_in_use = false;
