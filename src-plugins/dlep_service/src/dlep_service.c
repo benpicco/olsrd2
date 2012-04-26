@@ -42,6 +42,7 @@
 #include <errno.h>
 #include <endian.h>
 
+#include "common/common_types.h"
 #include "common/avl.h"
 #include "config/cfg_schema.h"
 #include "packetbb/pbb_conversion.h"
@@ -74,17 +75,26 @@ enum dlep_orders {
 
 /* DLEP TLV types */
 enum dlep_msgtlv_types {
-  DLEP_TLV_ORDER = 192,
-  DLEP_TLV_PEER_TYPE,
-//  DLEP_TLV_CUR_BC_RATE,
-//  DLEP_TLV_MAX_BC_RATE,
+  DLEP_TLV_ORDER           = 192,
+  DLEP_TLV_PEER_TYPE       = 193,
+
+  DLEP_TLV_SSID            = 194,
+  DLEP_TLV_LAST_SEEN       = 195,
+  DLEP_TLV_FREQUENCY       = 196,
+  DLEP_TLV_SUPPORTED_RATES = 197,
 };
 
 enum dlep_addrtlv_types {
-  DLEP_ADDRTLV_CUR_RATE = 192,
-//  DLEP_ADDRTLV_MAX_RATE,
-//  DLEP_ADDRTLV_IPv4,
-//  DLEP_ADDRTLV_IPv6,
+  DLEP_ADDRTLV_SIGNAL     = 192,
+  DLEP_ADDRTLV_LAST_SEEN  = 193,
+  DLEP_ADDRTLV_RX_BITRATE = 194,
+  DLEP_ADDRTLV_RX_BYTES   = 195,
+  DLEP_ADDRTLV_RX_PACKETS = 196,
+  DLEP_ADDRTLV_TX_BITRATE = 197,
+  DLEP_ADDRTLV_TX_BYTES   = 198,
+  DLEP_ADDRTLV_TX_PACKETS = 199,
+  DLEP_ADDRTLV_TX_RETRIES = 200,
+  DLEP_ADDRTLV_TX_FAILED  = 201,
 };
 
 /* DLEP TLV array index */
@@ -92,16 +102,24 @@ enum dlep_tlv_idx {
   IDX_TLV_ORDER,
   IDX_TLV_VTIME,
   IDX_TLV_PEER_TYPE,
-//  IDX_TLV_CUR_BC_RATE,
-//  IDX_TLV_MAX_BC_RATE,
+  IDX_TLV_SSID,
+  IDX_TLV_LAST_SEEN,
+  IDX_TLV_FREQUENCY,
+  IDX_TLV_SUPPORTED_RATES,
 };
 
 enum dlep_addrtlv_idx {
   IDX_ADDRTLV_LINK_STATUS,
-  IDX_ADDRTLV_CUR_RATE,
-//  IDX_ADDRTLV_MAX_RATE,
-//  IDX_ADDRTLV_IPv4,
-//  IDX_ADDRTLV_IPv6,
+  IDX_ADDRTLV_SIGNAL,
+  IDX_ADDRTLV_LAST_SEEN,
+  IDX_ADDRTLV_RX_BITRATE,
+  IDX_ADDRTLV_RX_BYTES,
+  IDX_ADDRTLV_RX_PACKETS,
+  IDX_ADDRTLV_TX_BITRATE,
+  IDX_ADDRTLV_TX_BYTES,
+  IDX_ADDRTLV_TX_PACKETS,
+  IDX_ADDRTLV_TX_RETRIES,
+  IDX_ADDRTLV_TX_FAILED,
 };
 
 
@@ -226,9 +244,13 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
-  [IDX_TLV_ORDER] =       { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
-  [IDX_TLV_VTIME] =       { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
-  [IDX_TLV_PEER_TYPE] =   { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
+  [IDX_TLV_ORDER]           = { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
+  [IDX_TLV_VTIME]           = { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_PEER_TYPE]       = { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
+  [IDX_TLV_SSID]            = { .type = DLEP_TLV_SSID, .min_length = 6, .match_length = true },
+  [IDX_TLV_LAST_SEEN]       = { .type = DLEP_TLV_LAST_SEEN, .min_length = 4, .match_length = true },
+  [IDX_TLV_FREQUENCY]       = { .type = DLEP_TLV_FREQUENCY, .min_length = 8, .match_length = true },
+  [IDX_TLV_SUPPORTED_RATES] = { .type = DLEP_TLV_SUPPORTED_RATES },
 };
 
 /* DLEP writer data */
@@ -255,7 +277,16 @@ static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
 
 static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
   [IDX_ADDRTLV_LINK_STATUS] = { .type = PBB_ADDRTLV_LINK_STATUS },
-  [IDX_ADDRTLV_CUR_RATE] =    { .type = DLEP_ADDRTLV_CUR_RATE },
+  [IDX_ADDRTLV_SIGNAL]      = { .type = DLEP_ADDRTLV_SIGNAL },
+  [IDX_ADDRTLV_LAST_SEEN]   = { .type = DLEP_ADDRTLV_LAST_SEEN },
+  [IDX_ADDRTLV_RX_BITRATE]  = { .type = DLEP_ADDRTLV_RX_BITRATE },
+  [IDX_ADDRTLV_RX_BYTES]    = { .type = DLEP_ADDRTLV_RX_BYTES },
+  [IDX_ADDRTLV_RX_PACKETS]  = { .type = DLEP_ADDRTLV_RX_PACKETS },
+  [IDX_ADDRTLV_TX_BITRATE]  = { .type = DLEP_ADDRTLV_TX_BITRATE },
+  [IDX_ADDRTLV_TX_BYTES]    = { .type = DLEP_ADDRTLV_TX_BYTES },
+  [IDX_ADDRTLV_TX_PACKETS]  = { .type = DLEP_ADDRTLV_TX_PACKETS },
+  [IDX_ADDRTLV_TX_RETRIES]  = { .type = DLEP_ADDRTLV_TX_RETRIES },
+  [IDX_ADDRTLV_TX_FAILED]   = { .type = DLEP_ADDRTLV_TX_FAILED },
 };
 
 static uint8_t _packet_buffer[256];
@@ -575,6 +606,41 @@ _add_neighborupdate_msgtlvs(void) {
 
   pbb_writer_add_messagetlv(&_dlep_writer,
       PBB_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+
+  if (olsr_layer2_network_has_ssid(_msg_network)) {
+    pbb_writer_add_messagetlv(&_dlep_writer,
+        DLEP_TLV_SSID, 0,
+        netaddr_get_binptr(&_msg_network->ssid),
+        netaddr_get_binlength(&_msg_network->ssid));
+  }
+  if (olsr_layer2_network_has_last_seen(_msg_network)) {
+    uint32_t interval;
+    int64_t t;
+
+    t = -olsr_clock_get_relative(_msg_network->last_seen);
+    if (t < 0) {
+      interval = 0;
+    }
+    else if (t > UINT32_MAX) {
+      interval = UINT32_MAX;
+    }
+    else {
+      interval = (uint32_t)t;
+    }
+
+    interval = htonl(interval);
+    pbb_writer_add_messagetlv(&_dlep_writer,
+        DLEP_TLV_LAST_SEEN, 0, &interval, sizeof(interval));
+  }
+  if (olsr_layer2_network_has_frequency(_msg_network)) {
+    uint64_t freq;
+
+    freq = htobe64(_msg_network->frequency);
+    pbb_writer_add_messagetlv(&_dlep_writer,
+        DLEP_TLV_FREQUENCY, 0, &freq, sizeof(freq));
+  }
+
+  // TODO: add supported data rates
 }
 
 /**
@@ -646,18 +712,71 @@ _add_neighborupdate_addresses(void) {
     if (!neigh->active)
       continue;
 
-    if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
-      uint64_t rate;
-
-      OLSR_DEBUG(LOG_DLEP_SERVICE, "Add bitrate of %s (measured by %s): %"PRIu64,
-          netaddr_to_string(&buf1, &neigh->key.neighbor_mac),
-          netaddr_to_string(&buf2, &neigh->key.radio_mac), neigh->tx_bitrate);
-
-      rate = htobe64(neigh->tx_bitrate);
-
+    if (olsr_layer2_neighbor_has_signal(neigh)) {
       pbb_writer_add_addrtlv(&_dlep_writer, addr,
-          _dlep_addrtlvs[IDX_ADDRTLV_CUR_RATE]._tlvtype, &rate, sizeof(rate), false);
+                _dlep_addrtlvs[IDX_ADDRTLV_SIGNAL]._tlvtype,
+                &neigh->signal, sizeof(&neigh->signal), false);
+    }
+    if (olsr_layer2_neighbor_has_last_seen(neigh)) {
+      uint32_t interval;
+      int64_t t;
 
+      t = -olsr_clock_get_relative(_msg_network->last_seen);
+      if (t < 0) {
+        interval = 0;
+      }
+      else if (t > UINT32_MAX) {
+        interval = UINT32_MAX;
+      }
+      else {
+        interval = (uint32_t)t;
+      }
+
+      interval = htonl(interval);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+                _dlep_addrtlvs[IDX_ADDRTLV_LAST_SEEN]._tlvtype,
+                &interval, sizeof(interval), false);
+    }
+    if (olsr_layer2_neighbor_has_rx_bitrate(neigh)) {
+      uint64_t rate = htobe64(neigh->rx_bitrate);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_RX_BITRATE]._tlvtype, &rate, sizeof(rate), false);
+    }
+    if (olsr_layer2_neighbor_has_rx_bytes(neigh)) {
+      uint32_t bytes = htonl(neigh->rx_bytes);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_RX_BYTES]._tlvtype, &bytes, sizeof(bytes), false);
+    }
+    if (olsr_layer2_neighbor_has_rx_packets(neigh)) {
+      uint32_t packets = htonl(neigh->rx_packets);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_RX_PACKETS]._tlvtype, &packets, sizeof(packets), false);
+    }
+    if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
+      uint64_t rate = htobe64(neigh->tx_bitrate);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_TX_BITRATE]._tlvtype, &rate, sizeof(rate), false);
+
+    }
+    if (olsr_layer2_neighbor_has_tx_bytes(neigh)) {
+      uint32_t bytes = htonl(neigh->tx_bytes);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_TX_BYTES]._tlvtype, &bytes, sizeof(bytes), false);
+    }
+    if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
+      uint32_t packets = htonl(neigh->tx_packets);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_TX_PACKETS]._tlvtype, &packets, sizeof(packets), false);
+    }
+    if (olsr_layer2_neighbor_has_tx_retries(neigh)) {
+      uint32_t packets = htonl(neigh->tx_retries);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_TX_RETRIES]._tlvtype, &packets, sizeof(packets), false);
+    }
+    if (olsr_layer2_neighbor_has_tx_failed(neigh)) {
+      uint32_t packets = htonl(neigh->tx_failed);
+      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+          _dlep_addrtlvs[IDX_ADDRTLV_TX_FAILED]._tlvtype, &packets, sizeof(packets), false);
     }
   }
 }
