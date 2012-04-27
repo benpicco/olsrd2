@@ -70,35 +70,51 @@ enum dlep_orders {
 
 /* DLEP TLV types */
 enum dlep_msgtlv_types {
-  DLEP_TLV_ORDER = 192,
-  DLEP_TLV_PEER_TYPE,
-//  DLEP_TLV_CUR_BC_RATE,
-//  DLEP_TLV_MAX_BC_RATE,
+  DLEP_TLV_ORDER           = 192,
+  DLEP_TLV_PEER_TYPE       = 193,
+
+  DLEP_TLV_SSID            = 194,
+  DLEP_TLV_LAST_SEEN       = 195,
+  DLEP_TLV_FREQUENCY       = 196,
+  DLEP_TLV_SUPPORTED_RATES = 197,
 };
 
 enum dlep_addrtlv_types {
-  DLEP_ADDRTLV_CUR_RATE = 192,
-//  DLEP_ADDRTLV_MAX_RATE,
-//  DLEP_ADDRTLV_IPv4,
-//  DLEP_ADDRTLV_IPv6,
+  DLEP_ADDRTLV_SIGNAL     = 192,
+  DLEP_ADDRTLV_LAST_SEEN  = 193,
+  DLEP_ADDRTLV_RX_BITRATE = 194,
+  DLEP_ADDRTLV_RX_BYTES   = 195,
+  DLEP_ADDRTLV_RX_PACKETS = 196,
+  DLEP_ADDRTLV_TX_BITRATE = 197,
+  DLEP_ADDRTLV_TX_BYTES   = 198,
+  DLEP_ADDRTLV_TX_PACKETS = 199,
+  DLEP_ADDRTLV_TX_RETRIES = 200,
+  DLEP_ADDRTLV_TX_FAILED  = 201,
 };
 
 /* DLEP TLV array index */
 enum dlep_tlv_idx {
-  IDX_TLV_ORDER,
   IDX_TLV_VTIME,
+  IDX_TLV_ORDER,
   IDX_TLV_PEER_TYPE,
-//  IDX_TLV_STATUS,
-//  IDX_TLV_CUR_BC_RATE,
-//  IDX_TLV_MAX_BC_RATE,
+  IDX_TLV_SSID,
+  IDX_TLV_LAST_SEEN,
+  IDX_TLV_FREQUENCY,
+  IDX_TLV_SUPPORTED_RATES,
 };
 
 enum dlep_addrtlv_idx {
   IDX_ADDRTLV_LINK_STATUS,
-  IDX_ADDRTLV_CUR_RATE,
-//  IDX_ADDRTLV_MAX_RATE,
-//  IDX_ADDRTLV_IPv4,
-//  IDX_ADDRTLV_IPv6,
+  IDX_ADDRTLV_SIGNAL,
+  IDX_ADDRTLV_LAST_SEEN,
+  IDX_ADDRTLV_RX_BITRATE,
+  IDX_ADDRTLV_RX_BYTES,
+  IDX_ADDRTLV_RX_PACKETS,
+  IDX_ADDRTLV_TX_BITRATE,
+  IDX_ADDRTLV_TX_BYTES,
+  IDX_ADDRTLV_TX_PACKETS,
+  IDX_ADDRTLV_TX_RETRIES,
+  IDX_ADDRTLV_TX_FAILED,
 };
 
 /* definitions */
@@ -212,9 +228,13 @@ static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
-  [IDX_TLV_ORDER] =     { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
-  [IDX_TLV_VTIME] =     { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
-  [IDX_TLV_PEER_TYPE] = { .type = DLEP_TLV_PEER_TYPE, .min_length = 1, .max_length = 80, .match_length = true },
+  [IDX_TLV_ORDER]           = { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
+  [IDX_TLV_VTIME]           = { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_PEER_TYPE]       = { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
+  [IDX_TLV_SSID]            = { .type = DLEP_TLV_SSID, .min_length = 6, .match_length = true },
+  [IDX_TLV_LAST_SEEN]       = { .type = DLEP_TLV_LAST_SEEN, .min_length = 4, .match_length = true },
+  [IDX_TLV_FREQUENCY]       = { .type = DLEP_TLV_FREQUENCY, .min_length = 8, .match_length = true },
+  [IDX_TLV_SUPPORTED_RATES] = { .type = DLEP_TLV_SUPPORTED_RATES },
 };
 
 static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
@@ -223,8 +243,17 @@ static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
 };
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
-  [IDX_ADDRTLV_LINK_STATUS] = { .type = PBB_ADDRTLV_LINK_STATUS, .min_length = 1 },
-  [IDX_ADDRTLV_CUR_RATE] =    { .type = DLEP_ADDRTLV_CUR_RATE, .min_length = 8 },
+  [IDX_ADDRTLV_LINK_STATUS] = { .type = PBB_ADDRTLV_LINK_STATUS, .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV_SIGNAL]      = { .type = DLEP_ADDRTLV_SIGNAL, .min_length = 1 , .match_length = true },
+  [IDX_ADDRTLV_LAST_SEEN]   = { .type = DLEP_ADDRTLV_LAST_SEEN, .min_length = 4, .match_length = true },
+  [IDX_ADDRTLV_RX_BITRATE]  = { .type = DLEP_ADDRTLV_RX_BITRATE, .min_length = 8, .match_length = true },
+  [IDX_ADDRTLV_RX_BYTES]    = { .type = DLEP_ADDRTLV_RX_BYTES, .min_length = 4, .match_length = true },
+  [IDX_ADDRTLV_RX_PACKETS]  = { .type = DLEP_ADDRTLV_RX_PACKETS, .min_length = 4, .match_length = true },
+  [IDX_ADDRTLV_TX_BITRATE]  = { .type = DLEP_ADDRTLV_TX_BITRATE, .min_length = 8, .match_length = true },
+  [IDX_ADDRTLV_TX_BYTES]    = { .type = DLEP_ADDRTLV_TX_BYTES, .min_length = 4, .match_length = true },
+  [IDX_ADDRTLV_TX_PACKETS]  = { .type = DLEP_ADDRTLV_TX_PACKETS, .min_length = 4, .match_length = true },
+  [IDX_ADDRTLV_TX_RETRIES]  = { .type = DLEP_ADDRTLV_TX_RETRIES, .min_length = 4, .match_length = true },
+  [IDX_ADDRTLV_TX_FAILED]   = { .type = DLEP_ADDRTLV_TX_FAILED, .min_length = 4, .match_length = true },
 };
 
 /* DLEP writer data */
@@ -248,9 +277,11 @@ static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
   .addMessageTLVs = _cb_addMessageTLVs,
 };
 
+#if 0
 static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
   { .type = DLEP_ADDRTLV_CUR_RATE },
 };
+#endif
 
 /* temporary variables for parsing DLEP messages */
 static enum dlep_orders _message_order;
@@ -319,8 +350,13 @@ _cb_plugin_enable(void) {
   }
   _dlep_message->addMessageHeader = _cb_addMessageHeader;
 
+#if 0
   if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
       &_dlep_msgcontent_provider, _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs))) {
+#endif
+  if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
+      &_dlep_msgcontent_provider, NULL, 0)) {
+
     OLSR_WARN(LOG_DLEP_CLIENT, "Count not register DLEP msg contentprovider");
     pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
     pbb_writer_cleanup(&_dlep_writer);
@@ -364,8 +400,12 @@ _cb_plugin_disable(void) {
   pbb_reader_cleanup(&_dlep_reader);
 
   /* remove pbb writer */
+#if 0
   pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
       _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs));
+#endif
+  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
+      NULL, 0);
   pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
   pbb_writer_cleanup(&_dlep_writer);
   return 0;
@@ -423,6 +463,57 @@ _parse_msg_interface_discovery(struct netaddr *radio_mac) {
 }
 
 /**
+ * Parse message TLVs of incoming Interface Discovery DLEP messages
+ * @param radio_mac originator MAC of message
+ * @return PBB_OKAY if message was okay, PBB_DROP_MESSAGE otherwise
+ */
+static enum pbb_result
+_parse_msg_neighbor_update(struct netaddr *radio_mac) {
+  struct olsr_layer2_network *net;
+  struct netaddr_str buf;
+
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Got layer2 network %s",
+      netaddr_to_string(&buf, radio_mac));
+
+  net = olsr_layer2_add_network(radio_mac, 0, _message_vtime);
+  if (net == NULL) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "Cannot allocate new layer2 network %s",
+        netaddr_to_string(&buf, radio_mac));
+    return PBB_DROP_MESSAGE;
+  }
+
+  olsr_layer2_network_clear(net);
+
+  if (_dlep_message_tlvs[IDX_TLV_SSID].tlv) {
+    struct netaddr ssid;
+
+    netaddr_from_binary(&ssid, _dlep_message_tlvs[IDX_TLV_SSID].tlv->single_value, 6, AF_MAC48);
+    olsr_layer2_network_set_ssid(net, &ssid);
+  }
+  if (_dlep_message_tlvs[IDX_TLV_LAST_SEEN].tlv) {
+    int32_t last_seen;
+
+    memcpy(&last_seen,
+        _dlep_message_tlvs[IDX_TLV_LAST_SEEN].tlv->single_value,
+        sizeof(last_seen));
+
+    last_seen = ntohl(last_seen);
+    olsr_layer2_network_set_last_seen(net, last_seen);
+  }
+  if (_dlep_message_tlvs[IDX_TLV_FREQUENCY].tlv) {
+    uint64_t freq;
+
+    memcpy(&freq,
+        _dlep_message_tlvs[IDX_TLV_FREQUENCY].tlv->single_value,
+        sizeof(freq));
+
+    freq = be64toh(freq);
+    olsr_layer2_network_set_frequency(net, freq);
+  }
+  // TODO: add supported datarates
+  return PBB_OKAY;
+}
+/**
  * Callback for parsing message TLVs of incoming DLEP messages
  * @param consumer
  * @param context
@@ -456,9 +547,7 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       return _parse_msg_interface_discovery(&radio_mac);
     case DLEP_ORDER_NEIGHBOR_UPDATE:
-      /* write network into database */
-      olsr_layer2_add_network(&radio_mac, 0, _message_vtime);
-      break;
+      return _parse_msg_neighbor_update(&radio_mac);
     default:
       OLSR_WARN(LOG_DLEP_CLIENT, "Unknown order in DLEP message: %d", _message_order);
       return PBB_DROP_MESSAGE;
@@ -505,17 +594,105 @@ _parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac
     return PBB_DROP_MESSAGE;
   }
 
-  if (_dlep_address_tlvs[IDX_ADDRTLV_CUR_RATE].tlv) {
+  olsr_layer2_neighbor_clear(neigh);
+
+  if (_dlep_address_tlvs[IDX_ADDRTLV_SIGNAL].tlv) {
+    uint16_t signal;
+
+    memcpy(&signal,
+        _dlep_address_tlvs[IDX_ADDRTLV_SIGNAL].tlv->single_value,
+        sizeof(signal));
+
+    signal = ntohs(signal);
+    olsr_layer2_neighbor_set_signal(neigh, signal);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_LAST_SEEN].tlv) {
+    int32_t last_seen;
+
+    memcpy(&last_seen,
+        _dlep_address_tlvs[IDX_ADDRTLV_LAST_SEEN].tlv->single_value,
+        sizeof(last_seen));
+
+    last_seen = ntohl(last_seen);
+    olsr_layer2_neighbor_set_last_seen(neigh, last_seen);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_RX_BITRATE].tlv) {
     uint64_t rate;
 
-    memcpy(&rate, _dlep_address_tlvs[IDX_ADDRTLV_CUR_RATE].tlv->single_value, sizeof(rate));
+    memcpy(&rate, _dlep_address_tlvs[IDX_ADDRTLV_RX_BITRATE].tlv->single_value, sizeof(rate));
+
+    rate = be64toh(rate);
+    olsr_layer2_neighbor_set_rx_bitrate(neigh, rate);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_RX_BYTES].tlv) {
+    uint32_t bytes;
+
+    memcpy(&bytes,
+        _dlep_address_tlvs[IDX_ADDRTLV_RX_BYTES].tlv->single_value,
+        sizeof(bytes));
+
+    bytes = ntohl(bytes);
+    olsr_layer2_neighbor_set_rx_bytes(neigh, bytes);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_RX_PACKETS].tlv) {
+    uint32_t packets;
+
+    memcpy(&packets,
+        _dlep_address_tlvs[IDX_ADDRTLV_RX_PACKETS].tlv->single_value,
+        sizeof(packets));
+
+    packets = ntohl(packets);
+    olsr_layer2_neighbor_set_rx_packets(neigh, packets);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_TX_BITRATE].tlv) {
+    uint64_t rate;
+
+    memcpy(&rate, _dlep_address_tlvs[IDX_ADDRTLV_TX_BITRATE].tlv->single_value, sizeof(rate));
 
     rate = be64toh(rate);
     olsr_layer2_neighbor_set_tx_bitrate(neigh, rate);
-
-    OLSR_DEBUG(LOG_DLEP_CLIENT, "Set bitrate of %s (measured by %s) to %"PRIu64,
-        netaddr_to_string(&buf1, neigh_mac), netaddr_to_string(&buf2, radio_mac), rate);
   }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_TX_BYTES].tlv) {
+    uint32_t bytes;
+
+    memcpy(&bytes,
+        _dlep_address_tlvs[IDX_ADDRTLV_TX_BYTES].tlv->single_value,
+        sizeof(bytes));
+
+    bytes = ntohl(bytes);
+    olsr_layer2_neighbor_set_tx_bytes(neigh, bytes);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_TX_PACKETS].tlv) {
+    uint32_t packets;
+
+    memcpy(&packets,
+        _dlep_address_tlvs[IDX_ADDRTLV_TX_PACKETS].tlv->single_value,
+        sizeof(packets));
+
+    packets = ntohl(packets);
+    olsr_layer2_neighbor_set_tx_packets(neigh, packets);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_TX_RETRIES].tlv) {
+    uint32_t retries;
+
+    memcpy(&retries,
+        _dlep_address_tlvs[IDX_ADDRTLV_TX_RETRIES].tlv->single_value,
+        sizeof(retries));
+
+    retries = ntohl(retries);
+    olsr_layer2_neighbor_set_tx_retries(neigh, retries);
+  }
+  if (_dlep_address_tlvs[IDX_ADDRTLV_TX_FAILED].tlv) {
+    uint32_t failed;
+
+    memcpy(&failed,
+        _dlep_address_tlvs[IDX_ADDRTLV_TX_FAILED].tlv->single_value,
+        sizeof(failed));
+
+    failed = ntohl(failed);
+    olsr_layer2_neighbor_set_tx_fails(neigh, failed);
+  }
+
   return PBB_OKAY;
 }
 
@@ -625,7 +802,34 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
       netaddr_socket_to_string(&buf, from));
 
   _message_peer_socket = from;
+/* TODO: test
+  packet header
+  00           no sequence number, no tlvs
 
+  message header
+  2a           message type 42 (DLEP)
+  95           has originator, has sequence number, has 6 byte address
+  0023         message length 35 bytes
+  00156d8408bd originator: 00:15:6d:84:08:bd
+  0079         sequence number
+
+  tlvblock:
+  0015         21 bytes tlvs
+
+  tlv:
+  c0           DLEP_ORDER_TLV
+  00           nothing else
+
+  00           VTIME TLV
+  10           has value
+  01           1 byte value
+  62           value: 0x62
+
+  c1           DLEP_PEER_TYPE
+  10           has value
+  0c           12 bytes value
+  546573742053657276696365 value: Test Service
+*/
   result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
   if (result) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Error while parsing DLEP packet: %s (%d)",
