@@ -44,6 +44,7 @@
 #include "packetbb/pbb_iana.h"
 #include "packetbb/pbb_reader.h"
 #include "packetbb/pbb_writer.h"
+#include "packetbb/pbb_print.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_layer2.h"
@@ -63,9 +64,9 @@
 #define DLEP_MESSAGE_ID 42
 
 enum dlep_orders {
-  DLEP_ORDER_INTERFACE_DISCOVERY,
-  DLEP_ORDER_CONNECT_ROUTER,
-  DLEP_ORDER_NEIGHBOR_UPDATE,
+  DLEP_ORDER_INTERFACE_DISCOVERY = 1,
+  DLEP_ORDER_CONNECT_ROUTER      = 2,
+  DLEP_ORDER_NEIGHBOR_UPDATE     = 3,
 };
 
 /* DLEP TLV types */
@@ -244,7 +245,7 @@ static struct pbb_reader_tlvblock_consumer _dlep_address_consumer = {
 
 static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
   [IDX_ADDRTLV_LINK_STATUS] = { .type = PBB_ADDRTLV_LINK_STATUS, .min_length = 1, .match_length = true },
-  [IDX_ADDRTLV_SIGNAL]      = { .type = DLEP_ADDRTLV_SIGNAL, .min_length = 1 , .match_length = true },
+  [IDX_ADDRTLV_SIGNAL]      = { .type = DLEP_ADDRTLV_SIGNAL, .min_length = 2 , .match_length = true },
   [IDX_ADDRTLV_LAST_SEEN]   = { .type = DLEP_ADDRTLV_LAST_SEEN, .min_length = 4, .match_length = true },
   [IDX_ADDRTLV_RX_BITRATE]  = { .type = DLEP_ADDRTLV_RX_BITRATE, .min_length = 8, .match_length = true },
   [IDX_ADDRTLV_RX_BYTES]    = { .type = DLEP_ADDRTLV_RX_BYTES, .min_length = 4, .match_length = true },
@@ -525,6 +526,7 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer __attribute
   struct netaddr radio_mac;
   uint8_t encoded_vtime;
 
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Parse DLEP message");
   if (context->addr_len != 6) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Address length of DLEP message should be 6 (but was %d)",
         context->addr_len);
@@ -597,14 +599,13 @@ _parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac
   olsr_layer2_neighbor_clear(neigh);
 
   if (_dlep_address_tlvs[IDX_ADDRTLV_SIGNAL].tlv) {
-    uint16_t signal;
+    uint16_t sig_encoded;
 
-    memcpy(&signal,
+    memcpy(&sig_encoded,
         _dlep_address_tlvs[IDX_ADDRTLV_SIGNAL].tlv->single_value,
-        sizeof(signal));
+        sizeof(sig_encoded));
 
-    signal = ntohs(signal);
-    olsr_layer2_neighbor_set_signal(neigh, signal);
+    olsr_layer2_neighbor_set_signal(neigh, (int16_t)ntohs(sig_encoded));
   }
   if (_dlep_address_tlvs[IDX_ADDRTLV_LAST_SEEN].tlv) {
     int32_t last_seen;
@@ -708,6 +709,8 @@ _cb_parse_dlep_addresses(struct pbb_reader_tlvblock_consumer *consumer __attribu
   struct netaddr radio_mac;
   struct netaddr neigh_mac;
 
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Parse DLEP addresses");
+
   if (context->addr_len != 6) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Address length of DLEP message should be 6 (but was %d)",
         context->addr_len);
@@ -773,12 +776,12 @@ static enum pbb_result
 _cb_parse_dlep_addresses_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
     struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   size_t i;
-  OLSR_WARN(LOG_DLEP_CLIENT, "Constraints of incoming DLEP message were not fulfilled!");
+  OLSR_WARN(LOG_DLEP_CLIENT, "Constraints of incoming DLEP address were not fulfilled!");
 
-  for (i=0; i < ARRAYSIZE(_dlep_message_tlvs); i++) {
-    OLSR_WARN(LOG_DLEP_CLIENT, "block %zu: %s", i, _dlep_message_tlvs[i].tlv == NULL ? "no" : "yes");
-    if (_dlep_message_tlvs[i].tlv) {
-      OLSR_WARN_NH(LOG_DLEP_CLIENT, "\tvalue length: %u", _dlep_message_tlvs[i].tlv->length);
+  for (i=0; i < ARRAYSIZE(_dlep_address_tlvs); i++) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "block %zu: %s", i, _dlep_address_tlvs[i].tlv == NULL ? "no" : "yes");
+    if (_dlep_address_tlvs[i].tlv) {
+      OLSR_WARN_NH(LOG_DLEP_CLIENT, "\tvalue length: %u", _dlep_address_tlvs[i].tlv->length);
     }
   }
   return PBB_DROP_ADDRESS;
@@ -798,43 +801,18 @@ _cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
 #if !defined(REMOVE_LOG_DEBUG)
   struct netaddr_str buf;
 #endif
+
   OLSR_DEBUG(LOG_DLEP_CLIENT, "Parsing DLEP packet from %s",
       netaddr_socket_to_string(&buf, from));
 
   _message_peer_socket = from;
-/* TODO: test
-  packet header
-  00           no sequence number, no tlvs
 
-  message header
-  2a           message type 42 (DLEP)
-  95           has originator, has sequence number, has 6 byte address
-  0023         message length 35 bytes
-  00156d8408bd originator: 00:15:6d:84:08:bd
-  0079         sequence number
-
-  tlvblock:
-  0015         21 bytes tlvs
-
-  tlv:
-  c0           DLEP_ORDER_TLV
-  00           nothing else
-
-  00           VTIME TLV
-  10           has value
-  01           1 byte value
-  62           value: 0x62
-
-  c1           DLEP_PEER_TYPE
-  10           has value
-  0c           12 bytes value
-  546573742053657276696365 value: Test Service
-*/
   result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
   if (result) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Error while parsing DLEP packet: %s (%d)",
         pbb_strerror(result), result);
   }
+
 
   _message_peer_socket = NULL;
 }

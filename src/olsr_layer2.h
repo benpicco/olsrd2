@@ -81,7 +81,7 @@ struct olsr_layer2_neighbor {
   struct olsr_timer_entry _valitity_timer;
   enum olsr_layer2_neighbor_data _available_data;
 
-  uint16_t signal;
+  int16_t signal_dbm;
   uint64_t last_seen;
 
   uint64_t tx_bitrate, rx_bitrate;
@@ -267,12 +267,12 @@ olsr_layer2_neighbor_clear(struct olsr_layer2_neighbor *neigh) {
 
 /**
  * @param neigh pointer to layer2 neighbor data
- * @param signal signal strength to store in layer2 neighbor data
+ * @param signal_dbm signal strength to store in layer2 neighbor data
  */
 static INLINE void
-olsr_layer2_neighbor_set_signal(struct olsr_layer2_neighbor *neigh, uint16_t signal_dbm) {
+olsr_layer2_neighbor_set_signal(struct olsr_layer2_neighbor *neigh, int16_t signal_dbm) {
   neigh->_available_data |= OLSR_L2NEIGH_SIGNAL;
-  neigh->signal = signal_dbm;
+  neigh->signal_dbm = signal_dbm;
 }
 
 /**
@@ -364,7 +364,7 @@ olsr_layer2_neighbor_set_tx_retries(struct olsr_layer2_neighbor *neigh, uint32_t
 
 /**
  * @param neigh pointer to layer2 neighbor data
- * @param signal signal strength to store in layer2 neighbor data
+ * @param signal_dbm signal strength to store in layer2 neighbor data
  */
 static INLINE void
 olsr_layer2_neighbor_set_tx_fails(struct olsr_layer2_neighbor *neigh, uint32_t failed) {

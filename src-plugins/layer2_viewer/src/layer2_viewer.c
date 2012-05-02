@@ -167,42 +167,53 @@ _print_network(struct autobuf *out, struct olsr_layer2_network *net) {
   struct netaddr_str netbuf;
   struct timeval_buf tvbuf;
   struct human_readable_str numbuf;
-  int result = 0;
 
-  result |= abuf_appendf(out,
+  if (0 > abuf_appendf(out,
       "Radio-ID: %s\n"
       "Active: %s\n",
       netaddr_to_string(&netbuf, &net->radio_id),
-      net->active ? "true" : "false");
+      net->active ? "true" : "false")) {
+    return -1;
+  }
 
   if (net->if_index) {
-    result |= abuf_appendf(out, "If-Index: %u\n", net->if_index);
+    if (0 > abuf_appendf(out, "If-Index: %u\n", net->if_index)) {
+      return -1;
+    }
   }
 
   if (olsr_layer2_network_has_ssid(net)) {
-    result |= abuf_appendf(out, "SSID: %s\n", netaddr_to_string(&netbuf, &net->ssid));
+    if (0 > abuf_appendf(out, "SSID: %s\n", netaddr_to_string(&netbuf, &net->ssid))) {
+      return -1;
+    }
   }
 
   if (olsr_layer2_network_has_last_seen(net)) {
     int64_t relative;
 
     relative = olsr_clock_get_relative(net->last_seen);
-    result |= abuf_appendf(out, "Last seen: %s seconds ago\n",
-        olsr_clock_toIntervalString(&tvbuf, -relative));
+    if (0 > abuf_appendf(out, "Last seen: %s seconds ago\n",
+        olsr_clock_toIntervalString(&tvbuf, -relative))) {
+      return -1;
+    }
   }
   if (olsr_layer2_network_has_frequency(net)) {
-    result |= abuf_appendf(out, "Frequency: %s\n",
-        str_get_human_readable_number(&numbuf, net->frequency, "Hz", 3, false));
+    if (0 > abuf_appendf(out, "Frequency: %s\n",
+        str_get_human_readable_number(&numbuf, net->frequency, "Hz", 3, false))) {
+      return -1;
+    }
   }
   if (olsr_layer2_network_has_supported_rates(net)) {
     size_t i;
 
     for (i=0; i<net->rate_count; i++) {
-      result |= abuf_appendf(out, "Supported rate: %s\n",
-          str_get_human_readable_number(&numbuf, net->supported_rates[i], "bit/s", 3, true));
+      if (0 > abuf_appendf(out, "Supported rate: %s\n",
+          str_get_human_readable_number(&numbuf, net->supported_rates[i], "bit/s", 3, true))) {
+        return -1;
+      }
     }
   }
-  return result;
+  return 0;
 }
 
 /**
@@ -216,65 +227,90 @@ _print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
   struct netaddr_str netbuf1, netbuf2;
   struct timeval_buf tvbuf;
   struct human_readable_str numbuf;
-  int result = 0;
 
-  result |= abuf_appendf(out,
+  if (0 > abuf_appendf(out,
       "Neighbor MAC: %s\n"
       "Active: %s\n"
       "Radio Mac: %s",
       netaddr_to_string(&netbuf1, &neigh->key.neighbor_mac),
       neigh->active ? "true" : "false",
-      netaddr_to_string(&netbuf2, &neigh->key.radio_mac));
+      netaddr_to_string(&netbuf2, &neigh->key.radio_mac))) {
+    return -1;
+  }
 
   if (neigh->if_index) {
-    result |= abuf_appendf(out, "(index: %u)", neigh->if_index);
+    if (0 > abuf_appendf(out, " (index: %u)", neigh->if_index)) {
+      return -1;
+    }
   }
-  result |= abuf_puts(out, "\n");
+  if (0 > abuf_puts(out, "\n")) {
+    return -1;
+  }
 
   if (olsr_layer2_neighbor_has_last_seen(neigh)) {
     int64_t relative;
 
     relative = olsr_clock_get_relative(neigh->last_seen);
-    result |= abuf_appendf(out, "Last seen: %s seconds ago\n",
-        olsr_clock_toIntervalString(&tvbuf, -relative));
+    if (0 > abuf_appendf(out, "Last seen: %s seconds ago\n",
+        olsr_clock_toIntervalString(&tvbuf, -relative))) {
+      return -1;
+    }
   }
 
   if (olsr_layer2_neighbor_has_signal(neigh)) {
-    result |= abuf_appendf(out, "RX bytes: %u dBm\n", neigh->signal);
+    if (0 > abuf_appendf(out, "Sginal strength: %d dBm\n", neigh->signal_dbm)) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_rx_bitrate(neigh)) {
-    result |= abuf_appendf(out, "RX bitrate: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->rx_bitrate, "bit/s", 1, true));
+    if (0 > abuf_appendf(out, "RX bitrate: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->rx_bitrate, "bit/s", 1, true))) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_rx_bytes(neigh)) {
-    result |= abuf_appendf(out, "RX traffic: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->rx_bytes, "Byte", 1, true));
+    if (0 > abuf_appendf(out, "RX traffic: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->rx_bytes, "Byte", 1, true))) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_rx_packets(neigh)) {
-    result |= abuf_appendf(out, "RX packets: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->rx_packets, "", 0, true));
+    if (0 > abuf_appendf(out, "RX packets: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->rx_packets, "", 0, true))) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
-    result |= abuf_appendf(out, "TX bitrate: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_bitrate, "bit/s", 1, true));
+    if (0 > abuf_appendf(out, "TX bitrate: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_bitrate, "bit/s", 1, true))) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_tx_bytes(neigh)) {
-    result |= abuf_appendf(out, "TX traffic: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_bytes, "Byte", 1, true));
+    if (0 > abuf_appendf(out, "TX traffic: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_bytes, "Byte", 1, true))) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    result |= abuf_appendf(out, "TX packets: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_packets, "", 0, true));
+    if (0 > abuf_appendf(out, "TX packets: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_packets, "", 0, true))) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    result |= abuf_appendf(out, "TX retries: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_retries, "", 3, true));
+    if (0 > abuf_appendf(out, "TX retries: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_retries, "", 3, true))) {
+      return -1;
+    }
   }
   if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    result |= abuf_appendf(out, "TX failed: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_failed, "", 3, true));
+    if (0 > abuf_appendf(out, "TX failed: %s\n",
+        str_get_human_readable_number(&numbuf, neigh->tx_failed, "", 3, true))) {
+      return -1;
+    }
   }
-  return result;
+  return 0;
 }
 
 /**
@@ -420,8 +456,8 @@ _cb_handle_layer2(struct olsr_telnet_data *data) {
     }
     return TELNET_RESULT_ACTIVE;
   }
-  abuf_appendf(data->out, "Error, unknown parameters for %s command\n",
-      data->command);
+  abuf_appendf(data->out, "Error, unknown parameters for %s command: %s\n",
+      data->command, data->parameter);
   return TELNET_RESULT_ACTIVE;
 }
 

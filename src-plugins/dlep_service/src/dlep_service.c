@@ -68,9 +68,9 @@
 #define DLEP_MESSAGE_ID 42
 
 enum dlep_orders {
-  DLEP_ORDER_INTERFACE_DISCOVERY,
-  DLEP_ORDER_CONNECT_ROUTER,
-  DLEP_ORDER_NEIGHBOR_UPDATE,
+  DLEP_ORDER_INTERFACE_DISCOVERY = 1,
+  DLEP_ORDER_CONNECT_ROUTER      = 2,
+  DLEP_ORDER_NEIGHBOR_UPDATE     = 3,
 };
 
 /* DLEP TLV types */
@@ -713,9 +713,12 @@ _add_neighborupdate_addresses(void) {
       continue;
 
     if (olsr_layer2_neighbor_has_signal(neigh)) {
+      uint16_t sig_encoded;
+
+      sig_encoded = htons(neigh->signal_dbm);
       pbb_writer_add_addrtlv(&_dlep_writer, addr,
                 _dlep_addrtlvs[IDX_ADDRTLV_SIGNAL]._tlvtype,
-                &neigh->signal, sizeof(&neigh->signal), false);
+                &sig_encoded, sizeof(sig_encoded), false);
     }
     if (olsr_layer2_neighbor_has_last_seen(neigh)) {
       uint32_t interval;

@@ -398,8 +398,7 @@ _parse_cmd_new_station(struct nlmsghdr *hdr) {
         nla_get_u32(sinfo[NL80211_STA_INFO_TX_FAILED]));
   }
   if (sinfo[NL80211_STA_INFO_SIGNAL])  {
-    olsr_layer2_neighbor_set_signal(neigh,
-        (int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]));
+    olsr_layer2_neighbor_set_signal(neigh, (int8_t)nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]));
   }
   if (sinfo[NL80211_STA_INFO_TX_BITRATE]) {
     if (nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX,
