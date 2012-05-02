@@ -139,7 +139,9 @@ abuf_vappendf(struct autobuf *autobuf,
  * The function accepts a variable number of arguments based on the format string.
  * @param autobuf pointer to autobuf object
  * @param fmt printf format string
- * @return -1 if an out-of-memory error happened, 0 otherwise
+ * @return -1 if an out-of-memory error happened,
+ *   otherwise it returns the number of written characters
+ *   (excluding the \0)
  */
 int
 abuf_appendf(struct autobuf *autobuf, const char *fmt, ...)
