@@ -1090,7 +1090,7 @@ _handle_message(struct pbb_reader *parser,
   /* initialize variables */
   result = PBB_OKAY;
   same_order[0] = same_order[1] = NULL;
-  avl_init(&tlv_entries, avl_comp_uint32, true, NULL);
+  avl_init(&tlv_entries, avl_comp_uint16, true, NULL);
   list_init_head(&addr_head);
 
   /* remember start of message */
@@ -1161,7 +1161,7 @@ _handle_message(struct pbb_reader *parser,
     }
 
     /* initialize avl_tree */
-    avl_init(&addr->tlvblock, avl_comp_uint32, true, NULL);
+    avl_init(&addr->tlvblock, avl_comp_uint16, true, NULL);
 
     /* parse address block... */
     if ((result = _parse_addrblock(addr, tlv_context, ptr, end)) != PBB_OKAY) {
