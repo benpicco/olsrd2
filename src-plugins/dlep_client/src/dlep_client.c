@@ -74,6 +74,9 @@ static int _cb_plugin_unload(void);
 static int _cb_plugin_enable(void);
 static int _cb_plugin_disable(void);
 
+static void _cb_receive_dlep(struct olsr_packet_socket *s,
+      union netaddr_socket *from, size_t length);
+
 static void _cb_send_dlep(struct pbb_writer *,
     struct pbb_writer_interface *, void *, size_t);
 
@@ -262,6 +265,18 @@ dlep_add_interface_session(union netaddr_socket *peer_socket,
   return session;
 }
 
+/**
+ * Receive UDP data with DLEP protocol
+ * @param
+ * @param from
+ * @param length
+ */
+static void
+_cb_receive_dlep(struct olsr_packet_socket *s,
+      union netaddr_socket *from, size_t length) {
+  dlep_service_incoming_parse(s->config.input_buffer, length, from,
+      s == &_dlep_socket.multicast_v4 || s == &_dlep_socket.multicast_v6);
+}
 
 /**
  * Callback for DLEP interface timeouts

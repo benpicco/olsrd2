@@ -97,7 +97,7 @@ OLSR_SUBSYSTEM_STATE(_dlep_service_incoming);
  * Initialize subsystem for RFC5444 processing
  */
 void
-dlep_incoming_init(void) {
+dlep_service_incoming_init(void) {
   if (olsr_subsystem_init(&_dlep_service_incoming))
     return;
 
@@ -110,7 +110,7 @@ dlep_incoming_init(void) {
  * Cleanup all data allocated for RFC 5444 processing
  */
 void
-dlep_incoming_cleanup(void) {
+dlep_service_incoming_cleanup(void) {
   if (olsr_subsystem_cleanup(&_dlep_service_incoming))
     return;
 
@@ -119,26 +119,27 @@ dlep_incoming_cleanup(void) {
 }
 
 /**
- * Receive UDP data with DLEP protocol
- * (see olsr socket packet)
- * @param
- * @param from
- * @param length
+ * Parse incoming DLEP packet
+ * @param ptr pointer to binary packet
+ * @param length length of packet
+ * @param from socket the packet came from
+ * @param multicast true if packet was received by the multicast socket
  */
 void
-cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
-      union netaddr_socket *from,
-      size_t length __attribute__((unused))) {
+dlep_service_incoming_parse(void *ptr, size_t length,
+    union netaddr_socket *from, bool multicast) {
   enum pbb_result result;
 #if !defined(REMOVE_LOG_DEBUG)
   struct netaddr_str buf;
 #endif
-  OLSR_DEBUG(LOG_DLEP_SERVICE, "Parsing DLEP packet from %s",
-      netaddr_socket_to_string(&buf, from));
+
+  OLSR_DEBUG(LOG_DLEP_SERVICE, "Parsing DLEP packet from %s (%s)",
+      netaddr_socket_to_string(&buf, from),
+      multicast ? "multicast" : "unicast");
 
   _peer_socket = from;
 
-  result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
+  result = pbb_reader_handle_packet(&_dlep_reader, ptr, length);
   if (result) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Error while parsing DLEP packet: %s (%d)",
         pbb_strerror(result), result);

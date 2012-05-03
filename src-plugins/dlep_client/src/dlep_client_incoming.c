@@ -130,7 +130,8 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_address_tlvs[] = {
 /* temporary variables for parsing DLEP messages */
 static enum dlep_orders _message_order;
 static union netaddr_socket *_message_peer_socket;
-uint64_t _message_vtime;
+static uint64_t _message_vtime;
+static bool _message_multicast;
 
 /* incoming subsystem */
 OLSR_SUBSYSTEM_STATE(_dlep_client_incoming);
@@ -164,26 +165,28 @@ dlep_client_incoming_cleanup(void) {
 }
 
 /**
- * Receive UDP data with DLEP protocol
- * @param
- * @param from
- * @param length
+ * Parse incoming DLEP packet
+ * @param ptr pointer to binary packet
+ * @param length length of packet
+ * @param from socket the packet came from
+ * @param multicast true if packet was received by the multicast socket
  */
 void
-_cb_receive_dlep(struct olsr_packet_socket *s __attribute__((unused)),
-      union netaddr_socket *from,
-      size_t length __attribute__((unused))) {
+dlep_service_incoming_parse(void *ptr, size_t length,
+    union netaddr_socket *from, bool multicast) {
   enum pbb_result result;
 #if !defined(REMOVE_LOG_DEBUG)
   struct netaddr_str buf;
 #endif
 
-  OLSR_DEBUG(LOG_DLEP_CLIENT, "Parsing DLEP packet from %s",
-      netaddr_socket_to_string(&buf, from));
+  OLSR_DEBUG(LOG_DLEP_CLIENT, "Parsing DLEP packet from %s (%s)",
+      netaddr_socket_to_string(&buf, from),
+      multicast ? "multicast" : "unicast");
 
   _message_peer_socket = from;
+  _message_multicast = multicast;
 
-  result = pbb_reader_handle_packet(&_dlep_reader, s->config.input_buffer, length);
+  result = pbb_reader_handle_packet(&_dlep_reader, ptr, length);
   if (result) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Error while parsing DLEP packet: %s (%d)",
         pbb_strerror(result), result);

@@ -76,6 +76,8 @@ static int _cb_plugin_unload(void);
 static int _cb_plugin_enable(void);
 static int _cb_plugin_disable(void);
 
+static void _cb_receive_dlep(struct olsr_packet_socket *s,
+      union netaddr_socket *from, size_t length);
 static void _cb_dlep_router_timerout(void *);
 
 static void _cb_neighbor_added(void *);
@@ -138,7 +140,7 @@ static struct cfg_schema_entry _dlep_entries[] = {
 
 struct _dlep_config _config;
 static struct olsr_packet_managed _dlep_socket = {
-  .config.receive_data = cb_receive_dlep,
+  .config.receive_data = _cb_receive_dlep,
 };
 
 /* DLEP session data */
@@ -206,7 +208,7 @@ _cb_plugin_enable(void) {
 
   olsr_packet_add_managed(&_dlep_socket);
 
-  dlep_incoming_init();
+  dlep_service_incoming_init();
   dlep_outgoing_init();
   return 0;
 }
@@ -224,7 +226,7 @@ _cb_plugin_disable(void) {
   }
 
   dlep_outgoing_cleanup();
-  dlep_incoming_cleanup();
+  dlep_service_incoming_cleanup();
 
   olsr_packet_remove_managed(&_dlep_socket, true);
 
@@ -272,6 +274,19 @@ dlep_add_router_session(union netaddr_socket *peer_socket, uint64_t vtime) {
   /* reset validity time for router session */
   olsr_timer_set(&session->router_vtime, vtime);
   return session;
+}
+
+/**
+ * Receive UDP data with DLEP protocol
+ * @param
+ * @param from
+ * @param length
+ */
+static void
+_cb_receive_dlep(struct olsr_packet_socket *s,
+      union netaddr_socket *from, size_t length) {
+  dlep_service_incoming_parse(s->config.input_buffer, length, from,
+      s == &_dlep_socket.multicast_v4 || s == &_dlep_socket.multicast_v6);
 }
 
 /**
