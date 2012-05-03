@@ -13,7 +13,7 @@
 
 #include "dlep_iana.h"
 #include "dlep_service.h"
-#include "dlep_incoming.h"
+#include "dlep_service_incoming.h"
 
 /* DLEP TLV array index */
 enum dlep_tlv_idx {
@@ -57,14 +57,14 @@ static enum dlep_orders _current_order;
 static union netaddr_socket *_peer_socket;
 
 /* incoming subsystem */
-OLSR_SUBSYSTEM_STATE(_dlep_incoming);
+OLSR_SUBSYSTEM_STATE(_dlep_service_incoming);
 
 /**
  * Initialize subsystem for RFC5444 processing
  */
 void
 dlep_incoming_init(void) {
-  if (olsr_subsystem_init(&_dlep_incoming))
+  if (olsr_subsystem_init(&_dlep_service_incoming))
     return;
 
   pbb_reader_init(&_dlep_reader);
@@ -77,7 +77,7 @@ dlep_incoming_init(void) {
  */
 void
 dlep_incoming_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_dlep_incoming))
+  if (olsr_subsystem_cleanup(&_dlep_service_incoming))
     return;
 
   pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);

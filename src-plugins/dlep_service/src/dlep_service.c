@@ -63,8 +63,8 @@
 #include "olsr.h"
 
 #include "dlep_iana.h"
-#include "dlep_incoming.h"
-#include "dlep_outgoing.h"
+#include "dlep_service_incoming.h"
+#include "dlep_service_outgoing.h"
 #include "dlep_service.h"
 
 /* constants */

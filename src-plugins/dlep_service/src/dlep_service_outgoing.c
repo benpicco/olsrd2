@@ -14,7 +14,7 @@
 
 #include "dlep_iana.h"
 #include "dlep_service.h"
-#include "dlep_outgoing.h"
+#include "dlep_service_outgoing.h"
 
 #include "olsr_layer2.h"
 
@@ -108,7 +108,7 @@ static struct pbb_writer_interface _dlep_multicast = {
 };
 
 /* outgoing subsystem */
-OLSR_SUBSYSTEM_STATE(_dlep_outgoing);
+OLSR_SUBSYSTEM_STATE(_dlep_service_outgoing);
 
 /**
  * Initialize subsystem for rfc5444 generation
@@ -116,7 +116,7 @@ OLSR_SUBSYSTEM_STATE(_dlep_outgoing);
  */
 int
 dlep_outgoing_init(void) {
-  if (olsr_subsystem_init(&_dlep_outgoing))
+  if (olsr_subsystem_init(&_dlep_service_outgoing))
     return 0;
 
   pbb_writer_init(&_dlep_writer);
@@ -150,7 +150,7 @@ dlep_outgoing_init(void) {
  */
 void
 dlep_outgoing_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_dlep_outgoing))
+  if (olsr_subsystem_cleanup(&_dlep_service_outgoing))
     return;
 
   olsr_timer_remove(&_tinfo_interface_discovery);
