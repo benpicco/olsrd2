@@ -18,6 +18,7 @@
 
 #include "olsr_layer2.h"
 
+/* index numbers of address TVLs */
 enum dlep_addrtlv_idx {
   IDX_ADDRTLV_LINK_STATUS,
   IDX_ADDRTLV_SIGNAL,
@@ -32,6 +33,7 @@ enum dlep_addrtlv_idx {
   IDX_ADDRTLV_TX_FAILED,
 };
 
+/* prototypes of callbacks */
 static void _cb_addMessageHeader(struct pbb_writer *,
     struct pbb_writer_message *);
 static void _cb_addMessageTLVs(struct pbb_writer *,
@@ -42,7 +44,7 @@ static void _cb_addAddresses(struct pbb_writer *,
 static void _cb_interface_discovery(void *);
 static void _cb_metric_update(void *);
 
-/* discovery and metric update timer */
+/* discovery and metric update timer data */
 struct olsr_timer_info _tinfo_interface_discovery = {
   .name = "dlep interface discovery",
   .callback = _cb_interface_discovery,
@@ -63,7 +65,7 @@ struct olsr_timer_entry _tentry_metric_update = {
 bool _triggered_metric_update;
 
 /* DLEP writer data */
-static uint8_t _msg_buffer[1500];
+static uint8_t _msg_buffer[1200];
 static uint8_t _msg_addrtlvs[5000];
 
 static enum dlep_orders _msg_order;
@@ -98,7 +100,7 @@ static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
   [IDX_ADDRTLV_TX_FAILED]   = { .type = DLEP_ADDRTLV_TX_FAILED },
 };
 
-static uint8_t _packet_buffer[1280];
+static uint8_t _packet_buffer[1500];
 static struct pbb_writer_interface _dlep_multicast = {
   .packet_buffer = _packet_buffer,
   .packet_size = sizeof(_packet_buffer),
@@ -160,6 +162,9 @@ dlep_outgoing_cleanup(void) {
   pbb_writer_cleanup(&_dlep_writer);
 }
 
+/**
+ * Trigger an 'out of order' metric update
+ */
 void
 dlep_trigger_metric_update(void) {
   if (!_triggered_metric_update) {
@@ -168,6 +173,9 @@ dlep_trigger_metric_update(void) {
   }
 }
 
+/**
+ * Reset timer settings according to configuration
+ */
 void
 dlep_reconfigure_timers(void) {
   olsr_timer_set(&_tentry_interface_discovery, _config.discovery_interval);

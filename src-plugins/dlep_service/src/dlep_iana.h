@@ -8,7 +8,7 @@
 #ifndef DLEP_IANA_H_
 #define DLEP_IANA_H_
 
-#define DLEP_MESSAGE_ID 42
+enum { DLEP_MESSAGE_ID = 42 };
 
 enum dlep_orders {
   DLEP_ORDER_INTERFACE_DISCOVERY = 1,

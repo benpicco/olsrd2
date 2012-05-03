@@ -26,6 +26,7 @@ enum dlep_tlv_idx {
   IDX_TLV_SUPPORTED_RATES,
 };
 
+/* callback prototypes */
 static enum pbb_result _cb_parse_dlep_message(
     struct pbb_reader_tlvblock_consumer *consumer,
     struct pbb_reader_tlvblock_context *context);
@@ -55,7 +56,7 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
 static enum dlep_orders _current_order;
 static union netaddr_socket *_peer_socket;
 
-/* outgoing subsystem */
+/* incoming subsystem */
 OLSR_SUBSYSTEM_STATE(_dlep_incoming);
 
 /**
@@ -71,6 +72,9 @@ dlep_incoming_init(void) {
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
 }
 
+/**
+ * Cleanup all data allocated for RFC 5444 processing
+ */
 void
 dlep_incoming_cleanup(void) {
   if (olsr_subsystem_cleanup(&_dlep_incoming))
