@@ -45,6 +45,9 @@
 int dlep_outgoing_init(void);
 void dlep_outgoing_cleanup(void);
 
+void dlep_service_registerif(struct pbb_writer_interface *);
+void dlep_service_unregisterif(struct pbb_writer_interface *);
+
 void dlep_trigger_metric_update(void);
 void dlep_reconfigure_timers(void);
 

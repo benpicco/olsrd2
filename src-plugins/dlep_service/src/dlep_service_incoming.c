@@ -54,6 +54,7 @@ enum dlep_tlv_idx {
   IDX_TLV_ORDER,
   IDX_TLV_VTIME,
   IDX_TLV_PEER_TYPE,
+  IDX_TLV_UNICAST,
   IDX_TLV_SSID,
   IDX_TLV_LAST_SEEN,
   IDX_TLV_FREQUENCY,
@@ -80,6 +81,7 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER]           = { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
   [IDX_TLV_VTIME]           = { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE]       = { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
+  [IDX_TLV_UNICAST]         = { .type = DLEP_TLV_UNICAST, .min_length = 0, .match_length = true},
   [IDX_TLV_SSID]            = { .type = DLEP_TLV_SSID, .min_length = 6, .match_length = true },
   [IDX_TLV_LAST_SEEN]       = { .type = DLEP_TLV_LAST_SEEN, .min_length = 4, .match_length = true },
   [IDX_TLV_FREQUENCY]       = { .type = DLEP_TLV_FREQUENCY, .min_length = 8, .match_length = true },
@@ -155,18 +157,24 @@ dlep_service_incoming_parse(void *ptr, size_t length,
  */
 static enum pbb_result
 _parse_order_connect_router(void) {
+  struct _router_session *session;
   uint8_t encoded_vtime;
   uint64_t vtime;
-
+  bool unicast;
   encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
 
   /* decode vtime according to RFC 5497 */
   vtime = pbb_timetlv_decode(encoded_vtime);
 
+  /* see if we have to unicast this router */
+  unicast = _dlep_message_tlvs[IDX_TLV_UNICAST].tlv != NULL;
+
   /* add new session */
-  if (!dlep_add_router_session(_peer_socket, vtime)) {
+  session = dlep_add_router_session(_peer_socket, unicast, vtime);
+  if (!session) {
     return PBB_DROP_MESSAGE;
   }
+
   return PBB_OKAY;
 }
 

@@ -51,29 +51,43 @@
 #include "core/olsr_timer.h"
 
 /* definitions */
-struct _dlep_config {
+struct _dlep_connect_to {
+  union netaddr_socket address;
+  bool explicit;
+};
+
+struct _dlep_client_config {
   struct olsr_packet_managed_config socket;
   char peer_type[81];
-
   uint64_t connect_interval, connect_validity;
 };
 
-struct _dlep_session {
+struct _dlep_service_session {
   struct avl_node _node;
 
   union netaddr_socket interface_socket;
-  struct pbb_writer_interface out_if;
+  struct olsr_timer_entry service_vtime;
 
-  struct netaddr radio_mac;
-  struct olsr_timer_entry interface_vtime;
+  bool explicit;
+
+  struct pbb_writer_interface out_if;
   uint16_t seqno;
 };
 
-extern struct _dlep_config _config;
-extern struct avl_tree _session_tree;
+struct _discovered_interface_session {
+  struct avl_node _node;
+
+  struct _dlep_service_session *service;
+  struct netaddr radio_mac;
+  struct olsr_timer_entry interface_vtime;
+};
+
+extern struct _dlep_client_config _client_config;
+extern struct avl_tree _service_tree;
+extern struct avl_tree _interface_tree;
 extern enum log_source LOG_DLEP_CLIENT;
 
-struct _dlep_session *dlep_add_interface_session(
+struct _discovered_interface_session *dlep_add_interface_session(
     union netaddr_socket *peer_socket,
     struct netaddr *radio_mac, uint64_t vtime);
 

@@ -50,6 +50,6 @@ void dlep_client_outgoing_cleanup(void);
 void dlep_client_registerif(struct pbb_writer_interface *);
 void dlep_client_unregisterif(struct pbb_writer_interface *);
 
-void dlep_client_reconfigure_timers(void);
+void dlep_client_outgoing_reconfigure(void);
 
 #endif /* DLEP_CLIENT_OUTGOING_H_ */

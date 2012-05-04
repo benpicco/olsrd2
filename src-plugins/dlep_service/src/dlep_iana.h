@@ -54,11 +54,12 @@ enum dlep_orders {
 enum dlep_msgtlv_types {
   DLEP_TLV_ORDER           = 192,
   DLEP_TLV_PEER_TYPE       = 193,
+  DLEP_TLV_UNICAST         = 194,
 
-  DLEP_TLV_SSID            = 194,
-  DLEP_TLV_LAST_SEEN       = 195,
-  DLEP_TLV_FREQUENCY       = 196,
-  DLEP_TLV_SUPPORTED_RATES = 197,
+  DLEP_TLV_SSID            = 195,
+  DLEP_TLV_LAST_SEEN       = 196,
+  DLEP_TLV_FREQUENCY       = 197,
+  DLEP_TLV_SUPPORTED_RATES = 198,
 };
 
 enum dlep_addrtlv_types {

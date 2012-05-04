@@ -61,7 +61,8 @@ static uint8_t _msg_buffer[1500];
 static uint8_t _msg_addrtlvs[5000];
 
 static enum dlep_orders _msg_order;
-static struct _dlep_session *_msg_session;
+static struct _dlep_service_session *_msg_session;
+static bool _msg_explicit_connectto;
 
 static struct pbb_writer _dlep_writer = {
   .msg_buffer = _msg_buffer,
@@ -84,15 +85,14 @@ static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
 #endif
 
 /* infrastructure */
-struct olsr_timer_info _tinfo_router_connect = {
+static struct olsr_timer_info _tinfo_router_connect = {
   .name = "dlep interface discovery",
   .callback = _cb_router_connect,
   .periodic = true,
 };
-struct olsr_timer_entry _tentry_router_connect = {
+static struct olsr_timer_entry _tentry_router_connect = {
   .info = &_tinfo_router_connect,
 };
-
 
 /* outgoing subsystem */
 OLSR_SUBSYSTEM_STATE(_dlep_client_outgoing);
@@ -156,23 +156,30 @@ dlep_client_outgoing_cleanup(void) {
   pbb_writer_cleanup(&_dlep_writer);
 }
 
+/**
+ * Add a packetbb interface to the writer instance
+ * @param pbbif pointer to packetbb interface
+ */
 void
 dlep_client_registerif(struct pbb_writer_interface *pbbif) {
   pbb_writer_register_interface(&_dlep_writer, pbbif);
 }
 
+/**
+ * Remove a packetbb interface to the writer instance
+ * @param pbbif pointer to packetbb interface
+ */
 void
 dlep_client_unregisterif(struct pbb_writer_interface *pbbif) {
   pbb_writer_unregister_interface(&_dlep_writer, pbbif);
 }
 
-
 /**
  * Reset timer settings according to configuration
  */
 void
-dlep_client_reconfigure_timers(void) {
-  olsr_timer_set(&_tentry_router_connect, _config.connect_interval);
+dlep_client_outgoing_reconfigure(void) {
+  olsr_timer_set(&_tentry_router_connect, _client_config.connect_interval);
 }
 
 /**
@@ -183,14 +190,18 @@ _add_connectrouter_msgtlvs(void) {
   uint8_t encoded_vtime;
 
   /* encode vtime according to RFC 5497 */
-  encoded_vtime = pbb_timetlv_encode(_config.connect_validity);
+  encoded_vtime = pbb_timetlv_encode(_client_config.connect_validity);
 
   pbb_writer_add_messagetlv(&_dlep_writer, PBB_MSGTLV_VALIDITY_TIME, 0,
       &encoded_vtime, sizeof(encoded_vtime));
 
-  if (_config.peer_type[0]) {
+  if (_msg_session->explicit) {
+    pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_UNICAST, 0, NULL, 0);
+  }
+
+  if (_client_config.peer_type[0]) {
     pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
-        _config.peer_type, strlen(_config.peer_type));
+        _client_config.peer_type, strlen(_client_config.peer_type));
   }
 }
 
@@ -233,13 +244,12 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
  */
 static void
 _cb_router_connect(void *ptr __attribute__((unused))) {
-  if (avl_is_empty(&_session_tree))
-    return;
-
   _msg_order = DLEP_ORDER_CONNECT_ROUTER;
 
-  avl_for_each_element(&_session_tree, _msg_session, _node) {
-    pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_msg_session->out_if);
+  avl_for_each_element(&_service_tree, _msg_session, _node) {
+    _msg_explicit_connectto = false;
+    pbb_writer_create_message_singleif(&_dlep_writer,
+        DLEP_MESSAGE_ID, &_msg_session->out_if);
     pbb_writer_flush(&_dlep_writer, &_msg_session->out_if, false);
   }
 }

@@ -138,7 +138,7 @@ static uint8_t _packet_buffer[1500];
 static struct pbb_writer_interface _dlep_multicast = {
   .packet_buffer = _packet_buffer,
   .packet_size = sizeof(_packet_buffer),
-  .sendPacket =_cb_sendMulticast,
+  .sendPacket =_cb_send_multicast,
 };
 
 /* outgoing subsystem */
@@ -194,6 +194,24 @@ dlep_outgoing_cleanup(void) {
       _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs));
   pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
   pbb_writer_cleanup(&_dlep_writer);
+}
+
+/**
+ * Add a packetbb interface to the writer instance
+ * @param pbbif pointer to packetbb interface
+ */
+void
+dlep_service_registerif(struct pbb_writer_interface *pbbif) {
+  pbb_writer_register_interface(&_dlep_writer, pbbif);
+}
+
+/**
+ * Remove a packetbb interface to the writer instance
+ * @param pbbif pointer to packetbb interface
+ */
+void
+dlep_service_unregisterif(struct pbb_writer_interface *pbbif) {
+  pbb_writer_unregister_interface(&_dlep_writer, pbbif);
 }
 
 /**
@@ -453,14 +471,23 @@ _cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
 static void
 _cb_interface_discovery(void *ptr __attribute__((unused))) {
   struct olsr_layer2_network *net_it;
+  struct _router_session *session;
   struct netaddr_str buf;
 
   _msg_order = DLEP_ORDER_INTERFACE_DISCOVERY;
   OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
     OLSR_DEBUG(LOG_DLEP_SERVICE, "Send interface discovery for radio %s",
         netaddr_to_string(&buf, &_msg_network->radio_id));
+
     pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
     pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
+
+    avl_for_each_element(&_router_tree, session, _node) {
+      if (session->unicast) {
+        pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &session->out_if);
+        pbb_writer_flush(&_dlep_writer, &session->out_if, false);
+      }
+    }
   }
 }
 
@@ -471,19 +498,38 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
 static void
 _cb_metric_update(void *ptr __attribute__((unused))) {
   struct olsr_layer2_network *net_it;
-  struct netaddr_str buf;
+  struct _router_session *session;
+  struct netaddr_str buf1, buf2;
+  bool multicast;
 
   _triggered_metric_update = false;
-
-  if (!_config.always_send && avl_is_empty(&_session_tree))
-    return;
-
   _msg_order = DLEP_ORDER_NEIGHBOR_UPDATE;
-  OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
-    OLSR_DEBUG(LOG_DLEP_SERVICE, "Send metric update for radio %s",
-        netaddr_to_string(&buf, &_msg_network->radio_id));
-    pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
-    pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
+
+  multicast = _config.always_send;
+  avl_for_each_element(&_router_tree, session, _node) {
+    if (!session->unicast) {
+      multicast = true;
+      continue;
+    }
+
+    OLSR_DEBUG(LOG_DLEP_SERVICE, "Send metric updates for radio %s to router %s",
+        netaddr_to_string(&buf1, &_msg_network->radio_id),
+        netaddr_socket_to_string(&buf2, &session->router_socket));
+
+    OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
+      pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &session->out_if);
+      pbb_writer_flush(&_dlep_writer, &session->out_if, false);
+    }
+  }
+
+  if (multicast) {
+    OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
+      OLSR_DEBUG(LOG_DLEP_SERVICE, "Send metric updates for radio %s (via multicast)",
+          netaddr_to_string(&buf1, &_msg_network->radio_id));
+
+      pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
+      pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
+    }
   }
 
   olsr_timer_start(&_tentry_metric_update, _config.metric_interval);

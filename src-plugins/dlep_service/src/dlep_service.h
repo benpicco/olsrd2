@@ -50,16 +50,20 @@
 #include "core/olsr_packet_socket.h"
 #include "core/olsr_timer.h"
 
-struct _dlep_session {
+struct _router_session {
   struct avl_node _node;
 
   union netaddr_socket router_socket;
   struct netaddr radio_mac;
   struct olsr_timer_entry router_vtime;
+
+  struct pbb_writer_interface out_if;
+
+  bool unicast;
 };
 
 /* definitions */
-struct _dlep_config {
+struct _dlep_service_config {
   struct olsr_packet_managed_config socket;
 
   char peer_type[81];
@@ -70,14 +74,14 @@ struct _dlep_config {
   bool always_send;
 };
 
-extern struct _dlep_config _config;
-extern struct avl_tree _session_tree;
+extern struct _dlep_service_config _config;
+extern struct avl_tree _router_tree;
 extern enum log_source LOG_DLEP_SERVICE;
 
-struct _dlep_session *dlep_add_router_session(
-    union netaddr_socket *peer_socket, uint64_t vtime);
+struct _router_session *dlep_add_router_session(
+    union netaddr_socket *peer_socket, bool unicast, uint64_t vtime);
 
-void _cb_sendMulticast(struct pbb_writer *writer,
+void _cb_send_multicast(struct pbb_writer *writer,
     struct pbb_writer_interface *interf,
     void *ptr, size_t len);
 #endif /* DLEP_SERVICE_H_ */

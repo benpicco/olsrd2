@@ -69,6 +69,7 @@
 
 /* constants */
 #define _CFG_SECTION "dlep_service"
+#define DLEP_PKT_BUFFER_SIZE 1500
 
 /* prototypes */
 static int _cb_plugin_load(void);
@@ -79,6 +80,11 @@ static int _cb_plugin_disable(void);
 static void _cb_receive_dlep(struct olsr_packet_socket *s,
       union netaddr_socket *from, size_t length);
 static void _cb_dlep_router_timerout(void *);
+
+void _cb_send_multicast(struct pbb_writer *writer,
+    struct pbb_writer_interface *interf, void *ptr, size_t len);
+void _cb_send_unicast(struct pbb_writer *writer,
+    struct pbb_writer_interface *interf, void *ptr, size_t len);
 
 static void _cb_neighbor_added(void *);
 static void _cb_neighbor_removed(void *);
@@ -104,47 +110,47 @@ static struct cfg_schema_section _dlep_section = {
 };
 
 static struct cfg_schema_entry _dlep_entries[] = {
-  CFG_MAP_ACL_V46(_dlep_config, socket.acl, "acl", "default_accept",
+  CFG_MAP_ACL_V46(_dlep_service_config, socket.acl, "acl", "default_accept",
     "Access control list for dlep interface"),
-  CFG_MAP_NETADDR_V4(_dlep_config, socket.bindto_v4, "bindto_v4", "127.0.0.1",
+  CFG_MAP_NETADDR_V4(_dlep_service_config, socket.bindto_v4, "bindto_v4", "127.0.0.1",
     "Bind dlep ipv4 socket to this address", false),
-  CFG_MAP_NETADDR_V6(_dlep_config, socket.bindto_v6, "bindto_v6", "::1",
+  CFG_MAP_NETADDR_V6(_dlep_service_config, socket.bindto_v6, "bindto_v6", "::1",
     "Bind dlep ipv6 socket to this address", false),
-  CFG_MAP_NETADDR_V4(_dlep_config, socket.multicast_v4, "multicast_v4", "224.0.0.2",
+  CFG_MAP_NETADDR_V4(_dlep_service_config, socket.multicast_v4, "multicast_v4", "224.0.0.2",
     "ipv4 multicast address of this socket", false),
-  CFG_MAP_NETADDR_V6(_dlep_config, socket.multicast_v6, "multicast_v6", "ff01::2",
+  CFG_MAP_NETADDR_V6(_dlep_service_config, socket.multicast_v6, "multicast_v6", "ff01::2",
     "ipv6 multicast address of this socket", false),
-  CFG_MAP_INT_MINMAX(_dlep_config, socket.port, "port", "2001",
+  CFG_MAP_INT_MINMAX(_dlep_service_config, socket.port, "port", "2001",
     "Multicast Network port for dlep interface", 1, 65535),
-  CFG_MAP_STRING_ARRAY(_dlep_config, socket.interface, "interface", "",
+  CFG_MAP_STRING_ARRAY(_dlep_service_config, socket.interface, "interface", "",
     "Specifies socket interface (necessary for linklocal communication)", IF_NAMESIZE),
-  CFG_MAP_BOOL(_dlep_config, socket.loop_multicast, "loop_multicast", "false",
+  CFG_MAP_BOOL(_dlep_service_config, socket.loop_multicast, "loop_multicast", "false",
     "Allow discovery broadcasts to be received by clients on the same node"),
 
-  CFG_MAP_STRING_ARRAY(_dlep_config, peer_type, "peer_type", "",
+  CFG_MAP_STRING_ARRAY(_dlep_service_config, peer_type, "peer_type", "",
     "String for identifying this DLEP service", 80),
 
-  CFG_MAP_CLOCK_MIN(_dlep_config, discovery_interval, "discovery_interval", "2.000",
+  CFG_MAP_CLOCK_MIN(_dlep_service_config, discovery_interval, "discovery_interval", "2.000",
     "Interval in seconds between interface discovery messages", 100),
-  CFG_MAP_CLOCK_MINMAX(_dlep_config, discovery_validity, "discovery_validity", "5.000",
+  CFG_MAP_CLOCK_MINMAX(_dlep_service_config, discovery_validity, "discovery_validity", "5.000",
     "Validity time in seconds for interface discovery messages", 100, PBB_TIMETLV_MAX),
 
-  CFG_MAP_CLOCK_MIN(_dlep_config, metric_interval, "metric_interval", "1.000",
+  CFG_MAP_CLOCK_MIN(_dlep_service_config, metric_interval, "metric_interval", "1.000",
     "Interval in seconds between neighbor update messages", 100),
-  CFG_MAP_CLOCK_MINMAX(_dlep_config, metric_validity, "metric_validity", "5.000",
+  CFG_MAP_CLOCK_MINMAX(_dlep_service_config, metric_validity, "metric_validity", "5.000",
     "Validity time in seconds for neighbor update messages", 100, PBB_TIMETLV_MAX),
 
-  CFG_MAP_BOOL(_dlep_config, always_send, "always_send", "false",
+  CFG_MAP_BOOL(_dlep_service_config, always_send, "always_send", "false",
     "Set to true to send neighbor updates even without connected clients"),
 };
 
-struct _dlep_config _config;
+struct _dlep_service_config _config;
 static struct olsr_packet_managed _dlep_socket = {
   .config.receive_data = _cb_receive_dlep,
 };
 
 /* DLEP session data */
-struct avl_tree _session_tree;
+struct avl_tree _router_tree;
 
 /* infrastructure */
 struct olsr_timer_info _tinfo_router_vtime = {
@@ -201,7 +207,7 @@ _cb_plugin_unload(void) {
  */
 static int
 _cb_plugin_enable(void) {
-  avl_init(&_session_tree, netaddr_socket_avlcmp, false, NULL);
+  avl_init(&_router_tree, netaddr_socket_avlcmp, false, NULL);
 
   olsr_callback_register_consumer(&_layer2_neighbor_consumer);
   olsr_callback_register_consumer(&_layer2_network_consumer);
@@ -219,9 +225,9 @@ _cb_plugin_enable(void) {
  */
 static int
 _cb_plugin_disable(void) {
-  struct _dlep_session *session, *s_it;
+  struct _router_session *session, *s_it;
 
-  avl_for_each_element_safe(&_session_tree, session, _node, s_it) {
+  avl_for_each_element_safe(&_router_tree, session, _node, s_it) {
     _cb_dlep_router_timerout(session);
   }
 
@@ -244,12 +250,12 @@ _cb_plugin_disable(void) {
  * @param vtime validity time of the socket connection
  * @return pointer to dlep session, NULL if out of memory
  */
-struct _dlep_session *
-dlep_add_router_session(union netaddr_socket *peer_socket, uint64_t vtime) {
-  struct _dlep_session *session;
+struct _router_session *
+dlep_add_router_session(union netaddr_socket *peer_socket, bool unicast, uint64_t vtime) {
+  struct _router_session *session;
   struct netaddr_str buf;
 
-  session = avl_find_element(&_session_tree, peer_socket, session, _node);
+  session = avl_find_element(&_router_tree, peer_socket, session, _node);
   if (session == NULL) {
     OLSR_DEBUG(LOG_DLEP_SERVICE, "New DLEP router session for %s",
         netaddr_socket_to_string(&buf, peer_socket));
@@ -261,6 +267,15 @@ dlep_add_router_session(union netaddr_socket *peer_socket, uint64_t vtime) {
       return NULL;
     }
 
+    /* TODO: create new outgoing interface for unicasting router */
+    session->out_if.packet_buffer = calloc(1, DLEP_PKT_BUFFER_SIZE);
+    if (session->out_if.packet_buffer == NULL) {
+      free(session);
+      OLSR_WARN(LOG_DLEP_SERVICE, "Not enough memory for packetbb output buffer");
+      return NULL;
+    }
+    session->out_if.packet_size = DLEP_PKT_BUFFER_SIZE;
+
     /* initialize new session */
     session->_node.key = &session->router_socket;
     memcpy(&session->router_socket, peer_socket, sizeof(*peer_socket));
@@ -268,8 +283,15 @@ dlep_add_router_session(union netaddr_socket *peer_socket, uint64_t vtime) {
     session->router_vtime.cb_context = session;
     session->router_vtime.info = &_tinfo_router_vtime;
 
-    avl_insert(&_session_tree, &session->_node);
+    avl_insert(&_router_tree, &session->_node);
+
+    /* register interface with rfc5444 writer */
+    session->out_if.sendPacket = _cb_send_unicast;
+    dlep_service_registerif(&session->out_if);
   }
+
+  /* copy unicast flag */
+  session->unicast = unicast;
 
   /* reset validity time for router session */
   olsr_timer_set(&session->router_vtime, vtime);
@@ -295,14 +317,19 @@ _cb_receive_dlep(struct olsr_packet_socket *s,
  */
 static void
 _cb_dlep_router_timerout(void *ptr) {
-  struct _dlep_session *session = ptr;
+  struct _router_session *session = ptr;
 
   OLSR_DEBUG(LOG_DLEP_SERVICE, "Removing DLEP router session");
 
   /* might have been called directly */
   olsr_timer_stop(&session->router_vtime);
 
-  avl_remove(&_session_tree, &session->_node);
+  /* free rfc 5444 interface */
+  dlep_service_unregisterif(&session->out_if);
+  free (session->out_if.packet_buffer);
+
+  /* remove session */
+  avl_remove(&_router_tree, &session->_node);
   free(session);
 }
 
@@ -314,7 +341,7 @@ _cb_dlep_router_timerout(void *ptr) {
  * @param len
  */
 void
-_cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
+_cb_send_multicast(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf __attribute__((unused)),
     void *ptr, size_t len) {
   if (config_global.ipv4
@@ -328,6 +355,27 @@ _cb_sendMulticast(struct pbb_writer *writer __attribute__((unused)),
         strerror(errno), errno);
   }
 }
+
+/**
+ * Callback for sending out the generated DLEP multicast packet
+ * @param writer
+ * @param interf
+ * @param ptr
+ * @param len
+ */
+void
+_cb_send_unicast(struct pbb_writer *writer __attribute__((unused)),
+    struct pbb_writer_interface *interf, void *ptr, size_t len) {
+  struct _router_session *session;
+
+  session = container_of(interf, struct _router_session, out_if);
+
+  if (olsr_packet_send_managed(&_dlep_socket, &session->router_socket, ptr, len) < 0) {
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket: %s (%d)",
+        strerror(errno), errno);
+  }
+}
+
 
 /**
  * Callback for receiving 'neighbor added' events from layer2 db
