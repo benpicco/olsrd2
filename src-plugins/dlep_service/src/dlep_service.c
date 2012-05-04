@@ -130,8 +130,8 @@ static struct cfg_schema_entry _dlep_entries[] = {
   CFG_MAP_STRING_ARRAY(_dlep_service_config, peer_type, "peer_type", "",
     "String for identifying this DLEP service", 80),
 
-  CFG_MAP_CLOCK_MIN(_dlep_service_config, discovery_interval, "discovery_interval", "2.000",
-    "Interval in seconds between interface discovery messages", 100),
+  CFG_MAP_CLOCK(_dlep_service_config, discovery_interval, "discovery_interval", "2.000",
+    "Interval in seconds between interface discovery messages"),
   CFG_MAP_CLOCK_MINMAX(_dlep_service_config, discovery_validity, "discovery_validity", "5.000",
     "Validity time in seconds for interface discovery messages", 100, PBB_TIMETLV_MAX),
 

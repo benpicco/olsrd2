@@ -512,11 +512,11 @@ _cb_metric_update(void *ptr __attribute__((unused))) {
       continue;
     }
 
-    OLSR_DEBUG(LOG_DLEP_SERVICE, "Send metric updates for radio %s to router %s",
-        netaddr_to_string(&buf1, &_msg_network->radio_id),
-        netaddr_socket_to_string(&buf2, &session->router_socket));
-
     OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
+      OLSR_DEBUG(LOG_DLEP_SERVICE, "Send metric updates for radio %s to router %s",
+          netaddr_to_string(&buf1, &_msg_network->radio_id),
+          netaddr_socket_to_string(&buf2, &session->router_socket));
+
       pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &session->out_if);
       pbb_writer_flush(&_dlep_writer, &session->out_if, false);
     }

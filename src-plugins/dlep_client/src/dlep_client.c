@@ -132,8 +132,8 @@ static struct cfg_schema_entry _dlep_entries[] = {
     "Connect to a specific DLEP service without waiting for its discovery messages",
     false, .list = true),
 
-  CFG_MAP_CLOCK_MIN(_dlep_client_config, connect_interval, "connect_interval", "0.000",
-    "Interval in seconds between router connect messages", 100),
+  CFG_MAP_CLOCK(_dlep_client_config, connect_interval, "connect_interval", "0.000",
+    "Interval in seconds between router connect messages"),
   CFG_MAP_CLOCK_MINMAX(_dlep_client_config, connect_validity, "connect_validity", "5.000",
     "Validity time in seconds for router connect messages", 100, PBB_TIMETLV_MAX),
 };
