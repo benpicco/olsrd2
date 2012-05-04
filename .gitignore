@@ -13,3 +13,5 @@ build-win32/
 .cproject
 .project
 .settings/
+
+upload.sh

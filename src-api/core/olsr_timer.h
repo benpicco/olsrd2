@@ -46,6 +46,8 @@
 #include "common/list.h"
 #include "common/avl.h"
 
+#include "olsr_clock.h"
+
 /* prototype for timer callback */
 typedef void (*timer_cb_func) (void *);
 
@@ -138,9 +140,23 @@ olsr_timer_is_active(struct olsr_timer_entry *timer) {
   return timer->_clock != 0ull;
 }
 
+/**
+ * @param timer pointer to timer
+ * @return interval between timer events in milliseconds
+ */
 static INLINE uint64_t
 olsr_timer_get_period(struct olsr_timer_entry *timer) {
   return timer->_period;
 }
+
+/**
+ * @param timer pointer to timer
+ * @return number of milliseconds until timer fires
+ */
+static INLINE int64_t
+olsr_timer_get_due(struct olsr_timer_entry *timer) {
+  return olsr_clock_get_relative(timer->_clock);
+}
+
 
 #endif /* OLSR_TIMER_H_ */
