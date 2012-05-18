@@ -47,6 +47,7 @@
 #include "common/list.h"
 #include "common/avl.h"
 #include "common/avl_comp.h"
+#include "olsr.h"
 #include "olsr_logging.h"
 #include "olsr_callbacks.h"
 
@@ -62,11 +63,16 @@ struct avl_tree olsr_callback_provider_tree;
 
 enum log_source LOG_CALLBACK;
 
+OLSR_SUBSYSTEM_STATE(_callback_state);
+
 /**
  * Initialize the internal data of the callback provider system
  */
 void
 olsr_callback_init(void) {
+  if (olsr_subsystem_init(&_callback_state)) {
+    return;
+  }
   avl_init(&olsr_callback_provider_tree, avl_comp_strcasecmp, false, NULL);
 
   LOG_CALLBACK = olsr_log_register_source("callback");
@@ -78,6 +84,10 @@ olsr_callback_init(void) {
 void
 olsr_callback_cleanup(void) {
   struct olsr_callback_provider *prv, *iterator;
+
+  if (olsr_subsystem_cleanup(&_callback_state)) {
+    return;
+  }
 
   OLSR_FOR_ALL_CALLBACK_PROVIDERS(prv, iterator) {
     olsr_callback_remove(prv);
