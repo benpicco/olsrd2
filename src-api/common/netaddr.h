@@ -58,9 +58,12 @@
 #include "common/common_types.h"
 #include "common/autobuf.h"
 
+enum {
+  AF_MAC48 = AF_MAX + 1,
+  AF_EUI64 = AF_MAX + 2,
+};
 
-#define AF_MAC48 ((AF_MAX) + 1)
-#define AF_EUI64 ((AF_MAX) + 2)
+enum { NETADDR_MAX_LENGTH = 16 };
 
 /**
  * Representation of an address including address type
@@ -68,7 +71,7 @@
  */
 struct netaddr {
   /* 16 bytes of memory for address */
-  uint8_t addr[16];
+  uint8_t addr[NETADDR_MAX_LENGTH];
 
   /* address type */
   uint8_t type;
@@ -127,7 +130,7 @@ EXPORT bool netaddr_is_in_subnet(const struct netaddr *subnet, const struct neta
 EXPORT bool netaddr_binary_is_in_subnet(const struct netaddr *subnet,
     const void *bin, size_t len, uint8_t af_family);
 
-EXPORT uint8_t netaddr_get_maxprefix(const struct netaddr *);
+EXPORT uint8_t netaddr_get_af_maxprefix(const uint32_t);
 
 EXPORT int netaddr_avlcmp(const void *, const void *, void *);
 EXPORT int netaddr_socket_avlcmp(const void *, const void *, void *);
@@ -214,4 +217,15 @@ static INLINE sa_family_t
 netaddr_socket_get_addressfamily(const union netaddr_socket *s) {
   return s->std.sa_family;
 }
+
+/**
+ * Calculates the maximum prefix length of an address type
+ * @param addr netaddr object
+ * @return prefix length, 0 if unknown address family
+ */
+static INLINE uint8_t
+netaddr_get_maxprefix(const struct netaddr *addr) {
+  return netaddr_get_af_maxprefix(addr->type);
+}
+
 #endif /* NETADDR_H_ */
