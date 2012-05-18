@@ -49,8 +49,7 @@
 
 #include "common/common_types.h"
 
-#define STRARRAY_BLOCKSIZE    64
-#define STRARRAY_MEMSIZE(b)   (((b) + (STRARRAY_BLOCKSIZE-1)) & (~(STRARRAY_BLOCKSIZE - 1)))
+enum { STRARRAY_BLOCKSIZE = 64 };
 
 
 /*
