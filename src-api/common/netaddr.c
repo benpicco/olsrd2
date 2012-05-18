@@ -584,7 +584,7 @@ netaddr_isequal_binary(const struct netaddr *addr,
     return false;
   }
 
-  addr_len = netaddr_get_max_prefixlen(addr) << 3;
+  addr_len = netaddr_get_maxprefix(addr) << 3;
   if (addr_len != len) {
     return false;
   }

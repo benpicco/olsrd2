@@ -53,7 +53,7 @@
 
 #include "common/autobuf.h"
 
-static const size_t AUTOBUFCHUNK = getpagesize();
+#define AUTOBUFCHUNK getpagesize()
 
 /**
  * @param val original size

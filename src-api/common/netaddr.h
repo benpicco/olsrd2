@@ -141,6 +141,16 @@ EXPORT int inet_pton(int af, const char *cp, void * buf);
 #endif
 
 /**
+ * Calculates the maximum prefix length of an address type
+ * @param addr netaddr object
+ * @return prefix length, 0 if unknown address family
+ */
+static INLINE uint8_t
+netaddr_get_maxprefix(const struct netaddr *addr) {
+  return netaddr_get_af_maxprefix(addr->type);
+}
+
+/**
  * Converts a netaddr object into a string.
  * Prefix will be added if necessary.
  * @param dst target buffer
@@ -216,16 +226,6 @@ netaddr_get_binlength(const struct netaddr *n) {
 static INLINE sa_family_t
 netaddr_socket_get_addressfamily(const union netaddr_socket *s) {
   return s->std.sa_family;
-}
-
-/**
- * Calculates the maximum prefix length of an address type
- * @param addr netaddr object
- * @return prefix length, 0 if unknown address family
- */
-static INLINE uint8_t
-netaddr_get_maxprefix(const struct netaddr *addr) {
-  return netaddr_get_af_maxprefix(addr->type);
 }
 
 #endif /* NETADDR_H_ */
