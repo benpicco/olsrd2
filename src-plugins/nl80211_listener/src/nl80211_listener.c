@@ -39,6 +39,8 @@
  *
  */
 
+#define _GNU_SOURCE
+
 /* must be first because of a problem with linux/netlink.h */
 #include <sys/socket.h>
 
@@ -654,6 +656,8 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
     uint8_t *rate1, *rate2;
     uint8_t rate1_count, rate2_count;
     uint64_t *rate;
+
+    rate1 = rate2 = NULL;
 
     if (bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
       len = nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
