@@ -188,7 +188,7 @@ _parse_order_connect_router(void) {
  */
 static enum pbb_result
 _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
-      struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+      struct pbb_reader_tlvblock_context *context) {
   if (context->addr_len != 6) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Address length of DLEP message should be 6 (but was %d)",
         context->addr_len);
