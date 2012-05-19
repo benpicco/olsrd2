@@ -1,7 +1,9 @@
 project(OONF_APP C)
 cmake_minimum_required(VERSION 2.8)
 
-set(OONF_CONFIG ./CMake.config)
+if(NOT OONF_CONFIG)
+    set(OONF_CONFIG ./CMake.config)
+endif(NOT OONF_CONFIG)
 
 include(${OONF_CONFIG})
 include(./CMake.os)
