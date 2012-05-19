@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=dlep-client
+PKG_NAME:=dlep-service
 PKG_VERSION:=2012-05-18
 PKG_RELEASE=$(PKG_SOURCE_VERSION)
 
@@ -16,20 +16,20 @@ include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
 CMAKE_SOURCE_DIR=$(CURDIR)/../../
-CMAKE_OPTIONS=-DOONF_CONFIG=$(CURDIR)/files/dlep-client.config
+CMAKE_OPTIONS=-DOONF_CONFIG=$(CURDIR)/files/dlep-service.config
 
-define Package/dlep-client
+define Package/dlep-service
   SECTION:=net
   CATEGORY:=Network
-  # DEPENDS:=+libnl-tiny
-  TITLE:=DLEP-Client
+  DEPENDS:=+libnl-tiny
+  TITLE:=DLEP-Service
 endef
 
 TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include -I${STAGING_DIR}/usr/include/libnl-tiny
 
-define Package/dlep-client/install
+define Package/dlep-service/install
 	$(INSTALL_DIR) $(1)/bin
-	$(CP) $(PKG_INSTALL_DIR)/usr/bin/dlep-client $(1)/bin/
+	$(CP) $(PKG_INSTALL_DIR)/usr/bin/dlep-service $(1)/bin/
 endef
 
-$(eval $(call BuildPackage,dlep-client))
+$(eval $(call BuildPackage,dlep-service))
