@@ -8,6 +8,7 @@
 # build directories
 build
 build-win32/
+build-clang/
 
 # eclipse development files/directory
 .cproject
