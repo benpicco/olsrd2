@@ -323,7 +323,7 @@ _print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
  */
 static int
 _parse_routing_filter(struct _routing_filter *filter, const char *ptr) {
-  memset(filter, 0, sizeof(filter));
+  memset(filter, 0, sizeof(*filter));
   if ((filter->if_index = if_nametoindex(ptr)) != 0) {
     return 0;
   }

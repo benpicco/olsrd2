@@ -16,7 +16,7 @@ include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
 CMAKE_SOURCE_DIR=$(CURDIR)/../../
-CMAKE_OPTIONS="-DOONF_CONFIG=$(CURDIR)/files/dlep-client.config"
+CMAKE_OPTIONS="-DOONF_CONFIG=$(CURDIR)/files/dlep-client.cmake"
 
 define Package/dlep-client
   SECTION:=net
