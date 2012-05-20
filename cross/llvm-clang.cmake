@@ -3,12 +3,13 @@
 #
 # > mkdir build-clang
 # > cd build-clang
-# > cmake -DCMAKE_TOOLCHAIN_FILE=../cross/clang.cmake ..
+# > cmake -DCMAKE_TOOLCHAIN_FILE=../cross/llvm-clang.cmake ..
 # > make
 
 # which compilers to use for C and C++
 SET(CMAKE_C_COMPILER clang)
 SET(CMAKE_CXX_COMPILER clang++)
+SET(CMAKE_LINKER gold)
 
 # here is the target environment located
 # SET(CMAKE_FIND_ROOT_PATH /usr/i686-w64-mingw32/)

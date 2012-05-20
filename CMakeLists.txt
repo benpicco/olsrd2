@@ -15,7 +15,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 # set release specific compiler options
 set(CMAKE_C_FLAGS_DEBUG "-g")
-set(CMAKE_C_FLAGS_RELEASE "-O3 -g0 -DNDEBUG")
+set(CMAKE_C_FLAGS_RELEASE "-O4 -g0 -DNDEBUG")
 set(CMAKE_C_FLAGS_MINSIZEREL "-Os -g0 -DNDEBUG")
 
 # add generic compiler options
