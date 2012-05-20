@@ -42,6 +42,11 @@
 #ifndef OS_NET_LINUX_H_
 #define OS_NET_LINUX_H_
 
+#include <sys/select.h>
+#include <unistd.h>
+
+#include "olsr_interface.h"
+
 /**
  * Close a file descriptor
  * @param fd filedescriptor

@@ -63,7 +63,7 @@ static const char *_DEFAULT_REJECT = "default_reject";
  */
 void
 olsr_acl_add(struct olsr_netaddr_acl *acl) {
-  memset(acl, 0, sizeof(acl));
+  memset(acl, 0, sizeof(*acl));
 }
 
 void
@@ -88,7 +88,7 @@ olsr_acl_from_strarray(struct olsr_netaddr_acl *acl, const struct const_strarray
   reject_count = 0;
 
   /* clear acl struct */
-  memset(acl, 0, sizeof(acl));
+  memset(acl, 0, sizeof(*acl));
 
   /* count number of address entries */
   FOR_ALL_STRINGS(value, ptr) {

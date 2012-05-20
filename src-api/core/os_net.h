@@ -50,16 +50,6 @@
 #include "olsr_logging.h"
 #include "olsr_interface.h"
 
-#if defined(__linux__)
-#include "os_linux/os_net_linux.h"
-#elif defined (BSD)
-#include "os_bsd/os_net_bsd.h"
-#elif defined (_WIN32)
-#include "os_win32/os_net_win32.h"
-#else
-#error "Unknown operation system"
-#endif
-
 /* prototypes for all os_net functions */
 EXPORT int os_net_init(void) __attribute__((warn_unused_result));
 EXPORT void os_net_cleanup(void);
@@ -82,5 +72,15 @@ static INLINE int os_net_bindto_interface(int, struct olsr_interface_data *data)
 static INLINE int os_close(int fd);
 static INLINE int os_select(
     int num, fd_set *r,fd_set *w,fd_set *e, struct timeval *timeout);
+
+#if defined(__linux__)
+#include "os_linux/os_net_linux.h"
+#elif defined (BSD)
+#include "os_bsd/os_net_bsd.h"
+#elif defined (_WIN32)
+#include "os_win32/os_net_win32.h"
+#else
+#error "Unknown operation system"
+#endif
 
 #endif /* OS_NET_H_ */
