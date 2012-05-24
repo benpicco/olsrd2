@@ -74,11 +74,13 @@ static struct olsr_memcookie_info _neighbor_cookie = {
 static struct olsr_timer_info _network_vtime_info = {
   .name = "layer2 network vtime",
   .callback = _cb_network_timeout,
+  .periodic = true,
 };
 
 static struct olsr_timer_info _neighbor_vtime_info = {
   .name = "layer2 neighbor vtime",
   .callback = _cb_neighbor_timeout,
+  .periodic = true,
 };
 
 static struct olsr_callback_provider _network_callback = {
@@ -360,6 +362,8 @@ _remove_network(struct olsr_layer2_network *net) {
  */
 static void
 _cb_neighbor_timeout(void *ptr) {
+  struct olsr_layer2_neighbor *neigh = ptr;
+  OLSR_DEBUG(LOG_MAIN, "Layer-2 neighbor timeout (was %sactive)", neigh->active ? "" : "in");
   _remove_neighbor(ptr);
 }
 
@@ -369,6 +373,8 @@ _cb_neighbor_timeout(void *ptr) {
  */
 static void
 _cb_network_timeout(void *ptr) {
+  struct olsr_layer2_network *net = ptr;
+  OLSR_DEBUG(LOG_MAIN, "Layer-2 network timeout (was %sactive)", net->active ? "" : "in");
   _remove_network(ptr);
 }
 

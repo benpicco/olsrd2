@@ -63,6 +63,7 @@
 #define KEY_ifindex "ifindex"
 #define KEY_interface "interface"
 #define KEY_active "active"
+#define KEY_shortactive "shortactive"
 #define KEY_lastseen "lastseen"
 #define KEY_ssid "ssid"
 #define KEY_frequency "frequency"
@@ -75,29 +76,6 @@
 #define KEY_txpackets "txpackets"
 #define KEY_txretries "txretries"
 #define KEY_txfailed "txfailed"
-
-enum template_idx {
-  IDX_neighbor,
-  IDX_radio,
-  IDX_ifindex,
-  IDX_interface,
-  IDX_active,
-  IDX_lastseen,
-  IDX_ssid,
-  IDX_frequency,
-  IDX_signal,
-  IDX_rxbitrate,
-  IDX_rxbytes,
-  IDX_rxpackets,
-  IDX_txbitrate,
-  IDX_txbytes,
-  IDX_txpackets,
-  IDX_txretries,
-  IDX_txfailed,
-
-  /* must be last */
-  IDX_count
-};
 
 /* definitions */
 struct _l2viewer_config {
@@ -143,13 +121,15 @@ static struct _l2viewer_config _config;
 static struct olsr_telnet_command _telnet_cmd =
   TELNET_CMD("layer2", _cb_handle_layer2,
       "\"layer2 net\": show data of all known WLAN networks\n"
-      "\"layer2 net list\": show a table of all known WLAN networks\n"
-      "\"layer2 net "JSON_TEMPLATE_FORMAT"\": show a json output of all known WLAN networks\n"
-      "\"layer2 net <template>\": show a table of all known WLAN networks\n"
+      "\"layer2 net list\": show a table of all known active WLAN networks\n"
+      "\"layer2 net "JSON_TEMPLATE_FORMAT"\": show a json output of all known active WLAN networks\n"
+      "\"layer2 net <template>\": show a table of all known active WLAN networks\n"
+      "     (use net_full/net_inactive to output all/inactive networks)\n"
       "\"layer2 neigh\": show data of all known WLAN neighbors\n"
       "\"layer2 neigh list\": show a table of all known WLAN neighbors\n"
       "\"layer2 neigh "JSON_TEMPLATE_FORMAT"\": show a json output of all known WLAN neighbors\n"
-      "\"layer2 neigh <template>\": show a table of all known WLAN neighbors\n",
+      "\"layer2 neigh <template>\": show a table of all known WLAN neighbors\n"
+      "     (use neigh_full/neigh_inactive to output all/inactive neighbors)\n",
       .acl = &_config.acl);
 
 /* template buffers */
@@ -159,6 +139,7 @@ static struct {
   char ifindex[10];
   char interface[IF_NAMESIZE];
   char active[JSON_BOOL_LENGTH];
+  char shortactive[2];
   struct timeval_buf lastseen;
   char ssid[33];
   struct human_readable_str frequency;
@@ -173,71 +154,104 @@ static struct {
   struct human_readable_str txfailed;
 } _template_buf;
 
-static struct abuf_template_data _template_neigh_data[IDX_count] = {
-  [IDX_neighbor] = { .key = KEY_neighbor, .value = _template_buf.neighbor.buf, .string = true},
-  [IDX_radio] = { .key = KEY_radio, .value = _template_buf.radio.buf, .string = true},
-  [IDX_ifindex] = { .key = KEY_ifindex, .value = _template_buf.ifindex },
-  [IDX_interface] = { .key = KEY_interface, .value = _template_buf.interface, .string = true },
-  [IDX_active] = { .key = KEY_active, .value = _template_buf.active },
-  [IDX_lastseen] = { .key = KEY_lastseen, .value = _template_buf.lastseen.buf },
-  [IDX_signal] = { .key = KEY_signal, .value = _template_buf.signal },
-  [IDX_rxbitrate] = { .key = KEY_rxbitrate, .value = _template_buf.rxbitrate.buf },
-  [IDX_rxbytes] = { .key = KEY_rxbytes, .value = _template_buf.rxbytes.buf },
-  [IDX_rxpackets] = { .key = KEY_rxpackets, .value = _template_buf.rxpackets.buf },
-  [IDX_txbitrate] = { .key = KEY_txbitrate, .value = _template_buf.txbitrate.buf },
-  [IDX_txbytes] = { .key = KEY_txbytes, .value = _template_buf.txbytes.buf },
-  [IDX_txpackets] = { .key = KEY_txpackets, .value = _template_buf.txpackets.buf },
-  [IDX_txretries] = { .key = KEY_txretries, .value = _template_buf.txretries.buf },
-  [IDX_txfailed] = { .key = KEY_txfailed, .value = _template_buf.txfailed.buf },
+static struct abuf_template_data _template_neigh_data[] = {
+  { .key = KEY_neighbor, .value = _template_buf.neighbor.buf, .string = true},
+  { .key = KEY_radio, .value = _template_buf.radio.buf, .string = true},
+  { .key = KEY_ifindex, .value = _template_buf.ifindex },
+  { .key = KEY_interface, .value = _template_buf.interface, .string = true },
+  { .key = KEY_active, .value = _template_buf.active },
+  { .key = KEY_shortactive, .value = _template_buf.shortactive, .string = true },
+  { .key = KEY_lastseen, .value = _template_buf.lastseen.buf },
+  { .key = KEY_signal, .value = _template_buf.signal },
+  { .key = KEY_rxbitrate, .value = _template_buf.rxbitrate.buf },
+  { .key = KEY_rxbytes, .value = _template_buf.rxbytes.buf },
+  { .key = KEY_rxpackets, .value = _template_buf.rxpackets.buf },
+  { .key = KEY_txbitrate, .value = _template_buf.txbitrate.buf },
+  { .key = KEY_txbytes, .value = _template_buf.txbytes.buf },
+  { .key = KEY_txpackets, .value = _template_buf.txpackets.buf },
+  { .key = KEY_txretries, .value = _template_buf.txretries.buf },
+  { .key = KEY_txfailed, .value = _template_buf.txfailed.buf },
 };
 
-static struct abuf_template_data _template_net_data[IDX_count] = {
-  [IDX_radio] = { .key = KEY_radio, .value = _template_buf.radio.buf, .string = true},
-  [IDX_ifindex] = { .key = KEY_ifindex, .value = _template_buf.ifindex },
-  [IDX_interface] = { .key = KEY_interface, .value = _template_buf.interface, .string = true },
-  [IDX_active] = { .key = KEY_active, .value = _template_buf.active },
-  [IDX_lastseen] = { .key = KEY_lastseen, .value = _template_buf.lastseen.buf },
-  [IDX_ssid] = { .key = KEY_ssid, .value = _template_buf.ssid, .string = true},
-  [IDX_frequency] = { .key = KEY_frequency, .value = _template_buf.frequency.buf },
+static struct abuf_template_data _template_net_data[] = {
+  { .key = KEY_radio, .value = _template_buf.radio.buf, .string = true},
+  { .key = KEY_ifindex, .value = _template_buf.ifindex },
+  { .key = KEY_interface, .value = _template_buf.interface, .string = true },
+  { .key = KEY_active, .value = _template_buf.active },
+  { .key = KEY_lastseen, .value = _template_buf.lastseen.buf },
+  { .key = KEY_ssid, .value = _template_buf.ssid, .string = true},
+  { .key = KEY_frequency, .value = _template_buf.frequency.buf },
 };
 
-static const char *HEADLINE_NETWORK_TABLE = "If\tRadio            \n";
-static const char *TEMPLATE_NETWORK_TABLE =
-  "%"KEY_interface"%\t%"KEY_radio"%\n";
+struct _command_params {
+  const char *cmd_full;
+  const char *cmd_active;
+  const char *cmd_inactive;
+  const char *tmpl_full;
+  const char *tmpl_table;
+  const char *tmpl_filtered_table;
+  const char *headline_table;
+  const char *headline_filtered_table;
 
-static const char *TEMPLATE_NETWORK_FULL =
-  "Radio MAC: %" KEY_radio     "%\n"
-  "Active:    %" KEY_active    "%\n"
-  "If-Index:  %" KEY_ifindex   "%\n"
-  "Interface: %" KEY_interface "%\n"
-  "SSID:      %" KEY_ssid      "%\n"
-  "Last seen: %" KEY_lastseen  "% seconds ago\n"
-  "Frequency: %" KEY_frequency "%\n"
-  "\n"
-;
+  /* set by runtime */
+  const char *template;
+  bool active;
+  bool inactive;
+};
 
-static const char *HEADLINE_NEIGHBOR_TABLE = "If\tRadio            \tNeighbor\n";
-static const char *TEMPLATE_NEIGHBOR_TABLE =
-  "%"KEY_interface"%\t%"KEY_radio"%\t%"KEY_neighbor"%\n";
+struct _command_params _net_params = {
+  .cmd_full = "net_full",
+  .cmd_active = "net",
+  .cmd_inactive = "net_inactive",
 
-static const char *TEMPLATE_NEIGHBOR_FULL =
-  "Neighbor MAC: %" KEY_neighbor  "%\n"
-  "Active:       %" KEY_active    "%\n"
-  "Radio MAC:    %" KEY_radio     "%\n"
-  "If-Index:     %" KEY_ifindex   "%\n"
-  "Interface:    %" KEY_interface "%\n"
-  "Last seen:    %" KEY_lastseen  "% seconds ago\n"
-  "Signal:       %" KEY_signal    "% dBm\n"
-  "Rx bitrate    %" KEY_rxbitrate "%\n"
-  "Rx bytes      %" KEY_rxbytes   "%\n"
-  "Rx packets    %" KEY_rxpackets "%\n"
-  "Tx bitrate    %" KEY_txbitrate "%\n"
-  "Tx bytes      %" KEY_txbytes   "%\n"
-  "Tx packets    %" KEY_txpackets "%\n"
-  "Tx retries    %" KEY_txretries "%\n"
-  "Tx failed     %" KEY_txfailed  "%\n"
-  "\n"
-  ;
+  .tmpl_full =
+      "Radio MAC: %" KEY_radio     "%\n"
+      "Active:    %" KEY_active    "%\n"
+      "If-Index:  %" KEY_ifindex   "%\n"
+      "Interface: %" KEY_interface "%\n"
+      "SSID:      %" KEY_ssid      "%\n"
+      "Last seen: %" KEY_lastseen  "% seconds ago\n"
+      "Frequency: %" KEY_frequency "%\n"
+      "\n",
+  .tmpl_table =
+      "%"KEY_shortactive"%%"KEY_interface"%\t%"KEY_radio"%\n",
+  .tmpl_filtered_table =
+      "%"KEY_interface"%\t%"KEY_radio"%\n",
+
+  .headline_table = "  If\tRadio            \n",
+  .headline_filtered_table = "If\tRadio            \n",
+};
+
+struct _command_params _neigh_params = {
+  .cmd_full = "neigh_full",
+  .cmd_active = "neigh",
+  .cmd_inactive = "neigh_inactive",
+
+  .tmpl_full =
+      "Neighbor MAC: %" KEY_neighbor  "%\n"
+      "Active:       %" KEY_active    "%\n"
+      "Radio MAC:    %" KEY_radio     "%\n"
+      "If-Index:     %" KEY_ifindex   "%\n"
+      "Interface:    %" KEY_interface "%\n"
+      "Last seen:    %" KEY_lastseen  "% seconds ago\n"
+      "Signal:       %" KEY_signal    "% dBm\n"
+      "Rx bitrate:   %" KEY_rxbitrate "%\n"
+      "Rx bytes:     %" KEY_rxbytes   "%\n"
+      "Rx packets:   %" KEY_rxpackets "%\n"
+      "Tx bitrate:   %" KEY_txbitrate "%\n"
+      "Tx bytes:     %" KEY_txbytes   "%\n"
+      "Tx packets:   %" KEY_txpackets "%\n"
+      "Tx retries:   %" KEY_txretries "%\n"
+      "Tx failed:    %" KEY_txfailed  "%\n"
+      "\n",
+  .tmpl_table =
+      "%"KEY_shortactive"%%"KEY_interface"%\t%"KEY_radio"%\t%"KEY_neighbor"%\n",
+  .tmpl_filtered_table =
+      "%"KEY_interface"%\t%"KEY_radio"%\t%"KEY_neighbor"%\n",
+
+  .headline_table = "  If\tRadio            \tNeighbor\n",
+  .headline_filtered_table = "If\tRadio            \tNeighbor\n",
+};
 
 /**
  * Constructor of plugin
@@ -406,98 +420,120 @@ _init_neighbor_template(struct olsr_layer2_neighbor *neigh, bool raw) {
 }
 
 /**
+ * Parse a group of subcommands to support filtered/nonfiltered output with
+ * full, list, json and custom template mode
+ * @param out output buffer
+ * @param cmd command stream
+ * @param params pointer to subcommand description
+ * @return true if one of the subcommands was found, false otherwise
+ */
+static bool
+_parse_mode(struct autobuf *out, const char *cmd, struct _command_params *params) {
+  const char *next;
+  bool filtered;
+
+  filtered = false;
+  if ((next = str_hasnextword(cmd, params->cmd_full))) {
+    params->active = true;
+    params->inactive = true;
+  }
+  else if ((next = str_hasnextword(cmd, params->cmd_active))) {
+    params->active = true;
+    filtered = true;
+  }
+  else if ((next = str_hasnextword(cmd, params->cmd_inactive))) {
+    params->inactive = true;
+    filtered = true;
+  }
+  else {
+    return false;
+  }
+
+  if (strcasecmp(next, "list") == 0) {
+    if (filtered) {
+      abuf_puts(out, params->headline_filtered_table);
+      params->template = params->tmpl_filtered_table;
+    }
+    else {
+      abuf_puts(out, params->headline_table);
+      params->template = params->tmpl_table;
+    }
+  }
+  else if (strcasecmp(next, JSON_TEMPLATE_FORMAT) == 0) {
+    params->template = NULL;
+  }
+  else if (*next == 0) {
+    params->template = params->tmpl_full;
+  }
+  else {
+    params->template = next;
+  }
+  return true;
+}
+
+/**
  * Implementation of 'layer2' telnet command
  * @param data pointer to telnet data
  * @return return code for telnet server
  */
 static enum olsr_telnet_result
 _cb_handle_layer2(struct olsr_telnet_data *data) {
-  const char *next = NULL;
   struct olsr_layer2_network *net, *net_it;
   struct olsr_layer2_neighbor *neigh, *neigh_it;
   struct abuf_template_storage *tmpl_storage = NULL;
-  const char *tmpl_format;
 
   if (data->parameter == NULL || *data->parameter == 0) {
     abuf_puts(data->out, "Error, 'layer2' needs a parameter\n");
     return TELNET_RESULT_ACTIVE;
   }
 
-  if ((next = str_hasnextword(data->parameter, "net"))) {
-    if (*next == 0) {
-      tmpl_format = TEMPLATE_NETWORK_FULL;
-    }
-    else if (strcasecmp(next, "list") == 0) {
-      tmpl_format = TEMPLATE_NETWORK_TABLE;
-      if (abuf_puts(data->out, HEADLINE_NETWORK_TABLE) < 0) {
-        return TELNET_RESULT_INTERNAL_ERROR;
-      }
-    }
-    else if (strcasecmp(next, JSON_TEMPLATE_FORMAT) == 0) {
-      tmpl_format = NULL;
-    }
-    else {
-      tmpl_format = next;
-    }
-
-    if (tmpl_format) {
+  if (_parse_mode(data->out, data->parameter, &_net_params)) {
+    if (_net_params.template) {
       tmpl_storage = abuf_template_init(
-        _template_net_data, ARRAYSIZE(_template_net_data), tmpl_format);
+        _template_net_data, ARRAYSIZE(_template_net_data), _net_params.template);
       if (tmpl_storage == NULL) {
         return TELNET_RESULT_INTERNAL_ERROR;
       }
     }
 
     OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
-      if (_init_network_template(net, tmpl_format == NULL)) {
-        free(tmpl_storage);
-        return TELNET_RESULT_INTERNAL_ERROR;
-      }
-      if (tmpl_format) {
-        abuf_add_template(data->out, tmpl_format, tmpl_storage);
-      }
-      else {
-        abuf_add_json(data->out, "",
-            _template_net_data, ARRAYSIZE(_template_net_data));
+      if (net->active ? _net_params.active : _net_params.inactive) {
+        if (_init_network_template(net, _net_params.template == NULL)) {
+          free(tmpl_storage);
+          return TELNET_RESULT_INTERNAL_ERROR;
+        }
+        if (_net_params.template) {
+          abuf_add_template(data->out, _net_params.template, tmpl_storage);
+        }
+        else {
+          abuf_add_json(data->out, "",
+              _template_net_data, ARRAYSIZE(_template_net_data));
+        }
       }
     }
   }
-  else if ((next = str_hasnextword(data->parameter, "neigh"))) {
-    if (*next == 0) {
-      tmpl_format = TEMPLATE_NEIGHBOR_FULL;
-    }
-    else if (strcasecmp(next, "list") == 0) {
-      tmpl_format = TEMPLATE_NEIGHBOR_TABLE;
-      if (abuf_puts(data->out, HEADLINE_NEIGHBOR_TABLE) < 0) {
-        return TELNET_RESULT_INTERNAL_ERROR;
-      }
-    }
-    else if (strcasecmp(next, JSON_TEMPLATE_FORMAT) == 0) {
-      tmpl_format = NULL;
-    }
-    else {
-      tmpl_format = next;
-    }
-
-    if (tmpl_format) {
+  else if (_parse_mode(data->out, data->parameter, &_neigh_params)) {
+    if (_neigh_params.template) {
       tmpl_storage = abuf_template_init(
-        _template_neigh_data, ARRAYSIZE(_template_neigh_data), tmpl_format);
+        _template_neigh_data, ARRAYSIZE(_template_neigh_data), _neigh_params.template);
       if (tmpl_storage == NULL) {
         return TELNET_RESULT_INTERNAL_ERROR;
       }
     }
 
     OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
-      if (_init_neighbor_template(neigh, tmpl_format == NULL)) {
-        free(tmpl_storage);
-        return TELNET_RESULT_INTERNAL_ERROR;
-      }
+      if (neigh->active ? _neigh_params.active : _neigh_params.inactive) {
+        if (_init_neighbor_template(neigh, _neigh_params.template == NULL)) {
+          free(tmpl_storage);
+          return TELNET_RESULT_INTERNAL_ERROR;
+        }
 
-      if (tmpl_format) {
-        abuf_add_template(data->out, tmpl_format, tmpl_storage);
-      }
-      else {
-        abuf_add_json(data->out, "", _template_neigh_data, ARRAYSIZE(_template_neigh_data));
+        if (_neigh_params.template) {
+          abuf_add_template(data->out, _neigh_params.template, tmpl_storage);
+        }
+        else {
+          abuf_add_json(data->out, "", _template_neigh_data, ARRAYSIZE(_template_neigh_data));
+        }
       }
     }
   }
