@@ -58,18 +58,13 @@
 #include "olsr_plugins.h"
 #include "olsr.h"
 
-/* Local functions */
-struct avl_tree plugin_tree;
-static bool plugin_tree_initialized = false;
-
-/* library loading patterns */
-static const char *dlopen_values[5];
-static const char *dlopen_keys[5] = {
-  "LIB",
-  "PATH",
-  "PRE",
-  "POST",
-  "VER",
+/* constants */
+enum {
+  IDX_DLOPEN_LIB,
+  IDX_DLOPEN_PATH,
+  IDX_DLOPEN_PRE,
+  IDX_DLOPEN_POST,
+  IDX_DLOPEN_VER,
 };
 
 static const char *dlopen_patterns[] = {
@@ -77,6 +72,19 @@ static const char *dlopen_patterns[] = {
   "%PATH%/%PRE%%LIB%%POST%",
   "%PRE%%LIB%%POST%.%VER%",
   "%PRE%%LIB%%POST%",
+};
+
+/* Local functions */
+struct avl_tree plugin_tree;
+static bool plugin_tree_initialized = false;
+
+/* library loading patterns */
+static struct abuf_template_data _dlopen_data[] = {
+  [IDX_DLOPEN_LIB]  =  { .key = "LIB" },
+  [IDX_DLOPEN_PATH] =  { .key = "PATH", .value = "." },
+  [IDX_DLOPEN_PRE]  =  { .key = "PRE" },
+  [IDX_DLOPEN_POST] =  { .key = "POST" },
+  [IDX_DLOPEN_VER]  =  { .key = "VER" },
 };
 
 static void _init_plugin_tree(void);
@@ -97,10 +105,12 @@ olsr_plugins_init(void) {
   _init_plugin_tree();
 
   /* load predefined values for dlopen templates */
-  dlopen_values[1] = ".";
-  dlopen_values[2] = olsr_log_get_builddata()->sharedlibrary_prefix;
-  dlopen_values[3] = olsr_log_get_builddata()->sharedlibrary_postfix;
-  dlopen_values[4] = olsr_log_get_builddata()->version;
+  _dlopen_data[IDX_DLOPEN_PRE].value =
+      olsr_log_get_builddata()->sharedlibrary_prefix;
+  _dlopen_data[IDX_DLOPEN_POST].value =
+      olsr_log_get_builddata()->sharedlibrary_postfix;
+  _dlopen_data[IDX_DLOPEN_VER].value =
+      olsr_log_get_builddata()->version;
 }
 
 /**
@@ -379,11 +389,10 @@ _unload_plugin(struct olsr_plugin *plugin, bool cleanup) {
  */
 static void *
 _open_plugin(const char *filename) {
-  struct abuf_template_storage table[5];
+  struct abuf_template_storage *table;
   struct autobuf abuf;
   void *result;
   size_t i;
-  int indexCount;
 
   if (abuf_init(&abuf)) {
     OLSR_WARN(LOG_PLUGINLOADER, "Not enough memory for plugin name generation");
@@ -391,18 +400,21 @@ _open_plugin(const char *filename) {
   }
 
   result = NULL;
-  dlopen_values[0] = filename;
+  _dlopen_data[IDX_DLOPEN_LIB].value = filename;
 
   for (i=0; result == NULL && i<ARRAYSIZE(dlopen_patterns); i++) {
-    if ((indexCount = abuf_template_init(dlopen_keys, ARRAYSIZE(dlopen_keys),
-        dlopen_patterns[i], table, ARRAYSIZE(table))) == -1) {
+    table = abuf_template_init(
+        _dlopen_data, ARRAYSIZE(_dlopen_data), dlopen_patterns[i]);
+
+    if (table == NULL) {
       OLSR_WARN(LOG_PLUGINLOADER, "Could not parse pattern %s for dlopen",
           dlopen_patterns[i]);
       continue;
     }
 
     abuf_clear(&abuf);
-    abuf_templatef(&abuf, dlopen_patterns[i], dlopen_values, table, indexCount);
+    abuf_add_template(&abuf, dlopen_patterns[i], table);
+    free(table);
 
     OLSR_DEBUG(LOG_PLUGINLOADER, "Trying to load library: %s", abuf_getptr(&abuf));
     result = dlopen(abuf_getptr(&abuf), RTLD_NOW);

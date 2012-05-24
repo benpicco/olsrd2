@@ -196,6 +196,29 @@ str_cpynextword (char *dst, const char *buffer, size_t len) {
   /* end of buffer */
   return NULL;
 }
+
+/**
+ * Printable is defined as all ascii characters >= 32 except
+ * 127 and 255.
+ * @param value stringpointer
+ * @return true if string only contains printable characters,
+ *   false otherwise
+ */
+bool
+str_is_printable(const char *value) {
+  const unsigned char *_value;
+
+  _value = (const unsigned char *)value;
+
+  while (*_value) {
+    if (!str_char_is_printable(*_value)) {
+      return false;
+    }
+    _value++;
+  }
+  return true;
+}
+
 /**
  * Copy a string array into another array. This overwrites
  * all data in the original array.
@@ -402,15 +425,23 @@ strarray_cmp(const struct strarray *a1, const struct strarray *a2) {
  * @param maxfraction maximum number of fractional digits
  * @param binary true if conversion should use 1024 as factor,
  *   false for default 1000 conversion factor
+ * @param raw true if the whole text conversion should be bypassed
+ *   and only the raw number shall be written, false otherwise
  * @return pointer to converted string
  */
 const char *
 str_get_human_readable_number(struct human_readable_str *out,
-    uint64_t number, const char *unit, int maxfraction, bool binary) {
+    uint64_t number, const char *unit, int maxfraction,
+    bool binary, bool raw) {
   static const char symbol[] = " kMGTPE";
   uint64_t step, multiplier, print, n;
   const char *unit_modifier;
   size_t idx, len;
+
+  if (raw) {
+    snprintf(out->buf, sizeof(*out), "%"PRIu64, number);
+    return out->buf;
+  }
 
   step = binary ? 1024 : 1000;
   multiplier = 1;
@@ -437,6 +468,7 @@ str_get_human_readable_number(struct human_readable_str *out,
     multiplier /= 10;
 
     print = n / multiplier;
+
     assert (print < 10);
     out->buf[len++] = (char)'0' + (char)(print);
     if (print) {

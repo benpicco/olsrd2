@@ -45,15 +45,41 @@
 #include "common/common_types.h"
 #include "common/autobuf.h"
 
-struct abuf_template_storage {
-  size_t start;
-  size_t end;
-  size_t key_index;
+#define JSON_TRUE            "true"
+#define JSON_FALSE           "false"
+#define JSON_TEMPLATE_FORMAT "json"
+
+enum { JSON_BOOL_LENGTH = 6 };
+
+struct abuf_template_data {
+  const char *key;
+  const char *value;
+  bool string;
 };
 
-EXPORT int abuf_template_init(const char **keys, size_t length,
-    const char *format, struct abuf_template_storage *indexTable, size_t indexLength);
-EXPORT int abuf_templatef(struct autobuf *autobuf, const char *format,
-    const char **values, struct abuf_template_storage *indexTable, size_t indexLength);
+struct abuf_template_storage_entry {
+  size_t start, end;
+  struct abuf_template_data *data;
+};
 
+struct abuf_template_storage {
+  size_t count;
+  struct abuf_template_storage_entry indices[0];
+};
+
+EXPORT struct abuf_template_storage *abuf_template_init (
+    struct abuf_template_data *data, size_t data_count, const char *format);
+EXPORT int abuf_add_template(struct autobuf *out, const char *format,
+    struct abuf_template_storage *storage);
+EXPORT int abuf_add_json(struct autobuf *out, const char *prefix,
+    struct abuf_template_data *data, size_t data_count);
+
+/**
+ * @param b boolean value
+ * @return JSON string representation of boolean value
+ */
+static INLINE const char *
+abuf_json_getbool(bool b) {
+  return b ? JSON_TRUE : JSON_FALSE;
+}
 #endif /* TEMPLATE_H_ */

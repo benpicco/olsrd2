@@ -86,6 +86,11 @@ EXPORT char *str_trim (char *ptr);
 EXPORT const char *str_hasnextword (const char *buffer, const char *word);
 EXPORT const char *str_cpynextword (char *dst, const char *buffer, size_t len);
 
+EXPORT const char *str_get_human_readable_number(struct human_readable_str *out,
+    uint64_t number, const char *unit, int maxfraction, bool binary, bool raw);
+
+EXPORT bool str_is_printable(const char *value);
+
 EXPORT int strarray_copy(struct strarray *dst, const struct strarray *src);
 EXPORT int strarray_append(struct strarray *, const char *);
 EXPORT int strarray_prepend(struct strarray *array, const char *string);
@@ -95,8 +100,12 @@ EXPORT char *strarray_get(const struct strarray *array, size_t idx);
 EXPORT size_t strarray_get_count(const struct strarray *array);
 
 EXPORT int strarray_cmp(const struct strarray *a1, const struct strarray *a2);
-EXPORT const char *str_get_human_readable_number(struct human_readable_str *out,
-    uint64_t number, const char *unit, int maxfraction, bool binary);
+
+static INLINE bool
+str_char_is_printable(char c) {
+  unsigned char uc = (unsigned char) c;
+  return !(uc < 32 || uc == 127 || uc == 255);
+}
 
 static INLINE int
 strarray_copy_c(struct strarray *dst, const struct const_strarray *src) {

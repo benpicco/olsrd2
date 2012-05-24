@@ -168,8 +168,7 @@ abuf_puts(struct autobuf *autobuf, const char *s)
 {
   size_t len;
 
-  if (s == NULL) return 0;
-  if (autobuf == NULL) return 0;
+  if (autobuf == NULL || s == NULL) return 0;
 
   len  = strlen(s);
   if (_autobuf_enlarge(autobuf, autobuf->_len + len + 1) < 0) {
@@ -217,7 +216,7 @@ abuf_strftime(struct autobuf *autobuf, const char *format, const struct tm *tm)
 int
 abuf_memcpy(struct autobuf *autobuf, const void *p, const size_t len)
 {
-  if (autobuf == NULL) return 0;
+  if (autobuf == NULL || len == 0) return 0;
 
   if (_autobuf_enlarge(autobuf, autobuf->_len + len) < 0) {
     return -1;
@@ -242,7 +241,7 @@ int
 abuf_memcpy_prepend(struct autobuf *autobuf,
     const void *p, const size_t len)
 {
-  if (autobuf == NULL) return 0;
+  if (autobuf == NULL || len == 0) return 0;
 
   if (_autobuf_enlarge(autobuf, autobuf->_len + len) < 0) {
     return -1;
@@ -268,7 +267,7 @@ abuf_pull(struct autobuf * autobuf, size_t len) {
   char *p;
   size_t newsize;
 
-  if (autobuf == NULL) return;
+  if (autobuf == NULL || len == 0) return;
 
   if (len != autobuf->_len) {
     memmove(autobuf->_buf, &autobuf->_buf[len], autobuf->_len - len);
