@@ -308,6 +308,7 @@ _init_network_template(struct olsr_layer2_network *net, bool raw) {
     return -1;
 
   strcpy (_template_buf.active, abuf_json_getbool(net->active));
+  strcpy (_template_buf.shortactive, net->active ? "*" : " ");
 
   if (net->if_index) {
     sprintf(_template_buf.ifindex, "%u", net->if_index);
@@ -347,6 +348,7 @@ _init_neighbor_template(struct olsr_layer2_neighbor *neigh, bool raw) {
     return -1;
 
   strcpy (_template_buf.active, abuf_json_getbool(neigh->active));
+  strcpy (_template_buf.shortactive, neigh->active ? "*" : " ");
 
   if (NULL == netaddr_to_string(&_template_buf.radio, &neigh->key.radio_mac))
     return -1;
