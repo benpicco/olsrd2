@@ -121,28 +121,6 @@ cfg_append_printable_line(struct autobuf *autobuf, const char *fmt, ...) {
 }
 
 /**
- * Printable is defined as all ascii characters >= 32 except
- * 127 and 255.
- * @param value stringpointer
- * @return true if string only contains printable characters,
- *   false otherwise
- */
-bool
-cfg_is_printable(const char *value) {
-  const unsigned char *_value;
-
-  _value = (const unsigned char *)value;
-
-  while (*_value) {
-    if (*_value < 32 || *_value == 127 || *_value == 255) {
-      return false;
-    }
-    _value++;
-  }
-  return true;
-}
-
-/**
  * Tests on the pattern [a-zA-Z_][a-zA-Z0-9_]*
  * @param key section_type/name or entry name
  * @return true if input string is valid for this parser,

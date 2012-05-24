@@ -452,7 +452,7 @@ cfg_schema_validate_printable(const struct cfg_schema_entry *entry,
   if (cfg_schema_validate_strlen(entry, section_name, value, out)) {
     return 1;
   }
-  if (!cfg_is_printable(value)) {
+  if (!str_is_printable(value)) {
     /* not a printable ascii character */
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s has has non-printable characters",

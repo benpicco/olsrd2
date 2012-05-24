@@ -79,7 +79,6 @@ EXPORT void cfg_remove(struct cfg_instance *);
 
 EXPORT int cfg_append_printable_line(struct autobuf *autobuf, const char *fmt, ...)
   __attribute__ ((format(printf, 2, 3)));
-EXPORT bool cfg_is_printable(const char *value);
 EXPORT bool cfg_is_allowed_key(const char *key);
 EXPORT int cfg_get_choice_index(const char *value, const char **array, size_t array_size);
 
