@@ -221,7 +221,8 @@ _cb_print_pkt_start(struct pbb_reader_tlvblock_consumer *c,
  */
 enum pbb_result
 _cb_print_pkt_tlv(struct pbb_reader_tlvblock_consumer *c,
-    struct pbb_reader_tlvblock_entry *tlv, struct pbb_reader_tlvblock_context *context) {
+    struct pbb_reader_tlvblock_entry *tlv,
+    struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   struct pbb_print_session *session;
 
   assert (context->type == PBB_CONTEXT_PACKET);
@@ -272,7 +273,7 @@ _cb_print_pkt_end(struct pbb_reader_tlvblock_consumer *c,
  */
 enum pbb_result
 _cb_print_msg_start(struct pbb_reader_tlvblock_consumer *c,
-    struct pbb_reader_tlvblock_context *context) {
+    struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   struct pbb_print_session *session;
 
   assert (context->type == PBB_CONTEXT_MESSAGE);
@@ -323,7 +324,8 @@ _cb_print_msg_start(struct pbb_reader_tlvblock_consumer *c,
  */
 enum pbb_result
 _cb_print_msg_tlv(struct pbb_reader_tlvblock_consumer *c,
-    struct pbb_reader_tlvblock_entry *tlv, struct pbb_reader_tlvblock_context *context) {
+    struct pbb_reader_tlvblock_entry *tlv,
+    struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   struct pbb_print_session *session;
 
   assert (context->type == PBB_CONTEXT_MESSAGE);
@@ -353,7 +355,7 @@ _cb_print_msg_tlv(struct pbb_reader_tlvblock_consumer *c,
  */
 enum pbb_result
 _cb_print_msg_end(struct pbb_reader_tlvblock_consumer *c,
-    struct pbb_reader_tlvblock_context *context,
+    struct pbb_reader_tlvblock_context *context __attribute__((unused)),
     bool dropped __attribute__ ((unused))) {
   struct pbb_print_session *session;
 
@@ -373,7 +375,7 @@ _cb_print_msg_end(struct pbb_reader_tlvblock_consumer *c,
  */
 enum pbb_result
 _cb_print_addr_start(struct pbb_reader_tlvblock_consumer *c,
-    struct pbb_reader_tlvblock_context *context) {
+    struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   char buffer[100];
   struct pbb_print_session *session;
 
@@ -405,7 +407,8 @@ _cb_print_addr_start(struct pbb_reader_tlvblock_consumer *c,
  */
 enum pbb_result
 _cb_print_addr_tlv(struct pbb_reader_tlvblock_consumer *c __attribute__ ((unused)),
-    struct pbb_reader_tlvblock_entry *tlv, struct pbb_reader_tlvblock_context *context) {
+    struct pbb_reader_tlvblock_entry *tlv,
+    struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
   struct pbb_print_session *session;
 
   assert (context->type == PBB_CONTEXT_ADDRESS);
@@ -435,7 +438,7 @@ _cb_print_addr_tlv(struct pbb_reader_tlvblock_consumer *c __attribute__ ((unused
  */
 enum pbb_result
 _cb_print_addr_end(struct pbb_reader_tlvblock_consumer *c __attribute__ ((unused)),
-    struct pbb_reader_tlvblock_context *context,
+    struct pbb_reader_tlvblock_context *context __attribute__((unused)),
     bool dropped __attribute__ ((unused))) {
   struct pbb_print_session *session;
 

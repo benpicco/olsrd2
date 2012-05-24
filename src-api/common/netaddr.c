@@ -75,35 +75,21 @@ const struct netaddr NETADDR_IPV6_MULTICAST = { { 0xff,0,0,0,0,0,0,0,0,0,0,0,0,0
 int
 netaddr_from_binary(struct netaddr *dst, const void *binary,
     size_t len, uint8_t addr_type) {
-  memset(dst->addr, 0, sizeof(dst->addr));
-  if (addr_type == AF_INET && len >= 4) {
-    /* ipv4 */
-    memcpy(dst->addr, binary, 4);
-    dst->prefix_len = 32;
-  }
-  else if (addr_type == AF_INET6 && len >= 16){
-    /* ipv6 */
-    memcpy(dst->addr, binary, 16);
-    dst->prefix_len = 128;
-  }
-  else if (addr_type == AF_MAC48 && len >= 6) {
-    /* mac48 */
-    memcpy(&dst->addr, binary, 6);
-    dst->prefix_len = 48;
-  }
-  else if (addr_type == AF_EUI64 && len >= 8) {
-    /* eui 64 */
-    memcpy(dst->addr, binary, 8);
-    dst->prefix_len = 64;
-  }
-  else {
+  uint32_t prefix_len, addr_len;
+
+  prefix_len = netaddr_get_af_maxprefix(addr_type);
+  addr_len = prefix_len << 3;
+
+  if (addr_len == 0 || len < addr_len) {
     /* unknown address type */
     dst->type = AF_UNSPEC;
     return -1;
   }
 
-  /* copy address type */
+  memset(dst->addr, 0, sizeof(dst->addr));
   dst->type = addr_type;
+  dst->prefix_len = prefix_len;
+  memcpy(dst->addr, binary, addr_len);
 
   return 0;
 }
@@ -117,26 +103,15 @@ netaddr_from_binary(struct netaddr *dst, const void *binary,
  */
 int
 netaddr_to_binary(void *dst, const struct netaddr *src, size_t len) {
-  if (src->type == AF_INET && len >= 4) {
-    /* ipv4 */
-    memcpy(dst, src->addr, 4);
-  }
-  else if (src->type == AF_INET6 && len >= 16) {
-    /* ipv6 */
-    memcpy(dst, src->addr, 16);
-  }
-  else if (src->type == AF_MAC48 && len >= 6) {
-    /* 48 bit MAC address */
-    memcpy(dst, src->addr, 6);
-  }
-  else if (src->type == AF_EUI64 && len >= 8) {
-    /* 64 bit EUI */
-    memcpy(dst, src->addr, 8);
-  }
-  else {
+  uint32_t addr_len;
+
+  addr_len = netaddr_get_maxprefix(src) << 3;
+  if (addr_len == 0 || len < addr_len) {
     /* unknown address type */
     return -1;
   }
+
+  memcpy(dst, src->addr, addr_len);
   return 0;
 }
 
@@ -199,30 +174,18 @@ netaddr_to_socket(union netaddr_socket *dst, const struct netaddr *src) {
   return 0;
 }
 
-
 int
 netaddr_to_autobuf(struct autobuf *abuf, const struct netaddr *src) {
-  switch (src->type) {
-    case AF_INET:
-      /* ipv4 */
-      return abuf_memcpy(abuf, src->addr, 4);
+  uint32_t addr_len;
 
-    case AF_INET6:
-      /* ipv6 */
-      return abuf_memcpy(abuf, src->addr, 16);
-
-    case AF_MAC48:
-      /* 48 bit MAC address */
-      return abuf_memcpy(abuf, src->addr, 6);
-
-    case AF_EUI64:
-      /* 64 bit EUI */
-      return abuf_memcpy(abuf, src->addr, 8);
-
-    default:
-      /* unknown address type */
-      return -1;
+  addr_len = netaddr_get_maxprefix(src) << 3;
+  if (addr_len == 0) {
+    /* unknown address type */
+    return -1;
   }
+
+  abuf_memcpy(abuf, src->addr, addr_len);
+  return 0;
 }
 
 /**
@@ -615,23 +578,18 @@ netaddr_cmp_to_socket(const struct netaddr *a1, const union netaddr_socket *a2) 
 bool
 netaddr_isequal_binary(const struct netaddr *addr,
     const void *bin, size_t len, uint16_t af, uint8_t prefix_len) {
+  uint32_t addr_len;
+
   if (addr->type != af || addr->prefix_len != prefix_len) {
     return false;
   }
 
-  if (af == AF_INET && len == 4) {
-    return memcmp(addr->addr, bin, 4) == 0;
+  addr_len = netaddr_get_maxprefix(addr) << 3;
+  if (addr_len != len) {
+    return false;
   }
-  if (af == AF_INET6 && len == 16) {
-    return memcmp(addr->addr, bin, 16) == 0;
-  }
-  if (af == AF_MAC48 && len == 6) {
-    return memcmp(addr->addr, bin, 6) == 0;
-  }
-  if (af == AF_EUI64 && len == 8) {
-    return memcmp(addr->addr, bin, 8) == 0;
-  }
-  return false;
+
+  return memcmp(addr->addr, bin, addr_len) == 0;
 }
 
 /**
@@ -672,12 +630,12 @@ netaddr_is_in_subnet(const struct netaddr *subnet,
 
 /**
  * Calculates the maximum prefix length of an address type
- * @param addr netaddr object
+ * @param af_type address type
  * @return prefix length, 0 if unknown address family
  */
 uint8_t
-netaddr_get_maxprefix(const struct netaddr *addr) {
-  switch (addr->type) {
+netaddr_get_af_maxprefix(uint32_t af_type) {
+  switch (af_type) {
     case AF_INET:
       return 32;
       break;

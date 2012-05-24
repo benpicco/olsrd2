@@ -47,6 +47,14 @@
 #include "common/string.h"
 
 /**
+ * @param size minimum size of block
+ * @return rounded up block size of STRARRAY_BLOCKSIZE
+ */
+static INLINE size_t STRARRAY_MEMSIZE(const size_t b) {
+  return (b + STRARRAY_BLOCKSIZE-1) & (~(STRARRAY_BLOCKSIZE - 1));
+}
+
+/**
  * A safer version of strncpy that ensures that the
  * destination string will be null-terminated if its
  * length is greater than 0.
