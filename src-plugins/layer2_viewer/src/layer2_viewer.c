@@ -42,6 +42,7 @@
 #include "common/common_types.h"
 #include "common/autobuf.h"
 #include "common/string.h"
+#include "common/template.h"
 
 #include "config/cfg_schema.h"
 #include "olsr_cfg.h"
@@ -56,14 +57,51 @@
 /* constants */
 #define _CFG_SECTION "layer2_viewer"
 
+/* keys for template engine */
+#define KEY_neighbor "neighbor"
+#define KEY_radio "radio"
+#define KEY_ifindex "ifindex"
+#define KEY_interface "interface"
+#define KEY_active "active"
+#define KEY_lastseen "lastseen"
+#define KEY_ssid "ssid"
+#define KEY_frequency "frequency"
+#define KEY_signal "signal"
+#define KEY_rxbitrate "rxbitrate"
+#define KEY_rxbytes "rxbytes"
+#define KEY_rxpackets "rxpackets"
+#define KEY_txbitrate "txbitrate"
+#define KEY_txbytes "txbytes"
+#define KEY_txpackets "txpackets"
+#define KEY_txretries "txretries"
+#define KEY_txfailed "txfailed"
+
+enum template_idx {
+  IDX_neighbor,
+  IDX_radio,
+  IDX_ifindex,
+  IDX_interface,
+  IDX_active,
+  IDX_lastseen,
+  IDX_ssid,
+  IDX_frequency,
+  IDX_signal,
+  IDX_rxbitrate,
+  IDX_rxbytes,
+  IDX_rxpackets,
+  IDX_txbitrate,
+  IDX_txbytes,
+  IDX_txpackets,
+  IDX_txretries,
+  IDX_txfailed,
+
+  /* must be last */
+  IDX_count
+};
+
 /* definitions */
 struct _l2viewer_config {
   struct olsr_netaddr_acl acl;
-};
-
-struct _routing_filter {
-  struct netaddr mac;
-  unsigned if_index;
 };
 
 /* prototypes */
@@ -104,17 +142,102 @@ static struct _l2viewer_config _config;
 /* telnet command */
 static struct olsr_telnet_command _telnet_cmd =
   TELNET_CMD("layer2", _cb_handle_layer2,
-      "\"layer2 list net\": list all connected wlan networks\n"
-      "\"layer2 list neigh\": list all known wlan neighbors\n"
-      "\"layer2 list neigh <if-index>\": list all known wlan"
-               " neighbors on interface with specified index\n"
-      "\"layer2 net\": show data of all known wlan networks\n"
-      "\"layer2 net <if-index>\": show data of a wlan network\n"
-      "\"layer2 neigh\": show data of all known wlan neighbors\n"
-      "\"layer2 neigh <if-index>\": show data of all known wlan"
-               " neighbors on specified interface\n"
-      "\"layer2 neigh <ssid>\": show data of a wlan neighbor\n",
+      "\"layer2 net\": show data of all known WLAN networks\n"
+      "\"layer2 net list\": show a table of all known WLAN networks\n"
+      "\"layer2 net "JSON_TEMPLATE_FORMAT"\": show a json output of all known WLAN networks\n"
+      "\"layer2 net <template>\": show a table of all known WLAN networks\n"
+      "\"layer2 neigh\": show data of all known WLAN neighbors\n"
+      "\"layer2 neigh list\": show a table of all known WLAN neighbors\n"
+      "\"layer2 neigh "JSON_TEMPLATE_FORMAT"\": show a json output of all known WLAN neighbors\n"
+      "\"layer2 neigh <template>\": show a table of all known WLAN neighbors\n",
       .acl = &_config.acl);
+
+/* template buffers */
+static struct {
+  struct netaddr_str neighbor;
+  struct netaddr_str radio;
+  char ifindex[10];
+  char interface[IF_NAMESIZE];
+  char active[JSON_BOOL_LENGTH];
+  struct timeval_buf lastseen;
+  char ssid[33];
+  struct human_readable_str frequency;
+  char signal[7];
+  struct human_readable_str rxbitrate;
+  struct human_readable_str rxbytes;
+  struct human_readable_str rxpackets;
+  struct human_readable_str txbitrate;
+  struct human_readable_str txbytes;
+  struct human_readable_str txpackets;
+  struct human_readable_str txretries;
+  struct human_readable_str txfailed;
+} _template_buf;
+
+static struct abuf_template_data _template_neigh_data[IDX_count] = {
+  [IDX_neighbor] = { .key = KEY_neighbor, .value = _template_buf.neighbor.buf, .string = true},
+  [IDX_radio] = { .key = KEY_radio, .value = _template_buf.radio.buf, .string = true},
+  [IDX_ifindex] = { .key = KEY_ifindex, .value = _template_buf.ifindex },
+  [IDX_interface] = { .key = KEY_interface, .value = _template_buf.interface, .string = true },
+  [IDX_active] = { .key = KEY_active, .value = _template_buf.active },
+  [IDX_lastseen] = { .key = KEY_lastseen, .value = _template_buf.lastseen.buf },
+  [IDX_signal] = { .key = KEY_signal, .value = _template_buf.signal },
+  [IDX_rxbitrate] = { .key = KEY_rxbitrate, .value = _template_buf.rxbitrate.buf },
+  [IDX_rxbytes] = { .key = KEY_rxbytes, .value = _template_buf.rxbytes.buf },
+  [IDX_rxpackets] = { .key = KEY_rxpackets, .value = _template_buf.rxpackets.buf },
+  [IDX_txbitrate] = { .key = KEY_txbitrate, .value = _template_buf.txbitrate.buf },
+  [IDX_txbytes] = { .key = KEY_txbytes, .value = _template_buf.txbytes.buf },
+  [IDX_txpackets] = { .key = KEY_txpackets, .value = _template_buf.txpackets.buf },
+  [IDX_txretries] = { .key = KEY_txretries, .value = _template_buf.txretries.buf },
+  [IDX_txfailed] = { .key = KEY_txfailed, .value = _template_buf.txfailed.buf },
+};
+
+static struct abuf_template_data _template_net_data[IDX_count] = {
+  [IDX_radio] = { .key = KEY_radio, .value = _template_buf.radio.buf, .string = true},
+  [IDX_ifindex] = { .key = KEY_ifindex, .value = _template_buf.ifindex },
+  [IDX_interface] = { .key = KEY_interface, .value = _template_buf.interface, .string = true },
+  [IDX_active] = { .key = KEY_active, .value = _template_buf.active },
+  [IDX_lastseen] = { .key = KEY_lastseen, .value = _template_buf.lastseen.buf },
+  [IDX_ssid] = { .key = KEY_ssid, .value = _template_buf.ssid, .string = true},
+  [IDX_frequency] = { .key = KEY_frequency, .value = _template_buf.frequency.buf },
+};
+
+static const char *HEADLINE_NETWORK_TABLE = "If\tRadio            \n";
+static const char *TEMPLATE_NETWORK_TABLE =
+  "%"KEY_interface"%\t%"KEY_radio"%\n";
+
+static const char *TEMPLATE_NETWORK_FULL =
+  "Radio MAC: %" KEY_radio     "%\n"
+  "Active:    %" KEY_active    "%\n"
+  "If-Index:  %" KEY_ifindex   "%\n"
+  "Interface: %" KEY_interface "%\n"
+  "SSID:      %" KEY_ssid      "%\n"
+  "Last seen: %" KEY_lastseen  "% seconds ago\n"
+  "Frequency: %" KEY_frequency "%\n"
+  "\n"
+;
+
+static const char *HEADLINE_NEIGHBOR_TABLE = "If\tRadio            \tNeighbor\n";
+static const char *TEMPLATE_NEIGHBOR_TABLE =
+  "%"KEY_interface"%\t%"KEY_radio"%\t%"KEY_neighbor"%\n";
+
+static const char *TEMPLATE_NEIGHBOR_FULL =
+  "Neighbor MAC: %" KEY_neighbor  "%\n"
+  "Active:       %" KEY_active    "%\n"
+  "Radio MAC:    %" KEY_radio     "%\n"
+  "If-Index:     %" KEY_ifindex   "%\n"
+  "Interface:    %" KEY_interface "%\n"
+  "Last seen:    %" KEY_lastseen  "% seconds ago\n"
+  "Signal:       %" KEY_signal    "% dBm\n"
+  "Rx bitrate    %" KEY_rxbitrate "%\n"
+  "Rx bytes      %" KEY_rxbytes   "%\n"
+  "Rx packets    %" KEY_rxpackets "%\n"
+  "Tx bitrate    %" KEY_txbitrate "%\n"
+  "Tx bytes      %" KEY_txbytes   "%\n"
+  "Tx packets    %" KEY_txpackets "%\n"
+  "Tx retries    %" KEY_txretries "%\n"
+  "Tx failed     %" KEY_txfailed  "%\n"
+  "\n"
+  ;
 
 /**
  * Constructor of plugin
@@ -164,54 +287,35 @@ _cb_plugin_disable(void) {
  * @return -1 if an error happened, 0 otherwise
  */
 static int
-_print_network(struct autobuf *out, struct olsr_layer2_network *net) {
-  struct netaddr_str netbuf;
-  struct timeval_buf tvbuf;
-  struct human_readable_str numbuf;
+_init_network_template(struct olsr_layer2_network *net, bool raw) {
+  memset (&_template_buf, 0, sizeof(_template_buf));
 
-  if (0 > abuf_appendf(out,
-      "Radio-ID: %s\n"
-      "Active: %s\n",
-      netaddr_to_string(&netbuf, &net->radio_id),
-      net->active ? "true" : "false")) {
+  if (NULL == netaddr_to_string(&_template_buf.radio, &net->radio_id))
     return -1;
-  }
+
+  strcpy (_template_buf.active, abuf_json_getbool(net->active));
 
   if (net->if_index) {
-    if (0 > abuf_appendf(out, "If-Index: %u\n", net->if_index)) {
-      return -1;
-    }
+    sprintf(_template_buf.ifindex, "%u", net->if_index);
+    if_indextoname(net->if_index, _template_buf.interface);
   }
 
   if (olsr_layer2_network_has_ssid(net)) {
-    if (0 > abuf_appendf(out, "SSID: %s\n", netaddr_to_string(&netbuf, &net->ssid))) {
-      return -1;
-    }
+    strscpy(_template_buf.ssid, net->ssid, sizeof(_template_buf.ssid));
   }
 
   if (olsr_layer2_network_has_last_seen(net)) {
     int64_t relative;
 
     relative = olsr_clock_get_relative(net->last_seen);
-    if (0 > abuf_appendf(out, "Last seen: %s seconds ago\n",
-        olsr_clock_toIntervalString(&tvbuf, -relative))) {
+    if (NULL == olsr_clock_toIntervalString(&_template_buf.lastseen, -relative)) {
       return -1;
     }
   }
   if (olsr_layer2_network_has_frequency(net)) {
-    if (0 > abuf_appendf(out, "Frequency: %s\n",
-        str_get_human_readable_number(&numbuf, net->frequency, "Hz", 3, false))) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.frequency, net->frequency, "Hz", 3, false, raw)) {
       return -1;
-    }
-  }
-  if (olsr_layer2_network_has_supported_rates(net)) {
-    size_t i;
-
-    for (i=0; i<net->rate_count; i++) {
-      if (0 > abuf_appendf(out, "Supported rate: %s\n",
-          str_get_human_readable_number(&numbuf, net->supported_rates[i], "bit/s", 3, true))) {
-        return -1;
-      }
     }
   }
   return 0;
@@ -224,139 +328,79 @@ _print_network(struct autobuf *out, struct olsr_layer2_network *net) {
  * @return -1 if an error happened, 0 otherwise
  */
 static int
-_print_neighbor(struct autobuf *out, struct olsr_layer2_neighbor *neigh) {
-  struct netaddr_str netbuf1, netbuf2;
-  struct timeval_buf tvbuf;
-  struct human_readable_str numbuf;
-
-  if (0 > abuf_appendf(out,
-      "Neighbor MAC: %s\n"
-      "Active: %s\n"
-      "Radio Mac: %s",
-      netaddr_to_string(&netbuf1, &neigh->key.neighbor_mac),
-      neigh->active ? "true" : "false",
-      netaddr_to_string(&netbuf2, &neigh->key.radio_mac))) {
+_init_neighbor_template(struct olsr_layer2_neighbor *neigh, bool raw) {
+  if (NULL == netaddr_to_string(&_template_buf.neighbor, &neigh->key.neighbor_mac))
     return -1;
-  }
+
+  strcpy (_template_buf.active, abuf_json_getbool(neigh->active));
+
+  if (NULL == netaddr_to_string(&_template_buf.radio, &neigh->key.radio_mac))
+    return -1;
 
   if (neigh->if_index) {
-    if (0 > abuf_appendf(out, " (index: %u)", neigh->if_index)) {
-      return -1;
-    }
-  }
-  if (0 > abuf_puts(out, "\n")) {
-    return -1;
+    sprintf(_template_buf.ifindex, "%u", neigh->if_index);
+    if_indextoname(neigh->if_index, _template_buf.interface);
   }
 
   if (olsr_layer2_neighbor_has_last_seen(neigh)) {
     int64_t relative;
 
     relative = olsr_clock_get_relative(neigh->last_seen);
-    if (0 > abuf_appendf(out, "Last seen: %s seconds ago\n",
-        olsr_clock_toIntervalString(&tvbuf, -relative))) {
+    if (NULL == olsr_clock_toIntervalString(&_template_buf.lastseen, -relative)) {
       return -1;
     }
   }
 
   if (olsr_layer2_neighbor_has_signal(neigh)) {
-    if (0 > abuf_appendf(out, "Sginal strength: %d dBm\n", neigh->signal_dbm)) {
-      return -1;
-    }
+    sprintf(_template_buf.signal, "%d", neigh->signal_dbm);
   }
   if (olsr_layer2_neighbor_has_rx_bitrate(neigh)) {
-    if (0 > abuf_appendf(out, "RX bitrate: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->rx_bitrate, "bit/s", 1, true))) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.rxbitrate, neigh->rx_bitrate, "bit/s", 1, true, raw)) {
       return -1;
     }
   }
   if (olsr_layer2_neighbor_has_rx_bytes(neigh)) {
-    if (0 > abuf_appendf(out, "RX traffic: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->rx_bytes, "Byte", 1, true))) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.rxbytes, neigh->rx_bytes, "Byte", 1, true, raw)) {
       return -1;
     }
   }
   if (olsr_layer2_neighbor_has_rx_packets(neigh)) {
-    if (0 > abuf_appendf(out, "RX packets: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->rx_packets, "", 0, true))) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.rxpackets, neigh->rx_packets, "", 0, true, raw)) {
       return -1;
     }
   }
   if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
-    if (0 > abuf_appendf(out, "TX bitrate: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_bitrate, "bit/s", 1, true))) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.txbitrate, neigh->tx_bitrate, "bit/s", 1, true, raw)) {
       return -1;
     }
   }
   if (olsr_layer2_neighbor_has_tx_bytes(neigh)) {
-    if (0 > abuf_appendf(out, "TX traffic: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_bytes, "Byte", 1, true))) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.txbytes, neigh->tx_bytes, "Byte", 1, true, raw)) {
       return -1;
     }
   }
   if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    if (0 > abuf_appendf(out, "TX packets: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_packets, "", 0, true))) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.txpackets, neigh->tx_packets, "", 0, true, raw)) {
       return -1;
     }
   }
-  if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    if (0 > abuf_appendf(out, "TX retries: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_retries, "", 3, true))) {
+  if (olsr_layer2_neighbor_has_tx_retries(neigh)) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.txretries, neigh->tx_retries, "", 3, true, raw)) {
       return -1;
     }
   }
-  if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
-    if (0 > abuf_appendf(out, "TX failed: %s\n",
-        str_get_human_readable_number(&numbuf, neigh->tx_failed, "", 3, true))) {
+  if (olsr_layer2_neighbor_has_tx_failed(neigh)) {
+    if (NULL == str_get_human_readable_number(
+        &_template_buf.txfailed, neigh->tx_failed, "", 3, true, raw)) {
       return -1;
     }
-  }
-  return 0;
-}
-
-/**
- * Parse an input parameter which can either contain a network interface
- * name or a mac address.
- * @param filter pointer to filter to be initialized
- * @param ptr pointer to input parameter
- * @return -1 if parameter wasn't valid, 0 otherwise
- */
-static int
-_parse_routing_filter(struct _routing_filter *filter, const char *ptr) {
-  memset(filter, 0, sizeof(*filter));
-  if ((filter->if_index = if_nametoindex(ptr)) != 0) {
-    return 0;
-  }
-
-  if (netaddr_from_string(&filter->mac, ptr) != 0) {
-    return -1;
-  }
-
-  if (filter->mac.type != AF_MAC48) {
-    filter->mac.type = AF_UNSPEC;
-    return -1;
-  }
-  return 0;
-}
-
-/**
- * Check if a combination of mac address and interface matchs
- * a routing filter
- * @param filter pointer to routing filter to be matched
- * @param mac pointer to mac address
- * @param if_index interface index
- * @return -1 if an error happened, 0 otherwise
- */
-static int
-_match_routing_filter(struct _routing_filter *filter,
-    struct netaddr *mac, unsigned if_index) {
-  if (filter->if_index != 0 && filter->if_index != if_index) {
-    return -1;
-  }
-
-  if (filter->mac.type != AF_UNSPEC &&
-      netaddr_cmp(&filter->mac, mac) != 0) {
-    return -1;
   }
   return 0;
 }
@@ -368,97 +412,101 @@ _match_routing_filter(struct _routing_filter *filter,
  */
 static enum olsr_telnet_result
 _cb_handle_layer2(struct olsr_telnet_data *data) {
-  const char *next = NULL, *ptr = NULL;
+  const char *next = NULL;
   struct olsr_layer2_network *net, *net_it;
   struct olsr_layer2_neighbor *neigh, *neigh_it;
-  struct netaddr_str buf1, buf2;
-  struct _routing_filter filter;
-  bool first = true;
-  char if_buffer[IF_NAMESIZE];
-
-  memset(&filter, 0, sizeof(filter));
+  struct abuf_template_storage *tmpl_storage = NULL;
+  const char *tmpl_format;
 
   if (data->parameter == NULL || *data->parameter == 0) {
     abuf_puts(data->out, "Error, 'layer2' needs a parameter\n");
     return TELNET_RESULT_ACTIVE;
   }
 
-  if ((next = str_hasnextword(data->parameter, "list"))) {
-    if ((ptr = str_hasnextword(next, "net"))) {
-      abuf_appendf(data->out, "Radio-id\tInterf.\n");
-      OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
-        abuf_appendf(data->out, "%c%s\t%s\n",
-            net->active ? ' ' : '-',
-            netaddr_to_string(&buf1, &net->radio_id),
-            net->if_index == 0 ? "" : if_indextoname(net->if_index, if_buffer));
-      }
-      return TELNET_RESULT_ACTIVE;
+  if ((next = str_hasnextword(data->parameter, "net"))) {
+    if (*next == 0) {
+      tmpl_format = TEMPLATE_NETWORK_FULL;
     }
-    else if ((ptr = str_hasnextword(next, "neigh"))) {
-      if (*ptr != 0 && _parse_routing_filter(&filter, ptr) != 0) {
-        abuf_appendf(data->out, "Unknown parameter: %s", ptr);
-        return TELNET_RESULT_ACTIVE;
-      }
-
-      abuf_appendf(data->out, "Radio-Id\tInterface\tMAC\n");
-      OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
-        if (_match_routing_filter(&filter, &neigh->key.radio_mac, neigh->if_index) == 0) {
-          abuf_appendf(data->out, "%s\t%s\t%s\n",
-              netaddr_to_string(&buf1, &neigh->key.radio_mac),
-              neigh->if_index == 0 ? "" : if_indextoname(neigh->if_index, if_buffer),
-              netaddr_to_string(&buf2, &neigh->key.neighbor_mac));
-        }
-      }
-      return TELNET_RESULT_ACTIVE;
-    }
-  }
-  else if ((next = str_hasnextword(data->parameter, "net"))) {
-    if (*next && _parse_routing_filter(&filter, next) != 0) {
-      abuf_appendf(data->out, "Unknown parameter: %s", next);
-      return TELNET_RESULT_ACTIVE;
-    }
-
-    OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
-      if (_match_routing_filter(&filter, &net->radio_id, net->if_index) == 0) {
-        if (first) {
-          first = false;
-        }
-        else {
-          abuf_puts(data->out, "\n");
-        }
-        if (_print_network(data->out, net)) {
-          return TELNET_RESULT_INTERNAL_ERROR;
-        }
-      }
-    }
-    return TELNET_RESULT_ACTIVE;
-  }
-  else if ((next = str_hasnextword(data->parameter, "neigh"))) {
-    if (*next && _parse_routing_filter(&filter, next) != 0) {
-      abuf_appendf(data->out, "Unknown parameter: %s", next);
-      return TELNET_RESULT_ACTIVE;
-    }
-
-    OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
-      if (_match_routing_filter(&filter,
-          &neigh->key.neighbor_mac, neigh->if_index) != 0) {
-        continue;
-      }
-
-      if (first) {
-        first = false;
-      }
-      else {
-        abuf_puts(data->out, "\n");
-      }
-      if (_print_neighbor(data->out, neigh)) {
+    else if (strcasecmp(next, "list") == 0) {
+      tmpl_format = TEMPLATE_NETWORK_TABLE;
+      if (abuf_puts(data->out, HEADLINE_NETWORK_TABLE) < 0) {
         return TELNET_RESULT_INTERNAL_ERROR;
       }
     }
-    return TELNET_RESULT_ACTIVE;
+    else if (strcasecmp(next, JSON_TEMPLATE_FORMAT) == 0) {
+      tmpl_format = NULL;
+    }
+    else {
+      tmpl_format = next;
+    }
+
+    if (tmpl_format) {
+      tmpl_storage = abuf_template_init(
+        _template_net_data, ARRAYSIZE(_template_net_data), tmpl_format);
+      if (tmpl_storage == NULL) {
+        return TELNET_RESULT_INTERNAL_ERROR;
+      }
+    }
+
+    OLSR_FOR_ALL_LAYER2_NETWORKS(net, net_it) {
+      if (_init_network_template(net, tmpl_format == NULL)) {
+        free(tmpl_storage);
+        return TELNET_RESULT_INTERNAL_ERROR;
+      }
+      if (tmpl_format) {
+        abuf_add_template(data->out, tmpl_format, tmpl_storage);
+      }
+      else {
+        abuf_add_json(data->out, "",
+            _template_net_data, ARRAYSIZE(_template_net_data));
+      }
+    }
   }
-  abuf_appendf(data->out, "Error, unknown parameters for %s command: %s\n",
-      data->command, data->parameter);
+  else if ((next = str_hasnextword(data->parameter, "neigh"))) {
+    if (*next == 0) {
+      tmpl_format = TEMPLATE_NEIGHBOR_FULL;
+    }
+    else if (strcasecmp(next, "list") == 0) {
+      tmpl_format = TEMPLATE_NEIGHBOR_TABLE;
+      if (abuf_puts(data->out, HEADLINE_NEIGHBOR_TABLE) < 0) {
+        return TELNET_RESULT_INTERNAL_ERROR;
+      }
+    }
+    else if (strcasecmp(next, JSON_TEMPLATE_FORMAT) == 0) {
+      tmpl_format = NULL;
+    }
+    else {
+      tmpl_format = next;
+    }
+
+    if (tmpl_format) {
+      tmpl_storage = abuf_template_init(
+        _template_neigh_data, ARRAYSIZE(_template_neigh_data), tmpl_format);
+      if (tmpl_storage == NULL) {
+        return TELNET_RESULT_INTERNAL_ERROR;
+      }
+    }
+
+    OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
+      if (_init_neighbor_template(neigh, tmpl_format == NULL)) {
+        free(tmpl_storage);
+        return TELNET_RESULT_INTERNAL_ERROR;
+      }
+
+      if (tmpl_format) {
+        abuf_add_template(data->out, tmpl_format, tmpl_storage);
+      }
+      else {
+        abuf_add_json(data->out, "", _template_neigh_data, ARRAYSIZE(_template_neigh_data));
+      }
+    }
+  }
+  else {
+    abuf_appendf(data->out, "Error, unknown parameters for %s command: %s\n",
+        data->command, data->parameter);
+  }
+
+  free(tmpl_storage);
   return TELNET_RESULT_ACTIVE;
 }
 

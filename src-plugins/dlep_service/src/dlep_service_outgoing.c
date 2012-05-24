@@ -269,8 +269,7 @@ _add_neighborupdate_msgtlvs(void) {
   if (olsr_layer2_network_has_ssid(_msg_network)) {
     pbb_writer_add_messagetlv(&_dlep_writer,
         DLEP_TLV_SSID, 0,
-        netaddr_get_binptr(&_msg_network->ssid),
-        netaddr_get_binlength(&_msg_network->ssid));
+        _msg_network->ssid, strlen(_msg_network->ssid));
   }
   if (olsr_layer2_network_has_last_seen(_msg_network)) {
     uint32_t interval;

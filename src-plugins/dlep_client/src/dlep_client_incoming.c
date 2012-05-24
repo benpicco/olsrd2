@@ -102,7 +102,7 @@ static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER]           = { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
   [IDX_TLV_VTIME]           = { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE]       = { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
-  [IDX_TLV_SSID]            = { .type = DLEP_TLV_SSID, .min_length = 6, .match_length = true },
+  [IDX_TLV_SSID]            = { .type = DLEP_TLV_SSID, .min_length = 0, .max_length = 32, .match_length = true },
   [IDX_TLV_LAST_SEEN]       = { .type = DLEP_TLV_LAST_SEEN, .min_length = 4, .match_length = true },
   [IDX_TLV_FREQUENCY]       = { .type = DLEP_TLV_FREQUENCY, .min_length = 8, .match_length = true },
   [IDX_TLV_SUPPORTED_RATES] = { .type = DLEP_TLV_SUPPORTED_RATES },
@@ -232,10 +232,12 @@ _parse_msg_neighbor_update(struct netaddr *radio_mac) {
   olsr_layer2_network_clear(net);
 
   if (_dlep_message_tlvs[IDX_TLV_SSID].tlv) {
-    struct netaddr ssid;
+    char ssid[33];
 
-    netaddr_from_binary(&ssid, _dlep_message_tlvs[IDX_TLV_SSID].tlv->single_value, 6, AF_MAC48);
-    olsr_layer2_network_set_ssid(net, &ssid);
+    memset(ssid, 0, sizeof(ssid));
+    memcpy(ssid, _dlep_message_tlvs[IDX_TLV_SSID].tlv->single_value,
+        _dlep_message_tlvs[IDX_TLV_SSID].tlv->length);
+    olsr_layer2_network_set_ssid(net, ssid);
   }
   if (_dlep_message_tlvs[IDX_TLV_LAST_SEEN].tlv) {
     int32_t last_seen;

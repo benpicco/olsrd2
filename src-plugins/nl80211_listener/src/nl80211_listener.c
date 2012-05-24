@@ -672,6 +672,14 @@ _parse_cmd_new_scan_result(struct nlmsghdr *msg) {
     rate1_count = 0;
     rate2_count = 0;
     while (len > 0) {
+      if (data[0] == 0) {
+        /* SSID */
+        char ssid[33];
+
+        memset(ssid, 0, sizeof(ssid));
+        memcpy(ssid, &data[2], data[1]);
+        olsr_layer2_network_set_ssid(net, ssid);
+      }
       if (data[0] == 1) {
         /* supported rates */
         rate1 = &data[2];

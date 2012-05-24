@@ -109,7 +109,8 @@ struct olsr_layer2_network {
   struct olsr_timer_entry _valitity_timer;
   enum olsr_layer2_network_data _available_data;
 
-  struct netaddr ssid;
+  /* 0-terminated ssid string */
+  char ssid[33];
 
   uint64_t last_seen;
 
@@ -374,8 +375,7 @@ olsr_layer2_neighbor_set_tx_fails(struct olsr_layer2_neighbor *neigh, uint32_t f
 
 /**
  * @param neigh pointer to layer2 network data
- * @return true if data contains timestamp when network
- *    has been seen last, false otherwise
+ * @return true if data contains bssid of network, false otherwise
  */
 static INLINE bool
 olsr_layer2_network_has_ssid(struct olsr_layer2_network *net) {
@@ -421,13 +421,12 @@ olsr_layer2_network_clear(struct olsr_layer2_network *net) {
 
 /**
  * @param neigh pointer to layer2 network data
- * @param relative relative timestamp when network has been seen last
- *    to store in layer2 network data
+ * @param bssid bssid to store in layer2 network data
  */
 static INLINE void
-olsr_layer2_network_set_ssid(struct olsr_layer2_network *net, struct netaddr *ssid) {
+olsr_layer2_network_set_ssid(struct olsr_layer2_network *net, char *ssid) {
   net->_available_data |= OLSR_L2NET_SSID;
-  memcpy(&net->ssid, ssid, sizeof(*ssid));
+  strscpy(net->ssid, ssid, sizeof(net->ssid));
 }
 
 /**

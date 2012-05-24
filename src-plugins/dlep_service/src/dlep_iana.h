@@ -56,7 +56,7 @@ enum dlep_msgtlv_types {
   DLEP_TLV_PEER_TYPE       = 193,
   DLEP_TLV_UNICAST         = 194,
 
-  DLEP_TLV_SSID            = 195,
+  DLEP_TLV_SSID           = 195,
   DLEP_TLV_LAST_SEEN       = 196,
   DLEP_TLV_FREQUENCY       = 197,
   DLEP_TLV_SUPPORTED_RATES = 198,
