@@ -63,6 +63,7 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
     enum log_source log_src __attribute__((unused))) {
 #if !defined (REMOVE_LOG_DEBUG)
   struct netaddr_str buf1, buf2;
+  char if_buf[IF_NAMESIZE];
 #endif
   struct ip_mreq   v4_mreq;
   struct ipv6_mreq v6_mreq;
@@ -78,12 +79,19 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
         netaddr_to_string(&buf2, multicast),
         netaddr_to_string(&buf1, src));
 
-    netaddr_to_binary(&v4_mreq.imr_multiaddr, multicast, 4);
-    netaddr_to_binary(&v4_mreq.imr_interface, src, 4);
+    if (netaddr_to_binary(&v4_mreq.imr_multiaddr, multicast, 4)) {
+      OLSR_WARN(log_src, "1");
+    }
+    if (netaddr_to_binary(&v4_mreq.imr_interface, src, 4)) {
+      OLSR_WARN(log_src, "2");
+    }
 
     if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
         &v4_mreq, sizeof(v4_mreq)) < 0) {
-      OLSR_WARN(log_src, "Cannot join multicast group: %s (%d)\n", strerror(errno), errno);
+      OLSR_WARN(log_src, "Cannot join multicast group: %s (%d, %s, %s)\n",
+          strerror(errno), errno,
+          netaddr_to_string(&buf1, multicast),
+          netaddr_to_string(&buf2, src));
       return -1;
     }
   }
@@ -102,8 +110,10 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
 
     if (setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP,
         &v6_mreq, sizeof(v6_mreq)) < 0) {
-      OLSR_WARN(log_src, "Cannot join multicast group: %s (%d)\n",
-          strerror(errno), errno);
+      OLSR_WARN(log_src, "Cannot join multicast group: %s (%d, %s, %d, %s)\n",
+          strerror(errno), errno,
+          netaddr_to_string(&buf1, multicast),
+          if_index, if_indextoname(if_index, if_buf));
       return -1;
     }
   }

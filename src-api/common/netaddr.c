@@ -78,7 +78,7 @@ netaddr_from_binary(struct netaddr *dst, const void *binary,
   uint32_t prefix_len, addr_len;
 
   prefix_len = netaddr_get_af_maxprefix(addr_type);
-  addr_len = prefix_len << 3;
+  addr_len = prefix_len >> 3;
 
   if (addr_len == 0 || len < addr_len) {
     /* unknown address type */
@@ -105,7 +105,7 @@ int
 netaddr_to_binary(void *dst, const struct netaddr *src, size_t len) {
   uint32_t addr_len;
 
-  addr_len = netaddr_get_maxprefix(src) << 3;
+  addr_len = netaddr_get_maxprefix(src) >> 3;
   if (addr_len == 0 || len < addr_len) {
     /* unknown address type */
     return -1;
@@ -178,7 +178,7 @@ int
 netaddr_to_autobuf(struct autobuf *abuf, const struct netaddr *src) {
   uint32_t addr_len;
 
-  addr_len = netaddr_get_maxprefix(src) << 3;
+  addr_len = netaddr_get_maxprefix(src) >> 3;
   if (addr_len == 0) {
     /* unknown address type */
     return -1;
@@ -584,7 +584,7 @@ netaddr_isequal_binary(const struct netaddr *addr,
     return false;
   }
 
-  addr_len = netaddr_get_maxprefix(addr) << 3;
+  addr_len = netaddr_get_maxprefix(addr) >> 3;
   if (addr_len != len) {
     return false;
   }
