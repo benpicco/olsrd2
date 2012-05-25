@@ -91,9 +91,9 @@ static struct cfg_schema_entry telnet_entries[] = {
   CFG_MAP_ACL_V46(olsr_stream_managed_config,
       acl, "acl", "127.0.0.1", "Access control list for telnet interface"),
   CFG_MAP_NETADDR_V4(olsr_stream_managed_config,
-      bindto_v4, "bindto_v4", "127.0.0.1", "Bind telnet ipv4 socket to this address", false),
+      bindto_v4, "bindto_v4", "127.0.0.1", "Bind telnet ipv4 socket to this address", false, true),
   CFG_MAP_NETADDR_V6(olsr_stream_managed_config,
-      bindto_v6, "bindto_v6", "::1", "Bind telnet ipv6 socket to this address", false),
+      bindto_v6, "bindto_v6", "::1", "Bind telnet ipv6 socket to this address", false, true),
   CFG_MAP_INT_MINMAX(olsr_stream_managed_config,
       port, "port", "2006", "Network port for telnet interface", 1, 65535),
 };

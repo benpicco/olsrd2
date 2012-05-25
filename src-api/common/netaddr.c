@@ -308,24 +308,28 @@ netaddr_to_prefixstring(struct netaddr_str *dst,
   const char *result = NULL;
   int maxprefix;
 
-  if (src->type == AF_INET) {
-    result = inet_ntop(AF_INET, src->addr, dst->buf, sizeof(*dst));
-    maxprefix = 32;
+  maxprefix = netaddr_get_maxprefix(src);
+  switch (src->type) {
+    case AF_INET:
+      result = inet_ntop(AF_INET, src->addr, dst->buf, sizeof(*dst));
+      break;
+    case AF_INET6:
+      result = inet_ntop(AF_INET6, src->addr, dst->buf, sizeof(*dst));
+      break;
+    case AF_MAC48:
+      result = _mac_to_string(dst->buf, src->addr, sizeof(*dst), 6, ':');
+      break;
+    case AF_EUI64:
+      result = _mac_to_string(dst->buf, src->addr, sizeof(*dst), 8, '-');
+      break;
+    case AF_UNSPEC:
+      result = strcpy(dst->buf, "-");
+      forceprefix = false;
+      break;
+    default:
+      return NULL;
   }
-  else if (src->type == AF_INET6) {
-    result = inet_ntop(AF_INET6, src->addr, dst->buf, sizeof(*dst));
-    maxprefix = 128;
-  }
-  else if (src->type == AF_MAC48) {
-    result = _mac_to_string(dst->buf, src->addr, sizeof(*dst), 6, ':');
-    maxprefix = 48;
-  }
-  else if (src->type == AF_EUI64) {
-    result = _mac_to_string(dst->buf, src->addr, sizeof(*dst), 8, '-');
-    maxprefix = 64;
-  }
-
-  if (result != NULL && (forceprefix || src->prefix_len < maxprefix)) {
+  if (forceprefix || src->prefix_len < maxprefix) {
     /* append prefix */
     snprintf(dst->buf + strlen(result), 5, "/%d", src->prefix_len);
   }
@@ -348,6 +352,13 @@ netaddr_from_string(struct netaddr *dst, const char *src) {
   bool has_coloncolon, has_point;
   bool last_was_colon;
   char *ptr1, *ptr2, *ptr3;
+
+  memset(dst, 0, sizeof(*dst));
+
+  if (strcmp(src, "-") == 0) {
+    /* unspec */
+    return 0;
+  }
 
   colon_count = 0;
   minus_count = 0;
@@ -389,7 +400,6 @@ netaddr_from_string(struct netaddr *dst, const char *src) {
     last_was_colon = *ptr2++ == ':';
   }
 
-  memset(dst, 0, sizeof(*dst));
   if (*ptr2) {
     /* split strings */
     while (isspace(*ptr2)) *ptr2++ = 0;

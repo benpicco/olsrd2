@@ -230,20 +230,18 @@ olsr_clock_validate(const struct cfg_schema_entry *entry,
     return -1;
   }
 
-  if (entry->validate_params.p_i1 != -1
-      && num < (unsigned)(entry->validate_params.p_i1)) {
+  if (num < entry->validate_param[0].u64) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
-        " in section %s must be larger than %d)",
+        " in section %s must be larger than %"PRIu64")",
         value, entry->key.entry, section_name,
-        entry->validate_params.p_i1);
+        entry->validate_param[0].u64);
     return -1;
   }
-  if (entry->validate_params.p_i2 != -1
-      && num > (unsigned)(entry->validate_params.p_i1)) {
+  if (num > entry->validate_param[1].u64) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
-        " in section %s must be smaller than %d",
+        " in section %s must be smaller than %"PRIu64"",
         value, entry->key.entry, section_name,
-        entry->validate_params.p_i2);
+        entry->validate_param[1].u64);
     return -1;
   }
   return 0;
@@ -273,14 +271,16 @@ olsr_clock_tobin(
 void
 olsr_clock_help(
     const struct cfg_schema_entry *entry, struct autobuf *out) {
+  struct timeval_buf buf;
+
   cfg_append_printable_line(out,
       "    Parameter must be an timestamp with a maximum of 3 fractional digits");
-  if (entry->validate_params.p_i1 != -1) {
-    cfg_append_printable_line(out,
-        "    Minimal valid time is %d.0", entry->validate_params.p_i1);
+  if (entry->validate_param[0].u64 != 0) {
+    cfg_append_printable_line(out, "    Minimal valid time is %s",
+        olsr_clock_toClockString(&buf, entry->validate_param[0].u64));
   }
-  if (entry->validate_params.p_i2 != -1) {
-    cfg_append_printable_line(out,
-        "    Maximum valid time is %d.0", entry->validate_params.p_i2);
+  if (entry->validate_param[1].u64 != UINT64_MAX) {
+    cfg_append_printable_line(out, "    Maximum valid time is %s",
+        olsr_clock_toClockString(&buf, entry->validate_param[1].u64));
   }
 }

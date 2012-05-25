@@ -85,7 +85,7 @@ static struct cfg_schema_entry entries[] = {
   CFG_MAP_STRING_ARRAY(bin_data, string_array, "string_array", "test", "help string array", 5),
   CFG_MAP_CHOICE(bin_data, choice, "choice", "choice1", "help choice", choices),
   CFG_MAP_INT(bin_data, integer, "integer", "3", "help int"),
-  CFG_MAP_NETADDR(bin_data, address, "address", "10.0.0.1", "help ip", false),
+  CFG_MAP_NETADDR(bin_data, address, "address", "10.0.0.1", "help ip", false, false),
   CFG_MAP_BOOL(bin_data, boolean, "boolean", "0", "help bool")
 };
 

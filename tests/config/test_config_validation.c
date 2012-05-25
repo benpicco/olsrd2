@@ -70,20 +70,20 @@ static struct cfg_schema_entry entries[] = {
   CFG_VALIDATE_CHOICE("choice", "choice1", "help", choices),
   CFG_VALIDATE_INT("int", "1", "help"),
   CFG_VALIDATE_INT_MINMAX("int_minmax", "1", "help", -10, 10),
-  CFG_VALIDATE_NETADDR("netaddr", "10.0.0.1", "help", false),
-  CFG_VALIDATE_NETADDR_HWADDR("mac", "10:aa:00:bb:00:cc", "help", false),
-  CFG_VALIDATE_NETADDR_MAC48("mac48", "11:bb:cc:dd:ee:ff", "help", false),
-  CFG_VALIDATE_NETADDR_EUI64("eui64", "00-11-22-33-44-55-66-77", "help", false),
-  CFG_VALIDATE_NETADDR_V4("ipv4", "10.0.0.2", "help", false),
-  CFG_VALIDATE_NETADDR_V6("ipv6", "10::1", "help", false),
-  CFG_VALIDATE_NETADDR_V46("ipv46", "11::0", "help", false),
-  CFG_VALIDATE_NETADDR("p_netaddr", "10.0.0.0/24", "help", true),
-  CFG_VALIDATE_NETADDR_HWADDR("p_mac", "10:aa:00:bb:00:cc/24", "help", true),
-  CFG_VALIDATE_NETADDR_MAC48("p_mac48", "11:bb:cc:dd:ee:ff/24", "help", true),
-  CFG_VALIDATE_NETADDR_EUI64("p_eui64", "00-11-22-33-44-55-66-77/32", "help", true),
-  CFG_VALIDATE_NETADDR_V4("p_ipv4", "10.0.0.0/8", "help", true),
-  CFG_VALIDATE_NETADDR_V6("p_ipv6", "10::1/64", "help", true),
-  CFG_VALIDATE_NETADDR_V46("p_ipv46", "11::0/32", "help", true),
+  CFG_VALIDATE_NETADDR("netaddr", "10.0.0.1", "help", false, false),
+  CFG_VALIDATE_NETADDR_HWADDR("mac", "10:aa:00:bb:00:cc", "help", false, false),
+  CFG_VALIDATE_NETADDR_MAC48("mac48", "11:bb:cc:dd:ee:ff", "help", false, false),
+  CFG_VALIDATE_NETADDR_EUI64("eui64", "00-11-22-33-44-55-66-77", "help", false, false),
+  CFG_VALIDATE_NETADDR_V4("ipv4", "10.0.0.2", "help", false, false),
+  CFG_VALIDATE_NETADDR_V6("ipv6", "10::1", "help", false, false),
+  CFG_VALIDATE_NETADDR_V46("ipv46", "11::0", "help", false, false),
+  CFG_VALIDATE_NETADDR("p_netaddr", "10.0.0.0/24", "help", true, false),
+  CFG_VALIDATE_NETADDR_HWADDR("p_mac", "10:aa:00:bb:00:cc/24", "help", true, false),
+  CFG_VALIDATE_NETADDR_MAC48("p_mac48", "11:bb:cc:dd:ee:ff/24", "help", true, false),
+  CFG_VALIDATE_NETADDR_EUI64("p_eui64", "00-11-22-33-44-55-66-77/32", "help", true, false),
+  CFG_VALIDATE_NETADDR_V4("p_ipv4", "10.0.0.0/8", "help", true, false),
+  CFG_VALIDATE_NETADDR_V6("p_ipv6", "10::1/64", "help", true, false),
+  CFG_VALIDATE_NETADDR_V46("p_ipv46", "11::0/32", "help", true, false),
 };
 
 static struct cfg_schema_section section2 = {
@@ -130,8 +130,8 @@ static void
 test_validate_success(void) {
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
   END_TEST();
 }
 
@@ -139,8 +139,8 @@ static void
 test_validate_stringarray_miss(void) {
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "stringarray", "12345678");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
@@ -152,8 +152,8 @@ static void
 test_validate_printable_miss(void) {
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "printable", "1234\n5678");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
@@ -165,8 +165,8 @@ static void
 test_validate_printable_array_miss(void) {
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "printable_array", "1\n2");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
@@ -183,8 +183,8 @@ static void
 test_validate_choice_miss(void) {
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "choice", "choice42");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
@@ -197,8 +197,8 @@ static void
 test_validate_int_miss(void) {
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int", "a");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, NULL),
@@ -223,8 +223,8 @@ static void
 test_validate_int_minmax_miss(void) {
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, "int_minmax", "11");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -258,8 +258,8 @@ test_validate_netaddr_miss(void) {
   const char *key = "netaddr";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -305,8 +305,8 @@ test_validate_netaddr_mac_miss(void) {
   const char *key = "mac";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -352,8 +352,8 @@ test_validate_netaddr_mac48_miss(void) {
   const char *key = "mac48";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -399,8 +399,8 @@ test_validate_netaddr_eui64_miss(void) {
   const char *key = "eui64";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -446,8 +446,8 @@ test_validate_netaddr_ipv4_miss(void) {
   const char *key = "ipv4";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -493,8 +493,8 @@ test_validate_netaddr_ipv6_miss(void) {
   const char *key = "ipv6";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -540,8 +540,8 @@ test_validate_netaddr_ipv46_miss(void) {
   const char *key = "ipv46";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -588,8 +588,8 @@ test_validate_netaddr_prefix_miss(void) {
   const char *key = "p_netaddr";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -635,8 +635,8 @@ test_validate_netaddr_mac_prefix_miss(void) {
   const char *key = "p_mac";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -682,8 +682,8 @@ test_validate_netaddr_mac48_prefix_miss(void) {
   const char *key = "p_mac48";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -729,8 +729,8 @@ test_validate_netaddr_eui64_prefix_miss(void) {
   const char *key = "p_eui64";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -776,8 +776,8 @@ test_validate_netaddr_ipv4_prefix_miss(void) {
   const char *key = "p_ipv4";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -823,8 +823,8 @@ test_validate_netaddr_ipv6_prefix_miss(void) {
   const char *key = "p_ipv6";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),
@@ -870,8 +870,8 @@ test_validate_netaddr_ipv46_prefix_miss(void) {
   const char *key = "p_ipv46";
   START_TEST();
 
-  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, NULL),
-      "error: %s", abuf_getptr(&out));
+  CHECK_TRUE(0 == cfg_schema_validate(db, false, false, &out),
+      "%s", abuf_getptr(&out));
 
   cfg_db_add_entry(db, CFG_SEC, CFG_SECNAME, key, "xxxxxxx");
   CHECK_TRUE(0 != cfg_schema_validate(db, false, false, &out),

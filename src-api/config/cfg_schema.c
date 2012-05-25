@@ -66,8 +66,6 @@ _check_missing_entries(struct cfg_schema_section *schema_section,
 static void _handle_named_section_change(struct cfg_schema_section *s_section,
     struct cfg_db *pre_change, struct cfg_db *post_change,
     const char *name, bool startup);
-static bool _extract_netaddr_filter(const struct cfg_schema_entry *entry,
-    int *address_family_1, int *address_family_2);
 static int
 _handle_db_changes(struct cfg_db *pre_change, struct cfg_db *post_change, bool startup);
 
@@ -426,11 +424,11 @@ cfg_avlcmp_schemaentries(const void *p1, const void *p2, void *unused) {
 int
 cfg_schema_validate_strlen(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out) {
-  if ((int)strlen(value) > entry->validate_params.p_i1) {
+  if (strlen(value) > entry->validate_param[0].s) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
-        " in section %s is longer than %d characters",
-        value, entry->key.entry, section_name, entry->validate_params.p_i1);
-    return 1;
+        " in section %s is longer than %"PRINTF_SIZE_T_SPECIFIER" characters",
+        value, entry->key.entry, section_name, entry->validate_param[0].s);
+    return -1;
   }
   return 0;
 }
@@ -476,10 +474,10 @@ cfg_schema_validate_printable(const struct cfg_schema_entry *entry,
 int
 cfg_schema_validate_choice(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out) {
-  const char **list = entry->validate_params.p_ptr;
+  const char **list = entry->validate_param[0].ptr;
   int i;
 
-  i = cfg_get_choice_index(value, list, (size_t)entry->validate_params.p_i1);
+  i = cfg_get_choice_index(value, list, entry->validate_param[1].s);
   if (i >= 0) {
     return 0;
   }
@@ -512,11 +510,11 @@ cfg_schema_validate_int(const struct cfg_schema_entry *entry,
         value, entry->key.entry, section_name);
     return 1;
   }
-  if (i < entry->validate_params.p_i1 || i > entry->validate_params.p_i2) {
+  if (i < entry->validate_param[0].i32[0] || i > entry->validate_param[0].i32[1]) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s' in section %s is "
         "not between %d and %d",
         value, entry->key.entry, section_name,
-        entry->validate_params.p_i1, entry->validate_params.p_i2);
+        entry->validate_param[0].i32[0], entry->validate_param[0].i32[1]);
     return 1;
   }
   return 0;
@@ -535,11 +533,8 @@ int
 cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out) {
   struct netaddr addr;
-  bool prefix = false;
-  int af1, af2;
   uint8_t max_prefix;
-
-  prefix = _extract_netaddr_filter(entry, &af1, &af2);
+  int i;
 
   if (netaddr_from_string(&addr, value)) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
@@ -557,21 +552,20 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
         value, entry->key.entry, section_name);
     return -1;
   }
-  if (!prefix && addr.prefix_len != max_prefix) {
+  if (!entry->validate_param[1].b && addr.prefix_len != max_prefix) {
     cfg_append_printable_line(out, "Value '%s' for entry '%s'"
         " in section %s must be a single address, not a prefix",
         value, entry->key.entry, section_name);
     return -1;
   }
 
-  if (af1 == 0) {
-    /* no further type check */
-    return 0;
-  }
+  for (i=0; i<5; i++) {
+    int8_t type;
 
-  /* check address type */
-  if ((af2 != 0 && af2 == addr.type) || (af1 == addr.type)) {
-    return 0;
+    type = entry->validate_param[0].i8[i];
+    if (type == addr.type) {
+      return 0;
+    }
   }
 
   /* at least one condition was set, but no one matched */
@@ -590,10 +584,9 @@ cfg_schema_validate_netaddr(const struct cfg_schema_entry *entry,
 void
 cfg_schema_help_strlen(
     const struct cfg_schema_entry *entry, struct autobuf *out) {
-  if (entry->validate_params.p_i1 < INT32_MAX) {
-    cfg_append_printable_line(out, "    Parameter must have a maximum length of %d characters",
-        entry->validate_params.p_i1);
-  }
+  cfg_append_printable_line(out, "    Parameter must have a maximum"
+      " length of %"PRINTF_SIZE_T_SPECIFIER" characters",
+      entry->validate_param[0].s);
 }
 
 /**
@@ -622,13 +615,13 @@ cfg_schema_help_printable(
 void
 cfg_schema_help_choice(
     const struct cfg_schema_entry *entry, struct autobuf *out) {
-  const char **list = entry->validate_params.p_ptr;
-  int i;
+  const char **list = entry->validate_param[0].ptr;
+  size_t i;
 
   cfg_append_printable_line(out, "    Parameter must be on of the following list:");
 
   abuf_puts(out, "    ");
-  for (i=0; i < entry->validate_params.p_i1; i++) {
+  for (i=0; i < entry->validate_param[1].s; i++) {
     abuf_appendf(out, "%s'%s'",
         i==0 ? "" : ", ", list[i]);
   }
@@ -644,13 +637,24 @@ cfg_schema_help_choice(
 void
 cfg_schema_help_int(
     const struct cfg_schema_entry *entry, struct autobuf *out) {
-  if (entry->validate_params.p_i1 > INT32_MIN
-      && entry->validate_params.p_i2 < INT32_MAX) {
-    cfg_append_printable_line(out, "    Parameter must be an integer between %d and %d",
-        entry->validate_params.p_i1, entry->validate_params.p_i2);
+  if (entry->validate_param[0].i32[0] > INT32_MIN) {
+    if (entry->validate_param[0].i32[1] < INT32_MAX) {
+      cfg_append_printable_line(out, "    Parameter must be an integer between %d and %d",
+          entry->validate_param[0].i32[0], entry->validate_param[0].i32[1]);
+    }
+    else {
+      cfg_append_printable_line(out, "    Parameter must be an integer larger or equal than %d",
+          entry->validate_param[0].i32[0]);
+    }
   }
   else {
-    cfg_append_printable_line(out, "    Parameter must be an integer");
+    if (entry->validate_param[0].i32[1] < INT32_MAX) {
+      cfg_append_printable_line(out, "    Parameter must be an integer less or equal than %d",
+          entry->validate_param[0].i32[1]);
+    }
+    else {
+      cfg_append_printable_line(out, "    Parameter must be a 32 bit signed integer");
+    }
   }
 }
 
@@ -663,35 +667,46 @@ cfg_schema_help_int(
 void
 cfg_schema_help_netaddr(
     const struct cfg_schema_entry *entry, struct autobuf *out) {
-  const char *p_string;
-  bool prefix = false;
-  int af1,af2;
+  int8_t type;
+  bool first;
+  int i;
 
-  prefix = _extract_netaddr_filter(entry, &af1, &af2);
-  p_string = prefix ? " with optional prefix string" : "";
+  abuf_puts(out, "    Parameter must be an address of the following type: ");
 
-  switch (af1) {
-    case AF_INET:
-      cfg_append_printable_line(out, "    Parameter must be an IPv4%s address%s",
-          af2 == AF_INET6 ? " or IPv6" : "", p_string);
-      break;
-    case AF_INET6:
-      cfg_append_printable_line(out, "    Parameter must be an IPv6 address%s",
-          p_string);
-      break;
-    case AF_MAC48:
-      cfg_append_printable_line(out, "    Parameter must be an MAC-48%s address%s",
-          af2 == AF_EUI64 ? " or EUI64" : "", p_string);
-      break;
-    case AF_EUI64:
-      cfg_append_printable_line(out, "    Parameter must be an EUI-64 address%s",
-          p_string);
-      break;
-    default:
-      cfg_append_printable_line(out, "    Parameter must be an IPv4, "
-          "IPv6, MAC-48 or EUI-64 address%s", p_string);
-      break;
+  first = true;
+  for (i=0; i<5; i++) {
+    type = entry->validate_param[0].i8[i];
+
+    if (first) {
+      first = false;
+    }
+    else {
+      abuf_puts(out, ", ");
+    }
+
+    switch (type) {
+      case AF_INET:
+        abuf_puts(out, "IPv4");
+        break;
+      case AF_INET6:
+        abuf_puts(out, "IPv6");
+        break;
+      case AF_MAC48:
+        abuf_puts(out, "MAC48");
+        break;
+      case AF_EUI64:
+        abuf_puts(out, "EUI64");
+        break;
+      case AF_UNSPEC:
+        abuf_puts(out, "Unspec (-)");
+        break;
+    }
   }
+
+  if (entry->validate_param[1].b) {
+    abuf_puts(out, " (with an optional prefix)");
+  }
+  abuf_puts(out, "\n");
 }
 
 /**
@@ -733,7 +748,7 @@ cfg_schema_tobin_strarray(const struct cfg_schema_entry *s_entry,
 
   ptr = (char *)reference;
 
-  strscpy(ptr, strarray_get_first_c(value), (size_t)s_entry->validate_params.p_i1);
+  strscpy(ptr, strarray_get_first_c(value), s_entry->validate_param[0].s);
   return 0;
 }
 
@@ -754,8 +769,7 @@ cfg_schema_tobin_choice(const struct cfg_schema_entry *s_entry,
   ptr = (int *)reference;
 
   *ptr = cfg_get_choice_index(strarray_get_first_c(value),
-      s_entry->validate_params.p_ptr,
-      (size_t)s_entry->validate_params.p_i1);
+      s_entry->validate_param[0].ptr, s_entry->validate_param[1].s);
   return 0;
 }
 
@@ -1041,41 +1055,4 @@ _handle_named_section_change(struct cfg_schema_section *s_section,
   if (changed || startup) {
     s_section->cb_delta_handler();
   }
-}
-
-/**
- * Extract the encoded address families and the prefix flag
- * from the parameters of a netaddr validator.
- * @param entry pointer to schema entry
- * @param address_family_1 pointer to address family 1 (return value)
- * @param address_family_2 pointer to address family 2 (return value)
- * @return true if the validator allows a prefix, false otherwise
- */
-static bool
-_extract_netaddr_filter(const struct cfg_schema_entry *entry,
-    int *address_family_1, int *address_family_2) {
-  bool prefix = false;
-  int p1, p2;
-
-  p1 = entry->validate_params.p_i1;
-  p2 = entry->validate_params.p_i2;
-
-  /* check if we may accept a prefix */
-  if (p1 < 0) {
-    prefix = true;
-    p1 = -p1;
-  }
-  if (p2 < 0) {
-    prefix = true;
-    p2 = -p2;
-
-    /* explicit 'all addresses, but no prefix' case */
-    if (p1 == 0) {
-      p2 = 0;
-    }
-  }
-
-  *address_family_1 = p1;
-  *address_family_2 = p2;
-  return prefix;
 }
