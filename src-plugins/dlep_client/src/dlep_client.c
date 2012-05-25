@@ -39,6 +39,8 @@
  *
  */
 
+#include <errno.h>
+
 #include "config/cfg_schema.h"
 #include "packetbb/pbb_conversion.h"
 #include "packetbb/pbb_iana.h"
@@ -405,8 +407,10 @@ _cb_send_dlep(struct pbb_writer *writer __attribute__((unused)),
 
   session = container_of(interf, struct _dlep_service_session, out_if);
 
-  if (olsr_packet_send_managed(&_dlep_socket, &session->interface_socket, ptr, len)) {
-    OLSR_WARN(LOG_DLEP_CLIENT, "Could not sent DLEP packet to socket");
+  if (olsr_packet_send_managed(
+      &_dlep_socket, &session->interface_socket, ptr, len) < 0) {
+    OLSR_WARN(LOG_DLEP_CLIENT, "Could not sent DLEP packet to socket: %s (%d)",
+        strerror(errno), errno);
   }
 }
 

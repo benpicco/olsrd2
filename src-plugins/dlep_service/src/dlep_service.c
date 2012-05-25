@@ -344,13 +344,12 @@ void
 _cb_send_multicast(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf __attribute__((unused)),
     void *ptr, size_t len) {
-  if (config_global.ipv4
-      && olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET) < 0) {
+  if (olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET) < 0) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket: %s (%d)",
         strerror(errno), errno);
   }
-  if (config_global.ipv6
-      && olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET6) < 0) {
+  if (config_global.ipv6 && olsr_packet_send_managed_multicast(
+      &_dlep_socket, ptr, len, AF_INET6) < 0) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv6 packet to socket: %s (%d)",
         strerror(errno), errno);
   }
@@ -371,7 +370,7 @@ _cb_send_unicast(struct pbb_writer *writer __attribute__((unused)),
   session = container_of(interf, struct _router_session, out_if);
 
   if (olsr_packet_send_managed(&_dlep_socket, &session->router_socket, ptr, len) < 0) {
-    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket: %s (%d)",
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP packet to socket: %s (%d)",
         strerror(errno), errno);
   }
 }
