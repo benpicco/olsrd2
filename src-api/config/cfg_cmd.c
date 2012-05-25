@@ -452,8 +452,8 @@ cfg_cmd_handle_schema(struct cfg_db *db,
       if (s_entry_it->cb_valhelp) {
         /* print validator help if different from last validator */
         if (s_entry_last == NULL || s_entry_last->cb_valhelp != s_entry_it->cb_valhelp
-            || memcmp(&s_entry_last->validate_params, &s_entry_it->validate_params,
-                sizeof(s_entry_it->validate_params)) != 0) {
+            || memcmp(&s_entry_last->validate_param, &s_entry_it->validate_param,
+                sizeof(s_entry_it->validate_param)) != 0) {
           s_entry_it->cb_valhelp(s_entry_it, log);
           s_entry_last = s_entry_it;
         }

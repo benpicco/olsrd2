@@ -108,9 +108,9 @@ static struct cfg_schema_entry _http_entries[] = {
   CFG_MAP_ACL_V46(olsr_stream_managed_config,
       acl, "acl", "127.0.0.1", "Access control list for http interface"),
   CFG_MAP_NETADDR_V4(olsr_stream_managed_config,
-      bindto_v4, "bindto_v4", "127.0.0.1", "Bind http ipv4 socket to this address", false),
+      bindto_v4, "bindto_v4", "127.0.0.1", "Bind http ipv4 socket to this address", false, true),
   CFG_MAP_NETADDR_V6(olsr_stream_managed_config,
-      bindto_v6, "bindto_v6", "::1", "Bind http ipv6 socket to this address", false),
+      bindto_v6, "bindto_v6", "::1", "Bind http ipv6 socket to this address", false, true),
   CFG_MAP_INT_MINMAX(olsr_stream_managed_config,
       port, "port", "1978", "Network port for http interface", 1, 65535),
 };
