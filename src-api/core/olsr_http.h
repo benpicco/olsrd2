@@ -49,9 +49,12 @@
 #include "core/olsr_stream_socket.h"
 #include "core/olsr_netaddr_acl.h"
 
-#define OLSR_HTTP_MAX_HEADERS 16
-#define OLSR_HTTP_MAX_PARAMS 8
-#define OLSR_HTTP_MAX_URI_LENGTH 256
+/* built in parameters for header parser */
+enum {
+  OLSR_HTTP_MAX_HEADERS = 16,
+  OLSR_HTTP_MAX_PARAMS  = 8,
+  OLSR_HTTP_MAX_URI_LENGTH = 256
+};
 
 enum olsr_http_result {
   HTTP_200_OK = 200,

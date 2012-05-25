@@ -269,7 +269,8 @@ olsr_packet_apply_managed(struct olsr_packet_managed *managed,
  * @param remote pointer to remote socket
  * @param data pointer to data to send
  * @param length length of data
- * @return -1 if an error happened, 0 otherwise
+ * @return -1 if an error happened, 0 if packet was sent, 1 if this
+ *    type of address was switched off
  */
 int
 olsr_packet_send_managed(struct olsr_packet_managed *managed,
@@ -282,7 +283,8 @@ olsr_packet_send_managed(struct olsr_packet_managed *managed,
       && netaddr_socket_get_addressfamily(remote) == AF_INET6) {
     return olsr_packet_send(&managed->socket_v6, remote, data, length);
   }
-  return -1;
+  errno = 0;
+  return 0;
 }
 
 /**
@@ -292,22 +294,20 @@ olsr_packet_send_managed(struct olsr_packet_managed *managed,
  * @param data pointer to data to send
  * @param length length of data
  * @param af_type address family to send multicast
- * @return -1 if an error happened, 0 otherwise
+ * @return -1 if an error happened, 0 if packet was sent, 1 if this
+ *    type of address was switched off
  */
 int
 olsr_packet_send_managed_multicast(struct olsr_packet_managed *managed,
     const void *data, size_t length, int af_type) {
-  if (config_global.ipv4 && af_type == AF_INET
-      && list_is_node_added(&managed->multicast_v4.scheduler_entry.node)) {
-    return olsr_packet_send(&managed->socket_v4, &managed->multicast_v4.local_socket, data, length);
+  if (af_type == AF_INET) {
+    return olsr_packet_send_managed(managed, &managed->multicast_v4.local_socket, data, length);
   }
-  if (config_global.ipv6 && af_type == AF_INET6
-      && list_is_node_added(&managed->multicast_v6.scheduler_entry.node)) {
-    return olsr_packet_send(&managed->socket_v6, &managed->multicast_v6.local_socket, data, length);
+  else if (af_type == AF_INET6) {
+    return olsr_packet_send_managed(managed, &managed->multicast_v6.local_socket, data, length);
   }
-
-  errno = ENXIO; /* error, no such device or address */
-  return -1;
+  errno = 0;
+  return 1;
 }
 
 /**
@@ -379,7 +379,7 @@ _apply_managed_socketpair(struct olsr_packet_managed *managed,
     struct olsr_packet_socket *sock, struct netaddr *bind_ip, uint16_t port,
     struct olsr_packet_socket *mc_sock, struct netaddr *mc_ip, uint16_t mc_port,
     bool mc_loopback, bool if_event) {
-  int result = 0;
+  int treestate = 0, result = 0;
   bool real_multicast;
 
   /* copy unicast port if necessary */
@@ -387,36 +387,44 @@ _apply_managed_socketpair(struct olsr_packet_managed *managed,
     mc_port = port;
   }
 
+  if (bind_ip->type == AF_UNSPEC) {
+    olsr_packet_remove(sock, false);
+    olsr_packet_remove(mc_sock, false);
+    return 0;
+  }
+
   /* check if multicast IP is a real multicast (and not a broadcast) */
   real_multicast = netaddr_is_in_subnet(
       mc_ip->type == AF_INET ? &NETADDR_IPV4_MULTICAST : &NETADDR_IPV6_MULTICAST,
       mc_ip);
 
-  if (bind_ip->type == AF_UNSPEC) {
-    olsr_packet_remove(sock, false);
+  treestate = _apply_managed_socket(sock, bind_ip, port, data,
+      &managed->config, if_event);
+  if (treestate == 0 && real_multicast && data != NULL && data->up) {
+    /* everything okay */
+    os_net_join_mcast_send(sock->scheduler_entry.fd,
+        bind_ip, data, mc_loopback, LOG_SOCKET_PACKET);
   }
-  else if (_apply_managed_socket(sock, bind_ip, port, data, &managed->config, if_event)) {
+  else if (treestate < 0) {
     /* error */
     result = -1;
   }
-  else if (real_multicast && data != NULL) {
-    /* restrict multicast output to interface */
-    os_net_join_mcast_send(sock->scheduler_entry.fd,
-        mc_ip, data, mc_loopback, LOG_SOCKET_PACKET);
-  }
 
   if (real_multicast && mc_ip->type != AF_UNSPEC) {
-    /* multicast v4*/
-    if (_apply_managed_socket(mc_sock, mc_ip, mc_port, data, &managed->config, if_event)) {
-      /* error */
-      result = -1;
-    }
-    else {
+    /* multicast */
+    treestate = _apply_managed_socket(mc_sock, mc_ip, mc_port, data,
+        &managed->config, if_event);
+    if (treestate == 0) {
+      /* everything okay */
       mc_sock->scheduler_entry.process = _cb_packet_event_multicast;
 
       /* join multicast group */
       os_net_join_mcast_recv(mc_sock->scheduler_entry.fd,
           mc_ip, data, LOG_SOCKET_PACKET);
+    }
+    else if (treestate < 0) {
+      /* error */
+      result = -1;
     }
   }
   else {
@@ -466,7 +474,7 @@ _apply_managed_socket(struct olsr_packet_socket *packet,
       && memcmp(&sock, &packet->local_socket, sizeof(sock)) == 0
       && data == packet->interface) {
     /* nothing changed */
-    return 0;
+    return 1;
   }
 
   /* remove old socket */
@@ -483,7 +491,6 @@ _apply_managed_socket(struct olsr_packet_socket *packet,
   if (olsr_packet_add(packet, &sock, data)) {
     return -1;
   }
-
   return 0;
 }
 
