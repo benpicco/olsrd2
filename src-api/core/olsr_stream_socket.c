@@ -415,12 +415,14 @@ _apply_managed_socket(struct olsr_stream_managed *managed,
     return -1;
   }
 
-  if (memcmp(&sock, &stream->local_socket, sizeof(sock)) == 0) {
-    /* nothing changed */
-    return 0;
-  }
+  if (list_is_node_added(&stream->scheduler_entry.node)) {
+    if (memcmp(&sock, &stream->local_socket, sizeof(sock)) == 0) {
+      /* nothing changed */
+      return 0;
+    }
 
-  olsr_stream_remove(stream, true);
+    olsr_stream_remove(stream, true);
+  }
   if (olsr_stream_add(stream, &sock)) {
     return -1;
   }

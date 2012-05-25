@@ -74,7 +74,9 @@ os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
   memcpy(&bindto, _bindto, sizeof(bindto));
 
   if (os_net_set_nonblocking(sock)) {
-    return 0;
+    OLSR_WARN(log_src, "Cannot make socket non-blocking %s: %s (%d)\n",
+        netaddr_socket_to_string(&buf, &bindto), strerror(errno), errno);
+    return -1;
   }
 
 #if defined(SO_BINDTODEVICE)
@@ -134,7 +136,9 @@ os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
   if (bind(sock, &bindto.std, addrlen) < 0) {
     OLSR_WARN(log_src, "Cannot bind socket to address %s: %s (%d)\n",
         netaddr_socket_to_string(&buf, &bindto), strerror(errno), errno);
+
     return -1;
   }
+
   return 0;
 }
