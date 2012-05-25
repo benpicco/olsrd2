@@ -16,20 +16,24 @@ include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
 CMAKE_SOURCE_DIR=$(CURDIR)/../../
-CMAKE_OPTIONS="-DOONF_CONFIG=$(CURDIR)/files/dlep-client.cmake"
+CMAKE_OPTIONS=-DOONF_CONFIG=$(CURDIR)/files/dlep-client.cmake
 
 define Package/dlep-client
-  SECTION:=net
-  CATEGORY:=Network
-  # DEPENDS:=+libnl-tiny
-  TITLE:=DLEP-Client
+	SECTION:=net
+	CATEGORY:=Network
+	TITLE:=DLEP-Client
 endef
 
-TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include -I${STAGING_DIR}/usr/include/libnl-tiny
+define Package/dlep-client/conffiles
+	/etc/dlep-client.config
+endef
+
+TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
 
 define Package/dlep-client/install
 	$(INSTALL_DIR) $(1)/bin
-	$(CP) $(PKG_INSTALL_DIR)/usr/bin/dlep-client $(1)/bin/
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/dlep-client $(1)/bin/
+	$(INSTALL_CONF) $(CURDIR)/files/dlep-client.config $(1)/etc/dlep-client.config
 endef
 
 $(eval $(call BuildPackage,dlep-client))

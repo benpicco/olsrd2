@@ -39,7 +39,7 @@ set (OONF_VERSION_TRAILER "Visit http://www.olsr.org\\\\n")
 set (OONF_VERSION 0.1.0)
 
 # set static plugins (list of plugin names, separated by space/newline)
-set (OONF_STATIC_PLUGINS cfgparser_compact cfgio_file dlep_client)
+set (OONF_STATIC_PLUGINS cfgparser_compact cfgio_file dlep_client httptelnet)
 
 # choose if framework should be linked static or dynamic
 set (OONF_FRAMEWORD_DYNAMIC false)

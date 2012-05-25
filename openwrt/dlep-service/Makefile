@@ -25,11 +25,16 @@ define Package/dlep-service
   TITLE:=DLEP-Service
 endef
 
+define Package/dlep-service/conffiles
+	/etc/dlep-service.config
+endef
+
 TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include -I${STAGING_DIR}/usr/include/libnl-tiny
 
 define Package/dlep-service/install
 	$(INSTALL_DIR) $(1)/bin
-	$(CP) $(PKG_INSTALL_DIR)/usr/bin/dlep-service $(1)/bin/
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/dlep-service $(1)/bin/
+	$(INSTALL_CONF) $(CURDIR)/files/dlep-service.config $(1)/etc/dlep-service.config
 endef
 
 $(eval $(call BuildPackage,dlep-service))
