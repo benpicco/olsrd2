@@ -47,13 +47,13 @@
 
 #include "config/cfg_schema.h"
 
-#define CFG_VALIDATE_ACL(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i16 = {-1}}}, ##args )
-#define CFG_VALIDATE_ACL_HWADDR(p_name, p_def, p_help, args...)  _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i16 = {AF_MAC48, AF_EUI64, -1}}}, ##args )
-#define CFG_VALIDATE_ACL_MAC48(p_name, p_def, p_help, args...)   _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i16 = {AF_MAC48, -1}}}, ##args )
-#define CFG_VALIDATE_ACL_EUI64(p_name, p_def, p_help, args...)   _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i16 = {AF_EUI64, -1}}}, ##args )
-#define CFG_VALIDATE_ACL_V4(p_name, p_def, p_help, args...)      _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i16 = {AF_INET, -1}}}, ##args )
-#define CFG_VALIDATE_ACL_V6(p_name, p_def, p_help, args...)      _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i16 = {AF_INET6, -1}}}, ##args )
-#define CFG_VALIDATE_ACL_V46(p_name, p_def, p_help, args...)     _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i16 = {AF_INET, AF_INET6, -1}}}, ##args )
+#define CFG_VALIDATE_ACL(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i8 = {-1}}, {.b = true}}, ##args )
+#define CFG_VALIDATE_ACL_HWADDR(p_name, p_def, p_help, args...)  _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i8 = {AF_MAC48, AF_EUI64, -1}}, {.b = true}}, ##args )
+#define CFG_VALIDATE_ACL_MAC48(p_name, p_def, p_help, args...)   _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i8 = {AF_MAC48, -1}}, {.b = true}}, ##args )
+#define CFG_VALIDATE_ACL_EUI64(p_name, p_def, p_help, args...)   _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i8 = {AF_EUI64, -1}}, {.b = true}}, ##args )
+#define CFG_VALIDATE_ACL_V4(p_name, p_def, p_help, args...)      _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i8 = {AF_INET, -1}}, {.b = true}}, ##args )
+#define CFG_VALIDATE_ACL_V6(p_name, p_def, p_help, args...)      _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i8 = {AF_INET6, -1}}, {.b = true}}, ##args )
+#define CFG_VALIDATE_ACL_V46(p_name, p_def, p_help, args...)     _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsr_acl_validate, .list = true, .validate_param = {{.i8 = {AF_INET, AF_INET6, -1}}, {.b = true}}, ##args )
 
 #define CFG_MAP_ACL(p_reference, p_field, p_name, p_def, p_help, args...)         CFG_VALIDATE_ACL(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
 #define CFG_MAP_ACL_HWADDR(p_reference, p_field, p_name, p_def, p_help, args...)  CFG_VALIDATE_ACL_HWADDR(p_name, p_def, p_help, .cb_to_binary = olsr_acl_tobin, .bin_offset = offsetof(struct p_reference, p_field), ##args)
