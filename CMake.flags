@@ -96,6 +96,7 @@ add_compiler_flag(-Wlogical-op)
 add_compiler_flag(-Wswitch-default)
 add_compiler_flag(-Winit-self)
 add_compiler_flag(-Wsync-nand)
+add_compiler_flag(-Wundef)
 add_compiler_flag(-Wunused-parameter)
 add_compiler_flag(-Wjump-missed-init)
 
