@@ -68,7 +68,7 @@
 #include "dlep_service.h"
 
 /* constants */
-#define _CFG_SECTION "dlep_service"
+#define _CFG_SECTION "dlep-service"
 #define DLEP_PKT_BUFFER_SIZE 1500
 
 /* prototypes */
@@ -116,9 +116,9 @@ static struct cfg_schema_entry _dlep_entries[] = {
     "Bind dlep ipv4 socket to this address", false, true),
   CFG_MAP_NETADDR_V6(_dlep_service_config, socket.bindto_v6, "bindto_v6", "::1",
     "Bind dlep ipv6 socket to this address", false, true),
-  CFG_MAP_NETADDR_V4(_dlep_service_config, socket.multicast_v4, "multicast_v4", "224.0.0.2",
+  CFG_MAP_NETADDR_V4(_dlep_service_config, socket.multicast_v4, "multicast_v4", "127.0.0.1",
     "ipv4 multicast address of this socket", false, true),
-  CFG_MAP_NETADDR_V6(_dlep_service_config, socket.multicast_v6, "multicast_v6", "ff01::2",
+  CFG_MAP_NETADDR_V6(_dlep_service_config, socket.multicast_v6, "multicast_v6", "::1",
     "ipv6 multicast address of this socket", false, true),
   CFG_MAP_INT_MINMAX(_dlep_service_config, socket.port, "port", "2001",
     "Multicast Network port for dlep interface", 1, 65535),
@@ -344,12 +344,11 @@ void
 _cb_send_multicast(struct pbb_writer *writer __attribute__((unused)),
     struct pbb_writer_interface *interf __attribute__((unused)),
     void *ptr, size_t len) {
-  if (olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET) < 0) {
+  if (olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET) != 0) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket: %s (%d)",
         strerror(errno), errno);
   }
-  if (config_global.ipv6 && olsr_packet_send_managed_multicast(
-      &_dlep_socket, ptr, len, AF_INET6) < 0) {
+  if (olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET6) != 0) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv6 packet to socket: %s (%d)",
         strerror(errno), errno);
   }
@@ -422,7 +421,7 @@ _cb_config_changed(void) {
   result = cfg_schema_tobin(&_config, _dlep_section.post,
       _dlep_entries, ARRAYSIZE(_dlep_entries));
   if (result) {
-    OLSR_WARN(LOG_CONFIG, "Could not convert dlep_listener config to binary (%d)", -(result+1));
+    OLSR_WARN(LOG_DLEP_SERVICE, "Could not convert dlep_listener config to binary (%d)", -(result+1));
     return;
   }
 

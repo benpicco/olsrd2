@@ -65,7 +65,7 @@
 #include "dlep_client.h"
 
 /* constants */
-#define _CFG_SECTION     "dlep_client"
+#define _CFG_SECTION     "dlep-client"
 #define _CFG_CONNECT_TO  "connect_to"
 
 #define DLEP_PKT_BUFFER_SIZE 1500
@@ -421,7 +421,7 @@ static void
 _cb_config_changed(void) {
   if (cfg_schema_tobin(&_client_config, _dlep_section.post,
       _dlep_entries, ARRAYSIZE(_dlep_entries))) {
-    OLSR_WARN(LOG_CONFIG, "Could not convert dlep_listener config to bin");
+    OLSR_WARN(LOG_DLEP_CLIENT, "Could not convert dlep_listener config to bin");
     return;
   }
 

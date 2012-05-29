@@ -13,18 +13,14 @@ CMAKE_SOURCE_DIR=$(CURDIR)/../../
 CMAKE_OPTIONS=-DOONF_CONFIG=$(CURDIR)/files/dlep-service.cmake
 
 define Package/dlep-service-git
-  SECTION:=net
-  CATEGORY:=Network
-  DEPENDS:=+libnl-tiny
-  TITLE:=DLEP-Service
+	SECTION:=net
+	CATEGORY:=Network
+	DEPENDS:=+libnl-tiny
+	TITLE:=DLEP-Service
 endef
 
 define Package/dlep-service/conffiles
 	/etc/dlep-service.config
-endef
-
-define Build/Compile
-	$(call Build/Compile/Default,dlep-service)
 endef
 
 TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include -I${STAGING_DIR}/usr/include/libnl-tiny

@@ -15,6 +15,7 @@ CMAKE_OPTIONS=-DOONF_CONFIG=$(CURDIR)/files/dlep-client.cmake
 define Package/dlep-client-git
 	SECTION:=net
 	CATEGORY:=Network
+	DEPENDS:=+libnl-tiny
 	TITLE:=DLEP-Client
 endef
 
@@ -22,11 +23,7 @@ define Package/dlep-client/conffiles
 	/etc/dlep-client.config
 endef
 
-define Build/Compile
-	$(call Build/Compile/Default,dlep-client)
-endef
-
-TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
+TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include -I${STAGING_DIR}/usr/include/libnl-tiny
 
 define Package/dlep-client/install
 	$(INSTALL_DIR) $(1)/bin
