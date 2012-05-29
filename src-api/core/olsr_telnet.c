@@ -318,14 +318,15 @@ static void
 _cb_telnet_create_error(struct olsr_stream_session *session,
     enum olsr_stream_errors error) {
   switch(error) {
-    case STREAM_REQUEST_FORBIDDEN:
-      /* no message */
-      break;
     case STREAM_REQUEST_TOO_LARGE:
       abuf_puts(&session->out, "Input buffer overflow, ending connection\n");
       break;
     case STREAM_SERVICE_UNAVAILABLE:
       abuf_puts(&session->out, "Telnet service unavailable, too many sessions\n");
+      break;
+    case STREAM_REQUEST_FORBIDDEN:
+    default:
+      /* no message */
       break;
   }
 }
@@ -424,17 +425,18 @@ _cb_telnet_receive_data(struct olsr_stream_session *session) {
           case TELNET_RESULT_CONTINOUS:
             telnet_session->data.show_echo = false;
             break;
-          case TELNET_RESULT_INTERNAL_ERROR:
-            abuf_setlen(&session->out, len);
-            abuf_appendf(&session->out,
-                "Error in autobuffer during command '%s'.\n", cmd);
-            break;
           case _TELNET_RESULT_UNKNOWN_COMMAND:
             abuf_setlen(&session->out, len);
             abuf_appendf(&session->out, "Error, unknown command '%s'\n", cmd);
             break;
           case TELNET_RESULT_QUIT:
             return STREAM_SESSION_SEND_AND_QUIT;
+          case TELNET_RESULT_INTERNAL_ERROR:
+          default:
+            abuf_setlen(&session->out, len);
+            abuf_appendf(&session->out,
+                "Error in autobuffer during command '%s'.\n", cmd);
+            break;
         }
         /* put an empty line behind each command */
         if (telnet_session->data.show_echo) {

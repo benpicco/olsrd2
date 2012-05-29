@@ -697,7 +697,7 @@ cfg_schema_help_netaddr(
       case AF_EUI64:
         abuf_puts(out, "EUI64");
         break;
-      case AF_UNSPEC:
+      default:
         abuf_puts(out, "Unspec (-)");
         break;
     }
