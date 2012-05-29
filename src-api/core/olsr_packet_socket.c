@@ -275,6 +275,12 @@ olsr_packet_apply_managed(struct olsr_packet_managed *managed,
 int
 olsr_packet_send_managed(struct olsr_packet_managed *managed,
     union netaddr_socket *remote, const void *data, size_t length) {
+  struct netaddr_str buf;
+
+  if (netaddr_socket_get_addressfamily(remote) == AF_UNSPEC) {
+    return 0;
+  }
+
   if (config_global.ipv4 && list_is_node_added(&managed->socket_v4.scheduler_entry.node)
       && netaddr_socket_get_addressfamily(remote) == AF_INET) {
     return olsr_packet_send(&managed->socket_v4, remote, data, length);
@@ -284,6 +290,10 @@ olsr_packet_send_managed(struct olsr_packet_managed *managed,
     return olsr_packet_send(&managed->socket_v6, remote, data, length);
   }
   errno = 0;
+  OLSR_DEBUG(LOG_SOCKET_PACKET,
+      "Managed socket did not sent packet to %s because socket was not active",
+      netaddr_socket_to_string(&buf, remote));
+
   return 0;
 }
 
@@ -381,6 +391,7 @@ _apply_managed_socketpair(struct olsr_packet_managed *managed,
     bool mc_loopback, bool if_event) {
   int treestate = 0, result = 0;
   bool real_multicast;
+  struct netaddr_str buf1, buf2;
 
   /* copy unicast port if necessary */
   if (mc_port == 0) {
@@ -392,6 +403,9 @@ _apply_managed_socketpair(struct olsr_packet_managed *managed,
     olsr_packet_remove(mc_sock, false);
     return 0;
   }
+
+  OLSR_DEBUG(LOG_SOCKET_PACKET, "Apply managed socketpair: %s/%s",
+      netaddr_to_string(&buf1, bind_ip), netaddr_to_string(&buf2, mc_ip));
 
   /* check if multicast IP is a real multicast (and not a broadcast) */
   real_multicast = netaddr_is_in_subnet(

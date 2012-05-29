@@ -507,8 +507,7 @@ netaddr_socket_to_string(struct netaddr_str *dst, const union netaddr_socket *sr
     }
   }
   else {
-    /* unknown address type */
-    return NULL;
+    snprintf(dst->buf, sizeof(*dst), "\"Unknown socket type: %d\"", src->std.sa_family);
   }
 
   return dst->buf;
