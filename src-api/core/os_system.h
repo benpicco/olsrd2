@@ -68,21 +68,6 @@ EXPORT void os_system_cleanup(void);
 
 EXPORT int os_system_set_interface_state(const char *dev, bool up);
 
-/*
- * INLINE implementations for generic os_net functions
- */
-
-#if OS_SYSTEM_GETTIMEOFDAY == OS_GENERIC
-/**
- * Inline wrapper around gettimeofday
- * @param tv pointer to target timeval object
- * @return -1 if an error happened, 0 otherwise
- */
-static INLINE int
-os_system_gettimeofday(struct timeval *tv) {
-  return gettimeofday(tv, NULL);
-}
-#endif
-
+static INLINE int os_system_gettimeofday(struct timeval *tv);
 
 #endif /* OS_SYSTEM_H_ */

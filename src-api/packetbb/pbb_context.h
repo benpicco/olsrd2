@@ -42,6 +42,7 @@
 #define PBB_CONTEXT_H_
 
 #include "common/common_types.h"
+#include "packetbb/pbb_api_config.h"
 
 /*
  * Return values for reader callbacks and API calls (and internal functions)

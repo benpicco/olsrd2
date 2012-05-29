@@ -86,4 +86,14 @@ os_system_netlink_addnetaddr(struct nlmsghdr *n,
   return os_system_netlink_addreq(n, type, addr->addr, netaddr_get_maxprefix(addr)/8);
 }
 
+/**
+ * Inline wrapper around gettimeofday
+ * @param tv pointer to target timeval object
+ * @return -1 if an error happened, 0 otherwise
+ */
+static INLINE int
+os_system_gettimeofday(struct timeval *tv) {
+  return gettimeofday(tv, NULL);
+}
+
 #endif /* OS_SYSTEM_LINUX_H_ */
