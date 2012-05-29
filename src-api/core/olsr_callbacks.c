@@ -218,6 +218,8 @@ olsr_callback_event(struct olsr_callback_provider *prv, void *obj,
           cons->cb_remove(obj);
         }
         break;
+      default:
+        break;
     }
   }
   prv->_in_use = false;
