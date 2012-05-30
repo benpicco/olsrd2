@@ -38,6 +38,7 @@
  * the copyright holders.
  *
  */
+
 #ifndef PBB_IANA_H_
 #define PBB_IANA_H_
 
@@ -50,7 +51,7 @@
  */
 
 enum pbb_iana {
-  PBB_MANET_IPPROTO = 138,
+  PBB_MANET_IPPROTO  = 138,
   PBB_MANET_UDP_PORT = 269,
 };
 
@@ -68,13 +69,38 @@ EXPORT extern const char *PBB_MANET_MULTICAST_V6_TXT;
 
 /*
  * this is a list of all globally defined IANA
+ * message types
+ */
+
+enum pbb_msgtype_iana {
+  /* RFC 6130 (NHDP) */
+  PBB_MSGTYPE_HELLO = 0,
+};
+
+/*
+ * this is a list of all globally defined IANA
+ * packet TLVs and their allocated values
+ */
+
+enum pbb_pkttlvs_iana {
+  /* RFC 6622 (packetbb-sec) */
+  PBB_PKTTLV_ICV       = 5,
+  PBB_PKTTLV_TIMESTAMP = 6,
+};
+
+/*
+ * this is a list of all globally defined IANA
  * message TLVs and their allocated values
  */
 
 enum pbb_msgtlvs_iana {
-  /* RFC 5497 */
+  /* RFC 5497 (timetlv) */
   PBB_MSGTLV_VALIDITY_TIME = 0,
   PBB_MSGTLV_INTERVAL_TIME = 1,
+
+  /* RFC 6622 (packetbb-sec) */
+  PBB_MSGTLV_ICV           = 5,
+  PBB_MSGTLV_TIMESTAMP     = 6,
 };
 
 /*
@@ -91,6 +117,10 @@ enum pbb_addrtlv_iana {
   PBB_ADDRTLV_LOCAL_IF      = 2,
   PBB_ADDRTLV_LINK_STATUS   = 3,
   PBB_ADDRTLV_OTHER_NEIGHB  = 4,
+
+  /* RFC 6622 (packetbb-sec) */
+  PBB_ADDRTLV_ICV           = 5,
+  PBB_ADDRTLV_TIMESTAMP     = 6,
 };
 
 /* values for LOCAL_IF address TLV */
