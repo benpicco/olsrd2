@@ -234,7 +234,7 @@ olsr_stream_remove(struct olsr_stream_socket *stream_socket, bool force) {
 
 /**
  * Create an outgoing stream socket.
- * @param stream socket pointer to stream socket
+ * @param stream_socket pointer to stream socket
  * @param remote pointer to address of remote TCP server
  * @return pointer to stream session, NULL if an error happened.
  */
@@ -292,6 +292,8 @@ olsr_stream_set_timeout(struct olsr_stream_session *con, uint64_t timeout) {
 /**
  * Close a TCP stream session
  * @param session pointer to stream session
+ * @param force true if the session should be closed instantly,
+ *   false if all data in queue should still be sent
  */
 void
 olsr_stream_close(struct olsr_stream_session *session, bool force) {
@@ -381,9 +383,9 @@ olsr_stream_apply_managed(struct olsr_stream_managed *managed,
  *   false if scheduler should wait until outgoing buffers are empty
  */
 void
-olsr_stream_remove_managed(struct olsr_stream_managed *managed, bool forced) {
-  olsr_stream_remove(&managed->socket_v4, forced);
-  olsr_stream_remove(&managed->socket_v6, forced);
+olsr_stream_remove_managed(struct olsr_stream_managed *managed, bool force) {
+  olsr_stream_remove(&managed->socket_v4, force);
+  olsr_stream_remove(&managed->socket_v6, force);
 
   olsr_acl_remove(&managed->acl);
 }

@@ -110,13 +110,13 @@ os_net_cleanup(void) {
  * @param buf buffer for incoming data
  * @param length length of buffer
  * @param source pointer to netaddr socket object to store source of packet
- * @param interface limit received data to certain interface
+ * @param interf limit received data to certain interface
  *   (only used if socket cannot be bound to interface)
  * @return same as recvfrom()
  */
 int
 os_recvfrom(int fd, void *buf, size_t length, union netaddr_socket *source,
-    struct olsr_interface_data *ifd __attribute__((unused))) {
+    struct olsr_interface_data *interf __attribute__((unused))) {
   socklen_t len = sizeof(*source);
   return recvfrom(fd, buf, length, 0, &source->std, &len);
 }
@@ -128,19 +128,19 @@ os_recvfrom(int fd, void *buf, size_t length, union netaddr_socket *source,
  * @return -1 if an error happened, 0 otherwise
  */
 int
-os_net_update_interface(struct olsr_interface_data *data,
+os_net_update_interface(struct olsr_interface_data *interf,
     const char *name) {
   struct ifaddrs *ifaddr, *ifa;
   union netaddr_socket *sock;
   struct netaddr addr;
   struct ifreq ifr;
 
-  memset(data, 0, sizeof(*data));
-  strscpy(data->name, name, sizeof(data->name));
+  memset(interf, 0, sizeof(*interf));
+  strscpy(interf->name, name, sizeof(interf->name));
 
   /* get interface index */
-  data->index = if_nametoindex(name);
-  if (data->index == 0) {
+  interf->index = if_nametoindex(name);
+  if (interf->index == 0) {
     /* interface is not there at the moment */
     return 0;
   }
@@ -152,7 +152,7 @@ os_net_update_interface(struct olsr_interface_data *data,
   }
 
   for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-    if (strcmp(ifa->ifa_name, data->name) != 0) {
+    if (strcmp(ifa->ifa_name, interf->name) != 0) {
       continue;
     }
 
@@ -164,47 +164,47 @@ os_net_update_interface(struct olsr_interface_data *data,
     }
 
     if (addr.type == AF_INET) {
-      memcpy(&data->if_v4, &addr, sizeof(data->if_v4));
+      memcpy(&interf->if_v4, &addr, sizeof(interf->if_v4));
     }
     else if (addr.type == AF_INET6) {
       if (IN6_IS_ADDR_LINKLOCAL(addr.addr)) {
-        memcpy(&data->linklocal_v6, &addr, sizeof(data->linklocal_v6));
+        memcpy(&interf->linklocal_v6, &addr, sizeof(interf->linklocal_v6));
       }
       else if (!(IN6_IS_ADDR_LOOPBACK(addr.addr)
           || IN6_IS_ADDR_MULTICAST(addr.addr)
           || IN6_IS_ADDR_UNSPECIFIED(addr.addr)
           || IN6_IS_ADDR_V4COMPAT(addr.addr)
           || IN6_IS_ADDR_V4MAPPED(addr.addr))) {
-        memcpy(&data->if_v6, &addr, sizeof(data->if_v6));
+        memcpy(&interf->if_v6, &addr, sizeof(interf->if_v6));
       }
     }
   }
   freeifaddrs(ifaddr);
 
   memset(&ifr, 0, sizeof(ifr));
-  strscpy(ifr.ifr_name, data->name, IF_NAMESIZE);
+  strscpy(ifr.ifr_name, interf->name, IF_NAMESIZE);
 
   if (ioctl(_ioctl_v4, SIOCGIFFLAGS, &ifr) < 0) {
     OLSR_WARN(LOG_OS_NET,
         "ioctl SIOCGIFFLAGS (get flags) error on device %s: %s (%d)\n",
-        data->name, strerror(errno), errno);
+        interf->name, strerror(errno), errno);
     return -1;
   }
 
   if ((ifr.ifr_flags & (IFF_UP | IFF_RUNNING)) == (IFF_UP|IFF_RUNNING)) {
-    data->up = true;
+    interf->up = true;
   }
 
   memset(&ifr, 0, sizeof(ifr));
-  strscpy(ifr.ifr_name, data->name, IF_NAMESIZE);
+  strscpy(ifr.ifr_name, interf->name, IF_NAMESIZE);
 
   if (ioctl(_ioctl_v4, SIOCGIFHWADDR, &ifr) < 0) {
     OLSR_WARN(LOG_OS_NET,
         "ioctl SIOCGIFHWADDR (get flags) error on device %s: %s (%d)\n",
-        data->name, strerror(errno), errno);
+        interf->name, strerror(errno), errno);
     return -1;
   }
 
-  netaddr_from_binary(&data->mac, ifr.ifr_hwaddr.sa_data, 6, AF_MAC48);
+  netaddr_from_binary(&interf->mac, ifr.ifr_hwaddr.sa_data, 6, AF_MAC48);
   return 0;
 }

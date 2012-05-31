@@ -106,6 +106,8 @@ olsr_packet_cleanup(void) {
  * Add a new packet socket handler
  * @param pktsocket pointer to an initialized packet socket struct
  * @param local pointer local IP address of packet socket
+ * @param interf pointer to interface to bind socket on, NULL
+ *   if socket should not be bound to interface
  * @return -1 if an error happened, 0 otherwise
  */
 int
@@ -142,10 +144,13 @@ olsr_packet_add(struct olsr_packet_socket *pktsocket,
 /**
  * Remove a packet socket from the global scheduler
  * @param pktsocket pointer to packet socket
+ * @param force true if the socket should be removed instantly,
+ *   false if it should be removed after the last packet in queue is sent
  */
 void
 olsr_packet_remove(struct olsr_packet_socket *pktsocket,
     bool force __attribute__((unused))) {
+  // TODO: implement non-force behavior for UDP sockets
   if (list_is_node_added(&pktsocket->node)) {
     olsr_socket_remove(&pktsocket->scheduler_entry);
     os_close(pktsocket->scheduler_entry.fd);

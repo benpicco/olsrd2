@@ -95,9 +95,8 @@ olsr_callback_cleanup(void) {
 }
 
 /**
- * Create a new callback provider
+ * Register a new callback provider
  * @param prv pointer to callback provider
- * @param name pointer to name of provider
  * @return 0 if provider was registered successfully, -1 otherwise
  */
 int
@@ -124,7 +123,7 @@ olsr_callback_add(struct olsr_callback_provider *prv) {
 
 /**
  * Cleans up an existing registered callback provider
- * @param pointer to initialized callback provider
+ * @param prv to initialized callback provider
  */
 void
 olsr_callback_remove(struct olsr_callback_provider *prv) {
@@ -142,9 +141,7 @@ olsr_callback_remove(struct olsr_callback_provider *prv) {
 
 /**
  * Registers a new callback consumer to an existing provider
- * @param prv_name name of callback provider
- * @param cons_name name of new callback consumer
- * @param cons pointer to uninitialized callback consumer
+ * @param cons pointer callback consumer
  * @return 0 if successfully registered, -1 otherwise
  */
 int

@@ -77,11 +77,12 @@ olsr_acl_remove(struct olsr_netaddr_acl *acl) {
 /**
  * Initialize an ACL with a list of string parameters.
  * @param acl pointer to uninitialized ACL
- * @param array pointer to array of text arguments for ACL
+ * @param value pointer to string-array of text arguments for the ACL
  * @return -1 if an error happened, 0 otherwise
  */
 int
-olsr_acl_from_strarray(struct olsr_netaddr_acl *acl, const struct const_strarray *value) {
+olsr_acl_from_strarray(struct olsr_netaddr_acl *acl,
+    const struct const_strarray *value) {
   size_t accept_count, reject_count;
   const char *ptr;
   accept_count = 0;

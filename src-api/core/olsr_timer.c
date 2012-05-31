@@ -203,6 +203,7 @@ olsr_timer_remove(struct olsr_timer_info *info) {
 /**
  * Start or restart a new timer.
  * @param timer initialized timer entry
+ * @param rel_time relative time when the timer should fire
  */
 void
 olsr_timer_start(struct olsr_timer_entry *timer, uint64_t rel_time)
@@ -314,7 +315,7 @@ olsr_timer_stop(struct olsr_timer_entry *timer)
  * Depending on the passed in parameters a new timer is started,
  * or an existing timer is started or an existing timer is
  * terminated.
- * @param timer_ptr timer_entry pointer
+ * @param timer timer_entry pointer
  * @param rel_time time until the new timer should fire, 0 to stop timer
  */
 void

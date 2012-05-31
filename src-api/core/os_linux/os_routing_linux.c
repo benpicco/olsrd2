@@ -320,8 +320,8 @@ os_routing_set(struct os_route *route, bool set, bool del_similar) {
 
 /**
  * Request all routing dataof a certain address family
- * @param af AF_INET or AF_INET6
- * @return -1 if an error happened, rtnetlink sequence number otherwise
+ * @param route pointer to routing filter
+ * @return -1 if an error happened, 0 otherwise
  */
 int
 os_routing_query(struct os_route *route) {

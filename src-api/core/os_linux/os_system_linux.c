@@ -224,7 +224,6 @@ os_system_set_interface_state(const char *dev, bool up) {
  * Open a new bidirectional netlink socket
  * @param nl pointer to initialized netlink socket handler
  * @param protocol protocol id (NETLINK_ROUTING for example)
- * @param multicast multicast groups this socket should listen to
  * @return -1 if an error happened, 0 otherwise
  */
 int
