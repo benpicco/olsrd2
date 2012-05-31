@@ -209,14 +209,14 @@ pbb_writer_add_addrtlv(struct pbb_writer *writer, struct pbb_writer_address *add
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message object
- * @param addr pointer to binary address in network byte order
+ * @param msg pointer to message object
+ * @param addr_ptr pointer to binary address in network byte order
  * @param prefix prefix length
  * @return pointer to address object, NULL if an error happened
  */
 struct pbb_writer_address *
 pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
-    struct pbb_writer_message *msg, const void *_addr, uint8_t prefix) {
+    struct pbb_writer_message *msg, const void *addr_ptr, uint8_t prefix) {
   struct pbb_writer_address *address;
   const uint8_t *addr;
 #if CLEAR_ADDRESS_POSTFIX == true
@@ -228,7 +228,7 @@ pbb_writer_add_address(struct pbb_writer *writer __attribute__ ((unused)),
   assert(writer->_state == PBB_WRITER_ADD_ADDRESSES);
 #endif
 
-  addr = _addr;
+  addr = addr_ptr;
 #if CLEAR_ADDRESS_POSTFIX == true
   /* only copy prefix part of address */
   for (p = prefix, i=0; i < _msg->addr_len; i++, p -= 8) {
@@ -333,12 +333,14 @@ pbb_writer_unregister_addrtlvtype(struct pbb_writer *writer, struct pbb_writer_t
  *
  * @param writer pointer to writer context
  * @param cpr pointer to message content provider object
+ * @param addrtlvs pointer to array of addressblock tlv definitions
+ * @param addrtlvs_count length of addressblock tlv array
  * @return -1 if an error happened, 0 otherwise
  */
 int
 pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
     struct pbb_writer_content_provider *cpr,
-    struct pbb_writer_addrtlv_block *addrtlvs, size_t addrtlv_count) {
+    struct pbb_writer_addrtlv_block *addrtlvs, size_t addrtlvs_count) {
   struct pbb_writer_message *msg;
   size_t i;
 
@@ -350,14 +352,14 @@ pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
     return -1;
   }
 
-  for (i=0; i<addrtlv_count; i++) {
+  for (i=0; i<addrtlvs_count; i++) {
     addrtlvs[i]._tlvtype = _register_addrtlvtype(msg, addrtlvs[i].type, addrtlvs[i].exttype);
     if (addrtlvs[i]._tlvtype == NULL) {
       break;
     }
   }
 
-  if (addrtlv_count > 0 && i < addrtlv_count) {
+  if (addrtlvs_count > 0 && i < addrtlvs_count) {
     /* allocation failed */
     while (i > 0) {
       i--;
@@ -382,6 +384,8 @@ pbb_writer_register_msgcontentprovider(struct pbb_writer *writer,
  * This function must not be called outside the message_addresses callback.
  * @param writer pointer to writer context
  * @param cpr pointer to message context provider object
+ * @param addrtlvs pointer to array of addressblock tlv definitions
+ * @param addrtlvs_count length of addressblock tlv array
  */
 void
 pbb_writer_unregister_content_provider(
@@ -451,10 +455,11 @@ pbb_writer_register_message(struct pbb_writer *writer, uint8_t msgid,
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  */
 void
-pbb_writer_unregister_message(struct pbb_writer *writer, struct pbb_writer_message *msg) {
+pbb_writer_unregister_message(struct pbb_writer *writer,
+    struct pbb_writer_message *msg) {
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
@@ -476,7 +481,7 @@ pbb_writer_unregister_message(struct pbb_writer *writer, struct pbb_writer_messa
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param _pkt pointer to packet handler object
+ * @param pkt pointer to packet handler object
  */
 void
 pbb_writer_register_pkthandler(struct pbb_writer *writer,
@@ -494,10 +499,11 @@ pbb_writer_register_pkthandler(struct pbb_writer *writer,
  * This function must not be called outside the message_addresses callback.
  *
  * @param writer pointer to writer context
- * @param _pkt pointer to packet handler object
+ * @param pkt pointer to packet handler object
  */
 void
-pbb_writer_unregister_pkthandler(struct pbb_writer *writer  __attribute__ ((unused)),
+pbb_writer_unregister_pkthandler(
+    struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_pkthandler *pkt) {
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_NONE);

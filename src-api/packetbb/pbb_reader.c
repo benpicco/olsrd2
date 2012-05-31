@@ -249,7 +249,7 @@ cleanup_parse_packet:
 /**
  * Add a packet consumer to the parser
  * @param parser pointer to parser context
- * @param pointer to pbb_reader_tlvblock_consumer
+ * @param consumer pointer to tlvblock consumer
  * @param entries array of tlvblock_entries
  * @param entrycount number of elements in array
  * @param order
@@ -286,11 +286,10 @@ pbb_reader_add_message_consumer(struct pbb_reader *parser,
  * Add a message consumer for all message types to
  * the parser to process the message tlvs
  * @param parser pointer to parser context
+ * @param consumer pointer to tlvblock consumer
  * @param entries array of tlvblock_entries
  * @param entrycount number of elements in array
  * @param order priority order within message/address-consumers
- * @return pointer to pbb_reader_tlvblock_consumer,
- *   NULL if an error happened
  */
 void
 pbb_reader_add_defaultmsg_consumer(struct pbb_reader *parser,
@@ -306,12 +305,11 @@ pbb_reader_add_defaultmsg_consumer(struct pbb_reader *parser,
  * Add a message consumer for a single message type to
  * the parser to process addresses and their tlvs
  * @param parser pointer to parser context
+ * @param consumer pointer to tlvblock consumer
  * @param entries array of tlvblock_entries
  * @param entrycount number of elements in array
  * @param msg_id type of the message for the consumer
- * @param order
- * @return pointer to pbb_reader_tlvblock_consumer,
- *   NULL if an error happened
+ * @param order priority of the consumer
  */
 void
 pbb_reader_add_address_consumer(struct pbb_reader *parser,
@@ -327,11 +325,10 @@ pbb_reader_add_address_consumer(struct pbb_reader *parser,
  * Add a message consumer for all message types to
  * the parser to process addresses and their tlvs
  * @param parser pointer to parser context
+ * @param consumer pointer to tlvblock consumer
  * @param entries array of tlvblock_entries
  * @param entrycount number of elements in array
- * @param order
- * @return pointer to pbb_reader_tlvblock_consumer,
- *   NULL if an error happened
+ * @param order priority of the consumer
  */
 void
 pbb_reader_add_defaultaddress_consumer(struct pbb_reader *parser,
@@ -346,10 +343,11 @@ pbb_reader_add_defaultaddress_consumer(struct pbb_reader *parser,
 /**
  * Remove a packet consumer from the parser
  * @param parser pointer to parser context
- * @param consumer pointer to pbb_reader_tlvblock_consumer
+ * @param consumer pointer to tlvblock consumer
  */
 void
-pbb_reader_remove_packet_consumer(struct pbb_reader *parser, struct pbb_reader_tlvblock_consumer *consumer) {
+pbb_reader_remove_packet_consumer(struct pbb_reader *parser,
+    struct pbb_reader_tlvblock_consumer *consumer) {
   assert (!consumer->addrblock_consumer && consumer->msg_id == 0);
   _free_consumer(&parser->packet_consumer, consumer);
 }
@@ -357,10 +355,11 @@ pbb_reader_remove_packet_consumer(struct pbb_reader *parser, struct pbb_reader_t
 /**
  * Remove a message/address consumer from the parser
  * @param parser pointer to parser context
- * @param consumer pointer to pbb_reader_tlvblock_consumer
+ * @param consumer pointer to tlvblock consumer
  */
 void
-pbb_reader_remove_message_consumer(struct pbb_reader *parser, struct pbb_reader_tlvblock_consumer *consumer) {
+pbb_reader_remove_message_consumer(struct pbb_reader *parser,
+    struct pbb_reader_tlvblock_consumer *consumer) {
   _free_consumer(&parser->message_consumer, consumer);
 }
 
@@ -369,7 +368,8 @@ pbb_reader_remove_message_consumer(struct pbb_reader *parser, struct pbb_reader_
  * used as a tie-breaker if order is the same.
  */
 static int
-_consumer_avl_comp(const void *k1, const void *k2, void *ptr __attribute__ ((unused))) {
+_consumer_avl_comp(const void *k1, const void *k2,
+    void *ptr __attribute__ ((unused))) {
   const struct pbb_reader_tlvblock_consumer *c1 = k1;
   const struct pbb_reader_tlvblock_consumer *c2 = k2;
 
