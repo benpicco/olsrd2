@@ -93,6 +93,8 @@ cfg_schema_add(struct cfg_schema *schema) {
  * Add a section to a schema
  * @param schema pointer to configuration schema
  * @param section pointer to section
+ * @param entries pointer to array of schema entries
+ * @param entry_count number of schema entries in array
  */
 void
 cfg_schema_add_section(struct cfg_schema *schema,
@@ -300,13 +302,13 @@ cfg_schema_validate(struct cfg_db *db,
 }
 
 /**
- * Convert the _entries of a db section into binary representation by
+ * Convert the entries of a db section into binary representation by
  * using the mappings defined in a schema section. The function assumes
  * that the section was already validated.
  * @param target pointer to target binary buffer
  * @param named pointer to named section
- * @param _entries pointer to array of schema _entries
- * @param count number of schema _entries
+ * @param entries pointer to array of schema entries
+ * @param count number of schema entries
  * @return 0 if conversion was successful, -(1+index) of the
  *   failed conversion array entry if an error happened.
  *   An error might result in a partial initialized target buffer.
@@ -595,7 +597,6 @@ cfg_schema_help_strlen(
  * See CFG_VALIDATE_PRINTABLE() and CFG_VALIDATE_PRINTABLE_LEN()
  * macro in cfg_schema.h
  * @param entry pointer to schema entry
- * @param value value of schema entry
  * @param out pointer to autobuffer for validator output
  */
 void
