@@ -52,7 +52,7 @@
 /**
  * Join a socket into a multicast group
  * @param sock filedescriptor of socket
- * @param multicast multicast ip/port to join
+ * @param multicast multicast-group to join
  * @param oif pointer to outgoing interface data for multicast
  * @param log_src logging source for error messages
  * @return -1 if an error happened, 0 otherwise
@@ -125,12 +125,13 @@ os_net_join_mcast_recv(int sock, struct netaddr *multicast,
  * @param sock filedescriptor of socket
  * @param multicast multicast ip/port to join
  * @param oif pointer to outgoing interface data for multicast
+ * @param loop true if multicast loop should be activated, false otherwise
  * @param log_src logging source for error messages
  * @return -1 if an error happened, 0 otherwise
  */
 int
 os_net_join_mcast_send(int sock,
-    struct netaddr *multicast __attribute((unused)),
+    struct netaddr *multicast,
     struct olsr_interface_data *oif, bool loop,
     enum log_source log_src __attribute__((unused))) {
 #if !defined (REMOVE_LOG_DEBUG)

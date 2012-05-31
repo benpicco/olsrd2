@@ -61,11 +61,7 @@ static int _json_printvalue(struct autobuf *out, const char *txt, bool string);
  * @param data array of key/value pairs for the template engine
  * @param data_count number of keys
  * @param format format string of the template
- * @param indexTable pointer to an template_storage array with a minimum
- *   length equals to the number of keys used in the format string
- * @param indexLength length of the size_t array
- * @return number of indices written into index table,
- *   -1 if an error happened
+ * @return allocated template storage object, NULL if an error happened
  */
 struct abuf_template_storage *
 abuf_template_init (
@@ -127,33 +123,32 @@ abuf_template_init (
  * Append the result of a template engine into an autobuffer.
  * Each usage of a key will be replaced with the corresponding
  * value.
- * @param autobuf pointer to autobuf object
+ * @param out pointer to autobuf object
  * @param format format string (as supplied to abuf_template_init()
- * @param values array of values (same number as keys)
- * @param indexTable pointer to index table initialized by abuf_template_init()
- * @param indexCount length of index table as returned by abuf_template_init()
+ * @param storage pointer to template storage object, which will be filled by
+ *   this function
  * @return -1 if an out-of-memory error happened, 0 otherwise
  */
 int
-abuf_add_template(struct autobuf *autobuf, const char *format,
+abuf_add_template(struct autobuf *out, const char *format,
     struct abuf_template_storage *storage) {
   struct abuf_template_storage_entry *entry;
   size_t i, last = 0;
 
-  if (autobuf == NULL) return 0;
+  if (out == NULL) return 0;
 
   for (i=0; i<storage->count; i++) {
     entry = &storage->indices[i];
 
     /* copy prefix text */
     if (last < entry->start) {
-      if (abuf_memcpy(autobuf, &format[last], entry->start - last) < 0) {
+      if (abuf_memcpy(out, &format[last], entry->start - last) < 0) {
         return -1;
       }
     }
 
     if (entry->data->value) {
-      if (abuf_puts(autobuf, entry->data->value) < 0) {
+      if (abuf_puts(out, entry->data->value) < 0) {
         return -1;
       }
     }
@@ -161,7 +156,7 @@ abuf_add_template(struct autobuf *autobuf, const char *format,
   }
 
   if (last < strlen(format)) {
-    if (abuf_puts(autobuf, &format[last]) < 0) {
+    if (abuf_puts(out, &format[last]) < 0) {
       return -1;
     }
   }

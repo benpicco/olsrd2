@@ -366,7 +366,7 @@ strarray_get_count(const struct strarray *array) {
 
 /**
  * @param array pointer to strarray object
- * @param index position of the requested object inside the array
+ * @param idx position of the requested object inside the array
  * @return string at the specified index, NULL if not found
  */
 char *

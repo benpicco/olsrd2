@@ -53,23 +53,25 @@ static void _write_pktheader(struct pbb_writer_interface *interf);
  * This function should not be called by the user of the pbb API!
  *
  * @param writer pointer to writer context
+ * @param interf pointer to interface for packet
  */
 void
-_pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface *interface) {
+_pbb_writer_begin_packet(struct pbb_writer *writer,
+    struct pbb_writer_interface *interf) {
   struct pbb_writer_pkthandler *handler;
 
   /* cleanup packet buffer data */
-  _pbb_tlv_writer_init(&interface->_pkt, interface->packet_size, interface->packet_size);
+  _pbb_tlv_writer_init(&interf->_pkt, interf->packet_size, interf->packet_size);
 
 #if WRITER_STATE_MACHINE == true
   writer->_state = PBB_WRITER_ADD_PKTHEADER;
 #endif
   /* add packet header */
-  if (interface->addPacketHeader) {
-    interface->addPacketHeader(writer, interface);
+  if (interf->addPacketHeader) {
+    interf->addPacketHeader(writer, interf);
   }
   else {
-    pbb_writer_set_pkt_header(writer, interface, false);
+    pbb_writer_set_pkt_header(writer, interf, false);
   }
 
 #if WRITER_STATE_MACHINE == true
@@ -77,10 +79,10 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
 #endif
   /* add packet tlvs */
   list_for_each_element(&writer->_pkthandlers, handler, _pkthandle_node) {
-    handler->addPacketTLVs(writer, interface);
+    handler->addPacketTLVs(writer, interf);
   }
 
-  interface->_is_flushed = false;
+  interf->_is_flushed = false;
 #if WRITER_STATE_MACHINE == true
   writer->_state = PBB_WRITER_NONE;
 #endif
@@ -90,10 +92,12 @@ _pbb_writer_begin_packet(struct pbb_writer *writer, struct pbb_writer_interface 
  * Flush the current messages in the writer buffer and send
  * a complete packet.
  * @param writer pointer to writer context
+ * @param interf pointer to interface to flush
  * @param force true if the writer should create an empty packet if necessary
  */
 void
-pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interface, bool force) {
+pbb_writer_flush(struct pbb_writer *writer,
+    struct pbb_writer_interface *interf, bool force) {
   struct pbb_writer_pkthandler *handler;
   size_t len;
 
@@ -101,15 +105,15 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
   assert(writer->_state == PBB_WRITER_NONE);
 #endif
 
-  assert(interface->sendPacket);
+  assert(interf->sendPacket);
 
-  if (interface->_is_flushed) {
+  if (interf->_is_flushed) {
     if (!force) {
       return;
     }
 
     /* begin a new packet, buffer is flushed at the moment */
-    _pbb_writer_begin_packet(writer, interface);
+    _pbb_writer_begin_packet(writer, interf);
   }
 
 #if WRITER_STATE_MACHINE == true
@@ -118,54 +122,54 @@ pbb_writer_flush(struct pbb_writer *writer, struct pbb_writer_interface *interfa
 
   /* finalize packet tlvs */
   list_for_each_element_reverse(&writer->_pkthandlers, handler, _pkthandle_node) {
-    handler->finishPacketTLVs(writer, interface);
+    handler->finishPacketTLVs(writer, interf);
   }
 
 #if WRITER_STATE_MACHINE == true
   writer->_state = PBB_WRITER_FINISH_PKTHEADER;
 #endif
   /* finalize packet header */
-  if (interface->finishPacketHeader) {
-    interface->finishPacketHeader(writer, interface);
+  if (interf->finishPacketHeader) {
+    interf->finishPacketHeader(writer, interf);
   }
 
   /* write packet header (including tlvblock length if necessary */
-  _write_pktheader(interface);
+  _write_pktheader(interf);
 
   /* calculate true length of header (optional tlv block !) */
   len = 1;
-  if (interface->has_seqno) {
+  if (interf->has_seqno) {
     len += 2;
   }
-  if (interface->_pkt.added + interface->_pkt.set > 0) {
+  if (interf->_pkt.added + interf->_pkt.set > 0) {
     len += 2;
   }
 
   /* compress packet buffer */
-  if (interface->_bin_msgs_size) {
-    memmove(&interface->_pkt.buffer[len + interface->_pkt.added + interface->_pkt.set],
-        &interface->_pkt.buffer[interface->_pkt.header + interface->_pkt.added + interface->_pkt.allocated],
-        interface->_bin_msgs_size);
+  if (interf->_bin_msgs_size) {
+    memmove(&interf->_pkt.buffer[len + interf->_pkt.added + interf->_pkt.set],
+        &interf->_pkt.buffer[interf->_pkt.header + interf->_pkt.added + interf->_pkt.allocated],
+        interf->_bin_msgs_size);
   }
 
   /* send packet */
-  interface->sendPacket(writer, interface, interface->_pkt.buffer,
-      len + interface->_pkt.added + interface->_pkt.set + interface->_bin_msgs_size);
+  interf->sendPacket(writer, interf, interf->_pkt.buffer,
+      len + interf->_pkt.added + interf->_pkt.set + interf->_bin_msgs_size);
 
   /* cleanup length information */
-  interface->_pkt.set  = 0;
-  interface->_bin_msgs_size = 0;
+  interf->_pkt.set  = 0;
+  interf->_bin_msgs_size = 0;
 
   /* mark buffer as flushed */
-  interface->_is_flushed = true;
+  interf->_is_flushed = true;
 
 #if WRITER_STATE_MACHINE == true
   writer->_state = PBB_WRITER_NONE;
 #endif
 
 #if DEBUG_CLEANUP == true
-  memset(&interface->_pkt.buffer[len + interface->_pkt.added], 0,
-      interface->_pkt.max - len - interface->_pkt.added);
+  memset(&interf->_pkt.buffer[len + interf->_pkt.added], 0,
+      interf->_pkt.max - len - interf->_pkt.added);
 #endif
 }
 
@@ -215,6 +219,7 @@ pbb_writer_allocate_packettlv(struct pbb_writer *writer __attribute__ ((unused))
  * This function must not be called outside the packet finish_tlv callback.
  *
  * @param writer pointer to writer context
+ * @param interf pointer to interface to set packet-tlv
  * @param type tlv type
  * @param exttype tlv extended type, 0 if no extended type
  * @param value pointer to tlv value, NULL if no value
@@ -236,15 +241,17 @@ pbb_writer_set_packettlv(struct pbb_writer *writer __attribute__ ((unused)),
  * This function must not be called outside the packet add_header callback.
  *
  * @param writer pointer to writer context
+ * @param interf pointer to interface to set packet header
  * @param has_seqno true if packet has a sequence number
  */
-void pbb_writer_set_pkt_header(struct pbb_writer *writer __attribute__ ((unused)),
+void pbb_writer_set_pkt_header(
+    struct pbb_writer *writer __attribute__ ((unused)),
     struct pbb_writer_interface *interf, bool has_seqno) {
 #if WRITER_STATE_MACHINE == true
   assert(writer->_state == PBB_WRITER_ADD_PKTHEADER);
 #endif
 
-  /* we assume that we have always an TLV block and substract the 2 bytes later */
+  /* we assume that we have always an TLV block and subtract the 2 bytes later */
   interf->_pkt.header = 1+2;
 
   /* handle sequence number */
@@ -260,6 +267,7 @@ void pbb_writer_set_pkt_header(struct pbb_writer *writer __attribute__ ((unused)
  * add_header/finish_header callback.
  *
  * @param writer pointer to writer context
+ * @param interf pointer to interface to set packet sequence number
  * @param seqno sequence number of packet
  */
 void

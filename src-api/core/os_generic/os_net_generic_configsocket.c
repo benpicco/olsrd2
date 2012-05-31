@@ -52,15 +52,16 @@
 /**
  * Configure a network socket
  * @param sock filedescriptor
- * @param bindto ip/port to bind the socket to
- * @param flags type of socket (udp/tcp, blocking, multicast)
+ * @param bind_to ip/port to bind the socket to
  * @param recvbuf size of input buffer for socket
+ * @param interf pointer to interface to bind socket on,
+ *   NULL if socket should not be bound to an interface
  * @param log_src logging source for error messages
  * @return -1 if an error happened, 0 otherwise
  */
 int
-os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
-    struct olsr_interface_data *data __attribute__((unused)),
+os_net_configsocket(int sock, union netaddr_socket *bind_to, int recvbuf,
+    struct olsr_interface_data *interf __attribute__((unused)),
     enum log_source log_src __attribute__((unused))) {
   int yes;
   socklen_t addrlen;
@@ -71,7 +72,7 @@ os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
 #endif
 
   /* temporary copy bindto address */
-  memcpy(&bindto, _bindto, sizeof(bindto));
+  memcpy(&bindto, bind_to, sizeof(bindto));
 
   if (os_net_set_nonblocking(sock)) {
     OLSR_WARN(log_src, "Cannot make socket non-blocking %s: %s (%d)\n",
@@ -80,10 +81,10 @@ os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
   }
 
 #if defined(SO_BINDTODEVICE)
-  if (data != NULL && setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE,
-      data->name, strlen(data->name) + 1) < 0) {
+  if (interf != NULL && setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE,
+      interf->name, strlen(interf->name) + 1) < 0) {
     OLSR_WARN(log_src, "Cannot bind socket to interface %s: %s (%d)\n",
-        data->name, strerror(errno), errno);
+        interf->name, strerror(errno), errno);
     return -1;
   }
 #endif
@@ -99,7 +100,7 @@ os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
 #endif
 
 #if defined(IP_RECVIF)
-  if (data != NULL
+  if (interf != NULL
       && setsockopt(sock, IPPROTO_IP, IP_RECVIF, &yes, sizeof(yes)) < 0) {
     OLSR_WARN(log_src, "Cannot apply IP_RECVIF for %s: %s (%d)\n",
         netaddr_socket_to_string(&buf, &bindto), strerror(errno), errno);
@@ -127,8 +128,8 @@ os_net_configsocket(int sock, union netaddr_socket *_bindto, int recvbuf,
 #endif
 
   /* add ipv6 interface scope if necessary */
-  if (data != NULL && netaddr_socket_get_addressfamily(&bindto) == AF_INET6) {
-    bindto.v6.sin6_scope_id = data->index;
+  if (interf != NULL && netaddr_socket_get_addressfamily(&bindto) == AF_INET6) {
+    bindto.v6.sin6_scope_id = interf->index;
   }
 
   /* bind the socket to the port number */

@@ -93,7 +93,7 @@ olsr_socket_cleanup(void)
 /**
  * Add a socket handler to the scheduler
  *
- * @param handler pointer to initialized socket entry
+ * @param entry pointer to initialized socket entry
  * @return -1 if an error happened, 0 otherwise
  */
 void

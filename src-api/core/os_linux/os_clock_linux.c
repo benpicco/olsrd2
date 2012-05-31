@@ -54,6 +54,7 @@ OLSR_SUBSYSTEM_STATE(_os_clock_state);
 
 /**
  * Initialize os-specific subsystem
+ * @return always return 0
  */
 int
 os_clock_init(void) {
@@ -87,7 +88,7 @@ os_clock_cleanup(void) {
 
 /**
  * Reads the current time as a monotonic timestamp
- * @param pointer to timestamp
+ * @param t64 pointer to timestamp
  * @return 0 if valid timestamp was read, negative otherwise
  */
 int

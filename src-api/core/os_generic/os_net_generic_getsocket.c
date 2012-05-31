@@ -49,27 +49,29 @@
 
 /**
  * Creates a new socket and configures it
- * @param bindto address to bind the socket to
- * @param flags type of socket (udp/tcp, blocking, multicast)
+ * @param bind_to address to bind the socket to
+ * @param tcp true for a TCP socket, false for UDP
  * @param recvbuf size of input buffer for socket
+ * @param interf pointer to interface to bind socket on,
+ *   NULL if socket should not be bound to an interface
  * @param log_src logging source for error messages
  * @return socket filedescriptor, -1 if an error happened
  */
 int
-os_net_getsocket(union netaddr_socket *bindto,
-    bool tcp, int recvbuf, struct olsr_interface_data *interface,
+os_net_getsocket(union netaddr_socket *bind_to,
+    bool tcp, int recvbuf, struct olsr_interface_data *interf,
     enum log_source log_src __attribute__((unused))) {
 
   int sock;
 
-  sock = socket(bindto->std.sa_family,
+  sock = socket(bind_to->std.sa_family,
       tcp ? SOCK_STREAM : SOCK_DGRAM, 0);
   if (sock < 0) {
     OLSR_WARN(log_src, "Cannot open socket: %s (%d)", strerror(errno), errno);
     return -1;
   }
 
-  if (os_net_configsocket(sock, bindto, recvbuf, interface, log_src)) {
+  if (os_net_configsocket(sock, bind_to, recvbuf, interf, log_src)) {
     os_close(sock);
     return -1;
   }

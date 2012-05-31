@@ -358,7 +358,7 @@ bool pbb_writer_allif_selector(struct pbb_writer *writer __attribute__ ((unused)
  * to be compatible with the readers forward_message callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message to be forwarded
+ * @param msg pointer to message to be forwarded
  * @param len number of bytes of message
  * @param useIf function pointer to decide which interface is used
  *   for forwarding the message
@@ -524,7 +524,7 @@ pbb_writer_set_messagetlv(struct pbb_writer *writer,
  * Sets a new address length for a message
  * This function must not be called outside the message add_header callback.
  * @param writer pointer to writer context
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param addrlen address length, must be less or equal than 16
  */
 void
@@ -552,7 +552,7 @@ pbb_writer_set_msg_addrlen(struct pbb_writer *writer __attribute__ ((unused)),
  * This function must not be called outside the message add_header callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param has_originator true if header contains an originator address
  * @param has_hopcount true if header contains a hopcount
  * @param has_hoplimit true if header contains a hoplimit
@@ -594,7 +594,7 @@ pbb_writer_set_msg_header(struct pbb_writer *writer, struct pbb_writer_message *
  * add_header or finish_header callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param originator pointer to originator address buffer
  */
 void
@@ -613,7 +613,7 @@ pbb_writer_set_msg_originator(struct pbb_writer *writer __attribute__ ((unused))
  * add_header or finish_header callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param hopcount
  */
 void
@@ -631,7 +631,7 @@ pbb_writer_set_msg_hopcount(struct pbb_writer *writer __attribute__ ((unused)),
  * add_header or finish_header callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param hoplimit
  */
 void
@@ -649,7 +649,7 @@ pbb_writer_set_msg_hoplimit(struct pbb_writer *writer __attribute__ ((unused)),
  * add_header or finish_header callback.
  *
  * @param writer pointer to writer context
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param seqno sequence number of message header
  */
 void
@@ -666,7 +666,7 @@ pbb_writer_set_msg_seqno(struct pbb_writer *writer __attribute__ ((unused)),
  * is finished.
  *
  * @param acs pointer to address compression session
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param last_addr pointer to last address object
  * @param common_head length of common head
  * @return common_head (might be modified common_head was 1)
@@ -757,7 +757,7 @@ _calculate_tlv_flags(struct pbb_writer_address *addr, bool first) {
  * Update the address compression session with a new address.
  *
  * @param acs pointer to address compression session
- * @param _msg pointer to message object
+ * @param msg pointer to message object
  * @param addr pointer to new address
  * @param same_prefixlen number of addresses (up to this) with the same
  *   prefix length
@@ -897,7 +897,7 @@ _compress_address(struct _pbb_internal_addr_compress_session *acs,
 /**
  * Write the address blocks to the message buffer.
  * @param writer pointer to writer context
- * @param _msg pointer to message context
+ * @param msg pointer to message context
  * @param first_addr pointer to first address to be written
  * @param last_addr pointer to last address to be written
  */

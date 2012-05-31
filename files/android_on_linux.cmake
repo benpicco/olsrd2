@@ -1,3 +1,12 @@
+# to use this file, create a build-android directory,
+# change into the directory and run cmake there:
+#
+# > mkdir build-android
+# > cd build-android
+# > cmake -DCMAKE_TOOLCHAIN_FILE=../files/android_on_linux.cmake ..
+# > make
+
+
 SET(CMAKE_SYSTEM_NAME Linux)  # Tell CMake we're cross-compiling
 include(CMakeForceCompiler)
 
@@ -6,4 +15,3 @@ include(CMakeForceCompiler)
 CMAKE_FORCE_C_COMPILER(arm-linux-androideabi-gcc GNU)
 
 SET(ANDROID TRUE)
-
