@@ -9,6 +9,7 @@
 build
 build-win32/
 build-clang/
+html/
 
 # eclipse development files/directory
 .cproject
