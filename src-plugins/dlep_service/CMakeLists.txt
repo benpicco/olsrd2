@@ -1,8 +1,7 @@
 # set library name
-SET (libname "dlep_service")
-SET (source ${CMAKE_CURRENT_SOURCE_DIR}/src/dlep_service.c
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/dlep_service_incoming.c
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/dlep_service_outgoing.c)
+SET (source src/dlep_service.c
+            src/dlep_service_incoming.c
+            src/dlep_service_outgoing.c)
 
-# use generic plugin cmake file
-include (../CMake.plugin)
+# use generic plugin maker
+oonf_create_app_plugin("dlep_service" "${source}" false false)

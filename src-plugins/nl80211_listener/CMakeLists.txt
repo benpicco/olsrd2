@@ -1,7 +1,5 @@
 # set library name
-SET (libname "nl80211_listener")
-SET (source "${CMAKE_CURRENT_SOURCE_DIR}/src/nl80211_listener.c")
-SET (linkto ${OONF_LIBNL})
+SET (source "src/nl80211_listener.c")
 
-# use generic plugin cmake file
-include (../CMake.plugin)
+# use generic plugin maker
+oonf_create_app_plugin("nl80211_listener" "${source}" false "${OONF_LIBNL}")

@@ -1,6 +1,5 @@
 # set library name
-SET (libname "layer2_viewer")
-SET (source "${CMAKE_CURRENT_SOURCE_DIR}/src/layer2_viewer.c")
+SET (source "src/layer2_viewer.c")
 
-# use generic plugin cmake file
-include (../CMake.plugin)
+# use generic plugin maker
+oonf_create_app_plugin("layer2_viewer" "${source}" false false)

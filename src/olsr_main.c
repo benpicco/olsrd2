@@ -55,9 +55,6 @@
 #include "config/cfg_cmd.h"
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
-#include "builddata/plugin_static.h"
-#include "builddata/data.h"
-#include "builddata/app_config.h"
 #include "os_clock.h"
 #include "os_net.h"
 #include "os_system.h"
@@ -67,6 +64,7 @@
 #include "olsr_clock.h"
 #include "olsr_http.h"
 #include "olsr_interface.h"
+#include "olsr_libdata.h"
 #include "olsr_logging.h"
 #include "olsr_logging_cfg.h"
 #include "olsr_memcookie.h"
@@ -78,6 +76,8 @@
 #include "olsr_timer.h"
 #include "olsr_setup.h"
 #include "olsr.h"
+
+#include "app_data.h"
 
 #if OONF_NEED_ROUTING == true
 #include "os_routing.h"
@@ -165,7 +165,7 @@ main(int argc, char **argv) {
   setup_signalhandler();
 
   /* initialize logger */
-  if (olsr_log_init(olsr_builddata_get(), LOG_SEVERITY_WARN)) {
+  if (olsr_log_init(olsr_appdata_get(), LOG_SEVERITY_DEBUG)) {
     goto olsrd_cleanup;
   }
 
@@ -193,17 +193,17 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* preload plugins to show their schemas */
-  if (olsr_cfg_loadplugins()) {
-    goto olsrd_cleanup;
-  }
-
   /* prepare for an error during initialization */
   return_code = 1;
 
   /* read global section early */
   if (olsr_cfg_update_globalcfg(true)) {
     OLSR_WARN(LOG_MAIN, "Cannot read global configuration section");
+    goto olsrd_cleanup;
+  }
+
+  /* preload plugins to show their schemas */
+  if (olsr_cfg_loadplugins()) {
     goto olsrd_cleanup;
   }
 
@@ -372,7 +372,7 @@ mainloop(int argc, char **argv) {
   uint64_t next_interval;
   int exit_code = 0;
 
-  OLSR_INFO(LOG_MAIN, "Starting %s.", olsr_log_get_builddata()->app_name);
+  OLSR_INFO(LOG_MAIN, "Starting %s", olsr_appdata_get()->app_name);
 
   /* enter main loop */
   while (olsr_is_running()) {
@@ -419,7 +419,7 @@ mainloop(int argc, char **argv) {
     exit_code = 1;
   }
 
-  OLSR_INFO(LOG_MAIN, "Ending %s.", olsr_log_get_builddata()->app_name);
+  OLSR_INFO(LOG_MAIN, "Ending %s", olsr_appdata_get()->app_name);
   return exit_code;
 }
 
@@ -497,9 +497,9 @@ parse_commandline(int argc, char **argv, bool reload_only) {
       case 'h':
 #if !defined(REMOVE_HELPTEXT)
         abuf_appendf(&log, "Usage: %s [OPTION]...\n%s%s%s", argv[0],
-            olsr_builddata_get()->help_prefix,
+            olsr_appdata_get()->help_prefix,
             help_text,
-            olsr_builddata_get()->help_suffix);
+            olsr_appdata_get()->help_suffix);
 #endif
         return_code = 0;
         break;
@@ -514,6 +514,9 @@ parse_commandline(int argc, char **argv, bool reload_only) {
       case 'p':
         if (olsr_plugins_load(optarg) == NULL) {
           return_code = 1;
+        }
+        else {
+          cfg_db_add_entry(olsr_cfg_get_rawdb(), CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_PLUGIN, optarg);
         }
         break;
       case 'q':
@@ -571,7 +574,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   if (return_code == -1 && !loaded_file) {
     /* try to load default config file if no other loaded */
     cfg_cmd_handle_load(olsr_cfg_get_instance(), db,
-        olsr_builddata_get()->default_config, NULL);
+        olsr_appdata_get()->default_config, NULL);
   }
 
 #if 0

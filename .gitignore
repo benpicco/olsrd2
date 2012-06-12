@@ -5,8 +5,11 @@
 # *.[oa]
 # *~
 
+# olsrorg api
+olsrorg-api/
+
 # build directories
-build
+build/
 build-win32/
 build-clang/
 html/
@@ -15,5 +18,3 @@ html/
 .cproject
 .project
 .settings/
-
-upload.sh
