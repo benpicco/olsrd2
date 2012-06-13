@@ -94,6 +94,7 @@ static struct option olsr_options[] = {
 #if !defined(REMOVE_HELPTEXT)
   { "help",         no_argument,       0, 'h' },
 #endif
+  { "early-debug",  no_argument,       0, 'e' },
   { "version",      no_argument,       0, 'v' },
   { "plugin",       required_argument, 0, 'p' },
   { "load",         required_argument, 0, 'l' },
@@ -110,6 +111,8 @@ static struct option olsr_options[] = {
 #if !defined(REMOVE_HELPTEXT)
 static const char *help_text =
     "Mandatory arguments to long options are mandatory for short options too.\n"
+    "  -e, --early-debug                      Activate debugging output before configuration could be parsed\n"
+    "                                         (this parameter must be the FIRST one in the command line)\n"
     "  -h, --help                             Display this help file\n"
     "  -v, --version                          Display the version string and the included static plugins\n"
     "  -p, --plugin=shared-library            Load a shared library as a plugin\n"
@@ -149,6 +152,7 @@ static int display_schema(void);
  */
 int
 main(int argc, char **argv) {
+  bool early_debug;
   int return_code;
   int fork_pipe;
 
@@ -164,8 +168,11 @@ main(int argc, char **argv) {
   _end_olsr_signal = false;
   setup_signalhandler();
 
+  early_debug = argc > 0
+      && (strcmp(argv[1], "-e") == 0 || strcmp(argv[1], "--early-debug") == 0);
+
   /* initialize logger */
-  if (olsr_log_init(olsr_appdata_get(), LOG_SEVERITY_DEBUG)) {
+  if (olsr_log_init(olsr_appdata_get(), early_debug ? LOG_SEVERITY_DEBUG : LOG_SEVERITY_WARN)) {
     goto olsrd_cleanup;
   }
 
@@ -502,6 +509,10 @@ parse_commandline(int argc, char **argv, bool reload_only) {
             olsr_appdata_get()->help_suffix);
 #endif
         return_code = 0;
+        break;
+
+      case 'e':
+        /* ignore this here */
         break;
 
       case 'v':

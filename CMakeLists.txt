@@ -8,7 +8,7 @@ include(${OONF_CONFIG_APPLICATION})
 # use libraries flag handling
 include (./cmake/cc_flags.cmake)
 
-SET (OONF_DIR /home/rogge/develop/olsrd/olsrd-api)
+SET (OONF_DIR "" CACHE PATH "Built-tree of OONF-API")
 find_package(OONF REQUIRED)
 if (NOT OONF_FOUND)
     message(FATAL_ERROR "Cannot compile application without OONF framework")
