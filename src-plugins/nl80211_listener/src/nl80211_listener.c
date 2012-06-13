@@ -64,7 +64,6 @@
 #include "core/olsr_plugins.h"
 #include "core/olsr_timer.h"
 #include "core/os_system.h"
-#include "core/olsr.h"
 
 #include "olsr_layer2.h"
 

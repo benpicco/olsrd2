@@ -56,7 +56,6 @@
 #include "core/olsr_timer.h"
 #include "core/olsr_telnet.h"
 #include "core/os_system.h"
-#include "core/olsr.h"
 
 #include "olsr_layer2.h"
 

@@ -43,7 +43,7 @@
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444_conversion.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "core/olsr.h"
+#include "core/olsr_subsystem.h"
 
 #include "dlep_iana.h"
 #include "dlep_service.h"

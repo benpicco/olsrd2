@@ -44,7 +44,7 @@
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_timer.h"
-#include "core/olsr.h"
+#include "core/olsr_subsystem.h"
 
 #include "dlep_iana.h"
 #include "dlep_client.h"

@@ -39,6 +39,8 @@
  *
  */
 
+#include <stdio.h>
+
 #include "common/common_types.h"
 #include "common/autobuf.h"
 #include "common/string.h"
@@ -51,7 +53,6 @@
 #include "core/olsr_logging.h"
 #include "core/olsr_plugins.h"
 #include "core/olsr_telnet.h"
-#include "core/olsr.h"
 
 #include "olsr_layer2.h"
 

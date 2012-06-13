@@ -44,7 +44,7 @@
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444_reader.h"
 #include "core/olsr_logging.h"
-#include "core/olsr.h"
+#include "core/olsr_subsystem.h"
 
 #include "olsr_layer2.h"
 

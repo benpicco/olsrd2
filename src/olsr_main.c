@@ -75,7 +75,7 @@
 #include "core/olsr_telnet.h"
 #include "core/olsr_timer.h"
 #include "olsr_setup.h"
-#include "core/olsr.h"
+#include "core/olsr_subsystem.h"
 
 #include "app_data.h"
 
@@ -293,7 +293,7 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  if (!olsr_is_running()) {
+  if (!olsr_cfg_is_running()) {
     /*
      * mayor error during late initialization
      * or maybe the user decided otherwise and pressed CTRL-C
@@ -358,7 +358,7 @@ olsrd_cleanup:
  */
 static void
 quit_signal_handler(int signo __attribute__ ((unused))) {
-  olsr_exit();
+  olsr_cfg_exit();
 }
 
 /**
@@ -382,7 +382,7 @@ mainloop(int argc, char **argv) {
   OLSR_INFO(LOG_MAIN, "Starting %s", olsr_appdata_get()->app_name);
 
   /* enter main loop */
-  while (olsr_is_running()) {
+  while (olsr_cfg_is_running()) {
     /*
      * Update the global timestamp. We are using a non-wallclock timer here
      * to avoid any undesired side effects if the system clock changes.
@@ -531,7 +531,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         }
         break;
       case 'q':
-        olsr_exit();
+        olsr_cfg_exit();
         break;
 
       case argv_option_schema:

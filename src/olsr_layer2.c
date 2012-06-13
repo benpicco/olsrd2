@@ -47,7 +47,7 @@
 #include "core/olsr_logging.h"
 #include "core/olsr_memcookie.h"
 #include "core/olsr_timer.h"
-#include "core/olsr.h"
+#include "core/olsr_subsystem.h"
 #include "olsr_layer2.h"
 
 static void _remove_neighbor(struct olsr_layer2_neighbor *);

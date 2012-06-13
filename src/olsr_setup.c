@@ -41,7 +41,7 @@
 
 #include "common/common_types.h"
 #include "core/olsr_logging_cfg.h"
-#include "core/olsr.h"
+#include "core/olsr_subsystem.h"
 #include "olsr_setup.h"
 #include "olsr_layer2.h"
 
