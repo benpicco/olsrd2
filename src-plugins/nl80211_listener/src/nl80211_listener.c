@@ -57,15 +57,16 @@
 #include "common/string.h"
 
 #include "config/cfg_schema.h"
-#include "olsr_cfg.h"
-#include "olsr_clock.h"
-#include "olsr_interface.h"
+#include "core/olsr_cfg.h"
+#include "core/olsr_clock.h"
+#include "core/olsr_interface.h"
+#include "core/olsr_logging.h"
+#include "core/olsr_plugins.h"
+#include "core/olsr_timer.h"
+#include "core/os_system.h"
+#include "core/olsr.h"
+
 #include "olsr_layer2.h"
-#include "olsr_logging.h"
-#include "olsr_plugins.h"
-#include "olsr_timer.h"
-#include "os_system.h"
-#include "olsr.h"
 
 /* constants */
 #define _CFG_SECTION "nl80211"

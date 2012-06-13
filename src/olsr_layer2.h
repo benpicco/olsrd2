@@ -46,8 +46,8 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
-#include "olsr_clock.h"
-#include "olsr_timer.h"
+#include "core/olsr_clock.h"
+#include "core/olsr_timer.h"
 
 /* both callbacks support ADD and REMOVE events */
 #define CALLBACK_ID_LAYER2_NEIGHBOR "layer2-neighbor"

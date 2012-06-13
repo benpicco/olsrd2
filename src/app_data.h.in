@@ -42,7 +42,7 @@
 #ifndef OLSR_APP_CONFIG_H_
 #define OLSR_APP_CONFIG_H_
 
-#include "olsr_logging.h"
+#include "core/olsr_logging.h"
 
 #define OONF_NEED_ROOT ${OONF_NEED_ROOT}
 #define OONF_NEED_ROUTING ${OONF_NEED_ROUTING}

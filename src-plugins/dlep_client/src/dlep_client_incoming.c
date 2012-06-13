@@ -39,6 +39,7 @@
  *
  */
 
+#include "common/common_types.h"
 #include "rfc5444/rfc5444_conversion.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444_reader.h"

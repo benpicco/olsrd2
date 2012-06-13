@@ -43,11 +43,11 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 
-#include "olsr_callbacks.h"
-#include "olsr_logging.h"
-#include "olsr_memcookie.h"
-#include "olsr_timer.h"
-#include "olsr.h"
+#include "core/olsr_callbacks.h"
+#include "core/olsr_logging.h"
+#include "core/olsr_memcookie.h"
+#include "core/olsr_timer.h"
+#include "core/olsr.h"
 #include "olsr_layer2.h"
 
 static void _remove_neighbor(struct olsr_layer2_neighbor *);
