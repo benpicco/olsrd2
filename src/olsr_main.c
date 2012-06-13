@@ -493,7 +493,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
 
   if (reload_only) {
     /* only parameters that load and change configuration data */
-    parameters = "l:s:r:f:";
+    parameters = "p:l:s:r:f:";
   }
   else {
     parameters = "hvp:ql:S:s:r:g::f:";
