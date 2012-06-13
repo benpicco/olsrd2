@@ -45,7 +45,7 @@
 #include "common/common_types.h"
 #include "common/avl.h"
 #include "common/netaddr.h"
-#include "packetbb/pbb_writer.h"
+#include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_packet_socket.h"
 #include "core/olsr_timer.h"
@@ -70,7 +70,7 @@ struct _dlep_service_session {
 
   bool explicit;
 
-  struct pbb_writer_interface out_if;
+  struct rfc5444_writer_interface out_if;
   uint16_t seqno;
 };
 

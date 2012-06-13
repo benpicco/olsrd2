@@ -45,7 +45,7 @@
 #include "common/common_types.h"
 #include "common/avl.h"
 #include "common/netaddr.h"
-#include "packetbb/pbb_writer.h"
+#include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_packet_socket.h"
 #include "core/olsr_timer.h"
@@ -57,7 +57,7 @@ struct _router_session {
   struct netaddr radio_mac;
   struct olsr_timer_entry router_vtime;
 
-  struct pbb_writer_interface out_if;
+  struct rfc5444_writer_interface out_if;
 
   bool unicast;
 };
@@ -81,7 +81,7 @@ extern enum log_source LOG_DLEP_SERVICE;
 struct _router_session *dlep_add_router_session(
     union netaddr_socket *peer_socket, bool unicast, uint64_t vtime);
 
-void _cb_send_multicast(struct pbb_writer *writer,
-    struct pbb_writer_interface *interf,
+void _cb_send_multicast(struct rfc5444_writer *writer,
+    struct rfc5444_writer_interface *interf,
     void *ptr, size_t len);
 #endif /* DLEP_SERVICE_H_ */

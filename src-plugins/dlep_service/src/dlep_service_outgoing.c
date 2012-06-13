@@ -40,9 +40,9 @@
  */
 
 #include "common/common_types.h"
-#include "packetbb/pbb_iana.h"
-#include "packetbb/pbb_conversion.h"
-#include "packetbb/pbb_writer.h"
+#include "rfc5444/rfc5444_iana.h"
+#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_timer.h"
 #include "core/olsr.h"
 
@@ -68,12 +68,12 @@ enum dlep_addrtlv_idx {
 };
 
 /* prototypes of callbacks */
-static void _cb_addMessageHeader(struct pbb_writer *,
-    struct pbb_writer_message *);
-static void _cb_addMessageTLVs(struct pbb_writer *,
-    struct pbb_writer_content_provider *);
-static void _cb_addAddresses(struct pbb_writer *,
-    struct pbb_writer_content_provider *);
+static void _cb_addMessageHeader(struct rfc5444_writer *,
+    struct rfc5444_writer_message *);
+static void _cb_addMessageTLVs(struct rfc5444_writer *,
+    struct rfc5444_writer_content_provider *);
+static void _cb_addAddresses(struct rfc5444_writer *,
+    struct rfc5444_writer_content_provider *);
 
 static void _cb_interface_discovery(void *);
 static void _cb_metric_update(void *);
@@ -105,23 +105,23 @@ static uint8_t _msg_addrtlvs[5000];
 static enum dlep_orders _msg_order;
 static struct olsr_layer2_network *_msg_network;
 
-static struct pbb_writer _dlep_writer = {
+static struct rfc5444_writer _dlep_writer = {
   .msg_buffer = _msg_buffer,
   .msg_size = sizeof(_msg_buffer),
   .addrtlv_buffer = _msg_addrtlvs,
   .addrtlv_size = sizeof(_msg_addrtlvs),
 };
 
-static struct pbb_writer_message *_dlep_message = NULL;
+static struct rfc5444_writer_message *_dlep_message = NULL;
 
-static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
+static struct rfc5444_writer_content_provider _dlep_msgcontent_provider = {
   .msg_type = DLEP_MESSAGE_ID,
   .addMessageTLVs = _cb_addMessageTLVs,
   .addAddresses = _cb_addAddresses,
 };
 
-static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
-  [IDX_ADDRTLV_LINK_STATUS] = { .type = PBB_ADDRTLV_LINK_STATUS },
+static struct rfc5444_writer_addrtlv_block _dlep_addrtlvs[] = {
+  [IDX_ADDRTLV_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS },
   [IDX_ADDRTLV_SIGNAL]      = { .type = DLEP_ADDRTLV_SIGNAL },
   [IDX_ADDRTLV_LAST_SEEN]   = { .type = DLEP_ADDRTLV_LAST_SEEN },
   [IDX_ADDRTLV_RX_BITRATE]  = { .type = DLEP_ADDRTLV_RX_BITRATE },
@@ -135,7 +135,7 @@ static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
 };
 
 static uint8_t _packet_buffer[1500];
-static struct pbb_writer_interface _dlep_multicast = {
+static struct rfc5444_writer_interface _dlep_multicast = {
   .packet_buffer = _packet_buffer,
   .packet_size = sizeof(_packet_buffer),
   .sendPacket =_cb_send_multicast,
@@ -153,25 +153,25 @@ dlep_outgoing_init(void) {
   if (olsr_subsystem_init(&_dlep_service_outgoing))
     return 0;
 
-  pbb_writer_init(&_dlep_writer);
+  rfc5444_writer_init(&_dlep_writer);
 
-  _dlep_message = pbb_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
+  _dlep_message = rfc5444_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
   if (_dlep_message == NULL) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Could not register DLEP message");
-    pbb_writer_cleanup(&_dlep_writer);
+    rfc5444_writer_cleanup(&_dlep_writer);
     return -1;
   }
   _dlep_message->addMessageHeader = _cb_addMessageHeader;
 
-  if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
+  if (rfc5444_writer_register_msgcontentprovider(&_dlep_writer,
       &_dlep_msgcontent_provider, _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs))) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Count not register DLEP msg contentprovider");
-    pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
-    pbb_writer_cleanup(&_dlep_writer);
+    rfc5444_writer_unregister_message(&_dlep_writer, _dlep_message);
+    rfc5444_writer_cleanup(&_dlep_writer);
     return -1;
   }
 
-  pbb_writer_register_interface(&_dlep_writer, &_dlep_multicast);
+  rfc5444_writer_register_interface(&_dlep_writer, &_dlep_multicast);
 
   olsr_timer_add(&_tinfo_interface_discovery);
   olsr_timer_add(&_tinfo_metric_update);
@@ -190,10 +190,10 @@ dlep_outgoing_cleanup(void) {
   olsr_timer_remove(&_tinfo_interface_discovery);
   olsr_timer_remove(&_tinfo_metric_update);
 
-  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
+  rfc5444_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
       _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs));
-  pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
-  pbb_writer_cleanup(&_dlep_writer);
+  rfc5444_writer_unregister_message(&_dlep_writer, _dlep_message);
+  rfc5444_writer_cleanup(&_dlep_writer);
 }
 
 /**
@@ -201,8 +201,8 @@ dlep_outgoing_cleanup(void) {
  * @param pbbif pointer to packetbb interface
  */
 void
-dlep_service_registerif(struct pbb_writer_interface *pbbif) {
-  pbb_writer_register_interface(&_dlep_writer, pbbif);
+dlep_service_registerif(struct rfc5444_writer_interface *pbbif) {
+  rfc5444_writer_register_interface(&_dlep_writer, pbbif);
 }
 
 /**
@@ -210,8 +210,8 @@ dlep_service_registerif(struct pbb_writer_interface *pbbif) {
  * @param pbbif pointer to packetbb interface
  */
 void
-dlep_service_unregisterif(struct pbb_writer_interface *pbbif) {
-  pbb_writer_unregister_interface(&_dlep_writer, pbbif);
+dlep_service_unregisterif(struct rfc5444_writer_interface *pbbif) {
+  rfc5444_writer_unregister_interface(&_dlep_writer, pbbif);
 }
 
 /**
@@ -242,13 +242,13 @@ _add_ifdiscovery_msgtlvs(void) {
   uint8_t encoded_vtime;
 
   /* encode vtime according to RFC 5497 */
-  encoded_vtime = pbb_timetlv_encode(_config.discovery_validity);
+  encoded_vtime = rfc5444_timetlv_encode(_config.discovery_validity);
 
-  pbb_writer_add_messagetlv(&_dlep_writer,
-      PBB_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+  rfc5444_writer_add_messagetlv(&_dlep_writer,
+      RFC5444_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 
   if (_config.peer_type[0]) {
-    pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
+    rfc5444_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
         _config.peer_type, strlen(_config.peer_type));
   }
 }
@@ -261,13 +261,13 @@ _add_neighborupdate_msgtlvs(void) {
   uint8_t encoded_vtime;
 
   /* encode vtime according to RFC 5497 */
-  encoded_vtime = pbb_timetlv_encode(_config.metric_validity);
+  encoded_vtime = rfc5444_timetlv_encode(_config.metric_validity);
 
-  pbb_writer_add_messagetlv(&_dlep_writer,
-      PBB_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
+  rfc5444_writer_add_messagetlv(&_dlep_writer,
+      RFC5444_MSGTLV_VALIDITY_TIME, 0, &encoded_vtime, sizeof(encoded_vtime));
 
   if (olsr_layer2_network_has_ssid(_msg_network)) {
-    pbb_writer_add_messagetlv(&_dlep_writer,
+    rfc5444_writer_add_messagetlv(&_dlep_writer,
         DLEP_TLV_SSID, 0,
         _msg_network->ssid, strlen(_msg_network->ssid));
   }
@@ -287,14 +287,14 @@ _add_neighborupdate_msgtlvs(void) {
     }
 
     interval = htonl(interval);
-    pbb_writer_add_messagetlv(&_dlep_writer,
+    rfc5444_writer_add_messagetlv(&_dlep_writer,
         DLEP_TLV_LAST_SEEN, 0, &interval, sizeof(interval));
   }
   if (olsr_layer2_network_has_frequency(_msg_network)) {
     uint64_t freq;
 
     freq = htobe64(_msg_network->frequency);
-    pbb_writer_add_messagetlv(&_dlep_writer,
+    rfc5444_writer_add_messagetlv(&_dlep_writer,
         DLEP_TLV_FREQUENCY, 0, &freq, sizeof(freq));
   }
 
@@ -307,18 +307,18 @@ _add_neighborupdate_msgtlvs(void) {
  * @param msg
  */
 static void
-_cb_addMessageHeader(struct pbb_writer *writer, struct pbb_writer_message *msg) {
+_cb_addMessageHeader(struct rfc5444_writer *writer, struct rfc5444_writer_message *msg) {
   static uint16_t seqno = 0;
-  pbb_writer_set_msg_header(writer, msg, true, false, false, true);
-  pbb_writer_set_msg_originator(writer, msg, netaddr_get_binptr(&_msg_network->radio_id));
-  pbb_writer_set_msg_seqno(writer, msg, seqno++);
+  rfc5444_writer_set_msg_header(writer, msg, true, false, false, true);
+  rfc5444_writer_set_msg_originator(writer, msg, netaddr_get_binptr(&_msg_network->radio_id));
+  rfc5444_writer_set_msg_seqno(writer, msg, seqno++);
 }
 
 static void
-_cb_addMessageTLVs(struct pbb_writer *writer,
-    struct pbb_writer_content_provider *prv __attribute__((unused))) {
+_cb_addMessageTLVs(struct rfc5444_writer *writer,
+    struct rfc5444_writer_content_provider *prv __attribute__((unused))) {
 
-  pbb_writer_add_messagetlv(writer,
+  rfc5444_writer_add_messagetlv(writer,
       DLEP_TLV_ORDER, _msg_order, NULL, 0);
 
   switch (_msg_order) {
@@ -340,7 +340,7 @@ _cb_addMessageTLVs(struct pbb_writer *writer,
 static void
 _add_neighborupdate_addresses(void) {
   struct olsr_layer2_neighbor *neigh, *neigh_it;
-  struct pbb_writer_address *addr;
+  struct rfc5444_writer_address *addr;
   struct netaddr_str buf1, buf2;
   char link_status;
 
@@ -349,7 +349,7 @@ _add_neighborupdate_addresses(void) {
       continue;
     }
 
-    addr = pbb_writer_add_address(&_dlep_writer, _dlep_message,
+    addr = rfc5444_writer_add_address(&_dlep_writer, _dlep_message,
           netaddr_get_binptr(&neigh->key.neighbor_mac), 48);
     if (addr == NULL) {
       OLSR_WARN(LOG_DLEP_SERVICE, "Could not allocate address for neighbor update");
@@ -357,9 +357,9 @@ _add_neighborupdate_addresses(void) {
     }
 
     /* LINK_HEARD */
-    link_status = neigh->active ? PBB_LINKSTATUS_HEARD : PBB_LINKSTATUS_LOST;
+    link_status = neigh->active ? RFC5444_LINKSTATUS_HEARD : RFC5444_LINKSTATUS_LOST;
 
-    pbb_writer_add_addrtlv(&_dlep_writer, addr,
+    rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
         _dlep_addrtlvs[IDX_ADDRTLV_LINK_STATUS]._tlvtype,
         &link_status, sizeof(link_status), false);
 
@@ -374,7 +374,7 @@ _add_neighborupdate_addresses(void) {
       uint16_t sig_encoded;
 
       sig_encoded = htons(neigh->signal_dbm);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
                 _dlep_addrtlvs[IDX_ADDRTLV_SIGNAL]._tlvtype,
                 &sig_encoded, sizeof(sig_encoded), false);
     }
@@ -394,49 +394,49 @@ _add_neighborupdate_addresses(void) {
       }
 
       interval = htonl(interval);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
                 _dlep_addrtlvs[IDX_ADDRTLV_LAST_SEEN]._tlvtype,
                 &interval, sizeof(interval), false);
     }
     if (olsr_layer2_neighbor_has_rx_bitrate(neigh)) {
       uint64_t rate = htobe64(neigh->rx_bitrate);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_RX_BITRATE]._tlvtype, &rate, sizeof(rate), false);
     }
     if (olsr_layer2_neighbor_has_rx_bytes(neigh)) {
       uint32_t bytes = htonl(neigh->rx_bytes);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_RX_BYTES]._tlvtype, &bytes, sizeof(bytes), false);
     }
     if (olsr_layer2_neighbor_has_rx_packets(neigh)) {
       uint32_t packets = htonl(neigh->rx_packets);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_RX_PACKETS]._tlvtype, &packets, sizeof(packets), false);
     }
     if (olsr_layer2_neighbor_has_tx_bitrate(neigh)) {
       uint64_t rate = htobe64(neigh->tx_bitrate);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_TX_BITRATE]._tlvtype, &rate, sizeof(rate), false);
 
     }
     if (olsr_layer2_neighbor_has_tx_bytes(neigh)) {
       uint32_t bytes = htonl(neigh->tx_bytes);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_TX_BYTES]._tlvtype, &bytes, sizeof(bytes), false);
     }
     if (olsr_layer2_neighbor_has_tx_packets(neigh)) {
       uint32_t packets = htonl(neigh->tx_packets);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_TX_PACKETS]._tlvtype, &packets, sizeof(packets), false);
     }
     if (olsr_layer2_neighbor_has_tx_retries(neigh)) {
       uint32_t packets = htonl(neigh->tx_retries);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_TX_RETRIES]._tlvtype, &packets, sizeof(packets), false);
     }
     if (olsr_layer2_neighbor_has_tx_failed(neigh)) {
       uint32_t packets = htonl(neigh->tx_failed);
-      pbb_writer_add_addrtlv(&_dlep_writer, addr,
+      rfc5444_writer_add_addrtlv(&_dlep_writer, addr,
           _dlep_addrtlvs[IDX_ADDRTLV_TX_FAILED]._tlvtype, &packets, sizeof(packets), false);
     }
   }
@@ -448,8 +448,8 @@ _add_neighborupdate_addresses(void) {
  * @param cpr
  */
 static void
-_cb_addAddresses(struct pbb_writer *writer __attribute__((unused)),
-    struct pbb_writer_content_provider *cpr __attribute__((unused))) {
+_cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
+    struct rfc5444_writer_content_provider *cpr __attribute__((unused))) {
   switch (_msg_order) {
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       /* no addresses in interface discovery */
@@ -478,13 +478,13 @@ _cb_interface_discovery(void *ptr __attribute__((unused))) {
     OLSR_DEBUG(LOG_DLEP_SERVICE, "Send interface discovery for radio %s",
         netaddr_to_string(&buf, &_msg_network->radio_id));
 
-    pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
-    pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
+    rfc5444_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
+    rfc5444_writer_flush(&_dlep_writer, &_dlep_multicast, false);
 
     avl_for_each_element(&_router_tree, session, _node) {
       if (session->unicast) {
-        pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &session->out_if);
-        pbb_writer_flush(&_dlep_writer, &session->out_if, false);
+        rfc5444_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &session->out_if);
+        rfc5444_writer_flush(&_dlep_writer, &session->out_if, false);
       }
     }
   }
@@ -516,8 +516,8 @@ _cb_metric_update(void *ptr __attribute__((unused))) {
           netaddr_to_string(&buf1, &_msg_network->radio_id),
           netaddr_socket_to_string(&buf2, &session->router_socket));
 
-      pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &session->out_if);
-      pbb_writer_flush(&_dlep_writer, &session->out_if, false);
+      rfc5444_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &session->out_if);
+      rfc5444_writer_flush(&_dlep_writer, &session->out_if, false);
     }
   }
 
@@ -526,8 +526,8 @@ _cb_metric_update(void *ptr __attribute__((unused))) {
       OLSR_DEBUG(LOG_DLEP_SERVICE, "Send metric updates for radio %s (via multicast)",
           netaddr_to_string(&buf1, &_msg_network->radio_id));
 
-      pbb_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
-      pbb_writer_flush(&_dlep_writer, &_dlep_multicast, false);
+      rfc5444_writer_create_message_singleif(&_dlep_writer, DLEP_MESSAGE_ID, &_dlep_multicast);
+      rfc5444_writer_flush(&_dlep_writer, &_dlep_multicast, false);
     }
   }
 

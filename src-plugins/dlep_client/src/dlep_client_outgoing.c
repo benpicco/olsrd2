@@ -39,9 +39,9 @@
  *
  */
 
-#include "packetbb/pbb_iana.h"
-#include "packetbb/pbb_conversion.h"
-#include "packetbb/pbb_writer.h"
+#include "rfc5444/rfc5444_iana.h"
+#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_timer.h"
 #include "core/olsr.h"
@@ -50,10 +50,10 @@
 #include "dlep_client.h"
 #include "dlep_client_outgoing.h"
 
-static void _cb_addMessageHeader(struct pbb_writer *,
-    struct pbb_writer_message *);
-static void _cb_addMessageTLVs(struct pbb_writer *,
-    struct pbb_writer_content_provider *);
+static void _cb_addMessageHeader(struct rfc5444_writer *,
+    struct rfc5444_writer_message *);
+static void _cb_addMessageTLVs(struct rfc5444_writer *,
+    struct rfc5444_writer_content_provider *);
 static void _cb_router_connect(void *);
 
 /* DLEP writer data */
@@ -64,22 +64,22 @@ static enum dlep_orders _msg_order;
 static struct _dlep_service_session *_msg_session;
 static bool _msg_explicit_connectto;
 
-static struct pbb_writer _dlep_writer = {
+static struct rfc5444_writer _dlep_writer = {
   .msg_buffer = _msg_buffer,
   .msg_size = sizeof(_msg_buffer),
   .addrtlv_buffer = _msg_addrtlvs,
   .addrtlv_size = sizeof(_msg_addrtlvs),
 };
 
-static struct pbb_writer_message *_dlep_message = NULL;
+static struct rfc5444_writer_message *_dlep_message = NULL;
 
-static struct pbb_writer_content_provider _dlep_msgcontent_provider = {
+static struct rfc5444_writer_content_provider _dlep_msgcontent_provider = {
   .msg_type = DLEP_MESSAGE_ID,
   .addMessageTLVs = _cb_addMessageTLVs,
 };
 
 #if 0
-static struct pbb_writer_addrtlv_block _dlep_addrtlvs[] = {
+static struct rfc5444_writer_addrtlv_block _dlep_addrtlvs[] = {
   { .type = DLEP_ADDRTLV_CUR_RATE },
 };
 #endif
@@ -106,26 +106,26 @@ dlep_client_outgoing_init(void) {
   if (olsr_subsystem_init(&_dlep_client_outgoing))
     return 0;
 
-  pbb_writer_init(&_dlep_writer);
+  rfc5444_writer_init(&_dlep_writer);
 
-  _dlep_message = pbb_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
+  _dlep_message = rfc5444_writer_register_message(&_dlep_writer, DLEP_MESSAGE_ID, true, 6);
   if (_dlep_message == NULL) {
     OLSR_WARN(LOG_DLEP_CLIENT, "Could not register DLEP message");
-    pbb_writer_cleanup(&_dlep_writer);
+    rfc5444_writer_cleanup(&_dlep_writer);
     return -1;
   }
   _dlep_message->addMessageHeader = _cb_addMessageHeader;
 
 #if 0
-  if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
+  if (rfc5444_writer_register_msgcontentprovider(&_dlep_writer,
       &_dlep_msgcontent_provider, _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs))) {
 #endif
-  if (pbb_writer_register_msgcontentprovider(&_dlep_writer,
+  if (rfc5444_writer_register_msgcontentprovider(&_dlep_writer,
       &_dlep_msgcontent_provider, NULL, 0)) {
 
     OLSR_WARN(LOG_DLEP_CLIENT, "Count not register DLEP msg contentprovider");
-    pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
-    pbb_writer_cleanup(&_dlep_writer);
+    rfc5444_writer_unregister_message(&_dlep_writer, _dlep_message);
+    rfc5444_writer_cleanup(&_dlep_writer);
     return -1;
   }
 
@@ -147,13 +147,13 @@ dlep_client_outgoing_cleanup(void) {
 
   /* remove pbb writer */
 #if 0
-  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
+  rfc5444_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
       _dlep_addrtlvs, ARRAYSIZE(_dlep_addrtlvs));
 #endif
-  pbb_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
+  rfc5444_writer_unregister_content_provider(&_dlep_writer, &_dlep_msgcontent_provider,
       NULL, 0);
-  pbb_writer_unregister_message(&_dlep_writer, _dlep_message);
-  pbb_writer_cleanup(&_dlep_writer);
+  rfc5444_writer_unregister_message(&_dlep_writer, _dlep_message);
+  rfc5444_writer_cleanup(&_dlep_writer);
 }
 
 /**
@@ -161,8 +161,8 @@ dlep_client_outgoing_cleanup(void) {
  * @param pbbif pointer to packetbb interface
  */
 void
-dlep_client_registerif(struct pbb_writer_interface *pbbif) {
-  pbb_writer_register_interface(&_dlep_writer, pbbif);
+dlep_client_registerif(struct rfc5444_writer_interface *pbbif) {
+  rfc5444_writer_register_interface(&_dlep_writer, pbbif);
 }
 
 /**
@@ -170,8 +170,8 @@ dlep_client_registerif(struct pbb_writer_interface *pbbif) {
  * @param pbbif pointer to packetbb interface
  */
 void
-dlep_client_unregisterif(struct pbb_writer_interface *pbbif) {
-  pbb_writer_unregister_interface(&_dlep_writer, pbbif);
+dlep_client_unregisterif(struct rfc5444_writer_interface *pbbif) {
+  rfc5444_writer_unregister_interface(&_dlep_writer, pbbif);
 }
 
 /**
@@ -190,17 +190,17 @@ _add_connectrouter_msgtlvs(void) {
   uint8_t encoded_vtime;
 
   /* encode vtime according to RFC 5497 */
-  encoded_vtime = pbb_timetlv_encode(_client_config.connect_validity);
+  encoded_vtime = rfc5444_timetlv_encode(_client_config.connect_validity);
 
-  pbb_writer_add_messagetlv(&_dlep_writer, PBB_MSGTLV_VALIDITY_TIME, 0,
+  rfc5444_writer_add_messagetlv(&_dlep_writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
       &encoded_vtime, sizeof(encoded_vtime));
 
   if (_msg_session->explicit) {
-    pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_UNICAST, 0, NULL, 0);
+    rfc5444_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_UNICAST, 0, NULL, 0);
   }
 
   if (_client_config.peer_type[0]) {
-    pbb_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
+    rfc5444_writer_add_messagetlv(&_dlep_writer, DLEP_TLV_PEER_TYPE, 0,
         _client_config.peer_type, strlen(_client_config.peer_type));
   }
 }
@@ -211,9 +211,9 @@ _add_connectrouter_msgtlvs(void) {
  * @param msg
  */
 static void
-_cb_addMessageHeader(struct pbb_writer *writer, struct pbb_writer_message *msg) {
-  pbb_writer_set_msg_header(writer, msg, false, false, false, true);
-  pbb_writer_set_msg_seqno(writer, msg, _msg_session->seqno++);
+_cb_addMessageHeader(struct rfc5444_writer *writer, struct rfc5444_writer_message *msg) {
+  rfc5444_writer_set_msg_header(writer, msg, false, false, false, true);
+  rfc5444_writer_set_msg_seqno(writer, msg, _msg_session->seqno++);
 }
 
 /**
@@ -222,10 +222,10 @@ _cb_addMessageHeader(struct pbb_writer *writer, struct pbb_writer_message *msg) 
  * @param prv
  */
 static void
-_cb_addMessageTLVs(struct pbb_writer *writer,
-    struct pbb_writer_content_provider *prv __attribute__((unused))) {
+_cb_addMessageTLVs(struct rfc5444_writer *writer,
+    struct rfc5444_writer_content_provider *prv __attribute__((unused))) {
 
-  pbb_writer_add_messagetlv(writer,
+  rfc5444_writer_add_messagetlv(writer,
       DLEP_TLV_ORDER, _msg_order, NULL, 0);
 
   switch (_msg_order) {
@@ -248,8 +248,8 @@ _cb_router_connect(void *ptr __attribute__((unused))) {
 
   avl_for_each_element(&_service_tree, _msg_session, _node) {
     _msg_explicit_connectto = false;
-    pbb_writer_create_message_singleif(&_dlep_writer,
+    rfc5444_writer_create_message_singleif(&_dlep_writer,
         DLEP_MESSAGE_ID, &_msg_session->out_if);
-    pbb_writer_flush(&_dlep_writer, &_msg_session->out_if, false);
+    rfc5444_writer_flush(&_dlep_writer, &_msg_session->out_if, false);
   }
 }

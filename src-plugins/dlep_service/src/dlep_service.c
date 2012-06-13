@@ -45,10 +45,10 @@
 #include "common/common_types.h"
 #include "common/avl.h"
 #include "config/cfg_schema.h"
-#include "packetbb/pbb_conversion.h"
-#include "packetbb/pbb_iana.h"
-#include "packetbb/pbb_reader.h"
-#include "packetbb/pbb_writer.h"
+#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444_iana.h"
+#include "rfc5444/rfc5444_reader.h"
+#include "rfc5444/rfc5444_writer.h"
 #include "olsr_callbacks.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
@@ -81,10 +81,10 @@ static void _cb_receive_dlep(struct olsr_packet_socket *s,
       union netaddr_socket *from, size_t length);
 static void _cb_dlep_router_timerout(void *);
 
-void _cb_send_multicast(struct pbb_writer *writer,
-    struct pbb_writer_interface *interf, void *ptr, size_t len);
-void _cb_send_unicast(struct pbb_writer *writer,
-    struct pbb_writer_interface *interf, void *ptr, size_t len);
+void _cb_send_multicast(struct rfc5444_writer *writer,
+    struct rfc5444_writer_interface *interf, void *ptr, size_t len);
+void _cb_send_unicast(struct rfc5444_writer *writer,
+    struct rfc5444_writer_interface *interf, void *ptr, size_t len);
 
 static void _cb_neighbor_added(void *);
 static void _cb_neighbor_removed(void *);
@@ -133,12 +133,12 @@ static struct cfg_schema_entry _dlep_entries[] = {
   CFG_MAP_CLOCK(_dlep_service_config, discovery_interval, "discovery_interval", "2.000",
     "Interval in seconds between interface discovery messages"),
   CFG_MAP_CLOCK_MINMAX(_dlep_service_config, discovery_validity, "discovery_validity", "5.000",
-    "Validity time in seconds for interface discovery messages", 100, PBB_TIMETLV_MAX),
+    "Validity time in seconds for interface discovery messages", 100, RFC5444_TIMETLV_MAX),
 
   CFG_MAP_CLOCK_MIN(_dlep_service_config, metric_interval, "metric_interval", "1.000",
     "Interval in seconds between neighbor update messages", 100),
   CFG_MAP_CLOCK_MINMAX(_dlep_service_config, metric_validity, "metric_validity", "5.000",
-    "Validity time in seconds for neighbor update messages", 100, PBB_TIMETLV_MAX),
+    "Validity time in seconds for neighbor update messages", 100, RFC5444_TIMETLV_MAX),
 
   CFG_MAP_BOOL(_dlep_service_config, always_send, "always_send", "false",
     "Set to true to send neighbor updates even without connected clients"),
@@ -341,8 +341,8 @@ _cb_dlep_router_timerout(void *ptr) {
  * @param len
  */
 void
-_cb_send_multicast(struct pbb_writer *writer __attribute__((unused)),
-    struct pbb_writer_interface *interf __attribute__((unused)),
+_cb_send_multicast(struct rfc5444_writer *writer __attribute__((unused)),
+    struct rfc5444_writer_interface *interf __attribute__((unused)),
     void *ptr, size_t len) {
   if (olsr_packet_send_managed_multicast(&_dlep_socket, ptr, len, AF_INET) != 0) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Could not sent DLEP IPv4 packet to socket: %s (%d)",
@@ -362,8 +362,8 @@ _cb_send_multicast(struct pbb_writer *writer __attribute__((unused)),
  * @param len
  */
 void
-_cb_send_unicast(struct pbb_writer *writer __attribute__((unused)),
-    struct pbb_writer_interface *interf, void *ptr, size_t len) {
+_cb_send_unicast(struct rfc5444_writer *writer __attribute__((unused)),
+    struct rfc5444_writer_interface *interf, void *ptr, size_t len) {
   struct _router_session *session;
 
   session = container_of(interf, struct _router_session, out_if);

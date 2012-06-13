@@ -42,11 +42,11 @@
 #include <errno.h>
 
 #include "config/cfg_schema.h"
-#include "packetbb/pbb_conversion.h"
-#include "packetbb/pbb_iana.h"
-#include "packetbb/pbb_reader.h"
-#include "packetbb/pbb_writer.h"
-#include "packetbb/pbb_print.h"
+#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444_iana.h"
+#include "rfc5444/rfc5444_reader.h"
+#include "rfc5444/rfc5444_writer.h"
+#include "rfc5444/rfc5444_print.h"
 #include "olsr_cfg.h"
 #include "olsr_clock.h"
 #include "olsr_layer2.h"
@@ -83,8 +83,8 @@ static struct _dlep_service_session *_add_service_session(
 static void _cb_receive_dlep(struct olsr_packet_socket *s,
       union netaddr_socket *from, size_t length);
 
-static void _cb_send_dlep(struct pbb_writer *,
-    struct pbb_writer_interface *, void *, size_t);
+static void _cb_send_dlep(struct rfc5444_writer *,
+    struct rfc5444_writer_interface *, void *, size_t);
 
 static void _cb_dlep_interface_timerout(void *ptr);
 static void _cb_dlep_service_timerout(void *ptr);
@@ -137,7 +137,7 @@ static struct cfg_schema_entry _dlep_entries[] = {
   CFG_MAP_CLOCK(_dlep_client_config, connect_interval, "connect_interval", "0.000",
     "Interval in seconds between router connect messages"),
   CFG_MAP_CLOCK_MINMAX(_dlep_client_config, connect_validity, "connect_validity", "5.000",
-    "Validity time in seconds for router connect messages", 100, PBB_TIMETLV_MAX),
+    "Validity time in seconds for router connect messages", 100, RFC5444_TIMETLV_MAX),
 };
 
 struct _dlep_client_config _client_config;
@@ -400,8 +400,8 @@ _cb_dlep_service_timerout(void *ptr) {
  * @param len
  */
 static void
-_cb_send_dlep(struct pbb_writer *writer __attribute__((unused)),
-    struct pbb_writer_interface *interf,
+_cb_send_dlep(struct rfc5444_writer *writer __attribute__((unused)),
+    struct rfc5444_writer_interface *interf,
     void *ptr, size_t len) {
   struct _dlep_service_session *session;
 

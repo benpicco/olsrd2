@@ -40,9 +40,9 @@
  */
 
 #include "common/common_types.h"
-#include "packetbb/pbb_iana.h"
-#include "packetbb/pbb_conversion.h"
-#include "packetbb/pbb_reader.h"
+#include "rfc5444/rfc5444_iana.h"
+#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444_reader.h"
 #include "core/olsr.h"
 
 #include "dlep_iana.h"
@@ -62,24 +62,24 @@ enum dlep_tlv_idx {
 };
 
 /* callback prototypes */
-static enum pbb_result _cb_parse_dlep_message(
-    struct pbb_reader_tlvblock_consumer *consumer,
-    struct pbb_reader_tlvblock_context *context);
-static enum pbb_result _cb_parse_dlep_message_failed(
-    struct pbb_reader_tlvblock_consumer *consumer,
-    struct pbb_reader_tlvblock_context *context);
+static enum rfc5444_result _cb_parse_dlep_message(
+    struct rfc5444_reader_tlvblock_consumer *consumer,
+    struct rfc5444_reader_tlvblock_context *context);
+static enum rfc5444_result _cb_parse_dlep_message_failed(
+    struct rfc5444_reader_tlvblock_consumer *consumer,
+    struct rfc5444_reader_tlvblock_context *context);
 
 /* DLEP reader data */
-static struct pbb_reader _dlep_reader;
+static struct rfc5444_reader _dlep_reader;
 
-static struct pbb_reader_tlvblock_consumer _dlep_message_consumer = {
+static struct rfc5444_reader_tlvblock_consumer _dlep_message_consumer = {
   .block_callback = _cb_parse_dlep_message,
   .block_callback_failed_constraints = _cb_parse_dlep_message_failed,
 };
 
-static struct pbb_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
+static struct rfc5444_reader_tlvblock_consumer_entry _dlep_message_tlvs[] = {
   [IDX_TLV_ORDER]           = { .type = DLEP_TLV_ORDER, .mandatory = true, .min_length = 0, .match_length = true },
-  [IDX_TLV_VTIME]           = { .type = PBB_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_VTIME]           = { .type = RFC5444_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_PEER_TYPE]       = { .type = DLEP_TLV_PEER_TYPE, .min_length = 0, .max_length = 80, .match_length = true },
   [IDX_TLV_UNICAST]         = { .type = DLEP_TLV_UNICAST, .min_length = 0, .match_length = true},
   [IDX_TLV_BSSID]           = { .type = DLEP_TLV_SSID, .min_length = 6, .match_length = true },
@@ -103,8 +103,8 @@ dlep_service_incoming_init(void) {
   if (olsr_subsystem_init(&_dlep_service_incoming))
     return;
 
-  pbb_reader_init(&_dlep_reader);
-  pbb_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
+  rfc5444_reader_init(&_dlep_reader);
+  rfc5444_reader_add_message_consumer(&_dlep_reader, &_dlep_message_consumer,
       _dlep_message_tlvs, ARRAYSIZE(_dlep_message_tlvs), DLEP_MESSAGE_ID, 0);
 }
 
@@ -116,8 +116,8 @@ dlep_service_incoming_cleanup(void) {
   if (olsr_subsystem_cleanup(&_dlep_service_incoming))
     return;
 
-  pbb_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
-  pbb_reader_cleanup(&_dlep_reader);
+  rfc5444_reader_remove_message_consumer(&_dlep_reader, &_dlep_message_consumer);
+  rfc5444_reader_cleanup(&_dlep_reader);
 }
 
 /**
@@ -130,7 +130,7 @@ dlep_service_incoming_cleanup(void) {
 void
 dlep_service_incoming_parse(void *ptr, size_t length,
     union netaddr_socket *from, bool multicast) {
-  enum pbb_result result;
+  enum rfc5444_result result;
 #if !defined(REMOVE_LOG_DEBUG)
   struct netaddr_str buf;
 #endif
@@ -141,10 +141,10 @@ dlep_service_incoming_parse(void *ptr, size_t length,
 
   _peer_socket = from;
 
-  result = pbb_reader_handle_packet(&_dlep_reader, ptr, length);
+  result = rfc5444_reader_handle_packet(&_dlep_reader, ptr, length);
   if (result) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Error while parsing DLEP packet: %s (%d)",
-        pbb_strerror(result), result);
+        rfc5444_strerror(result), result);
   }
 
   _peer_socket = NULL;
@@ -153,9 +153,9 @@ dlep_service_incoming_parse(void *ptr, size_t length,
 /**
  * parse message TLVs of "connect router" message and add it to
  * session database
- * @return PBB_OKAY if message was okay, PBB_DROP_MESSAGE otherwise
+ * @return RFC5444_OKAY if message was okay, RFC5444_DROP_MESSAGE otherwise
  */
-static enum pbb_result
+static enum rfc5444_result
 _parse_order_connect_router(void) {
   struct _router_session *session;
   uint8_t encoded_vtime;
@@ -164,7 +164,7 @@ _parse_order_connect_router(void) {
   encoded_vtime = _dlep_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0];
 
   /* decode vtime according to RFC 5497 */
-  vtime = pbb_timetlv_decode(encoded_vtime);
+  vtime = rfc5444_timetlv_decode(encoded_vtime);
 
   /* see if we have to unicast this router */
   unicast = _dlep_message_tlvs[IDX_TLV_UNICAST].tlv != NULL;
@@ -172,10 +172,10 @@ _parse_order_connect_router(void) {
   /* add new session */
   session = dlep_add_router_session(_peer_socket, unicast, vtime);
   if (!session) {
-    return PBB_DROP_MESSAGE;
+    return RFC5444_DROP_MESSAGE;
   }
 
-  return PBB_OKAY;
+  return RFC5444_OKAY;
 }
 
 
@@ -186,13 +186,13 @@ _parse_order_connect_router(void) {
  * @param context
  * @return
  */
-static enum pbb_result
-_cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
-      struct pbb_reader_tlvblock_context *context) {
+static enum rfc5444_result
+_cb_parse_dlep_message(struct rfc5444_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
+      struct rfc5444_reader_tlvblock_context *context) {
   if (context->addr_len != 6) {
     OLSR_WARN(LOG_DLEP_SERVICE, "Address length of DLEP message should be 6 (but was %d)",
         context->addr_len);
-    return PBB_DROP_MESSAGE;
+    return RFC5444_DROP_MESSAGE;
   }
 
   _current_order = _dlep_message_tlvs[IDX_TLV_ORDER].tlv->type_ext;
@@ -201,15 +201,15 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
       return _parse_order_connect_router();
     case DLEP_ORDER_INTERFACE_DISCOVERY:
       /* ignore our own discovery packets if we work with multicast loop */
-      return PBB_OKAY;
+      return RFC5444_OKAY;
     case DLEP_ORDER_NEIGHBOR_UPDATE:
       /* ignore our own discovery packets if we work with multicast loop */
       break;
     default:
       OLSR_WARN(LOG_DLEP_SERVICE, "Unknown order in DLEP message: %d", _current_order);
-      return PBB_DROP_MESSAGE;
+      return RFC5444_DROP_MESSAGE;
   }
-  return PBB_OKAY;
+  return RFC5444_OKAY;
 }
 
 /**
@@ -219,9 +219,9 @@ _cb_parse_dlep_message(struct pbb_reader_tlvblock_consumer *consumer  __attribut
  * @param context
  * @return
  */
-static enum pbb_result
-_cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
-      struct pbb_reader_tlvblock_context *context __attribute__((unused))) {
+static enum rfc5444_result
+_cb_parse_dlep_message_failed(struct rfc5444_reader_tlvblock_consumer *consumer  __attribute__ ((unused)),
+      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   size_t i;
   OLSR_WARN(LOG_DLEP_SERVICE, "Constraints of incoming DLEP message were not fulfilled!");
 
@@ -231,5 +231,5 @@ _cb_parse_dlep_message_failed(struct pbb_reader_tlvblock_consumer *consumer  __a
       OLSR_WARN_NH(LOG_DLEP_SERVICE, "\tvalue length: %u", _dlep_message_tlvs[i].tlv->length);
     }
   }
-  return PBB_OKAY;
+  return RFC5444_OKAY;
 }

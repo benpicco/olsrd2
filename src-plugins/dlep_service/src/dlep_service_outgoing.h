@@ -42,11 +42,12 @@
 #ifndef DLEP_SERVICE_OUTGOING_H_
 #define DLEP_SERVICE_OUTGOING_H_
 
+#include "rfc5444/rfc5444_writer.h"
 int dlep_outgoing_init(void);
 void dlep_outgoing_cleanup(void);
 
-void dlep_service_registerif(struct pbb_writer_interface *);
-void dlep_service_unregisterif(struct pbb_writer_interface *);
+void dlep_service_registerif(struct rfc5444_writer_interface *);
+void dlep_service_unregisterif(struct rfc5444_writer_interface *);
 
 void dlep_trigger_metric_update(void);
 void dlep_reconfigure_timers(void);

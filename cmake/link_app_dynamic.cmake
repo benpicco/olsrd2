@@ -9,7 +9,7 @@ ENDFOREACH(plugin)
 
 # link packetbb if necessary
 IF(OONF_NEED_PACKETBB)
-    TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_packetbb)
+    TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_rfc5444)
 ENDIF(OONF_NEED_PACKETBB)
 
 # link core
