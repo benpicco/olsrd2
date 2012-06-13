@@ -3,8 +3,6 @@
 # look for git executable 
 find_program(found_git git)
 
-message ("GIT app: ${GIT}")
-
 IF(${found_git} STREQUAL "found_git-NOTFOUND" OR NOT EXISTS ${GIT})
     # git executable or repository (.git) is not available
     SET(OONF_SRC_GIT "cannot read git repository")
