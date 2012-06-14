@@ -8,7 +8,7 @@ set (CMAKE_BUILD_TYPE Debug)
 
 # keep logging level for application, core-api and plugins down to level
 # (none, warn, info, debug)
-set (OONF_MAX_LOGGING_LEVEL debug)
+set (OONF_LOGGING_LEVEL debug)
 
 # remove help texts from application, core-api and plugins
 set (OONF_REMOVE_HELPTEXT false)
