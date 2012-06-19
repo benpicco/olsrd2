@@ -40,10 +40,12 @@
  */
 
 #include "common/common_types.h"
-#include "core/olsr_logging_cfg.h"
 #include "core/olsr_subsystem.h"
+#include "tools/olsr_logging_cfg.h"
+
 #include "olsr_setup.h"
 #include "olsr_layer2.h"
+
 
 /* define the logging sources that are part of debug level 1 */
 static enum log_source _level_1_sources[] = {

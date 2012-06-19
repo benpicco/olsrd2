@@ -8,13 +8,16 @@ FOREACH(plugin ${PLUGIN_LIST})
     ENDIF(TARGET oonf_static_${plugin})
 ENDFOREACH(plugin)
 
+# link tools
+TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_tools)
+
+# link core
+TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_core)
+
 # link packetbb if necessary
 IF(OONF_NEED_PACKETBB)
     TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_rfc5444)
 ENDIF(OONF_NEED_PACKETBB)
-
-# link core
-TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_core)
 
 # link config and common API
 TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_config)

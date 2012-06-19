@@ -50,15 +50,16 @@
 #include "rfc5444/rfc5444_reader.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_callbacks.h"
-#include "core/olsr_cfg.h"
 #include "core/olsr_clock.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_netaddr_acl.h"
 #include "core/olsr_packet_socket.h"
 #include "core/olsr_plugins.h"
 #include "core/olsr_timer.h"
-#include "core/olsr_telnet.h"
 #include "core/os_system.h"
+
+#include "tools/olsr_cfg.h"
+#include "tools/olsr_telnet.h"
 
 #include "olsr_layer2.h"
 
