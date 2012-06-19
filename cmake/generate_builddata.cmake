@@ -19,9 +19,7 @@ ENDIF()
 configure_file (${SRC} ${DST})
 
 # replace spaces with string to convert into list
-message ("Generate static plugin loader for '${PLUGINS}'")
-
-string(REPLACE " " ";" PLUGIN_LIST "${PLUGINS}")
+string(REPLACE "\\ " ";" PLUGIN_LIST "${PLUGINS}")
 
 # create C file which would call the static plugin constructors 
 file(APPEND ${DST} "\n")

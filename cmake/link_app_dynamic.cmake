@@ -1,5 +1,6 @@
 # link static plugins
-FOREACH(plugin ${OONF_STATIC_PLUGINS})
+string(REPLACE " " ";" PLUGIN_LIST "${OONF_STATIC_PLUGINS}")
+FOREACH(plugin ${PLUGIN_LIST})
     IF(TARGET oonf_static_${plugin})
         TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_static_${plugin})
     ELSE (TARGET oonf_static_${plugin})

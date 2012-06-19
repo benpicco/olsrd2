@@ -362,7 +362,9 @@ _remove_network(struct olsr_layer2_network *net) {
  */
 static void
 _cb_neighbor_timeout(void *ptr) {
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct olsr_layer2_neighbor *neigh = ptr;
+#endif
   OLSR_DEBUG(LOG_MAIN, "Layer-2 neighbor timeout (was %sactive)", neigh->active ? "" : "in");
   _remove_neighbor(ptr);
 }
@@ -373,7 +375,9 @@ _cb_neighbor_timeout(void *ptr) {
  */
 static void
 _cb_network_timeout(void *ptr) {
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct olsr_layer2_network *net = ptr;
+#endif
   OLSR_DEBUG(LOG_MAIN, "Layer-2 network timeout (was %sactive)", net->active ? "" : "in");
   _remove_network(ptr);
 }

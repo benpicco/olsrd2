@@ -253,7 +253,9 @@ _cb_plugin_disable(void) {
 struct _router_session *
 dlep_add_router_session(union netaddr_socket *peer_socket, bool unicast, uint64_t vtime) {
   struct _router_session *session;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   session = avl_find_element(&_router_tree, peer_socket, session, _node);
   if (session == NULL) {
@@ -267,7 +269,7 @@ dlep_add_router_session(union netaddr_socket *peer_socket, bool unicast, uint64_
       return NULL;
     }
 
-    /* TODO: create new outgoing interface for unicasting router */
+    /* create new outgoing interface for unicasting router */
     session->out_if.packet_buffer = calloc(1, DLEP_PKT_BUFFER_SIZE);
     if (session->out_if.packet_buffer == NULL) {
       free(session);
@@ -380,11 +382,13 @@ _cb_send_unicast(struct rfc5444_writer *writer __attribute__((unused)),
  * @param ptr
  */
 static void
-_cb_neighbor_added(void *ptr) {
+_cb_neighbor_added(void *ptr __attribute__((unused))) {
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct olsr_layer2_neighbor *nbr;
   struct netaddr_str buf1, buf2;
 
   nbr = ptr;
+#endif
 
   OLSR_DEBUG(LOG_DLEP_SERVICE, "Layer 2 neighbor %s added on radio %s",
       netaddr_to_string(&buf1, &nbr->key.neighbor_mac),
@@ -398,11 +402,13 @@ _cb_neighbor_added(void *ptr) {
  * @param ptr
  */
 static void
-_cb_neighbor_removed(void *ptr) {
+_cb_neighbor_removed(void *ptr __attribute__((unused))) {
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct olsr_layer2_neighbor *nbr;
   struct netaddr_str buf1, buf2;
 
   nbr = ptr;
+#endif
 
   OLSR_DEBUG(LOG_DLEP_SERVICE, "Layer 2 neighbor %s removed on radio %s",
       netaddr_to_string(&buf1, &nbr->key.neighbor_mac),

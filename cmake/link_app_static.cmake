@@ -3,10 +3,13 @@
 # other way around
 
 # link static plugins
-FOREACH(plugin ${OONF_STATIC_PLUGINS})
+string(REPLACE " " ";" PLUGIN_LIST "${OONF_STATIC_PLUGINS}")
+FOREACH(plugin ${PLUGIN_LIST})
     IF(TARGET oonf_static_${plugin})
+        message ("    Found target: oonf_static_${plugin}")  
         TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive oonf_static_${plugin} -Wl,--no-whole-archive)
     ELSE (TARGET oonf_static_${plugin})
+        message ("    Did not found target: oonf_static_${plugin}")
         TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive ${OONF_APP_LIBPREFIX}_static_${plugin} -Wl,--no-whole-archive)
     ENDIF(TARGET oonf_static_${plugin})
 ENDFOREACH(plugin)

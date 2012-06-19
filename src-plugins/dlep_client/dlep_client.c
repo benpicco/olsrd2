@@ -246,7 +246,9 @@ dlep_add_interface_session(union netaddr_socket *peer_socket,
   struct netaddr *radio_mac, uint64_t vtime) {
   struct _discovered_interface_session *if_session;
   struct _dlep_service_session *service_session;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   service_session = _add_service_session(peer_socket, vtime+1);
   if (service_session == NULL) {
@@ -292,7 +294,9 @@ dlep_add_interface_session(union netaddr_socket *peer_socket,
 static struct _dlep_service_session *
 _add_service_session(union netaddr_socket *peer_socket, uint64_t vtime) {
   struct _dlep_service_session *service_session;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   service_session = avl_find_element(
       &_service_tree, peer_socket, service_session, _node);

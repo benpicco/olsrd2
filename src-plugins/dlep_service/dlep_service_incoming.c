@@ -129,9 +129,9 @@ dlep_service_incoming_cleanup(void) {
  */
 void
 dlep_service_incoming_parse(void *ptr, size_t length,
-    union netaddr_socket *from, bool multicast) {
+    union netaddr_socket *from, bool multicast __attribute__((unused))) {
   enum rfc5444_result result;
-#if !defined(REMOVE_LOG_DEBUG)
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
 #endif
 

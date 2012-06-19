@@ -176,7 +176,7 @@ void
 dlep_service_incoming_parse(void *ptr, size_t length,
     union netaddr_socket *from, bool multicast) {
   enum rfc5444_result result;
-#if !defined(REMOVE_LOG_DEBUG)
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
 #endif
 
@@ -218,7 +218,9 @@ _parse_msg_interface_discovery(struct netaddr *radio_mac) {
 static enum rfc5444_result
 _parse_msg_neighbor_update(struct netaddr *radio_mac) {
   struct olsr_layer2_network *net;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_WARN
   struct netaddr_str buf;
+#endif
 
   OLSR_DEBUG(LOG_DLEP_CLIENT, "Got layer2 network %s",
       netaddr_to_string(&buf, radio_mac));
@@ -316,8 +318,10 @@ _cb_parse_dlep_message(struct rfc5444_reader_tlvblock_consumer *consumer __attri
 static enum rfc5444_result
 _parse_addr_neighbor_update(struct netaddr *radio_mac, struct netaddr *neigh_mac) {
   struct olsr_layer2_neighbor *neigh;
-  struct netaddr_str buf1, buf2;
   char link_status;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+  struct netaddr_str buf1, buf2;
+#endif
 
   if (_dlep_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv == NULL) {
     /* ignore */

@@ -136,13 +136,3 @@ add_compiler_flag(-Wsync-nand)
 add_compiler_flag(-Wundef)
 add_compiler_flag(-Wunused-parameter)
 add_compiler_flag(-Wjump-missed-init)
-
-# check for link time optimization
-check_c_compiler_flag("-flto" test_lto)
-if (${test_lto})
-    if (NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-        ADD_DEFINITIONS(-flto -fuse-linker-plugin)
-        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
-        SET(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -flto")
-    endif()
-endif()

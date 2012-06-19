@@ -1,8 +1,8 @@
 # create application data for including
 include_directories(${CMAKE_BINARY_DIR})
 
-# generate full version string and initialization for static plugins
-SET(GEN_DATA_C ${PROJECT_BINARY_DIR}/app_data.c)
+# initialization for static plugins
+SET (GEN_DATA_C ${PROJECT_BINARY_DIR}/app_data.c)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/app_data.h.in ${PROJECT_BINARY_DIR}/app_data.h)
 

@@ -341,8 +341,10 @@ static void
 _add_neighborupdate_addresses(void) {
   struct olsr_layer2_neighbor *neigh, *neigh_it;
   struct rfc5444_writer_address *addr;
-  struct netaddr_str buf1, buf2;
   char link_status;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+  struct netaddr_str buf1, buf2;
+#endif
 
   OLSR_FOR_ALL_LAYER2_NEIGHBORS(neigh, neigh_it) {
     if (netaddr_cmp(&_msg_network->radio_id, &neigh->key.radio_mac) != 0) {
@@ -471,8 +473,9 @@ static void
 _cb_interface_discovery(void *ptr __attribute__((unused))) {
   struct olsr_layer2_network *net_it;
   struct _router_session *session;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
-
+#endif
   _msg_order = DLEP_ORDER_INTERFACE_DISCOVERY;
   OLSR_FOR_ALL_LAYER2_ACTIVE_NETWORKS(_msg_network, net_it) {
     OLSR_DEBUG(LOG_DLEP_SERVICE, "Send interface discovery for radio %s",
@@ -498,8 +501,10 @@ static void
 _cb_metric_update(void *ptr __attribute__((unused))) {
   struct olsr_layer2_network *net_it;
   struct _router_session *session;
-  struct netaddr_str buf1, buf2;
   bool multicast;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+  struct netaddr_str buf1, buf2;
+#endif
 
   _triggered_metric_update = false;
   _msg_order = DLEP_ORDER_NEIGHBOR_UPDATE;
