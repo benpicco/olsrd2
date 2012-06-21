@@ -10,19 +10,25 @@ include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
 CMAKE_SOURCE_DIR=$(CURDIR)/../../
-CMAKE_OPTIONS=-DOONF_DO_NOT_REGISTER_PACKAGE:Bool=true -DOONF_LOGGING_LEVEL:String=warn -DCMAKE_BUILD_TYPE:String=Release -DINSTALL_LIB_DIR:Path=lib/oonf -DINSTALL_INCLUDE_DIR:Path=include/oonf -DINSTALL_CMAKE_DIR:Path=lib/oonf -DOONF_LIBNL:Path=nl-tiny
+CMAKE_OPTIONS=-DOONF_DO_NOT_REGISTER_PACKAGE:Bool=true \
+              -DOONF_LOGGING_LEVEL:String=warn \
+              -DCMAKE_BUILD_TYPE:String=MinSizeRel \
+              -DINSTALL_LIB_DIR:Path=lib/oonf \
+              -DINSTALL_INCLUDE_DIR:Path=include/oonf \
+              -DINSTALL_CMAKE_DIR:Path=lib/oonf \
+              -DOONF_LIBNL:Path=nl-tiny
 
 define Package/oonf-dlep/template
 	SECTION:=net
 	CATEGORY:=Network
 	MAINTAINER:=Henning Rogge <hrogge@gmail.com>
-	TITLE:=OLSR.org DLEP agent
+	SUBMENU:=OLSR.org DLEP agent
 	URL:=http://www.olsr.org/
 endef
 
 define Package/oonf-dlep
 	$(call Package/oonf-dlep/template)
-	MENU:=1 
+	TITLE:=DLEP-agent (executable for client and service) 
 	DEPENDS:=+oonf-core-api +oonf-tools-api
 endef
 
