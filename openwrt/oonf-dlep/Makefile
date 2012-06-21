@@ -23,7 +23,7 @@ endef
 define Package/oonf-dlep
 	$(call Package/oonf-dlep/template)
 	MENU:=1 
-	DEPENDS:=+oonf-core-api
+	DEPENDS:=+oonf-core-api +oonf-tools-api
 endef
 
 define Package/oonf-dlep-plugin-client
