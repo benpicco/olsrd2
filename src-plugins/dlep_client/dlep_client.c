@@ -467,7 +467,7 @@ _parse_connectto(void) {
     }
 
     netaddr_socket_init(&sock, &connect_to,
-        _client_config.socket.multicast_port);
+        _client_config.socket.multicast_port, 0);
 
     _add_service_session(&sock, 0);
   }
