@@ -270,9 +270,7 @@ main(int argc, char **argv) {
   }
 
   /* activate interface listening system */
-  if (olsr_interface_init()) {
-    goto olsrd_cleanup;
-  }
+  olsr_interface_init();
 
   /* activate telnet and http */
   olsr_telnet_init();
