@@ -40,11 +40,11 @@
  */
 
 #include "common/common_types.h"
+#include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_logging_cfg.h"
 
 #include "olsr_setup.h"
-#include "olsr_layer2.h"
 
 
 /* define the logging sources that are part of debug level 1 */
@@ -65,7 +65,6 @@ olsr_setup_init(void) {
     return 0;
 
   /* add custom service setup here */
-  olsr_layer2_init();
 
   /* no error happened */
   olsr_subsystem_init(&_setup_state);
@@ -81,7 +80,6 @@ olsr_setup_cleanup(void) {
     return;
 
   /* add cleanup for custom services here */
-  olsr_layer2_cleanup();
 }
 
 /**
