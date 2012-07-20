@@ -39,67 +39,77 @@
  *
  */
 
+#ifndef NHDP_INTERFACES_H_
+#define NHDP_INTERFACES_H_
+
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
+#include "common/avl.h"
+#include "common/netaddr.h"
+#include "core/olsr_interface.h"
+#include "core/olsr_timer.h"
+#include "tools/olsr_rfc5444.h"
 
-#include "nhdp/nhdp.h"
+struct nhdp_interface {
+  struct olsr_rfc5444_interface_listener rfc5444_if;
 
-#include "olsr_setup.h"
+  bool active;
 
+  uint64_t hello_itime, hello_vtime;
 
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
+  struct olsr_timer_entry _hello_timer;
+  struct olsr_timer_entry _cleanup_timer;
+
+  struct avl_node _node;
+  struct avl_tree _addrs;
 };
 
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
+struct nhdp_interface_addr {
+  struct netaddr addr;
+  bool active;
+  bool socket_addr;
+
+  struct nhdp_interface *interf;
+
+  bool _might_be_removed;
+  struct avl_node _node;
+  struct olsr_timer_entry _cleanup_timer;
+};
+
+#define NHDP_FOR_ALL_ACTIVE_INTERFACE_ADDRS(interf, addr) avl_for_each_element(&interf->_addrs, addr, _node) if (addr->active)
+#define NHDP_FOR_ALL_INACTIVE_INTERFACE_ADDRS(interf, addr) avl_for_each_element(&interf->_addrs, addr, _node) if (!addr->active)
+
+EXPORT extern struct avl_tree nhdp_interface_tree;
+
+void nhdp_interfaces_init(void);
+void nhdp_interfaces_cleanup(void);
+
+struct nhdp_interface *nhdp_interface_add(const char *name);
+void nhdp_interface_remove(struct nhdp_interface *);
+
+struct nhdp_interface_addr *nhdp_interface_addr_add(
+    struct nhdp_interface *, struct netaddr *);
+void nhdp_interface_addr_remove(struct nhdp_interface_addr *);
 
 /**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
+ *
+ * @param
+ * @return
  */
-int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
+static INLINE struct nhdp_interface *
+nhdp_interface_get(const char *name) {
+  struct nhdp_interface *interf;
 
-  /* add custom service setup here */
-  if (nhdp_init()) {
-    return -1;
-  }
-
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
-  return 0;
+  return avl_find_element(&nhdp_interface_tree, name, interf, _node);
 }
 
 /**
- * Cleanup all resources allocated by setup initialization
+ *
+ * @param interf
+ * @return
  */
-void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
-    return;
-
-  /* add cleanup for custom services here */
-  nhdp_cleanup();
+static INLINE const char *
+nhdp_interface_get_name(struct nhdp_interface *interf) {
+  return interf->_node.key;
 }
 
-/**
- * @return number of logging sources for debug level 1
- */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
-}
-
-/**
- * @return array of logging sources for debug level 1
- */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
-}
+#endif /* NHDP_INTERFACES_H_ */

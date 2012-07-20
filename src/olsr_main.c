@@ -76,6 +76,7 @@
 #include "tools/olsr_cfg.h"
 #include "tools/olsr_http.h"
 #include "tools/olsr_logging_cfg.h"
+#include "tools/olsr_rfc5444.h"
 #include "tools/olsr_telnet.h"
 
 #include "app_data.h"
@@ -272,6 +273,11 @@ main(int argc, char **argv) {
   /* activate interface listening system */
   olsr_interface_init();
 
+  /* activate rfc5444 scheduler */
+  if (olsr_rfc5444_init()) {
+    goto olsrd_cleanup;
+  }
+
   /* activate telnet and http */
   olsr_telnet_init();
   olsr_http_init();
@@ -320,6 +326,7 @@ olsrd_cleanup:
   /* free framework resources */
   olsr_http_cleanup();
   olsr_telnet_cleanup();
+  olsr_rfc5444_cleanup();
   olsr_interface_cleanup();
   os_net_cleanup();
 #if OONF_NEED_ROUTING

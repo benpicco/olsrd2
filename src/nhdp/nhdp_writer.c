@@ -40,66 +40,69 @@
  */
 
 #include "common/common_types.h"
+#include "rfc5444/rfc5444_iana.h"
+#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
+#include "tools/olsr_rfc5444.h"
 
-#include "nhdp/nhdp.h"
+#include "nhdp/nhdp_writer.h"
 
-#include "olsr_setup.h"
+/* definition of NHDP writer */
+static struct rfc5444_writer_message *_nhdp_message = NULL;
 
-
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
+static struct rfc5444_writer_content_provider _nhdp_msgcontent_provider = {
+  .msg_type = RFC5444_MSGTYPE_HELLO,
+  .addMessageTLVs = NULL,
+  .addAddresses = NULL,
 };
 
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
+static struct rfc5444_writer_addrtlv_block _nhdp_addrtlvs[] = {
+    { .type = RFC5444_ADDRTLV_LOCAL_IF },
+    { .type = RFC5444_ADDRTLV_LINK_STATUS },
+    { .type = RFC5444_ADDRTLV_OTHER_NEIGHB },
+};
+
+static struct olsr_rfc5444_protocol *_protocol;
+
+/* nhdp logging sources */
+static enum log_source LOG_NHDP;
 
 /**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
+ * Initialize nhdp writer
  */
 int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
+nhdp_writer_init(enum log_source src, struct olsr_rfc5444_protocol *p) {
+  LOG_NHDP = src;
+  _protocol = p;
 
-  /* add custom service setup here */
-  if (nhdp_init()) {
+  _nhdp_message = rfc5444_writer_register_message(
+      &_protocol->writer, RFC5444_MSGTYPE_HELLO, true, 4);
+  if (_nhdp_message == NULL) {
+    OLSR_WARN(LOG_NHDP, "Could not register NHDP Hello message");
     return -1;
   }
 
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
+  _nhdp_message->addMessageHeader = NULL;
+  if (rfc5444_writer_register_msgcontentprovider(
+      &_protocol->writer, &_nhdp_msgcontent_provider,
+      _nhdp_addrtlvs, ARRAYSIZE(_nhdp_addrtlvs))) {
+
+    OLSR_WARN(LOG_NHDP, "Count not register NHDP msg contentprovider");
+    rfc5444_writer_unregister_message(&_protocol->writer, _nhdp_message);
+    return -1;
+  }
   return 0;
 }
 
 /**
- * Cleanup all resources allocated by setup initialization
+ * Cleanup nhdp writer
  */
 void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
-    return;
-
-  /* add cleanup for custom services here */
-  nhdp_cleanup();
-}
-
-/**
- * @return number of logging sources for debug level 1
- */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
-}
-
-/**
- * @return array of logging sources for debug level 1
- */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
+nhdp_writer_cleanup(void) {
+  /* remove pbb writer */
+  rfc5444_writer_unregister_content_provider(
+      &_protocol->writer, &_nhdp_msgcontent_provider,
+      _nhdp_addrtlvs, ARRAYSIZE(_nhdp_addrtlvs));
+  rfc5444_writer_unregister_message(&_protocol->writer, _nhdp_message);
 }

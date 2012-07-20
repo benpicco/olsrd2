@@ -40,66 +40,55 @@
  */
 
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
+#include "config/cfg_schema.h"
+#include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
-
+#include "tools/olsr_rfc5444.h"
+#include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_reader.h"
+#include "nhdp/nhdp_writer.h"
 #include "nhdp/nhdp.h"
 
-#include "olsr_setup.h"
+#define _LOG_NHDP_NAME "nhdp"
 
+OLSR_SUBSYSTEM_STATE(_nhdp_state);
 
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
-};
+enum log_source LOG_NHDP = LOG_MAIN;
+static struct olsr_rfc5444_protocol *_protocol;
 
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
-
-/**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
- */
 int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
+nhdp_init(void) {
+  if (olsr_subsystem_is_initialized(&_nhdp_state)) {
     return 0;
+  }
 
-  /* add custom service setup here */
-  if (nhdp_init()) {
+  LOG_NHDP = olsr_log_register_source(_LOG_NHDP_NAME);
+
+  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL);
+  if (_protocol == NULL) {
     return -1;
   }
 
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
+  nhdp_reader_init(LOG_NHDP, _protocol);
+  if (nhdp_writer_init(LOG_NHDP, _protocol)) {
+    olsr_rfc5444_remove_protocol(_protocol);
+    return -1;
+  }
+
+  nhdp_interfaces_init();
+
+  olsr_subsystem_init(&_nhdp_state);
   return 0;
 }
 
-/**
- * Cleanup all resources allocated by setup initialization
- */
 void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
+nhdp_cleanup(void) {
+  if (olsr_subsystem_cleanup(&_nhdp_state)) {
     return;
+  }
 
-  /* add cleanup for custom services here */
-  nhdp_cleanup();
-}
+  nhdp_interfaces_cleanup();
 
-/**
- * @return number of logging sources for debug level 1
- */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
-}
-
-/**
- * @return array of logging sources for debug level 1
- */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
+  nhdp_writer_cleanup();
+  nhdp_reader_cleanup();
 }

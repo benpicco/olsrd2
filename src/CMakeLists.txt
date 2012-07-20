@@ -5,6 +5,11 @@ include (../cmake/prepare_app.cmake)
 set(OONF_SRCS olsr_main.c 
               olsr_setup.c
               ${PROJECT_BINARY_DIR}/app_data.c
+              
+              nhdp/nhdp.c
+              nhdp/nhdp_reader.c
+              nhdp/nhdp_writer.c
+              nhdp/nhdp_interfaces.c
               )
 
 # create executable
