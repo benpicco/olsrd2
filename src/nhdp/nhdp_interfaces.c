@@ -285,6 +285,7 @@ _cb_remove_interf(void *ptr) {
   interf = ptr;
 
   olsr_timer_stop(&interf->_cleanup_timer);
+  olsr_timer_stop(&interf->_hello_timer);
 
   avl_for_each_element_safe(&interf->_addrs, addr, _node, addr_it) {
     _cb_remove_addr(addr);
@@ -319,6 +320,8 @@ _cb_generate_hello(void *ptr) {
   struct nhdp_interface *interf;
 
   interf = ptr;
+
+  OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s", nhdp_interface_get_name(interf));
 
   /* send both IPv4 and IPv6 (if active) */
   olsr_rfc5444_send(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);

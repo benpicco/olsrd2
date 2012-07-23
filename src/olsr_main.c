@@ -79,6 +79,7 @@
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_telnet.h"
 
+#include "nhdp/nhdp.h"
 #include "app_data.h"
 
 #if OONF_NEED_ROUTING == true
@@ -282,6 +283,11 @@ main(int argc, char **argv) {
   olsr_telnet_init();
   olsr_http_init();
 
+  /* activate NHDP */
+  if (nhdp_init()) {
+    goto olsrd_cleanup;
+  }
+
   /* activate custom additions to framework */
   if (olsr_setup_init()) {
     goto olsrd_cleanup;
@@ -322,6 +328,9 @@ olsrd_cleanup:
 
   /* free custom framework additions */
   olsr_setup_cleanup();
+
+  /* free NHDP */
+  nhdp_cleanup();
 
   /* free framework resources */
   olsr_http_cleanup();
