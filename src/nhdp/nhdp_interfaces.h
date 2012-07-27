@@ -52,31 +52,23 @@
 struct nhdp_interface {
   struct olsr_rfc5444_interface_listener rfc5444_if;
 
-  bool active;
-
   uint64_t hello_itime, hello_vtime;
 
   struct olsr_timer_entry _hello_timer;
-  struct olsr_timer_entry _cleanup_timer;
 
   struct avl_node _node;
   struct avl_tree _addrs;
 };
 
 struct nhdp_interface_addr {
-  struct netaddr addr;
-  bool active;
+  struct netaddr if_addr;
   bool socket_addr;
 
   struct nhdp_interface *interf;
 
   bool _might_be_removed;
   struct avl_node _node;
-  struct olsr_timer_entry _cleanup_timer;
 };
-
-#define NHDP_FOR_ALL_ACTIVE_INTERFACE_ADDRS(interf, addr) avl_for_each_element(&interf->_addrs, addr, _node) if (addr->active)
-#define NHDP_FOR_ALL_INACTIVE_INTERFACE_ADDRS(interf, addr) avl_for_each_element(&interf->_addrs, addr, _node) if (!addr->active)
 
 EXPORT extern struct avl_tree nhdp_interface_tree;
 

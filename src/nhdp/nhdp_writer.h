@@ -45,7 +45,7 @@
 #include "core/olsr_logging.h"
 #include "tools/olsr_rfc5444.h"
 
-int nhdp_writer_init(enum log_source, struct olsr_rfc5444_protocol *)
+int nhdp_writer_init(struct olsr_rfc5444_protocol *)
   __attribute__((warn_unused_result));
 void nhdp_writer_cleanup(void);
 

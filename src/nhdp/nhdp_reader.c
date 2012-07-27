@@ -47,6 +47,7 @@
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_rfc5444.h"
 
+#include "nhdp/nhdp.h"
 #include "nhdp/nhdp_reader.h"
 
 /* DLEP TLV array index */
@@ -94,15 +95,11 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_tlvs[] = {
 /* nhdp multiplexer/protocol */
 struct olsr_rfc5444_protocol *_protocol = NULL;
 
-/* nhdp logging sources */
-static enum log_source LOG_NHDP;
-
 /**
  * Initialize nhdp reader
  */
 void
-nhdp_reader_init(enum log_source src, struct olsr_rfc5444_protocol *p) {
-  LOG_NHDP = src;
+nhdp_reader_init(struct olsr_rfc5444_protocol *p) {
   _protocol = p;
 
   rfc5444_reader_add_message_consumer(

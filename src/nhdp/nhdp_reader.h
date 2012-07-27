@@ -42,10 +42,9 @@
 #ifndef NHDP_INCOMING_H_
 #define NHDP_INCOMING_H_
 
-#include "core/olsr_logging.h"
 #include "tools/olsr_rfc5444.h"
 
-void nhdp_reader_init(enum log_source, struct olsr_rfc5444_protocol *);
+void nhdp_reader_init(struct olsr_rfc5444_protocol *);
 void nhdp_reader_cleanup(void);
 
 #endif /* NHDP_INCOMING_H_ */

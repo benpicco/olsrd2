@@ -31,11 +31,11 @@ set (OONF_REMOVE_HELPTEXT false CACHE BOOL
 #### Install target configuration ####
 ######################################
 
-set (INSTALL_LIB_DIR        lib/oonf                 CACHE PATH
+set (INSTALL_LIB_DIR        lib/olsrv2               CACHE PATH
      "Relative installation directory for libraries")
 set (INSTALL_PKGCONFIG_DIR  lib/pkgconfig            CACHE PATH
      "Relative installation directory for pkgconfig file")
-set (INSTALL_INCLUDE_DIR    include/oonf             CACHE PATH 
+set (INSTALL_INCLUDE_DIR    include/olsrv2           CACHE PATH 
      "Relative installation directory for header files")
 set (INSTALL_CMAKE_DIR      ${DEF_INSTALL_CMAKE_DIR} CACHE PATH
      "Relative installation directory for CMake files")
@@ -45,14 +45,11 @@ set (INSTALL_CMAKE_DIR      ${DEF_INSTALL_CMAKE_DIR} CACHE PATH
 ###########################################
 
 # set name of program the executable and library prefix
-set (OONF_APP DLEP CACHE STRING
-     "Name of the Application (to be displayed in output)")
-set (OONF_EXE dlep CACHE STRING
-     "Name of the executable file for the application")
+set (OONF_APP OLSRd2)
+set (OONF_EXE olsrd2)
 
 # set Application library prefix
-set (OONF_APP_LIBPREFIX dlep CACHE STRING
-     "Application specific prefix for plugins (libXXXX_...)")
+set (OONF_APP_LIBPREFIX olsrd2)
 
 # set default configuration file
 set (OONF_DEFAULT_CONF "/etc/${OONF_EXE}.conf" CACHE FILEPATH
@@ -68,9 +65,6 @@ set (OONF_HELP_SUFFIX "" CACHE STRING
 set (OONF_VERSION_TRAILER "Visit http://www.olsr.org\\\\n" CACHE STRING
      "Text to be displayed after version output")
 
-# set application version (e.g. 0.7.0)
-#set (OONF_APP_VERSION 0.7.0
-
 # set static plugins (list of plugin names, separated by space)
 set (OONF_STATIC_PLUGINS "cfgparser_compact cfgio_file" CACHE STRING
      "Space separated list of plugins to compile into application")
@@ -80,16 +74,13 @@ set (OONF_STATIC_PLUGINS "cfgparser_compact cfgio_file" CACHE STRING
 set (OONF_FRAMEWORD_DYNAMIC false)
 
 # set to true to stop application running without root privileges (true/false)
-set (OONF_NEED_ROOT false CACHE BOOL
-     "True if the application needs root rights")
+set (OONF_NEED_ROOT true)
 
 # set to true if the application needs to set ip routes for traffic forwarding
-set (OONF_NEED_ROUTING false CACHE BOOL
-     "True if the application needs to modify the routing tables")
+set (OONF_NEED_ROUTING true)
 
 # set to true to link packetbb API to application
-set (OONF_NEED_PACKETBB true CACHE BOOL
-     "True if the application needs the packetbb API")
+set (OONF_NEED_PACKETBB true)
 
 # name of the libnl library
 set (OONF_LIBNL nl CACHE STRING

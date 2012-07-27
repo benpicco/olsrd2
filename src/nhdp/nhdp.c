@@ -43,6 +43,7 @@
 #include "config/cfg_schema.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_subsystem.h"
+#include "tools/olsr_cfg.h"
 #include "tools/olsr_rfc5444.h"
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_reader.h"
@@ -50,6 +51,26 @@
 #include "nhdp/nhdp.h"
 
 #define _LOG_NHDP_NAME "nhdp"
+
+struct _nhdp_config {
+  struct netaddr originator;
+};
+
+static void _cb_cfg_nhdp_changed(void);
+
+/* configuration options for nhdp section */
+static struct cfg_schema_section _nhdp_section = {
+  .type = CFG_NHDP_SECTION,
+  .mode = CFG_SSMODE_UNNAMED,
+  .cb_delta_handler = _cb_cfg_nhdp_changed,
+};
+
+static struct cfg_schema_entry _nhdp_entries[] = {
+  CFG_MAP_NETADDR_V46(_nhdp_config, originator, "originator", "-",
+      "Originator address for all NHDP messages", false, true),
+};
+
+static struct _nhdp_config _config;
 
 OLSR_SUBSYSTEM_STATE(_nhdp_state);
 
@@ -69,13 +90,20 @@ nhdp_init(void) {
     return -1;
   }
 
-  nhdp_reader_init(LOG_NHDP, _protocol);
-  if (nhdp_writer_init(LOG_NHDP, _protocol)) {
+  nhdp_reader_init(_protocol);
+  if (nhdp_writer_init(_protocol)) {
+    nhdp_reader_cleanup();
     olsr_rfc5444_remove_protocol(_protocol);
     return -1;
   }
 
   nhdp_interfaces_init();
+
+  /* add additional configuration for interface section */
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_nhdp_section,
+      _nhdp_entries, ARRAYSIZE(_nhdp_entries));
+
+  memset(&_config, 0, sizeof(_config));
 
   olsr_subsystem_init(&_nhdp_state);
   return 0;
@@ -87,8 +115,27 @@ nhdp_cleanup(void) {
     return;
   }
 
+  cfg_schema_remove_section(olsr_cfg_get_schema(), &_nhdp_section);
+
   nhdp_interfaces_cleanup();
 
   nhdp_writer_cleanup();
   nhdp_reader_cleanup();
+}
+
+const struct netaddr *
+nhdp_get_originator(void) {
+  return &_config.originator;
+}
+
+/**
+ * Configuration has changed, handle the changes
+ */
+static void
+_cb_cfg_nhdp_changed(void) {
+  if (cfg_schema_tobin(&_config, _nhdp_section.post,
+      _nhdp_entries, ARRAYSIZE(_nhdp_entries))) {
+    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP settings.");
+    return;
+  }
 }

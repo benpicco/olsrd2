@@ -171,7 +171,7 @@ main(int argc, char **argv) {
   _end_olsr_signal = false;
   setup_signalhandler();
 
-  early_debug = argc > 0
+  early_debug = argc > 1
       && (strcmp(argv[1], "-e") == 0 || strcmp(argv[1], "--early-debug") == 0);
 
   /* initialize logger */
@@ -221,7 +221,7 @@ main(int argc, char **argv) {
 #if OONF_NEED_ROOT == true
   if (geteuid() != 0) {
     OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
-        olsr_builddata_get()->app_name);
+        olsr_appdata_get()->app_name);
     goto olsrd_cleanup;
   }
 #endif
