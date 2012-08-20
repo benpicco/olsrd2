@@ -42,6 +42,10 @@
 #ifndef NHDP_H_
 #define NHDP_H_
 
+#include "common/avl.h"
+#include "core/olsr_timer.h"
+#include "tools/olsr_rfc5444.h"
+
 #define CFG_NHDP_SECTION "nhdp"
 
 EXPORT extern enum log_source LOG_NHDP;

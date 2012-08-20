@@ -52,29 +52,32 @@
 #include "core/olsr_interface.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_memcookie.h"
+#include "core/olsr_netaddr_acl.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_interfaces.h"
 
+#define _IF_ADDRS_PARAMETER "if_addrs"
+static struct nhdp_interface *_interface_add(const char *name);
+static void _interface_remove(struct nhdp_interface *interf);
+static struct nhdp_interface_addr *_addr_add(
+    struct nhdp_interface *, struct netaddr *addr);
+static void _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime);
 static void _cb_remove_addr(void *ptr);
-static void _cb_remove_interf(void *ptr);
+
 static void _cb_generate_hello(void *ptr);
 static void _cb_cfg_interface_changed(void);
 static void _cb_interface_event(struct olsr_rfc5444_interface_listener *);
 
-/* global tree of nhdp interfaces */
+/* global tree of nhdp interfaces, filters and addresses */
 struct avl_tree nhdp_interface_tree;
+struct avl_tree nhdp_ifaddr_tree;
 
 /* memory and timers for nhdp interface objects */
 static struct olsr_memcookie_info _interface_info = {
   .name = "NHDP Interface",
   .size = sizeof(struct nhdp_interface),
-};
-
-static struct olsr_memcookie_info _addr_info = {
-  .name = "NHDP interface address",
-  .size = sizeof(struct nhdp_interface_addr),
 };
 
 static struct olsr_timer_info _interface_hello_timer = {
@@ -83,10 +86,16 @@ static struct olsr_timer_info _interface_hello_timer = {
   .callback = _cb_generate_hello,
 };
 
-static struct olsr_timer_info _interface_hold_timer = {
-  .name = "NHDP interface hold timer",
-  .callback = _cb_remove_interf,
+static struct olsr_memcookie_info _addr_info = {
+  .name = "NHDP interface address",
+  .size = sizeof(struct nhdp_interface_addr),
 };
+
+static struct olsr_timer_info _removed_address_hold_timer = {
+  .name = "NHDP interface removed address hold timer",
+  .callback = _cb_remove_addr,
+};
+
 
 /* additional configuration options for interface section */
 static struct cfg_schema_section _interface_section = {
@@ -96,10 +105,12 @@ static struct cfg_schema_section _interface_section = {
 };
 
 static struct cfg_schema_entry _interface_entries[] = {
-    CFG_MAP_CLOCK_MIN(nhdp_interface, hello_vtime, "hellp-validity", "6.0",
-        "Validity time for NHDP Hello Messages", 100),
-    CFG_MAP_CLOCK_MIN(nhdp_interface, hello_itime, "hello-interval", "2.0",
-        "Time interval between two NHDP Hello Messages", 100),
+  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
+      "Filter for ip interface addresses that should be included in HELLO messages"),
+  CFG_MAP_CLOCK_MIN(nhdp_interface, hello_vtime, "hello-validity", "6.0",
+    "Validity time for NHDP Hello Messages", 100),
+  CFG_MAP_CLOCK_MIN(nhdp_interface, hello_itime, "hello-interval", "2.0",
+    "Time interval between two NHDP Hello Messages", 100),
 };
 
 /* pointer to default rfc5444 protocol */
@@ -113,10 +124,11 @@ static struct olsr_rfc5444_protocol *_protocol;
 void
 nhdp_interfaces_init(void) {
   avl_init(&nhdp_interface_tree, avl_comp_strcasecmp, false, NULL);
+  avl_init(&nhdp_ifaddr_tree, avl_comp_netaddr, true, NULL);
   olsr_memcookie_add(&_interface_info);
   olsr_memcookie_add(&_addr_info);
   olsr_timer_add(&_interface_hello_timer);
-  olsr_timer_add(&_interface_hold_timer);
+  olsr_timer_add(&_removed_address_hold_timer);
 
   /* default protocol should be always available */
   _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL);
@@ -135,15 +147,15 @@ nhdp_interfaces_cleanup(void) {
   struct nhdp_interface *interf, *if_it;
 
   avl_for_each_element_safe(&nhdp_interface_tree, interf, _node, if_it) {
-    _cb_remove_interf(interf);
+    _interface_remove(interf);
   }
 
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_interface_section);
 
-  olsr_timer_remove(&_interface_hold_timer);
   olsr_timer_remove(&_interface_hello_timer);
-  olsr_memcookie_remove(&_addr_info);
+  olsr_timer_remove(&_removed_address_hold_timer);
   olsr_memcookie_remove(&_interface_info);
+  olsr_memcookie_remove(&_addr_info);
 
   olsr_rfc5444_remove_protocol(_protocol);
 }
@@ -153,8 +165,8 @@ nhdp_interfaces_cleanup(void) {
  * @param name name of interface
  * @return pointer to nhdp interface, NULL if out of memory
  */
-struct nhdp_interface *
-nhdp_interface_add(const char *name) {
+static struct nhdp_interface *
+_interface_add(const char *name) {
   struct nhdp_interface *interf;
 
   OLSR_DEBUG(LOG_NHDP, "Add interface to NHDP_interface tree: %s", name);
@@ -178,12 +190,12 @@ nhdp_interface_add(const char *name) {
     interf->_hello_timer.info = &_interface_hello_timer;
     interf->_hello_timer.cb_context = interf;
 
-    /* initialize tree for addresses */
-    avl_init(&interf->_addrs, avl_comp_netaddr, false, NULL);
-
     /* hook into global interface tree */
     interf->_node.key = interf->rfc5444_if.interface->name;
     avl_insert(&nhdp_interface_tree, &interf->_node);
+
+    /* init address tree */
+    avl_init(&interf->_addressed, avl_comp_netaddr, false, NULL);
 
     /* handle addresses now */
     _cb_interface_event(&interf->rfc5444_if);
@@ -195,10 +207,22 @@ nhdp_interface_add(const char *name) {
  * Mark a nhdp interface as removed and start cleanup timer
  * @param interf pointer to nhdp interface
  */
-void
-nhdp_interface_remove(struct nhdp_interface *interf) {
-  /* remove interface immediately if possible */
-  _cb_remove_interf(interf);
+static void
+_interface_remove(struct nhdp_interface *interf) {
+  struct nhdp_interface_addr *addr, *a_it;
+
+  /* free filter */
+  olsr_acl_remove(&interf->ifaddr_filter);
+
+  olsr_timer_stop(&interf->_hello_timer);
+
+  avl_for_each_element_safe(&interf->_addressed, addr, _if_node, a_it) {
+    _cb_remove_addr(addr);
+  }
+
+  olsr_rfc5444_remove_interface(interf->rfc5444_if.interface, &interf->rfc5444_if);
+  avl_remove(&nhdp_interface_tree, &interf->_node);
+  olsr_memcookie_free(&_interface_info, interf);
 }
 
 /**
@@ -207,15 +231,15 @@ nhdp_interface_remove(struct nhdp_interface *interf) {
  * @param if_addr address to add to interface
  * @return pointer to ndhp interface address, NULL if out of memory
  */
-struct nhdp_interface_addr *
-nhdp_interface_addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
+static struct nhdp_interface_addr *
+_addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
   struct nhdp_interface_addr *if_addr;
   struct netaddr_str buf;
 
-  OLSR_DEBUG(LOG_NHDP, "Add address %s to interface %s in NHDP_interface trees",
-      netaddr_to_string(&buf, addr), interf->rfc5444_if.interface->name);
+  OLSR_DEBUG(LOG_NHDP, "Add address %s in NHDP_interface_address tree",
+      netaddr_to_string(&buf, addr));
 
-  if_addr = avl_find_element(&interf->_addrs, addr, if_addr, _node);
+  if_addr = avl_find_element(&interf->_addressed, addr, if_addr, _if_node);
   if (if_addr == NULL) {
     if_addr = olsr_memcookie_malloc(&_addr_info);
     if (if_addr == NULL) {
@@ -227,42 +251,27 @@ nhdp_interface_addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
 
     if_addr->interf = interf;
 
-    if_addr->_node.key = &if_addr->if_addr;
-    avl_insert(&interf->_addrs, &if_addr->_node);
+    if_addr->_global_node.key = &if_addr->if_addr;
+    avl_insert(&nhdp_ifaddr_tree, &if_addr->_global_node);
+
+    if_addr->_if_node.key = &if_addr->if_addr;
+    avl_insert(&interf->_addressed, &if_addr->_if_node);
+  }
+  else {
+    if_addr->_to_be_removed = false;
   }
   return if_addr;
 }
 
-/**
- * Mark a nhdp interface address as removed and start cleanup timer
- * @param if_addr pointer to nhdp interface address
- */
-void
-nhdp_interface_addr_remove(struct nhdp_interface_addr *addr) {
-  /* remove interface address immediately if possible */
-  _cb_remove_addr(addr);
-}
-
-/**
- * Cleanup and remove a nhdp interface and its addresses
- * @param ptr pointer to nhdp interface
- */
 static void
-_cb_remove_interf(void *ptr) {
-  struct nhdp_interface *interf;
-  struct nhdp_interface_addr *addr, *addr_it;
-
-  interf = ptr;
-
-  olsr_timer_stop(&interf->_hello_timer);
-
-  avl_for_each_element_safe(&interf->_addrs, addr, _node, addr_it) {
+_addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime) {
+  if (addr->removed) {
     _cb_remove_addr(addr);
+    return;
   }
 
-  olsr_rfc5444_remove_interface(interf->rfc5444_if.interface, &interf->rfc5444_if);
-  avl_remove(&nhdp_interface_tree, &interf->_node);
-  olsr_memcookie_free(&_interface_info, interf);
+  addr->removed = true;
+  olsr_timer_set(&addr->_vtime, vtime);
 }
 
 /**
@@ -275,9 +284,12 @@ _cb_remove_addr(void *ptr) {
 
   addr = ptr;
 
-  avl_remove(&addr->interf->_addrs, &addr->_node);
+  olsr_timer_stop(&addr->_vtime);
+  avl_remove(&nhdp_ifaddr_tree, &addr->_global_node);
+  avl_remove(&addr->interf->_addressed, &addr->_if_node);
   olsr_memcookie_free(&_addr_info, addr);
 }
+
 
 /**
  * Generate Hellos on an interface
@@ -333,13 +345,13 @@ _cb_cfg_interface_changed(void) {
   if (_interface_section.post == NULL) {
     /* section was removed */
     if (interf != NULL) {
-      nhdp_interface_remove(interf);
+      _interface_remove(interf);
     }
     return;
   }
 
   if (interf == NULL) {
-    interf = nhdp_interface_add(name);
+    interf = _interface_add(name);
   }
 
   if (cfg_schema_tobin(interf, _interface_section.post,
@@ -350,6 +362,8 @@ _cb_cfg_interface_changed(void) {
 
   /* reset hello generation frequency */
   olsr_timer_set(&interf->_hello_timer, interf->hello_itime);
+
+  /* TODO: reset list of addresses of the interface */
 }
 
 /**
@@ -360,45 +374,54 @@ static void
 _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr, *addr_it;
+  union netaddr_socket *sock;
   struct netaddr ip;
   struct netaddr_str buf;
+  const struct ifaddrs *if_addrs;
 
   OLSR_DEBUG(LOG_NHDP, "NHDP Interface change event: %s", ifl->interface->name);
 
   interf = container_of(ifl, struct nhdp_interface, rfc5444_if);
 
-  /* mark all old socket addresses */
-  avl_for_each_element_safe(&interf->_addrs, addr, _node, addr_it) {
-    if (addr->socket_addr) {
-      addr->_might_be_removed = true;
+  /* mark all old addresses */
+  avl_for_each_element_safe(&interf->_addressed, addr, _if_node, addr_it) {
+    addr->_to_be_removed = true;
+  }
+
+  /* get all socket addresses that are matching the filter */
+  for (if_addrs = olsr_interface_get_ifaddrs(); if_addrs;
+       if_addrs = if_addrs->ifa_next) {
+    if (strcmp(if_addrs->ifa_name, nhdp_interface_get_name(interf)) != 0) {
+      continue;
+    }
+
+    sock = (union netaddr_socket *)if_addrs->ifa_addr;
+
+    netaddr_from_socket(&ip, sock);
+
+    if (olsr_acl_check_accept(&interf->ifaddr_filter, &ip)) {
+      _addr_add(interf, &ip);
     }
   }
 
-  /* create new socket addresses */
+  /* handle local socket addresses in addition to filter */
   if (olsr_packet_managed_is_active(&interf->rfc5444_if.interface->_socket, AF_INET)) {
     netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
-
-    addr = nhdp_interface_addr_add(interf, &ip);
-    addr->socket_addr = true;
-    addr->_might_be_removed = false;
+    _addr_add(interf, &ip);
   }
   if (olsr_packet_managed_is_active(&interf->rfc5444_if.interface->_socket, AF_INET6)) {
     netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v6.local_socket);
-
-    addr = nhdp_interface_addr_add(interf, &ip);
-    addr->socket_addr = true;
-    addr->_might_be_removed = false;
+    _addr_add(interf, &ip);
   }
 
   /* remove outdated socket addresses */
-  avl_for_each_element_safe(&interf->_addrs, addr, _node, addr_it) {
-    if (addr->_might_be_removed) {
+  avl_for_each_element_safe(&interf->_addressed, addr, _if_node, addr_it) {
+    if (addr->_to_be_removed) {
       OLSR_DEBUG(LOG_NHDP, "Remove %s from NHDP interface %s",
-          netaddr_to_string(&buf, &addr->if_addr), interf->rfc5444_if.interface->name);
+          netaddr_to_string(&buf, &addr->if_addr), nhdp_interface_get_name(interf));
 
-      addr->_might_be_removed = false;
-      addr->socket_addr = false;
-      nhdp_interface_addr_remove(addr);
+      addr->_to_be_removed = false;
+      _addr_remove(addr, interf->hello_vtime);
     }
   }
 }

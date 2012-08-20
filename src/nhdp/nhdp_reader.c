@@ -146,7 +146,35 @@ _cb_nhdp_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 static enum rfc5444_result
 _cb_nhdp_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+  uint8_t local_if, link_status, other_neigh;
 
-  OLSR_DEBUG(LOG_NHDP, "Incoming message type %d, got address tlvs", context->msg_type);
+  local_if = 255;
+  link_status = 255;
+  other_neigh = 255;
+
+  if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv) {
+    local_if = _nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv->single_value[0];
+  }
+  if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv) {
+    link_status = _nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv->single_value[0];
+  }
+  if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv) {
+    other_neigh = _nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv->single_value[0];
+  }
+
+  OLSR_DEBUG(LOG_NHDP, "Incoming message type %d, address %s, tlvs (%u/%u/%u)",
+      context->msg_type, /* TODO: */ "", local_if, link_status, other_neigh);
+
+  if (local_if == RFC5444_LOCALIF_THIS_IF) {
+    /* add local neighbors interface */
+    return RFC5444_OKAY;
+  }
+  else if (local_if == RFC5444_LOCALIF_OTHER_IF){
+    /* add local neighbors remote interface */
+    return RFC5444_OKAY;
+  }
+
+
+
   return RFC5444_OKAY;
 }

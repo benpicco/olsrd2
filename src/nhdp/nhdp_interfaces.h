@@ -46,6 +46,7 @@
 #include "common/avl.h"
 #include "common/netaddr.h"
 #include "core/olsr_interface.h"
+#include "core/olsr_netaddr_acl.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_rfc5444.h"
 
@@ -54,33 +55,32 @@ struct nhdp_interface {
 
   uint64_t hello_itime, hello_vtime;
 
+  struct olsr_netaddr_acl ifaddr_filter;
+
   struct olsr_timer_entry _hello_timer;
 
   struct avl_node _node;
-  struct avl_tree _addrs;
+  struct avl_tree _addressed;
 };
 
 struct nhdp_interface_addr {
   struct netaddr if_addr;
-  bool socket_addr;
 
   struct nhdp_interface *interf;
 
-  bool _might_be_removed;
-  struct avl_node _node;
+  bool removed;
+
+  bool _to_be_removed;
+  struct olsr_timer_entry _vtime;
+  struct avl_node _if_node;
+  struct avl_node _global_node;
 };
 
 EXPORT extern struct avl_tree nhdp_interface_tree;
+EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 
 void nhdp_interfaces_init(void);
 void nhdp_interfaces_cleanup(void);
-
-struct nhdp_interface *nhdp_interface_add(const char *name);
-void nhdp_interface_remove(struct nhdp_interface *);
-
-struct nhdp_interface_addr *nhdp_interface_addr_add(
-    struct nhdp_interface *, struct netaddr *);
-void nhdp_interface_addr_remove(struct nhdp_interface_addr *);
 
 /**
  *

@@ -149,6 +149,9 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
 
   rfc5444_writer_set_msg_hoplimit(writer, message, 1);
   rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_next_target_seqno(target));
+
+  OLSR_DEBUG(LOG_NHDP, "Generate Hello for originator %s on interface %s",
+      netaddr_to_string(&buf, originator), target->interface->name);
 }
 
 static void
@@ -180,9 +183,10 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
 }
 
 void
-_cb_addAddresses(struct rfc5444_writer *writer,
+_cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
     struct rfc5444_writer_content_provider *prv) {
   struct olsr_rfc5444_target *target;
+
   struct rfc5444_writer_address *address;
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
@@ -201,9 +205,9 @@ _cb_addAddresses(struct rfc5444_writer *writer,
     OLSR_DEBUG(LOG_NHDP, "Process interface %s for NHDP", interf->rfc5444_if.interface->name);
 
     /* add local interface addresses */
-    avl_for_each_element(&interf->_addrs, addr, _node) {
-      OLSR_DEBUG(LOG_NHDP, "Add %s to NHDP hello",
-          netaddr_to_string(&buf, &addr->if_addr));
+    avl_for_each_element(&interf->_addressed, addr, _if_node) {
+      OLSR_DEBUG(LOG_NHDP, "Add %s (%s) to NHDP hello",
+          netaddr_to_string(&buf, &addr->if_addr), this_if ? "this_if" : "other_if");
 
       address = rfc5444_writer_add_address(writer, prv->_creator,
           netaddr_get_binptr(&addr->if_addr),
