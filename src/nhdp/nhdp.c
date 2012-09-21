@@ -85,7 +85,7 @@ nhdp_init(void) {
 
   LOG_NHDP = olsr_log_register_source(_LOG_NHDP_NAME);
 
-  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL);
+  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
     return -1;
   }
@@ -97,7 +97,8 @@ nhdp_init(void) {
     return -1;
   }
 
-  nhdp_interfaces_init();
+  nhdp_interfaces_init(_protocol);
+  nhdp_db_init();
 
   /* add additional configuration for interface section */
   cfg_schema_add_section(olsr_cfg_get_schema(), &_nhdp_section,
@@ -117,6 +118,7 @@ nhdp_cleanup(void) {
 
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_nhdp_section);
 
+  nhdp_db_cleanup();
   nhdp_interfaces_cleanup();
 
   nhdp_writer_cleanup();

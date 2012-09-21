@@ -42,6 +42,8 @@
 #ifndef NHDP_INTERFACES_H_
 #define NHDP_INTERFACES_H_
 
+struct nhdp_interface;
+
 #include "common/common_types.h"
 #include "common/avl.h"
 #include "common/netaddr.h"
@@ -50,17 +52,25 @@
 #include "core/olsr_timer.h"
 #include "tools/olsr_rfc5444.h"
 
+#include "nhdp/nhdp_db.h"
+
 struct nhdp_interface {
   struct olsr_rfc5444_interface_listener rfc5444_if;
 
-  uint64_t hello_itime, hello_vtime;
+  uint64_t refresh_interval;
+  uint64_t h_hold_time;
+  uint64_t l_hold_time;
+  uint64_t n_hold_time;
+  uint64_t i_hold_time;
 
   struct olsr_netaddr_acl ifaddr_filter;
 
   struct olsr_timer_entry _hello_timer;
 
   struct avl_node _node;
-  struct avl_tree _addressed;
+  struct avl_tree _if_addresses;
+
+  struct list_entity _links;
 };
 
 struct nhdp_interface_addr {
@@ -79,8 +89,12 @@ struct nhdp_interface_addr {
 EXPORT extern struct avl_tree nhdp_interface_tree;
 EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 
-void nhdp_interfaces_init(void);
+void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
+
+void nhdp_interfaces_add_link(struct nhdp_interface *interf,
+    struct nhdp_link *lnk);
+void nhdp_interfaces_remove_link(struct nhdp_link *lnk);
 
 /**
  *
@@ -103,5 +117,30 @@ static INLINE const char *
 nhdp_interface_get_name(struct nhdp_interface *interf) {
   return interf->_node.key;
 }
+
+/**
+ *
+ * @param
+ * @return
+ */
+static INLINE struct nhdp_interface_addr *
+nhdp_interface_addr_if_get(struct nhdp_interface *interf, struct netaddr *addr) {
+  struct nhdp_interface_addr *iaddr;
+
+  return avl_find_element(&interf->_if_addresses, addr, iaddr, _if_node);
+}
+
+/**
+ *
+ * @param
+ * @return
+ */
+static INLINE struct nhdp_interface_addr *
+nhdp_interface_addr_global_get(struct netaddr *addr) {
+  struct nhdp_interface_addr *iaddr;
+
+  return avl_find_element(&nhdp_ifaddr_tree, addr, iaddr, _global_node);
+}
+
 
 #endif /* NHDP_INTERFACES_H_ */
