@@ -125,6 +125,8 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_neigh_address_tlvs[] 
 /* nhdp multiplexer/protocol */
 static struct olsr_rfc5444_protocol *_protocol = NULL;
 
+static enum log_source LOG_NHDP_R = LOG_MAIN;
+
 /* temporary variables for message parsing */
 static struct {
   struct nhdp_interface *localif;
@@ -143,6 +145,8 @@ static struct {
 void
 nhdp_reader_init(struct olsr_rfc5444_protocol *p) {
   _protocol = p;
+
+  LOG_NHDP_R = olsr_log_register_source("nhdp_r");
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_message_consumer,
@@ -203,7 +207,7 @@ static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
 
-  OLSR_DEBUG(LOG_NHDP, "Incoming message type %d, got message tlvs", context->msg_type);
+  OLSR_DEBUG(LOG_NHDP_R, "Incoming message type %d, got message tlvs", context->msg_type);
 
   _current.vtime = rfc5444_timetlv_decode(
       _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0]);
@@ -225,6 +229,9 @@ _process_localif(struct netaddr *addr) {
   /* section 12.3: Updating Neighbor Set */
   naddr = nhdp_db_addr_get(addr);
   if (naddr == NULL) {
+    OLSR_DEBUG(LOG_NHDP_R, "No neighbor found for address %s",
+        netaddr_to_string(&buf, addr));
+
     /* address not present in database, create it */
     if (_current.neighbor == NULL) {
       /* create a new nhdp neighbor first */
@@ -243,9 +250,6 @@ _process_localif(struct netaddr *addr) {
 
     /* attach entry to neighbor */
     nhdp_db_addr_attach_neigh(naddr, _current.neighbor);
-    OLSR_DEBUG(LOG_NHDP, "Added new address %s to neighbor 0x%zx/0x%zx",
-        netaddr_to_string(&buf, &naddr->if_addr),
-        (size_t)_current.neighbor, (size_t)naddr->neigh);
     return naddr;
   }
 
@@ -254,8 +258,6 @@ _process_localif(struct netaddr *addr) {
     /* its just the first address, everything is fine */
     _initialize_neighbor_for_processing(naddr->neigh);
     _current.neighbor = naddr->neigh;
-    return naddr;
-
   }
   else if (_current.neighbor != naddr->neigh) {
     /* overlapping neighbors, join them */
@@ -289,7 +291,7 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
   link_status = 255;
 
   if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
-    OLSR_WARN(LOG_NHDP, "Could not read incoming address of length %u", context->addr_len);
+    OLSR_WARN(LOG_NHDP_R, "Could not read incoming address of length %u", context->addr_len);
     return RFC5444_DROP_ADDRESS;
   }
 
@@ -300,7 +302,7 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
     link_status = _nhdp_localif_address_tlvs[IDX_ADDRTLV1_LINK_STATUS].tlv->single_value[0];
   }
 
-  OLSR_DEBUG(LOG_NHDP, "Incoming NHDP message type %d, address %s, local_if %u, link_status %u",
+  OLSR_DEBUG(LOG_NHDP_R, "Incoming NHDP message type %d, address %s, local_if %u, link_status %u",
       context->msg_type, netaddr_to_string(&buf, &addr), local_if, link_status);
 
   if (local_if != 255) {
@@ -324,6 +326,8 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
           _current.link = lnk;
         }
         else if (lnk != _current.link) {
+          OLSR_DEBUG(LOG_NHDP_R, "Overlapping link data detected");
+
           /* multiple links, all must be removed */
           _current.multiple_links = true;
 
@@ -342,9 +346,11 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
   /* detect if our own node is seen by our neighbor */
   if (link_status != 255 && nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
     if (link_status == RFC5444_LINKSTATUS_LOST) {
+      OLSR_DEBUG(LOG_NHDP_R, "connection lost to ourself for address %s", netaddr_to_string(&buf, &addr));
       _current.link_lost = true;
     }
     else {
+      OLSR_DEBUG(LOG_NHDP_R, "we heard ourself for address %s", netaddr_to_string(&buf, &addr));
       _current.link_heard = true;
     }
   }
@@ -360,6 +366,7 @@ _cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
   struct nhdp_link *lnk;
   struct netaddr addr;
   uint64_t t;
+  struct netaddr_str buf;
 
   if (dropped) {
     /* error in message processing */
@@ -386,6 +393,9 @@ _cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
   avl_for_each_element_safe(&_current.neighbor->_addresses, naddr, _neigh_node, na_it) {
     if (naddr->_might_be_removed) {
       lnk = naddr->link;
+
+      OLSR_DEBUG(LOG_NHDP_R, "Address %s is not part of link anymore",
+          netaddr_to_string(&buf, &naddr->if_addr));
 
       if (_current.neighbor->symmetric > 0) {
         /* Section 12.4: symmetric neighbor address got lost */
@@ -419,22 +429,13 @@ _cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
     }
   }
 
-  /* Section 12.5.1, 12.5.2.1-3: lookup link entry for local interface */
-  if (_current.link != NULL) {
-    avl_for_each_element_safe(&_current.link->_addresses, naddr, _link_node, na_it) {
-      /* detach addresses from link, they belong to a different interface */
-      nhdp_db_addr_attach_neigh(naddr, _current.neighbor);
-    }
-  }
-  else {
+  if (_current.link == NULL) {
     /* Section 12.5.3: no link there, create empty link tuple */
     _current.link = nhdp_db_link_insert(_current.neighbor, _current.localif);
     if (_current.link == NULL) {
       nhdp_db_neighbor_remove(_current.neighbor);
       return RFC5444_DROP_MESSAGE;
     }
-
-    nhdp_db_link_set_vtime(_current.link, _current.vtime);
   }
 
   avl_for_each_element(&_current.neighbor->_addresses, naddr, _neigh_node) {
@@ -510,7 +511,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   other_neigh = 255;
 
   if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
-    OLSR_WARN(LOG_NHDP, "Could not read incoming address of length %u", context->addr_len);
+    OLSR_WARN(LOG_NHDP_R, "Could not read incoming address of length %u", context->addr_len);
     return RFC5444_DROP_ADDRESS;
   }
 
@@ -521,7 +522,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
     other_neigh = _nhdp_neigh_address_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv->single_value[0];
   }
 
-  OLSR_DEBUG(LOG_NHDP, "Incoming NHDP message type %d, address %s, link_status %u, other_neigh: %u",
+  OLSR_DEBUG(LOG_NHDP_R, "Incoming NHDP message type %d, address %s, link_status %u, other_neigh: %u",
       context->msg_type, netaddr_to_string(&buf, &addr), link_status, other_neigh);
 
   if (link_status == 255 && other_neigh == 255) {

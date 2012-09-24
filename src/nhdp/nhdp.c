@@ -45,6 +45,8 @@
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_cfg.h"
 #include "tools/olsr_rfc5444.h"
+#include "tools/olsr_telnet.h"
+
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_reader.h"
 #include "nhdp/nhdp_writer.h"
@@ -55,6 +57,9 @@
 struct _nhdp_config {
   struct netaddr originator;
 };
+
+static enum olsr_telnet_result _cb_nhdb_neigh(struct olsr_telnet_data *con);
+static enum olsr_telnet_result _cb_nhdb_link(struct olsr_telnet_data *con);
 
 static void _cb_cfg_nhdp_changed(void);
 
@@ -71,6 +76,11 @@ static struct cfg_schema_entry _nhdp_entries[] = {
 };
 
 static struct _nhdp_config _config;
+
+struct olsr_telnet_command _cmds[] = {
+    TELNET_CMD("nhdp_neighbor", _cb_nhdb_neigh, "NHDP neighbor output"),
+    TELNET_CMD("nhdp_link", _cb_nhdb_link, "NHDP link output"),
+};
 
 OLSR_SUBSYSTEM_STATE(_nhdp_state);
 
@@ -106,6 +116,9 @@ nhdp_init(void) {
 
   memset(&_config, 0, sizeof(_config));
 
+  olsr_telnet_add(&_cmds[0]);
+  olsr_telnet_add(&_cmds[1]);
+
   olsr_subsystem_init(&_nhdp_state);
   return 0;
 }
@@ -115,6 +128,9 @@ nhdp_cleanup(void) {
   if (olsr_subsystem_cleanup(&_nhdp_state)) {
     return;
   }
+
+  olsr_telnet_remove(&_cmds[0]);
+  olsr_telnet_remove(&_cmds[1]);
 
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_nhdp_section);
 
@@ -128,6 +144,79 @@ nhdp_cleanup(void) {
 const struct netaddr *
 nhdp_get_originator(void) {
   return &_config.originator;
+}
+
+static enum olsr_telnet_result
+_cb_nhdb_neigh(struct olsr_telnet_data *con) {
+  struct nhdp_neighbor *neigh;
+  struct nhdp_addr *naddr;
+  struct netaddr_str buf;
+
+  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
+    abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
+
+    avl_for_each_element(&neigh->_addresses, naddr, _neigh_node) {
+      abuf_appendf(con->out, "\t%s\n", netaddr_to_string(&buf, &naddr->if_addr));
+    }
+  }
+
+  return TELNET_RESULT_ACTIVE;
+}
+
+static enum olsr_telnet_result
+_cb_nhdb_link(struct olsr_telnet_data *con) {
+  static const char *PENDING = "pending";
+  static const char *HEARD = "heard";
+  static const char *SYMMETRIC = "symmetric";
+  static const char *LOST = "lost";
+
+  struct nhdp_neighbor *neigh;
+  struct nhdp_link *lnk;
+  struct nhdp_addr *naddr;
+  struct nhdp_2hop *twohop;
+  struct netaddr_str buf;
+  const char *status;
+
+  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
+    abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
+
+    list_for_each_element(&neigh->_links, lnk, _neigh_node) {
+      if (lnk->status == NHDP_LINK_PENDING) {
+          status = PENDING;
+      }
+      else if (lnk->status == RFC5444_LINKSTATUS_HEARD) {
+          status = HEARD;
+      }
+      else if (lnk->status == RFC5444_LINKSTATUS_SYMMETRIC) {
+          status = SYMMETRIC;
+      }
+      else {
+        status = LOST;
+      }
+      abuf_appendf(con->out, "\tLink: status=%s localif=%s"
+          " vtime=%"PRINTF_SSIZE_T_SPECIFIER
+          " heard=%"PRINTF_SSIZE_T_SPECIFIER
+          " symmetric=%"PRINTF_SSIZE_T_SPECIFIER
+          "%s%s\n",
+          status,
+          nhdp_interface_get_name(lnk->local_if),
+          olsr_timer_get_due(&lnk->vtime),
+          olsr_timer_get_due(&lnk->heard_time),
+          olsr_timer_get_due(&lnk->sym_time),
+          lnk->hyst_pending ? " pending" : "",
+          lnk->hyst_lost ? " lost" : "");
+
+      abuf_appendf(con->out, "\t    Link addresses:\n");
+      avl_for_each_element(&lnk->_addresses, naddr, _link_node) {
+        abuf_appendf(con->out, "\t\t%s\n", netaddr_to_string(&buf, &naddr->if_addr));
+      }
+      abuf_appendf(con->out, "\t    2-Hop addresses:\n");
+      avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
+        abuf_appendf(con->out, "\t\t%s\n", netaddr_to_string(&buf, &twohop->neigh_addr));
+      }
+    }
+  }
+  return TELNET_RESULT_ACTIVE;
 }
 
 /**

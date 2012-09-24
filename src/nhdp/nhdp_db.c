@@ -138,6 +138,8 @@ nhdp_db_neighbor_insert(void) {
     return NULL;
   }
 
+  OLSR_DEBUG(LOG_NHDP, "New Neighbor: 0x%0zx", (size_t)neigh);
+
   avl_init(&neigh->_addresses, avl_comp_netaddr, false, NULL);
   list_init_head(&neigh->_links);
 
@@ -149,6 +151,8 @@ void
 nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   struct nhdp_addr *naddr, *na_it;
   struct nhdp_link *lnk, *l_it;
+
+  OLSR_DEBUG(LOG_NHDP, "Remove Neighbor: 0x%0zx", (size_t)neigh);
 
   /* detach/remove all addresses */
   avl_for_each_element_safe(&neigh->_addresses, naddr, _neigh_node, na_it) {
@@ -405,6 +409,8 @@ nhdp_db_2hop_remove(struct nhdp_2hop *twohop) {
   avl_remove(&twohop->link->_2hop, &twohop->_link_node);
   avl_remove(&nhdp_2hop_tree, &twohop->_global_node);
 
+  olsr_timer_stop(&twohop->_vtime);
+
   olsr_memcookie_free(&_2hop_info, twohop);
 }
 
@@ -415,8 +421,10 @@ _addr_move(struct nhdp_addr *naddr,
 
   assert (lnk == NULL || (neigh != NULL && neigh == lnk->neigh));
 
-  OLSR_DEBUG(LOG_NHDP, "Move address %s to neigh=0x%zx, link=0x%zx",
-      netaddr_to_string(&buf, &naddr->if_addr), (size_t)neigh, (size_t)lnk);
+  OLSR_DEBUG(LOG_NHDP, "Move address %s from neigh=0x%zx, link=0x%zx to neigh=0x%zx, link=0x%zx",
+      netaddr_to_string(&buf, &naddr->if_addr),
+      (size_t)naddr->neigh, (size_t)naddr->link,
+      (size_t)neigh, (size_t)lnk);
 
   if (naddr->neigh != neigh) {
     /* fix neighbor hook */
@@ -508,17 +516,21 @@ _cb_link_vtime(void *ptr) {
 
 static void
 _cb_link_heard(void *ptr) {
+  OLSR_DEBUG(LOG_NHDP, "Link heard fired: 0x%0zx", (size_t)ptr);
   nhdp_db_link_update_status(ptr);
 }
 
 static void
 _cb_link_symtime(void *ptr __attribute__((unused))) {
+  OLSR_DEBUG(LOG_NHDP, "Link Symtime fired: 0x%0zx", (size_t)ptr);
   nhdp_db_link_update_status(ptr);
 }
 
 static void
 _cb_addr_vtime(void *ptr) {
   struct nhdp_addr *naddr = ptr;
+
+  OLSR_DEBUG(LOG_NHDP, "Neighbor Address Lost fired: 0x%0zx", (size_t)ptr);
 
   /* lost neighbor vtime triggered */
   if (naddr->neigh == NULL) {
@@ -533,5 +545,7 @@ _cb_addr_vtime(void *ptr) {
 static void
 _cb_2hop_vtime(void *ptr) {
   /* 2hop address vtime triggered */
+
+  OLSR_DEBUG(LOG_NHDP, "2Hop vtime fired: 0x%0zx", (size_t)ptr);
   nhdp_db_2hop_remove(ptr);
 }
