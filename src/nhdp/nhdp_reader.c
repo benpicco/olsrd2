@@ -90,8 +90,8 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
 /* definition of the RFC5444 reader components */
 static struct rfc5444_reader_tlvblock_consumer _nhdp_message_consumer = {
   .start_callback = _cb_message_start_callback,
+  .end_callback = _cb_localif_end_callback,
   .block_callback = _cb_messagetlvs,
-  .block_callback_failed_constraints = NULL,
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
@@ -100,9 +100,7 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_localif_address_consumer = {
-  .end_callback = _cb_localif_end_callback,
   .block_callback = _cb_localif_addresstlvs,
-  .block_callback_failed_constraints = NULL,
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_localif_address_tlvs[] = {
@@ -111,10 +109,7 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_localif_address_tlvs[
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_neigh_address_consumer = {
-  .start_callback = NULL,
-  .end_callback = NULL,
   .block_callback = _cb_neigh2_addresstlvs,
-  .block_callback_failed_constraints = NULL,
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_neigh_address_tlvs[] = {
@@ -153,10 +148,10 @@ nhdp_reader_init(struct olsr_rfc5444_protocol *p) {
       _nhdp_message_tlvs, ARRAYSIZE(_nhdp_message_tlvs), RFC5444_MSGTYPE_HELLO, 0);
   rfc5444_reader_add_address_consumer(
       &_protocol->reader, &_nhdp_localif_address_consumer,
-      _nhdp_localif_address_tlvs, ARRAYSIZE(_nhdp_localif_address_tlvs), RFC5444_MSGTYPE_HELLO, 1);
+      _nhdp_localif_address_tlvs, ARRAYSIZE(_nhdp_localif_address_tlvs), RFC5444_MSGTYPE_HELLO, 0);
   rfc5444_reader_add_address_consumer(
       &_protocol->reader, &_nhdp_neigh_address_consumer,
-      _nhdp_neigh_address_tlvs, ARRAYSIZE(_nhdp_neigh_address_tlvs), RFC5444_MSGTYPE_HELLO, 2);
+      _nhdp_neigh_address_tlvs, ARRAYSIZE(_nhdp_neigh_address_tlvs), RFC5444_MSGTYPE_HELLO, 1);
 }
 
 /**
@@ -206,8 +201,11 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __a
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+  struct netaddr_str buf;
 
-  OLSR_DEBUG(LOG_NHDP_R, "Incoming message type %d, got message tlvs", context->msg_type);
+  OLSR_DEBUG(LOG_NHDP_R, "Incoming message type %d from %s through %s, got message tlvs",
+      context->msg_type, netaddr_socket_to_string(&buf, _protocol->input_address),
+      _protocol->input_interface->name);
 
   _current.vtime = rfc5444_timetlv_decode(
       _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0]);
@@ -320,12 +318,12 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
       /* detach address from link */
       nhdp_db_addr_detach_link(naddr);
 
-      if (!_current.multiple_links) {
+      if (!_current.multiple_links && _current.link != lnk) {
         if (_current.link == NULL) {
           /* remember the first link */
           _current.link = lnk;
         }
-        else if (lnk != _current.link) {
+        else {
           OLSR_DEBUG(LOG_NHDP_R, "Overlapping link data detected");
 
           /* multiple links, all must be removed */
@@ -368,6 +366,7 @@ _cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
   uint64_t t;
   struct netaddr_str buf;
 
+  OLSR_DEBUG(LOG_NHDP_R, "Localif_end_callback");
   if (dropped) {
     /* error in message processing */
     if (_current.neighbor) {

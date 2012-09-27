@@ -176,6 +176,7 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
 void
 nhdp_db_neighbor_join(struct nhdp_neighbor *dst, struct nhdp_neighbor *src) {
   struct nhdp_addr *naddr, *na_it;
+  struct nhdp_link *lnk, *l_it;
 
   if (dst == src) {
     return;
@@ -184,18 +185,21 @@ nhdp_db_neighbor_join(struct nhdp_neighbor *dst, struct nhdp_neighbor *src) {
   /* fix symmetric link count */
   dst->symmetric += src->symmetric;
 
+  /* move links */
+  list_for_each_element_safe(&src->_links, lnk, _neigh_node, l_it) {
+    /* move link to new neighbor */
+    list_remove(&lnk->_neigh_node);
+    list_add_tail(&dst->_links, &lnk->_neigh_node);
+
+    lnk->neigh = dst;
+  }
+
   /* move all addresses  */
   avl_for_each_element_safe(&src->_addresses, naddr, _neigh_node, na_it) {
     /* move address to new neighbor */
     avl_remove(&src->_addresses, &naddr->_neigh_node);
     avl_insert(&dst->_addresses, &naddr->_neigh_node);
     naddr->neigh = dst;
-
-    /* move link to new neighbor */
-    list_remove(&naddr->link->_neigh_node);
-    list_add_tail(&dst->_links, &naddr->link->_neigh_node);
-
-    naddr->link->neigh = dst;
   }
 
   nhdp_db_neighbor_remove(src);
