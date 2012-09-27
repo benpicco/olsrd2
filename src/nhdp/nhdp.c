@@ -184,10 +184,10 @@ _cb_nhdb_link(struct olsr_telnet_data *con) {
       if (lnk->status == NHDP_LINK_PENDING) {
           status = PENDING;
       }
-      else if (lnk->status == RFC5444_LINKSTATUS_HEARD) {
+      else if (lnk->status == NHDP_LINK_HEARD) {
           status = HEARD;
       }
-      else if (lnk->status == RFC5444_LINKSTATUS_SYMMETRIC) {
+      else if (lnk->status == NHDP_LINK_SYMMETRIC) {
           status = SYMMETRIC;
       }
       else {

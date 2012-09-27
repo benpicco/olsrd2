@@ -16,14 +16,19 @@
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 
-enum { NHDP_LINK_PENDING = -1 };
+enum nhdp_link_status {
+  NHDP_LINK_PENDING   = -1,
+  NHDP_LINK_LOST      = RFC5444_LINKSTATUS_LOST,
+  NHDP_LINK_SYMMETRIC = RFC5444_LINKSTATUS_SYMMETRIC,
+  NHDP_LINK_HEARD     = RFC5444_LINKSTATUS_HEARD,
+};
 
 struct nhdp_link {
   struct olsr_timer_entry sym_time;
   struct olsr_timer_entry heard_time;
   struct olsr_timer_entry vtime;
 
-  int status;
+  enum nhdp_link_status status;
 
   uint32_t hyst_quality;
   bool hyst_pending;

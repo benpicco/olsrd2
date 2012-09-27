@@ -502,7 +502,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   struct netaddr addr;
   struct netaddr_str buf;
 
-  if (_current.link->status != RFC5444_LINKSTATUS_SYMMETRIC) {
+  if (_current.link->status != NHDP_LINK_SYMMETRIC) {
     return RFC5444_OKAY;
   }
 

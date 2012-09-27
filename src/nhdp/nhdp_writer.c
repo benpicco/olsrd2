@@ -204,6 +204,7 @@ _cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
   struct netaddr_str buf;
   bool this_if;
   uint8_t linkstatus, otherneigh;
+  uint8_t value;
 
   target = olsr_rfc5444_get_target_from_provider(prv);
   if (target != target->interface->multicast4
@@ -237,15 +238,14 @@ _cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
 
     /* Add LOCALIF TLV */
     if (this_if) {
-      rfc5444_writer_add_addrtlv(writer, address,
-          _nhdp_addrtlvs[IDX_TLV_LOCALIF]._tlvtype,
-          &RFC5444_LOCALIF_THIS_IF, sizeof(RFC5444_LOCALIF_THIS_IF), true);
+      value = RFC5444_LOCALIF_THIS_IF;
     }
     else {
-      rfc5444_writer_add_addrtlv(writer, address,
-          _nhdp_addrtlvs[IDX_TLV_LOCALIF]._tlvtype,
-          &RFC5444_LOCALIF_OTHER_IF, sizeof(RFC5444_LOCALIF_OTHER_IF), true);
+      value = RFC5444_LOCALIF_OTHER_IF;
     }
+    rfc5444_writer_add_addrtlv(writer, address,
+        _nhdp_addrtlvs[IDX_TLV_LOCALIF]._tlvtype,
+        &value, sizeof(value), true);
   }
 
   avl_for_each_element(&nhdp_addr_tree, naddr, _global_node) {
@@ -291,9 +291,10 @@ _cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
     }
 
     if (otherneigh != 255) {
+      value = RFC5444_OTHERNEIGHB_SYMMETRIC;
       rfc5444_writer_add_addrtlv(writer, address,
           _nhdp_addrtlvs[IDX_TLV_OTHERNEIGHB]._tlvtype,
-          &RFC5444_OTHERNEIGHB_SYMMETRIC, sizeof(RFC5444_OTHERNEIGHB_SYMMETRIC), true);
+          &value, sizeof(value), true);
 
       OLSR_DEBUG(LOG_NHDP_W, "Add %s (otherneigh=%d) to NHDP hello",
           netaddr_to_string(&buf, &naddr->if_addr), otherneigh);

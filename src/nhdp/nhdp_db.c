@@ -244,7 +244,7 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   struct nhdp_addr *naddr, *na_it;
   struct nhdp_2hop *twohop, *th_it;
 
-  if (lnk->status == RFC5444_LINKSTATUS_SYMMETRIC) {
+  if (lnk->status == NHDP_LINK_SYMMETRIC) {
     _link_status_not_symmetric_anymore(lnk);
   }
 
@@ -276,16 +276,16 @@ void
 nhdp_db_link_update_status(struct nhdp_link *lnk) {
   bool was_symmetric;
 
-  was_symmetric = lnk->status == RFC5444_LINKSTATUS_SYMMETRIC;
+  was_symmetric = lnk->status == NHDP_LINK_SYMMETRIC;
 
   /* update link status */
   lnk->status = _nhdp_db_link_calculate_status(lnk);
 
   /* handle database changes */
-  if (was_symmetric && lnk->status != RFC5444_LINKSTATUS_SYMMETRIC) {
+  if (was_symmetric && lnk->status != NHDP_LINK_SYMMETRIC) {
     _link_status_not_symmetric_anymore(lnk);
   }
-  if (!was_symmetric && lnk->status == RFC5444_LINKSTATUS_SYMMETRIC) {
+  if (!was_symmetric && lnk->status == NHDP_LINK_SYMMETRIC) {
     _link_status_now_symmetric(lnk);
   }
 }
@@ -505,7 +505,7 @@ _cb_link_vtime(void *ptr) {
 
   neigh = lnk->neigh;
 
-  if (lnk->status == RFC5444_LINKSTATUS_SYMMETRIC) {
+  if (lnk->status == NHDP_LINK_SYMMETRIC) {
     _link_status_not_symmetric_anymore(lnk);
   }
 
