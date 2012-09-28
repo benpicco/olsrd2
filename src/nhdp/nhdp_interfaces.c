@@ -399,10 +399,10 @@ static void
 _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr, *addr_it;
-  union netaddr_socket *sock;
+  struct olsr_interface *olsr_interf;
   struct netaddr ip;
   struct netaddr_str buf;
-  const struct ifaddrs *if_addrs;
+  size_t i;
 
   OLSR_DEBUG(LOG_NHDP, "NHDP Interface change event: %s", ifl->interface->name);
 
@@ -414,18 +414,10 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
   }
 
   /* get all socket addresses that are matching the filter */
-  for (if_addrs = olsr_interface_get_ifaddrs(); if_addrs;
-       if_addrs = if_addrs->ifa_next) {
-    if (strcmp(if_addrs->ifa_name, nhdp_interface_get_name(interf)) != 0) {
-      continue;
-    }
-
-    sock = (union netaddr_socket *)if_addrs->ifa_addr;
-
-    netaddr_from_socket(&ip, sock);
-
-    if (olsr_acl_check_accept(&interf->ifaddr_filter, &ip)) {
-      _addr_add(interf, &ip);
+  olsr_interf = olsr_rfc5444_get_core_interface(ifl->interface);
+  for (i = 0; i<olsr_interf->data.addrcount; i++) {
+    if (olsr_acl_check_accept(&interf->ifaddr_filter, &olsr_interf->data.addresses[i])) {
+      _addr_add(interf, &olsr_interf->data.addresses[i]);
     }
   }
 

@@ -9,8 +9,6 @@ set(OONF_SRCS olsr_main.c
               nhdp/nhdp.c
               nhdp/nhdp_db.c
               nhdp/nhdp_interfaces.c
-#              nhdp/nhdp_link.c
-#              nhdp/nhdp_neighbor.c
               nhdp/nhdp_reader.c
               nhdp/nhdp_writer.c
               )
