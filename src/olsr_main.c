@@ -86,36 +86,37 @@
 #include "core/os_routing.h"
 #endif
 
-static bool _end_olsr_signal, _display_schema;
+static bool _end_olsr_signal, _display_schema, _debug_early, _ignore_unknown;
 static char *_schema_name;
 
 enum argv_short_options {
   argv_option_schema = 256,
+  argv_option_debug_early,
+  argv_option_ignore_unknown,
 };
 
 static struct option olsr_options[] = {
 #if !defined(REMOVE_HELPTEXT)
   { "help",         no_argument,       0, 'h' },
 #endif
-  { "early-debug",  no_argument,       0, 'e' },
-  { "version",      no_argument,       0, 'v' },
-  { "plugin",       required_argument, 0, 'p' },
-  { "load",         required_argument, 0, 'l' },
-  { "save",         required_argument, 0, 'S' },
-  { "set",          required_argument, 0, 's' },
-  { "remove",       required_argument, 0, 'r' },
-  { "get",          optional_argument, 0, 'g' },
-  { "format",       required_argument, 0, 'f' },
-  { "quit",         no_argument,       0, 'q' },
-  { "schema",       optional_argument, 0, argv_option_schema },
+  { "version",         no_argument,       0, 'v' },
+  { "plugin",          required_argument, 0, 'p' },
+  { "load",            required_argument, 0, 'l' },
+  { "save",            required_argument, 0, 'S' },
+  { "set",             required_argument, 0, 's' },
+  { "remove",          required_argument, 0, 'r' },
+  { "get",             optional_argument, 0, 'g' },
+  { "format",          required_argument, 0, 'f' },
+  { "quit",            no_argument,       0, 'q' },
+  { "schema",          optional_argument, 0, argv_option_schema },
+  { "Xearlydebug",     no_argument,       0, argv_option_debug_early },
+  { "Xignoreunknown",  no_argument,       0, argv_option_ignore_unknown },
   { NULL, 0,0,0 }
 };
 
 #if !defined(REMOVE_HELPTEXT)
 static const char *help_text =
-    "Mandatory arguments to long options are mandatory for short options too.\n"
-    "  -e, --early-debug                      Activate debugging output before configuration could be parsed\n"
-    "                                         (this parameter must be the FIRST one in the command line)\n"
+    "Mandatory arguments for long options are mandatory for short options too.\n"
     "  -h, --help                             Display this help file\n"
     "  -v, --version                          Display the version string and the included static plugins\n"
     "  -p, --plugin=shared-library            Load a shared library as a plugin\n"
@@ -139,6 +140,10 @@ static const char *help_text =
     "           =section_type[name].key       Show the value(s) of a key in a named section\n"
     "  -f, --format=FORMAT                    Set the format for loading/saving data\n"
     "                                         (use 'AUTO' for automatic detection of format)\n"
+    "\n"
+    "Expert/Experimental arguments\n"
+    "  --Xearlydebug                          Activate debugging output before configuration could be parsed\n"
+    "  --Xignoreunknown                       Ignore unknown command line arguments\n"
 ;
 #endif
 
@@ -147,6 +152,7 @@ static void quit_signal_handler(int);
 static void hup_signal_handler(int);
 static void setup_signalhandler(void);
 static int mainloop(int argc, char **argv);
+static void parse_early_commandline(int argc, char **argv);
 static int parse_commandline(int argc, char **argv, bool reload_only);
 static int display_schema(void);
 
@@ -155,7 +161,6 @@ static int display_schema(void);
  */
 int
 main(int argc, char **argv) {
-  bool early_debug;
   int return_code;
   int fork_pipe;
 
@@ -164,6 +169,8 @@ main(int argc, char **argv) {
   fork_pipe = -1;
   _schema_name = NULL;
   _display_schema = false;
+  _debug_early = false;
+  _ignore_unknown = false;
 
   srand(times(NULL));
 
@@ -171,16 +178,16 @@ main(int argc, char **argv) {
   _end_olsr_signal = false;
   setup_signalhandler();
 
-  early_debug = argc > 1
-      && (strcmp(argv[1], "-e") == 0 || strcmp(argv[1], "--early-debug") == 0);
+  /* parse "early" command line arguments */
+  parse_early_commandline(argc, argv);
 
   /* initialize logger */
-  if (olsr_log_init(olsr_appdata_get(), early_debug ? LOG_SEVERITY_DEBUG : LOG_SEVERITY_WARN)) {
+  if (olsr_log_init(olsr_appdata_get(), _debug_early ? LOG_SEVERITY_DEBUG : LOG_SEVERITY_WARN)) {
     goto olsrd_cleanup;
   }
 
   /* add configuration definition */
-  if (olsr_cfg_init()) {
+  if (olsr_cfg_init(argc, argv)) {
     goto olsrd_cleanup;
   }
 
@@ -474,6 +481,25 @@ setup_signalhandler(void) {
   sigaction(SIGHUP, &act, NULL);
 }
 
+static void
+parse_early_commandline(int argc, char **argv) {
+  int opt, opt_idx;
+
+  opterr = 0;
+  while (0 <= (opt = getopt_long(argc, argv, "-", olsr_options, &opt_idx))) {
+    switch (opt) {
+      case argv_option_debug_early:
+        _debug_early = true;
+        break;
+      case argv_option_ignore_unknown:
+        _ignore_unknown = true;
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 /**
  * Parse command line of olsrd
  * @param argc number of arguments
@@ -502,17 +528,19 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   /* reset getopt_long */
   opt_idx = -1;
   optind = 1;
+  opterr = _ignore_unknown ? 0 : -1;
 
   abuf_init(&log);
   cfg_cmd_clear_state(olsr_cfg_get_instance());
 
   if (reload_only) {
     /* only parameters that load and change configuration data */
-    parameters = "p:l:s:r:f:";
+    parameters = "-p:l:s:r:f:";
   }
   else {
-    parameters = "hvp:ql:S:s:r:g::f:";
+    parameters = "-hvp:ql:S:s:r:g::f:";
   }
+
   while (return_code == -1
       && 0 <= (opt = getopt_long(argc, argv, parameters, olsr_options, &opt_idx))) {
     switch (opt) {
@@ -526,7 +554,8 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         return_code = 0;
         break;
 
-      case 'e':
+      case argv_option_debug_early:
+      case argv_option_ignore_unknown:
         /* ignore this here */
         break;
 
@@ -590,7 +619,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         break;
 
       default:
-        if (!reload_only) {
+        if (!(reload_only ||_ignore_unknown)) {
           return_code = 1;
         }
         break;
