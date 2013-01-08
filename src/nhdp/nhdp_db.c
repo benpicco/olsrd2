@@ -19,6 +19,7 @@
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_db.h"
 
+/* Prototypes of local functions */
 static void _addr_move(struct nhdp_addr *,
     struct nhdp_neighbor *, struct nhdp_link *);
 static void _link_status_now_symmetric(struct nhdp_link *lnk);
@@ -31,6 +32,7 @@ static void _cb_link_symtime(void *);
 static void _cb_addr_vtime(void *);
 static void _cb_2hop_vtime(void *);
 
+/* memory and timer classes necessary for NHDP */
 static struct olsr_memcookie_info _neigh_info = {
   .name = "NHDP neighbor",
   .size = sizeof(struct nhdp_neighbor),
@@ -76,11 +78,21 @@ static struct olsr_timer_info _2hop_vtime_info = {
   .callback = _cb_2hop_vtime,
 };
 
+/* global tree of neighbor addresses */
 struct avl_tree nhdp_addr_tree;
+
+/* global tree of 2-hop neighbor addresses */
 struct avl_tree nhdp_2hop_tree;
+
+/* list of neighbors */
 struct list_entity nhdp_neigh_list;
+
+/* list of links (to neighbors) */
 struct list_entity nhdp_link_list;
 
+/**
+ * Initialize NHDP databases
+ */
 void
 nhdp_db_init(void) {
   avl_init(&nhdp_addr_tree, avl_comp_netaddr, false, NULL);
@@ -100,6 +112,9 @@ nhdp_db_init(void) {
   olsr_timer_add(&_2hop_vtime_info);
 }
 
+/**
+ * Cleanup NHDP databases
+ */
 void
 nhdp_db_cleanup(void) {
   struct nhdp_neighbor *neigh, *n_it;
@@ -129,6 +144,10 @@ nhdp_db_cleanup(void) {
   olsr_memcookie_remove(&_neigh_info);
 }
 
+/**
+ * @return new NHDP neighbor without links and addresses,
+ *  NULL if out of memory
+ */
 struct nhdp_neighbor *
 nhdp_db_neighbor_insert(void) {
   struct nhdp_neighbor *neigh;
@@ -147,6 +166,10 @@ nhdp_db_neighbor_insert(void) {
   return neigh;
 }
 
+/**
+ * Remove NHDP neighbor including links and addresses from db
+ * @param neigh nhdp neighbor to be removed
+ */
 void
 nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   struct nhdp_addr *naddr, *na_it;
@@ -157,9 +180,11 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   /* detach/remove all addresses */
   avl_for_each_element_safe(&neigh->_addresses, naddr, _neigh_node, na_it) {
     if (naddr->lost) {
+      /* just detach lost addresses and keep them in global list */
       nhdp_db_addr_detach_neigh(naddr);
     }
     else {
+      /* remove address from neighbor (and mark them lost this way */
       nhdp_db_addr_remove(naddr);
     }
   }
@@ -173,6 +198,11 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   olsr_memcookie_free(&_neigh_info, neigh);
 }
 
+/**
+ * Join the links and addresses of two NHDP neighbors
+ * @param dst target neighbor which gets all the links and addresses
+ * @param src source neighbor which will be removed afterwards
+ */
 void
 nhdp_db_neighbor_join(struct nhdp_neighbor *dst, struct nhdp_neighbor *src) {
   struct nhdp_addr *naddr, *na_it;
@@ -205,6 +235,12 @@ nhdp_db_neighbor_join(struct nhdp_neighbor *dst, struct nhdp_neighbor *src) {
   nhdp_db_neighbor_remove(src);
 }
 
+/**
+ * Insert a new link into a nhdp neighbors database
+ * @param neigh neighbor which will get the new link
+ * @param local_if local interface through which the link was heard
+ * @return new nhdp link, NULL if out of memory
+ */
 struct nhdp_link *
 nhdp_db_link_insert(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   struct nhdp_link *lnk;
@@ -239,6 +275,10 @@ nhdp_db_link_insert(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if
   return lnk;
 }
 
+/**
+ * Remove a nhdp link from database
+ * @param lnk nhdp link to be removed
+ */
 void
 nhdp_db_link_remove(struct nhdp_link *lnk) {
   struct nhdp_addr *naddr, *na_it;
@@ -248,7 +288,7 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
     _link_status_not_symmetric_anymore(lnk);
   }
 
-  /* stop timers */
+  /* stop link timers */
   olsr_timer_stop(&lnk->sym_time);
   olsr_timer_stop(&lnk->heard_time);
   olsr_timer_stop(&lnk->vtime);
@@ -272,6 +312,11 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   olsr_memcookie_free(&_link_info, lnk);
 }
 
+/**
+ * Recalculate the status of a nhdp link and update database
+ * if link changed between symmetric and non-symmetric
+ * @param lnk nhdp link with (potential) new status
+ */
 void
 nhdp_db_link_update_status(struct nhdp_link *lnk) {
   bool was_symmetric;
@@ -290,6 +335,11 @@ nhdp_db_link_update_status(struct nhdp_link *lnk) {
   }
 }
 
+/**
+ * Add a new nhdp (one-hop) address to database
+ * @param addr address to be added
+ * @return nhdp address, NULL if out of memory
+ */
 struct nhdp_addr *
 nhdp_db_addr_insert(struct netaddr *addr) {
   struct nhdp_addr *naddr;
@@ -318,6 +368,10 @@ nhdp_db_addr_insert(struct netaddr *addr) {
   return naddr;
 }
 
+/**
+ * Remove a nhdp address from database
+ * @param naddr nhdp address
+ */
 void
 nhdp_db_addr_remove(struct nhdp_addr *naddr) {
   /* stop timer */
@@ -339,6 +393,11 @@ nhdp_db_addr_remove(struct nhdp_addr *naddr) {
   olsr_memcookie_free(&_addr_info, naddr);
 }
 
+/**
+ * Attach a neighbor to a nhdp address
+ * @param naddr nhdp address
+ * @param neigh nhdp neighbor
+ */
 void
 nhdp_db_addr_attach_neigh(
     struct nhdp_addr *naddr, struct nhdp_neighbor *neigh) {
@@ -350,6 +409,11 @@ nhdp_db_addr_attach_neigh(
   _addr_move(naddr, neigh, NULL);
 }
 
+/**
+ * Attach a link to a nhdp address
+ * @param naddr nhdp address
+ * @param lnk nhdp link
+ */
 void
 nhdp_db_addr_attach_link(struct nhdp_addr *naddr, struct nhdp_link *lnk) {
   if (naddr->lost) {
@@ -360,28 +424,52 @@ nhdp_db_addr_attach_link(struct nhdp_addr *naddr, struct nhdp_link *lnk) {
   _addr_move(naddr, lnk->neigh, lnk);
 }
 
+/**
+ * Detach the neighbor (and the link) from a nhdp address
+ * @param naddr nhdp address
+ */
 void
 nhdp_db_addr_detach_neigh(struct nhdp_addr *naddr) {
   _addr_move(naddr, NULL, NULL);
 }
 
+/**
+ * Detach the link from a nhdp address, but keep the neighbor
+ * @param naddr nhdp address
+ */
 void
 nhdp_db_addr_detach_link(struct nhdp_addr *naddr) {
   _addr_move(naddr, naddr->neigh, NULL);
 }
 
+/**
+ * Mark a nhdp address as lost
+ * @param naddr nhdp address
+ * @param vtime time until address should be removed from database
+ */
 void
 nhdp_db_addr_set_lost(struct nhdp_addr *naddr, uint64_t vtime) {
   naddr->lost = true;
   olsr_timer_set(&naddr->vtime, vtime);
 }
 
+/**
+ * Remove 'lost' mark from an nhdp address, but do not remove it
+ * from database.
+ * @param naddr nhdp address
+ */
 void
 nhdp_db_addr_remove_lost(struct nhdp_addr *naddr) {
   naddr->lost = false;
   olsr_timer_stop(&naddr->vtime);
 }
 
+/**
+ * Add a new 2-hop address to a nhdp link
+ * @param lnk nhpd link
+ * @param addr network address
+ * @return 2hop address, NULL if out of memory
+ */
 struct nhdp_2hop *
 nhdp_db_2hop_insert(struct nhdp_link *lnk, struct netaddr *addr) {
   struct nhdp_2hop *twohop;
@@ -408,6 +496,10 @@ nhdp_db_2hop_insert(struct nhdp_link *lnk, struct netaddr *addr) {
   return twohop;
 }
 
+/**
+ * Remove a 2-hop address from database
+ * @param twohop two-hop address of a nhdp link
+ */
 void
 nhdp_db_2hop_remove(struct nhdp_2hop *twohop) {
   avl_remove(&twohop->link->_2hop, &twohop->_link_node);
@@ -418,6 +510,12 @@ nhdp_db_2hop_remove(struct nhdp_2hop *twohop) {
   olsr_memcookie_free(&_2hop_info, twohop);
 }
 
+/**
+ * Helper function to attach/detach nhdp addresses from links/neighbors
+ * @param naddr nhdp address
+ * @param neigh nhdp neighbor, NULL to detach from link and neighbor
+ * @param lnk nhdp link, NULL to detach from link
+ */
 static void
 _addr_move(struct nhdp_addr *naddr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk) {
@@ -453,6 +551,11 @@ _addr_move(struct nhdp_addr *naddr,
   }
 }
 
+/**
+ * Helper function to calculate NHDP link status
+ * @param lnk nhdp link
+ * @return link status
+ */
 int
 _nhdp_db_link_calculate_status(struct nhdp_link *lnk) {
   if (lnk->hyst_pending)
@@ -466,6 +569,10 @@ _nhdp_db_link_calculate_status(struct nhdp_link *lnk) {
   return RFC5444_LINKSTATUS_LOST;
 }
 
+/**
+ * Helper function that handles the case of a link becoming symmetric
+ * @param lnk nhdp link
+ */
 static void
 _link_status_now_symmetric(struct nhdp_link *lnk) {
   struct nhdp_addr *naddr;
@@ -479,6 +586,10 @@ _link_status_now_symmetric(struct nhdp_link *lnk) {
   }
 }
 
+/**
+ * Helper function that handles the case of a link becoming asymmetric
+ * @param lnk nhdp link
+ */
 static void
 _link_status_not_symmetric_anymore(struct nhdp_link *lnk) {
   struct nhdp_2hop *twohop, *twohop_it;
@@ -498,10 +609,16 @@ _link_status_not_symmetric_anymore(struct nhdp_link *lnk) {
   }
 }
 
+/**
+ * Callback triggered when link validity timer fires
+ * @param ptr nhdp link
+ */
 static void
 _cb_link_vtime(void *ptr) {
   struct nhdp_link *lnk = ptr;
   struct nhdp_neighbor *neigh;
+
+  OLSR_DEBUG(LOG_NHDP, "Link vtime fired: 0x%0zx", (size_t)ptr);
 
   neigh = lnk->neigh;
 
@@ -518,18 +635,30 @@ _cb_link_vtime(void *ptr) {
   }
 }
 
+/**
+ * Callback triggered when link heard timer fires
+ * @param ptr nhdp link
+ */
 static void
 _cb_link_heard(void *ptr) {
   OLSR_DEBUG(LOG_NHDP, "Link heard fired: 0x%0zx", (size_t)ptr);
   nhdp_db_link_update_status(ptr);
 }
 
+/**
+ * Callback triggered when link symmetric timer fires
+ * @param ptr nhdp link
+ */
 static void
 _cb_link_symtime(void *ptr __attribute__((unused))) {
   OLSR_DEBUG(LOG_NHDP, "Link Symtime fired: 0x%0zx", (size_t)ptr);
   nhdp_db_link_update_status(ptr);
 }
 
+/**
+ * Callback triggered when nhdp address validity timer fires
+ * @param ptr nhdp address
+ */
 static void
 _cb_addr_vtime(void *ptr) {
   struct nhdp_addr *naddr = ptr;
@@ -546,6 +675,10 @@ _cb_addr_vtime(void *ptr) {
   }
 }
 
+/**
+ * Callback triggered when 2hop valitidy timer fires
+ * @param ptr nhdp 2hop address
+ */
 static void
 _cb_2hop_vtime(void *ptr) {
   /* 2hop address vtime triggered */
