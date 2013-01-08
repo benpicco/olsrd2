@@ -50,12 +50,14 @@
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_writer.h"
 
+/* constants */
 enum {
   IDX_TLV_LOCALIF,
   IDX_TLV_LINKSTATUS,
   IDX_TLV_OTHERNEIGHB,
 };
 
+/* prototypes */
 static void _cb_addMessageHeader(
     struct rfc5444_writer *, struct rfc5444_writer_message *);
 static void _cb_addMessageTLVs(
@@ -123,6 +125,11 @@ nhdp_writer_cleanup(void) {
   rfc5444_writer_unregister_message(&_protocol->writer, _nhdp_message);
 }
 
+/**
+ * Callback to initialize the message header for a HELLO message
+ * @param writer
+ * @param message
+ */
 static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
@@ -164,6 +171,11 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
       netaddr_to_string(&buf, originator), target->interface->name);
 }
 
+/**
+ * Callback to add the message TLVs to a HELLO message
+ * @param writer
+ * @param prv
+ */
 static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
@@ -192,6 +204,11 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
       &vtime_encoded, sizeof(vtime_encoded));
 }
 
+/**
+ * Callback to add the addresses and address TLVs to a HELLO message
+ * @param writer
+ * @param prv
+ */
 void
 _cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
     struct rfc5444_writer_content_provider *prv) {

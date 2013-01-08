@@ -58,6 +58,8 @@ struct _nhdp_config {
   struct netaddr originator;
 };
 
+/* prototypes */
+
 static enum olsr_telnet_result _cb_nhdb_neigh(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _cb_nhdb_link(struct olsr_telnet_data *con);
 
@@ -87,6 +89,10 @@ OLSR_SUBSYSTEM_STATE(_nhdp_state);
 enum log_source LOG_NHDP = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
 
+/**
+ * Initialize NHDP subsystem
+ * @return 0 if initialized, -1 if an error happened
+ */
 int
 nhdp_init(void) {
   if (olsr_subsystem_is_initialized(&_nhdp_state)) {
@@ -123,6 +129,9 @@ nhdp_init(void) {
   return 0;
 }
 
+/**
+ * Cleanup NHDP subsystem
+ */
 void
 nhdp_cleanup(void) {
   if (olsr_subsystem_cleanup(&_nhdp_state)) {
@@ -141,11 +150,19 @@ nhdp_cleanup(void) {
   nhdp_reader_cleanup();
 }
 
+/**
+ * @return NHDP originator address for HELLOs
+ */
 const struct netaddr *
 nhdp_get_originator(void) {
   return &_config.originator;
 }
 
+/**
+ * Callback triggered for nhdp_neighbor telnet command
+ * @param con
+ * @return
+ */
 static enum olsr_telnet_result
 _cb_nhdb_neigh(struct olsr_telnet_data *con) {
   struct nhdp_neighbor *neigh;
@@ -163,6 +180,11 @@ _cb_nhdb_neigh(struct olsr_telnet_data *con) {
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Callback triggered for nhdp_link command
+ * @param con
+ * @return
+ */
 static enum olsr_telnet_result
 _cb_nhdb_link(struct olsr_telnet_data *con) {
   static const char *PENDING = "pending";

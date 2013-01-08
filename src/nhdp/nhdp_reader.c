@@ -169,6 +169,10 @@ nhdp_reader_cleanup(void) {
   olsr_rfc5444_remove_protocol(_protocol);
 }
 
+/**
+ * Helper functions that prepares a nhdp neighbor for HELLO processing
+ * @param neigh nhdp neighbor
+ */
 static void
 _initialize_neighbor_for_processing(struct nhdp_neighbor *neigh) {
   struct nhdp_addr *naddr;
@@ -181,19 +185,25 @@ _initialize_neighbor_for_processing(struct nhdp_neighbor *neigh) {
   }
 }
 
+/**
+ * Callback triggered at the start of a HELLO message.
+ * @param consumer tlvblock consumer
+ * @param context message context
+ * @return
+ */
 static enum rfc5444_result
 _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
     struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   memset(&_current, 0, sizeof(_current));
 
-  /* get local NHDP interface */
+  /* remember local NHDP interface */
   _current.localif = nhdp_interface_get(_protocol->input_interface->name);
 
   return RFC5444_OKAY;
 }
 
 /**
- * Handle incoming messages and its TLVs
+ * Handle incoming HELLO messages and its TLVs
  * @param consumer tlvblock consumer
  * @param context message context
  * @return see rfc5444_result enum
@@ -214,10 +224,10 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 }
 
 /**
- *
- * @param addr
- * @param _this_if
- * @return
+ * Create a nhdp address for a RFC5444 address with a
+ *   "local_if" TLV attached to it
+ * @param addr network addres
+ * @return nhdp address
  */
 static struct nhdp_addr *
 _process_localif(struct netaddr *addr) {
@@ -355,6 +365,13 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
   return RFC5444_OKAY;
 }
 
+/**
+ * Handle end of message for localif processing
+ * @param consumer
+ * @param context
+ * @param dropped
+ * @return
+ */
 static enum rfc5444_result
 _cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
     struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
