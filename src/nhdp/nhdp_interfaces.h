@@ -54,35 +54,61 @@ struct nhdp_interface;
 
 #include "nhdp/nhdp_db.h"
 
+/**
+ * nhdp_interface represents a local interface participating in the mesh network
+ */
 struct nhdp_interface {
+  /* listener for interface events */
   struct olsr_rfc5444_interface_listener rfc5444_if;
 
+  /* interval between two hellos sent through this interface */
   uint64_t refresh_interval;
+
+  /* See RFC 6130, 5.3.2 and 5.4.1 */
   uint64_t h_hold_time;
   uint64_t l_hold_time;
   uint64_t n_hold_time;
   uint64_t i_hold_time;
 
+  /* ACL for incoming HELLO messages through this interface */
   struct olsr_netaddr_acl ifaddr_filter;
 
+  /* timer for hello generation */
   struct olsr_timer_entry _hello_timer;
 
+  /* member entry for global interface tree */
   struct avl_node _node;
+
+  /* tree of interface addresses */
   struct avl_tree _if_addresses;
 
+  /* list of interface nhdp links */
   struct list_entity _links;
 };
 
+/**
+ * nhdp_interface_addr represents a single address of a nhdp interface
+ */
 struct nhdp_interface_addr {
+  /* interface address */
   struct netaddr if_addr;
 
+  /* pointer to nhdp interface */
   struct nhdp_interface *interf;
 
+  /* true if address was removed */
   bool removed;
 
+  /* internal variable */
   bool _to_be_removed;
+
+  /* validity time until entry should be removed from database */
   struct olsr_timer_entry _vtime;
+
+  /* member entry for interfaces tree of addresses */
   struct avl_node _if_node;
+
+  /* member entry for global address tree */
   struct avl_node _global_node;
 };
 
@@ -97,9 +123,8 @@ void nhdp_interfaces_add_link(struct nhdp_interface *interf,
 void nhdp_interfaces_remove_link(struct nhdp_link *lnk);
 
 /**
- *
- * @param
- * @return
+ * @param interface name
+ * @return nhdp interface, NULL if not found
  */
 static INLINE struct nhdp_interface *
 nhdp_interface_get(const char *name) {
@@ -109,9 +134,8 @@ nhdp_interface_get(const char *name) {
 }
 
 /**
- *
- * @param interf
- * @return
+ * @param interf nhdp interface
+ * @return name of interface (e.g. wlan0)
  */
 static INLINE const char *
 nhdp_interface_get_name(struct nhdp_interface *interf) {
@@ -119,9 +143,9 @@ nhdp_interface_get_name(struct nhdp_interface *interf) {
 }
 
 /**
- *
- * @param
- * @return
+ * @param interf nhdp interface
+ * @param addr network address
+ * @return nhdp interface address
  */
 static INLINE struct nhdp_interface_addr *
 nhdp_interface_addr_if_get(struct nhdp_interface *interf, struct netaddr *addr) {
@@ -131,9 +155,8 @@ nhdp_interface_addr_if_get(struct nhdp_interface *interf, struct netaddr *addr) 
 }
 
 /**
- *
- * @param
- * @return
+ * @param network address
+ * @return nhdp interface address
  */
 static INLINE struct nhdp_interface_addr *
 nhdp_interface_addr_global_get(struct netaddr *addr) {

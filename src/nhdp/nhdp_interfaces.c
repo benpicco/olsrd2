@@ -59,7 +59,7 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_interfaces.h"
 
-#define _IF_ADDRS_PARAMETER "if_addrs"
+/* Prototypes of local functions */
 static struct nhdp_interface *_interface_add(const char *name);
 static void _interface_remove(struct nhdp_interface *interf);
 static struct nhdp_interface_addr *_addr_add(
@@ -159,6 +159,11 @@ nhdp_interfaces_cleanup(void) {
 }
 
 
+/**
+ * Add a link to a nhdp interface
+ * @param interf nhdp interface
+ * @param lnk nhdp link
+ */
 void
 nhdp_interfaces_add_link(struct nhdp_interface *interf,
     struct nhdp_link *lnk) {
@@ -167,6 +172,10 @@ nhdp_interfaces_add_link(struct nhdp_interface *interf,
   list_add_tail(&interf->_links, &lnk->_if_node);
 }
 
+/**
+ * Remove a nhdp link from a nhdp interface
+ * @param lnk nhdp link
+ */
 void
 nhdp_interfaces_remove_link(struct nhdp_link *lnk) {
   list_remove(&lnk->_if_node);
@@ -284,19 +293,21 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
   return if_addr;
 }
 
+/**
+ * Mark an interface address as removed
+ * @param addr nhdp interface address
+ * @param vtime time in milliseconds until address should be removed from db
+ */
 static void
 _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime) {
-  if (addr->removed) {
-    _cb_remove_addr(addr);
-    return;
-  }
-
+  assert (!addr->removed);
   addr->removed = true;
   olsr_timer_set(&addr->_vtime, vtime);
 }
 
 /**
- * Cleanup and remove an address from a nhdp interface
+ * Callback triggered when an address from a nhdp interface
+ *  should be removed from the db
  * @param ptr pointer to nhdp interface address
  */
 static void
@@ -313,7 +324,7 @@ _cb_remove_addr(void *ptr) {
 
 
 /**
- * Generate Hellos on an interface
+ * Callback triggered to generate a Hello on an interface
  * @param ptr pointer to nhdp interface
  */
 static void
@@ -384,16 +395,16 @@ _cb_cfg_interface_changed(void) {
   /* reset hello generation frequency */
   olsr_timer_set(&interf->_hello_timer, interf->refresh_interval);
 
+  /* just copy hold time for now */
   interf->l_hold_time = interf->h_hold_time;
   interf->n_hold_time = interf->l_hold_time;
   interf->i_hold_time = interf->n_hold_time;
-
-  /* TODO: reset list of addresses of the interface */
 }
 
 /**
- * Settings of an interface changed, fix the nhdp addresses if necessary
- * @param ifl
+ * Configuration of an interface changed,
+ *  fix the nhdp addresses if necessary
+ * @param ifl olsr rfc5444 interface listener
  */
 static void
 _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
