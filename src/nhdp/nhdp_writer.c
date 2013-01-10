@@ -40,6 +40,8 @@
  */
 
 #include "common/common_types.h"
+#include "common/avl.h"
+#include "common/avl_comp.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444_conversion.h"
 #include "rfc5444/rfc5444_writer.h"
@@ -64,6 +66,16 @@ static void _cb_addMessageTLVs(
     struct rfc5444_writer *, struct rfc5444_writer_content_provider *);
 static void _cb_addAddresses(
     struct rfc5444_writer *, struct rfc5444_writer_content_provider *);
+
+static void _add_link_address(struct rfc5444_writer *writer,
+    struct rfc5444_writer_content_provider *prv,
+    struct nhdp_interface *interf, struct nhdp_addr *naddr);
+static void _add_localif_address(struct rfc5444_writer *writer,
+    struct rfc5444_writer_content_provider *prv,
+    struct nhdp_interface *interf, struct nhdp_interface_addr *addr);
+static struct rfc5444_writer_address *_add_rfc5444_address(
+    struct rfc5444_writer *writer,   struct rfc5444_writer_message *creator,
+    struct netaddr *addr);
 
 /* definition of NHDP writer */
 static struct rfc5444_writer_message *_nhdp_message = NULL;
@@ -134,11 +146,9 @@ static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
   struct olsr_rfc5444_target *target;
-  struct nhdp_interface *interf;
   const struct netaddr *originator;
   struct netaddr embedded;
   struct netaddr_str buf;
-  bool ipv6;
 
   if (!message->if_specific) {
     OLSR_WARN(LOG_NHDP_W, "non interface-specific NHDP message!");
@@ -146,10 +156,8 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
   }
 
   target = olsr_rfc5444_get_target_from_message(message);
-  interf = nhdp_interface_get(target->interface->name);
-
-  ipv6 = target == target->interface->multicast6;
-  if (!ipv6 && target != target->interface->multicast4) {
+  if (target != target->interface->multicast6
+      && target != target->interface->multicast4) {
     OLSR_WARN(LOG_NHDP_W, "Cannot generate unicast nhdp message to %s",
         netaddr_to_string(&buf, &target->dst));
     return;
@@ -157,11 +165,18 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
 
   originator = nhdp_get_originator();
 
-  rfc5444_writer_set_msg_addrlen(writer, message, interf->mode == NHDP_IPV4 ? 4 : 16);
+  if (netaddr_get_address_family(&target->dst) == AF_INET
+      && netaddr_get_address_family(originator) != AF_INET6) {
+    /* only IPv4 originator on IPv4 socket can produce 4-byte addresses */
+    rfc5444_writer_set_msg_addrlen(writer, message, 4);
+  }
+  else {
+    rfc5444_writer_set_msg_addrlen(writer, message, 16);
+  }
 
   switch (netaddr_get_address_family(originator)) {
     case AF_INET:
-      if (interf->mode != NHDP_IPV4) {
+      if (message->addr_len == 16) {
         /* embed IPV4 originator in IPv6 address */
         netaddr_embed_ipv4(&embedded, originator);
         originator = &embedded;
@@ -222,138 +237,189 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
 }
 
 /**
+ * Create a rfc5444 addres object, embed IPv4 address if necessary
+ * @param writer
+ * @param creator
+ * @param addr network address
+ * @return pointer to rfc5444 address, NULL if an error happened
+ */
+static struct rfc5444_writer_address *
+_add_rfc5444_address(struct rfc5444_writer *writer,   struct rfc5444_writer_message *creator,
+    struct netaddr *addr) {
+  struct netaddr embedded;
+
+  if (netaddr_get_address_family(addr) == AF_INET
+      && creator->addr_len == 16) {
+    /* generate embedded address */
+    netaddr_embed_ipv4(&embedded, addr);
+    return rfc5444_writer_add_address(writer, creator,
+        netaddr_get_binptr(&embedded),
+        netaddr_get_prefix_length(&embedded), true);
+  }
+  else {
+    /* address should already be the right length */
+    assert (netaddr_get_prefix_length(addr) == creator->addr_len*8);
+
+    return rfc5444_writer_add_address(writer, creator,
+        netaddr_get_binptr(addr), netaddr_get_prefix_length(addr), true);
+  }
+}
+
+/**
+ * Add a rfc5444 address with localif TLV to the stream
+ * @param writer
+ * @param prv
+ * @param interf
+ * @param addr
+ */
+static void
+_add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_provider *prv,
+    struct nhdp_interface *interf, struct nhdp_interface_addr *addr) {
+  struct rfc5444_writer_address *address;
+  struct netaddr_str buf;
+  uint8_t value;
+  bool this_if;
+
+  /* check if address of local interface */
+  this_if = NULL != avl_find_element(
+      &interf->_if_addresses, &addr->if_addr, addr, _if_node);
+
+  OLSR_DEBUG(LOG_NHDP_W, "Add %s (%s) to NHDP hello",
+      netaddr_to_string(&buf, &addr->if_addr), this_if ? "this_if" : "other_if");
+
+  /* generate RFC5444 address */
+  address = _add_rfc5444_address(writer, prv->creator, &addr->if_addr);
+  if (address == NULL) {
+    OLSR_WARN(LOG_NHDP_W, "Could not add address %s to NHDP hello",
+        netaddr_to_string(&buf, &addr->if_addr));
+    return;
+  }
+
+  /* Add LOCALIF TLV */
+  if (this_if) {
+    value = RFC5444_LOCALIF_THIS_IF;
+  }
+  else {
+    value = RFC5444_LOCALIF_OTHER_IF;
+  }
+  rfc5444_writer_add_addrtlv(writer, address,
+      _nhdp_addrtlvs[IDX_TLV_LOCALIF]._tlvtype,
+      &value, sizeof(value), true);
+}
+
+/**
+ * Add a rfc5444 address with link_status or other_neigh TLV to the stream
+ * @param writer
+ * @param prv
+ * @param interf
+ * @param naddr
+ */
+static void
+_add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_provider *prv,
+    struct nhdp_interface *interf, struct nhdp_addr *naddr) {
+  struct rfc5444_writer_address *address;
+  struct netaddr_str buf;
+  uint8_t linkstatus, otherneigh;
+  uint8_t value;
+
+  /* initialize flags for this address */
+  linkstatus = 255;
+  otherneigh = 255;
+
+  if (naddr->link != NULL && naddr->link->local_if == interf
+      && naddr->link->status != NHDP_LINK_PENDING) {
+    linkstatus = naddr->link->status;
+  }
+
+  if (naddr->neigh != NULL && naddr->neigh->symmetric > 0
+      && linkstatus != RFC5444_LINKSTATUS_SYMMETRIC) {
+    otherneigh = RFC5444_OTHERNEIGHB_SYMMETRIC;
+  }
+
+  if (naddr->lost && linkstatus == 255 && otherneigh == 255) {
+    otherneigh = RFC5444_OTHERNEIGHB_LOST;
+  }
+
+  if (linkstatus == 255 && otherneigh == 255) {
+    return;
+  }
+
+  /* generate RFC5444 address */
+  address = _add_rfc5444_address(writer, prv->creator, &naddr->if_addr);
+  if (address == NULL) {
+    OLSR_WARN(LOG_NHDP_W, "Could not add address %s to NHDP hello",
+        netaddr_to_string(&buf, &naddr->if_addr));
+    return;
+  }
+
+  if (linkstatus != 255) {
+    rfc5444_writer_add_addrtlv(writer, address,
+          _nhdp_addrtlvs[IDX_TLV_LINKSTATUS]._tlvtype,
+          &linkstatus, sizeof(linkstatus), true);
+
+    OLSR_DEBUG(LOG_NHDP_W, "Add %s (linkstatus=%d) to NHDP hello",
+        netaddr_to_string(&buf, &naddr->if_addr), naddr->link->status);
+  }
+
+  if (otherneigh != 255) {
+    value = RFC5444_OTHERNEIGHB_SYMMETRIC;
+    rfc5444_writer_add_addrtlv(writer, address,
+        _nhdp_addrtlvs[IDX_TLV_OTHERNEIGHB]._tlvtype,
+        &value, sizeof(value), true);
+
+    OLSR_DEBUG(LOG_NHDP_W, "Add %s (otherneigh=%d) to NHDP hello",
+        netaddr_to_string(&buf, &naddr->if_addr), otherneigh);
+  }
+}
+
+/**
  * Callback to add the addresses and address TLVs to a HELLO message
  * @param writer
  * @param prv
  */
 void
-_cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
+_cb_addAddresses(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
   struct olsr_rfc5444_target *target;
 
-  struct rfc5444_writer_address *address;
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
   struct nhdp_addr *naddr;
-  struct netaddr_str buf;
-  struct netaddr embedded;
-  bool this_if;
-  uint8_t linkstatus, otherneigh;
-  uint8_t value;
 
-  /* have already be checked for message TLVs */
+  /* have already be checked for message TLVs, so they cannot be NULL */
   target = olsr_rfc5444_get_target_from_provider(prv);
   interf = nhdp_interface_get(target->interface->name);
 
-  avl_for_each_element(&nhdp_ifaddr_tree, addr, _global_node) {
-    if (addr->_global_node.follower || addr->removed) {
-      /* each address only once and only active ones */
-      continue;
-    }
+  addr = avl_first_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
+  naddr = avl_first_element_safe(&nhdp_addr_tree, naddr, _global_node);
 
-    /* check if address of local interface */
-    this_if = NULL != avl_find_element(
-        &interf->_if_addresses, &addr->if_addr, addr, _if_node);
+  /* produce a sorted list of addr/naddr objects */
+  while (addr != NULL || naddr != NULL) {
+    /* if there is no naddr anymore or naddr>addr then... */
+    if (naddr == NULL || (addr != NULL &&
+        avl_comp_netaddr_socket(&naddr->if_addr, &addr->if_addr, NULL) > 0)) {
+      /* add another addr with TLV to the steam */
+      if (!addr->_global_node.follower && !addr->removed) {
+        /* each address only once and only active ones */
+        if (netaddr_get_address_family(&addr->if_addr) != AF_INET6
+          || netaddr_get_address_family(&target->dst) != AF_INET) {
+          /* do not send IPv6 addresses over IPv4 */
+          _add_localif_address(writer, prv, interf, addr);
+        }
+      }
 
-    OLSR_DEBUG(LOG_NHDP_W, "Add %s (%s) to NHDP hello",
-        netaddr_to_string(&buf, &addr->if_addr), this_if ? "this_if" : "other_if");
-
-    /* generate RFC5444 address */
-    if (netaddr_get_address_family(&addr->if_addr) == AF_INET
-        && prv->creator->addr_len == 16) {
-      /* generate embedded address */
-      netaddr_embed_ipv4(&embedded, &addr->if_addr);
-      address = rfc5444_writer_add_address(writer, prv->creator,
-          &embedded, 16, true);
-    }
-    else {
-      /* address should already be the right length */
-      assert (netaddr_get_prefix_length(&addr->if_addr) == prv->creator->addr_len*8);
-
-      address = rfc5444_writer_add_address(writer, prv->creator,
-          netaddr_get_binptr(&addr->if_addr),
-          netaddr_get_prefix_length(&addr->if_addr), true);
-    }
-    if (address == NULL) {
-      OLSR_WARN(LOG_NHDP_W, "Could not add address %s to NHDP hello",
-          netaddr_to_string(&buf, &addr->if_addr));
-      continue;
-    }
-
-    /* Add LOCALIF TLV */
-    if (this_if) {
-      value = RFC5444_LOCALIF_THIS_IF;
+      /* move to next addr, NULL if end reached */
+      addr = avl_next_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
     }
     else {
-      value = RFC5444_LOCALIF_OTHER_IF;
-    }
-    rfc5444_writer_add_addrtlv(writer, address,
-        _nhdp_addrtlvs[IDX_TLV_LOCALIF]._tlvtype,
-        &value, sizeof(value), true);
-  }
+      /* otherwise add another naddr with TLVs to the stream */
+      if (netaddr_get_address_family(&naddr->if_addr) != AF_INET6
+          || netaddr_get_address_family(&target->dst) != AF_INET) {
+        _add_link_address(writer, prv, interf, naddr);
+      }
 
-  avl_for_each_element(&nhdp_addr_tree, naddr, _global_node) {
-    /* initialize flags for this address */
-    linkstatus = 255;
-    otherneigh = 255;
-
-    if (naddr->link != NULL && naddr->link->local_if == interf
-        && naddr->link->status != NHDP_LINK_PENDING) {
-      linkstatus = naddr->link->status;
-    }
-
-    if (naddr->neigh != NULL && naddr->neigh->symmetric > 0
-        && linkstatus != RFC5444_LINKSTATUS_SYMMETRIC) {
-      otherneigh = RFC5444_OTHERNEIGHB_SYMMETRIC;
-    }
-
-    if (naddr->lost && linkstatus == 255 && otherneigh == 255) {
-      otherneigh = RFC5444_OTHERNEIGHB_LOST;
-    }
-
-    if (linkstatus == 255 && otherneigh == 255) {
-      continue;
-
-    }
-    /* generate RFC5444 address */
-    if (netaddr_get_address_family(&naddr->if_addr) == AF_INET
-        && prv->creator->addr_len == 16) {
-      /* generate embedded address */
-      netaddr_embed_ipv4(&embedded, &naddr->if_addr);
-      address = rfc5444_writer_add_address(writer, prv->creator,
-          &embedded, 16, true);
-    }
-    else {
-      /* address should already be the right length */
-      assert (netaddr_get_prefix_length(&naddr->if_addr) == prv->creator->addr_len*8);
-
-      address = rfc5444_writer_add_address(writer, prv->creator,
-          netaddr_get_binptr(&naddr->if_addr),
-          netaddr_get_prefix_length(&naddr->if_addr), true);
-    }
-    if (address == NULL) {
-      OLSR_WARN(LOG_NHDP_W, "Could not add address %s to NHDP hello",
-          netaddr_to_string(&buf, &addr->if_addr));
-      continue;
-    }
-
-    if (linkstatus != 255) {
-      rfc5444_writer_add_addrtlv(writer, address,
-            _nhdp_addrtlvs[IDX_TLV_LINKSTATUS]._tlvtype,
-            &linkstatus, sizeof(linkstatus), true);
-
-      OLSR_DEBUG(LOG_NHDP_W, "Add %s (linkstatus=%d) to NHDP hello",
-          netaddr_to_string(&buf, &naddr->if_addr), naddr->link->status);
-    }
-
-    if (otherneigh != 255) {
-      value = RFC5444_OTHERNEIGHB_SYMMETRIC;
-      rfc5444_writer_add_addrtlv(writer, address,
-          _nhdp_addrtlvs[IDX_TLV_OTHERNEIGHB]._tlvtype,
-          &value, sizeof(value), true);
-
-      OLSR_DEBUG(LOG_NHDP_W, "Add %s (otherneigh=%d) to NHDP hello",
-          netaddr_to_string(&buf, &naddr->if_addr), otherneigh);
+      /* move to next naddr, NULL if end reached */
+      naddr = avl_next_element_safe(&nhdp_addr_tree, naddr, _global_node);
     }
   }
 }
