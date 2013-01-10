@@ -67,6 +67,8 @@ static struct nhdp_interface_addr *_addr_add(
 static void _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime);
 static void _cb_remove_addr(void *ptr);
 
+static int avl_comp_ifaddr(const void *k1, const void *k2, void *ptr);
+
 static void _cb_generate_hello(void *ptr);
 static void _cb_cfg_interface_changed(void);
 static void _cb_interface_event(struct olsr_rfc5444_interface_listener *);
@@ -99,6 +101,12 @@ static struct olsr_timer_info _removed_address_hold_timer = {
 
 
 /* additional configuration options for interface section */
+const char *NHDP_INTERFACE_MODES[] = {
+  [NHDP_IPV4] = "ipv4",
+  [NHDP_IPV6] = "ipv6",
+  [NHDP_DUAL] = "dual",
+};
+
 static struct cfg_schema_section _interface_section = {
   .type = CFG_INTERFACE_SECTION,
   .mode = CFG_SSMODE_NAMED,
@@ -106,6 +114,8 @@ static struct cfg_schema_section _interface_section = {
 };
 
 static struct cfg_schema_entry _interface_entries[] = {
+  CFG_MAP_CHOICE(nhdp_interface, mode, "mode",
+      "ipv4", "Mode of interface (ipv4/6/dual)", NHDP_INTERFACE_MODES),
   CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
       "Filter for ip interface addresses that should be included in HELLO messages"),
   CFG_MAP_CLOCK_MIN(nhdp_interface, h_hold_time, "hello-validity", "6.0",
@@ -125,7 +135,7 @@ static struct olsr_rfc5444_protocol *_protocol;
 void
 nhdp_interfaces_init(struct olsr_rfc5444_protocol *p) {
   avl_init(&nhdp_interface_tree, avl_comp_strcasecmp, false, NULL);
-  avl_init(&nhdp_ifaddr_tree, avl_comp_netaddr, true, NULL);
+  avl_init(&nhdp_ifaddr_tree, avl_comp_ifaddr, true, NULL);
   olsr_memcookie_add(&_interface_info);
   olsr_memcookie_add(&_addr_info);
   olsr_timer_add(&_interface_hello_timer);
@@ -183,6 +193,43 @@ nhdp_interfaces_remove_link(struct nhdp_link *lnk) {
 }
 
 /**
+ * Updates the neigh_v4/6only variables of an interface
+ * @param interf nhdp interface
+ */
+void
+nhdp_interfaces_update_neighonly(struct nhdp_interface *interf) {
+  struct nhdp_link *lnk;
+  struct nhdp_addr *addr;
+  bool v4;
+
+  interf->neigh_onlyv4 = false;
+
+  list_for_each_element(&interf->_links, lnk, _if_node) {
+    v4 = false;
+
+    avl_for_each_element(&lnk->_addresses, addr, _link_node) {
+      if (netaddr_get_address_family(&addr->if_addr) == AF_INET6) {
+        v4 = false;
+        break;
+      }
+
+      v4 |= netaddr_get_address_family(&addr->if_addr) == AF_INET;
+    }
+
+    interf->neigh_onlyv4 = v4;
+  }
+}
+
+void
+nhdp_interface_update_addresses(void) {
+  struct nhdp_interface *interf;
+
+  avl_for_each_element(&nhdp_interface_tree, interf, _node) {
+    _cb_interface_event(&interf->rfc5444_if);
+  }
+}
+
+/**
  * Add a nhdp interface
  * @param name name of interface
  * @return pointer to nhdp interface, NULL if out of memory
@@ -221,9 +268,6 @@ _interface_add(const char *name) {
 
     /* init link treee */
     list_init_head(&interf->_links);
-
-    /* handle addresses now */
-    _cb_interface_event(&interf->rfc5444_if);
   }
   return interf;
 }
@@ -281,11 +325,16 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
 
     if_addr->interf = interf;
 
+    /* hook if-addr into interface and global tree */
     if_addr->_global_node.key = &if_addr->if_addr;
     avl_insert(&nhdp_ifaddr_tree, &if_addr->_global_node);
 
     if_addr->_if_node.key = &if_addr->if_addr;
     avl_insert(&interf->_if_addresses, &if_addr->_if_node);
+
+    /* initialize validity timer for removed addresses */
+    if_addr->_vtime.info = &_removed_address_hold_timer;
+    if_addr->_vtime.cb_context = if_addr;
   }
   else {
     if_addr->_to_be_removed = false;
@@ -300,7 +349,12 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
  */
 static void
 _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime) {
+  struct netaddr_str buf;
   assert (!addr->removed);
+
+  OLSR_DEBUG(LOG_NHDP, "Remove %s from NHDP interface %s",
+      netaddr_to_string(&buf, &addr->if_addr), nhdp_interface_get_name(addr->interf));
+
   addr->removed = true;
   olsr_timer_set(&addr->_vtime, vtime);
 }
@@ -322,6 +376,28 @@ _cb_remove_addr(void *ptr) {
   olsr_memcookie_free(&_addr_info, addr);
 }
 
+/**
+ * AVL tree comparator for netaddr objects.
+ * @param k1 pointer to key 1
+ * @param k2 pointer to key 2
+ * @param ptr not used in this comparator
+ * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
+ */
+static int
+avl_comp_ifaddr(const void *k1, const void *k2,
+    void *ptr __attribute__ ((unused))) {
+  const struct netaddr *n1 = k1;
+  const struct netaddr *n2 = k2;
+
+  if (netaddr_get_address_family(n1) > netaddr_get_address_family(n2)) {
+    return 1;
+  }
+  if (netaddr_get_address_family(n1) < netaddr_get_address_family(n2)) {
+    return -1;
+  }
+
+  return memcmp(n1, n2, 16);
+}
 
 /**
  * Callback triggered to generate a Hello on an interface
@@ -339,17 +415,22 @@ _cb_generate_hello(void *ptr) {
 
   OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s", nhdp_interface_get_name(interf));
 
-  /* send both IPv4 and IPv6 (if active) */
-  result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
-  if (result < 0) {
-    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
+  /* send IPv4 if this interface is IPv4-only or if this interface has such neighbors */
+  if (interf->mode == NHDP_IPV4 || interf->neigh_onlyv4) {
+    result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
+    if (result < 0) {
+      OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
+          netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
+    }
   }
 
-  result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
-  if (result < 0) {
-    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
+  /* send IPV6 unless this interface is in IPv4-only mode */
+  if (interf->mode != NHDP_IPV4) {
+    result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
+    if (result < 0) {
+      OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
+          netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
+    }
   }
 }
 
@@ -392,6 +473,9 @@ _cb_cfg_interface_changed(void) {
     return;
   }
 
+  /* trigger interface address change handler */
+  _cb_interface_event(&interf->rfc5444_if);
+
   /* reset hello generation frequency */
   olsr_timer_set(&interf->_hello_timer, interf->refresh_interval);
 
@@ -412,7 +496,6 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
   struct nhdp_interface_addr *addr, *addr_it;
   struct olsr_interface *olsr_interf;
   struct netaddr ip;
-  struct netaddr_str buf;
   size_t i;
 
   OLSR_DEBUG(LOG_NHDP, "NHDP Interface change event: %s", ifl->interface->name);
@@ -424,30 +507,41 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
     addr->_to_be_removed = true;
   }
 
-  /* get all socket addresses that are matching the filter */
-  olsr_interf = olsr_rfc5444_get_core_interface(ifl->interface);
-  for (i = 0; i<olsr_interf->data.addrcount; i++) {
-    if (olsr_acl_check_accept(&interf->ifaddr_filter, &olsr_interf->data.addresses[i])) {
-      _addr_add(interf, &olsr_interf->data.addresses[i]);
-    }
-  }
-
-  /* handle local socket addresses in addition to filter */
-  if (olsr_packet_managed_is_active(&interf->rfc5444_if.interface->_socket, AF_INET)) {
+  /* handle local socket main addresses */
+  if (interf->mode != NHDP_IPV6) {
+    OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv4", ifl->interface->name);
     netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
     _addr_add(interf, &ip);
   }
-  if (olsr_packet_managed_is_active(&interf->rfc5444_if.interface->_socket, AF_INET6)) {
+  if (interf->mode != NHDP_IPV4) {
+    OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv6", ifl->interface->name);
     netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v6.local_socket);
     _addr_add(interf, &ip);
+  }
+
+  /* get all socket addresses that are matching the filter */
+  olsr_interf = olsr_rfc5444_get_core_interface(ifl->interface);
+  for (i = 0; i<olsr_interf->data.addrcount; i++) {
+    struct netaddr *ifaddr = &olsr_interf->data.addresses[i];
+
+    if (netaddr_get_address_family(ifaddr) == AF_INET && !interf->mode ==  NHDP_IPV6) {
+      /* ignore IPv6 addresses in IPv4 mode */
+      continue;
+    }
+    if (netaddr_get_address_family(ifaddr) == AF_INET6 && !interf->mode == NHDP_IPV4) {
+      /* ignore IPv4 addresses in IPv6 mode */
+      continue;
+    }
+
+    /* check if IP address fits to ACL */
+    if (olsr_acl_check_accept(&interf->ifaddr_filter, ifaddr)) {
+      _addr_add(interf, ifaddr);
+    }
   }
 
   /* remove outdated socket addresses */
   avl_for_each_element_safe(&interf->_if_addresses, addr, _if_node, addr_it) {
     if (addr->_to_be_removed) {
-      OLSR_DEBUG(LOG_NHDP, "Remove %s from NHDP interface %s",
-          netaddr_to_string(&buf, &addr->if_addr), nhdp_interface_get_name(interf));
-
       addr->_to_be_removed = false;
       _addr_remove(addr, interf->i_hold_time);
     }

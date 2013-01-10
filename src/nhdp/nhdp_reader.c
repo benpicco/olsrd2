@@ -40,6 +40,7 @@
  */
 
 #include "common/common_types.h"
+#include "common/netaddr.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444_conversion.h"
 #include "rfc5444/rfc5444_reader.h"
@@ -75,7 +76,7 @@ static struct nhdp_addr *_process_localif(struct netaddr *addr);
 
 static enum rfc5444_result _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *,
     struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *,
+static enum rfc5444_result _cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *,
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
@@ -90,7 +91,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
 /* definition of the RFC5444 reader components */
 static struct rfc5444_reader_tlvblock_consumer _nhdp_message_consumer = {
   .start_callback = _cb_message_start_callback,
-  .end_callback = _cb_localif_end_callback,
+  .end_callback = _cb_message_end_callback,
   .block_callback = _cb_messagetlvs,
 };
 
@@ -292,15 +293,32 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
   uint8_t local_if, link_status;
   struct nhdp_addr *naddr;
   struct nhdp_link *lnk;
-  struct netaddr addr;
+  struct netaddr addrbuf1, addrbuf2, *addr;
   struct netaddr_str buf;
 
   local_if = 255;
   link_status = 255;
 
-  if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
+  if (netaddr_from_binary(&addrbuf1, context->addr, context->addr_len, 0)) {
     OLSR_WARN(LOG_NHDP_R, "Could not read incoming address of length %u", context->addr_len);
     return RFC5444_DROP_ADDRESS;
+  }
+
+  if (netaddr_is_in_subnet(&NETADDR_IPV6_IPV4EMBEDDED, &addrbuf1)) {
+    /* embedded IPv4 address */
+    netaddr_extract_ipv4(&addrbuf2, &addrbuf1);
+    addr = &addrbuf2;
+  }
+  else {
+    addr = &addrbuf1;
+  }
+
+  /* ignore wrong IP type if restricted to the other one */
+  if (_current.localif->mode == NHDP_IPV4 && netaddr_get_address_family(addr) == AF_INET6) {
+    return RFC5444_OKAY;
+  }
+  if (_current.localif->mode == NHDP_IPV6 && netaddr_get_address_family(addr) == AF_INET) {
+    return RFC5444_OKAY;
   }
 
   if (_nhdp_localif_address_tlvs[IDX_ADDRTLV1_LOCAL_IF].tlv) {
@@ -311,10 +329,10 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
   }
 
   OLSR_DEBUG(LOG_NHDP_R, "Incoming NHDP message type %d, address %s, local_if %u, link_status %u",
-      context->msg_type, netaddr_to_string(&buf, &addr), local_if, link_status);
+      context->msg_type, netaddr_to_string(&buf, addr), local_if, link_status);
 
   if (local_if != 255) {
-    naddr = _process_localif(&addr);
+    naddr = _process_localif(addr);
     if (naddr == NULL) {
       return RFC5444_DROP_MESSAGE;
     }
@@ -352,13 +370,13 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
   }
 
   /* detect if our own node is seen by our neighbor */
-  if (link_status != 255 && nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
+  if (link_status != 255 && nhdp_interface_addr_if_get(_current.localif, addr) != NULL) {
     if (link_status == RFC5444_LINKSTATUS_LOST) {
-      OLSR_DEBUG(LOG_NHDP_R, "connection lost to ourself for address %s", netaddr_to_string(&buf, &addr));
+      OLSR_DEBUG(LOG_NHDP_R, "connection lost to ourself for address %s", netaddr_to_string(&buf, addr));
       _current.link_lost = true;
     }
     else {
-      OLSR_DEBUG(LOG_NHDP_R, "we heard ourself for address %s", netaddr_to_string(&buf, &addr));
+      OLSR_DEBUG(LOG_NHDP_R, "we heard ourself for address %s", netaddr_to_string(&buf, addr));
       _current.link_heard = true;
     }
   }
@@ -373,7 +391,7 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
  * @return
  */
 static enum rfc5444_result
-_cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
+_cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
     struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
     bool dropped) {
   struct nhdp_addr *naddr, *na_it;
@@ -502,6 +520,8 @@ _cb_localif_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
   /* update link status */
   nhdp_db_link_update_status(_current.link);
 
+  /* update v4/v6-only status of interface */
+  nhdp_interfaces_update_neighonly(_current.localif);
   return RFC5444_OKAY;
 }
 
@@ -516,7 +536,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   uint8_t link_status, other_neigh;
   struct nhdp_2hop *twohop;
-  struct netaddr addr;
+  struct netaddr addrbuf1, addrbuf2, *addr;
   struct netaddr_str buf;
 
   if (_current.link->status != NHDP_LINK_SYMMETRIC) {
@@ -526,11 +546,30 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   link_status = 255;
   other_neigh = 255;
 
-  if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
+  if (netaddr_from_binary(&addrbuf1, context->addr, context->addr_len, 0)) {
     OLSR_WARN(LOG_NHDP_R, "Could not read incoming address of length %u", context->addr_len);
     return RFC5444_DROP_ADDRESS;
   }
 
+  if (netaddr_get_address_family(&addrbuf1) == AF_INET6
+      && netaddr_is_in_subnet(&NETADDR_IPV6_IPV4EMBEDDED, &addrbuf1)) {
+    /* embedded IPv4 address */
+    netaddr_extract_ipv4(&addrbuf2, &addrbuf1);
+    addr = &addrbuf2;
+  }
+  else {
+    addr = &addrbuf1;
+  }
+
+  /* ignore wrong IP type if restricted to the other one */
+  if (_current.localif->mode == NHDP_IPV4 && netaddr_get_address_family(addr) == AF_INET6) {
+    return RFC5444_OKAY;
+  }
+  if (_current.localif->mode == NHDP_IPV6 && netaddr_get_address_family(addr) == AF_INET) {
+    return RFC5444_OKAY;
+  }
+
+  /* read link status and other neighbor TLV value */
   if (_nhdp_neigh_address_tlvs[IDX_ADDRTLV2_LINK_STATUS].tlv) {
     link_status = _nhdp_neigh_address_tlvs[IDX_ADDRTLV2_LINK_STATUS].tlv->single_value[0];
   }
@@ -539,7 +578,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   }
 
   OLSR_DEBUG(LOG_NHDP_R, "Incoming NHDP message type %d, address %s, link_status %u, other_neigh: %u",
-      context->msg_type, netaddr_to_string(&buf, &addr), link_status, other_neigh);
+      context->msg_type, netaddr_to_string(&buf, addr), link_status, other_neigh);
 
   if (link_status == 255 && other_neigh == 255) {
     /* neither link_status nor other_neigh set */
@@ -547,7 +586,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   }
 
   /* Section 12.6.2.1 */
-  if (nhdp_interface_addr_global_get(&addr) != NULL) {
+  if (nhdp_interface_addr_global_get(addr) != NULL) {
     /* is local interface address */
     return RFC5444_OKAY;
   }
@@ -560,9 +599,9 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   if (link_status == RFC5444_LINKSTATUS_SYMMETRIC
       || other_neigh == RFC5444_OTHERNEIGHB_SYMMETRIC){
     /* Section 12.6.2.1: new 2-hop neighbor */
-    twohop  = nhdp_db_2hop_get(_current.link, &addr);
+    twohop  = nhdp_db_2hop_get(_current.link, addr);
     if (twohop == NULL) {
-      twohop = nhdp_db_2hop_insert(_current.link, &addr);
+      twohop = nhdp_db_2hop_insert(_current.link, addr);
     }
     if (twohop != NULL) {
       nhdp_db_2hop_set_vtime(twohop, _current.vtime);
@@ -570,7 +609,7 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   }
   else {
     /* Section 12.6.2.2: lost 2-hop neighbor */
-    twohop = nhdp_db_2hop_get(_current.link, &addr);
+    twohop = nhdp_db_2hop_get(_current.link, addr);
     if (twohop) {
       nhdp_db_2hop_remove(twohop);
     }

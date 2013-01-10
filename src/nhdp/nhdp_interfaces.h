@@ -54,6 +54,14 @@ struct nhdp_interface;
 
 #include "nhdp/nhdp_db.h"
 
+enum nhdp_interface_mode {
+  NHDP_IPV4,
+  NHDP_IPV6,
+  NHDP_DUAL,
+};
+
+extern const char *NHDP_INTERFACE_MODES[3];
+
 /**
  * nhdp_interface represents a local interface participating in the mesh network
  */
@@ -63,6 +71,12 @@ struct nhdp_interface {
 
   /* interval between two hellos sent through this interface */
   uint64_t refresh_interval;
+
+  /* does this interface only work with IPv4/IPv6 or does it dualstack? */
+  enum nhdp_interface_mode mode;
+
+  /* true if this interface has a neighbors that support only ipv4 */
+  bool neigh_onlyv4;
 
   /* See RFC 6130, 5.3.2 and 5.4.1 */
   uint64_t h_hold_time;
@@ -121,6 +135,9 @@ void nhdp_interfaces_cleanup(void);
 void nhdp_interfaces_add_link(struct nhdp_interface *interf,
     struct nhdp_link *lnk);
 void nhdp_interfaces_remove_link(struct nhdp_link *lnk);
+
+void nhdp_interfaces_update_neighonly(struct nhdp_interface *interf);
+void nhdp_interface_update_addresses(void);
 
 /**
  * @param interface name
