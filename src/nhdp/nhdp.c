@@ -144,12 +144,14 @@ nhdp_init(void) {
  */
 void
 nhdp_cleanup(void) {
+  size_t i;
   if (olsr_subsystem_cleanup(&_nhdp_state)) {
     return;
   }
 
-  olsr_telnet_remove(&_cmds[0]);
-  olsr_telnet_remove(&_cmds[1]);
+  for (i=0; i<ARRAYSIZE(_cmds); i++) {
+    olsr_telnet_remove(&_cmds[i]);
+  }
 
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_nhdp_section);
 
