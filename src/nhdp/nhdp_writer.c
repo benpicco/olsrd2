@@ -146,8 +146,6 @@ static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
   struct olsr_rfc5444_target *target;
-  const struct netaddr *originator;
-  struct netaddr embedded;
   struct netaddr_str buf;
 
   if (!message->if_specific) {
@@ -163,41 +161,19 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     return;
   }
 
-  originator = nhdp_get_originator();
-
-  if (netaddr_get_address_family(&target->dst) == AF_INET
-      && netaddr_get_address_family(originator) != AF_INET6) {
-    /* only IPv4 originator on IPv4 socket can produce 4-byte addresses */
+  if (netaddr_get_address_family(&target->dst) == AF_INET) {
     rfc5444_writer_set_msg_addrlen(writer, message, 4);
   }
   else {
     rfc5444_writer_set_msg_addrlen(writer, message, 16);
   }
 
-  switch (netaddr_get_address_family(originator)) {
-    case AF_INET:
-      if (message->addr_len == 16) {
-        /* embed IPV4 originator in IPv6 address */
-        netaddr_embed_ipv4(&embedded, originator);
-        originator = &embedded;
-      }
-      /* no break */
-    case AF_INET6:
-      rfc5444_writer_set_msg_originator(writer, message, netaddr_get_binptr(originator));
-      rfc5444_writer_set_msg_header(writer, message, true, false, true, true);
-      break;
-
-    default:
-      /* no originator */
-      rfc5444_writer_set_msg_header(writer, message, false, false, true, true);
-      break;
-  }
-
+  rfc5444_writer_set_msg_header(writer, message, false, false, true, true);
   rfc5444_writer_set_msg_hoplimit(writer, message, 1);
   rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_next_target_seqno(target));
 
-  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello for originator %s on interface %s",
-      netaddr_to_string(&buf, originator), target->interface->name);
+  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s",
+      target->interface->name);
 }
 
 /**

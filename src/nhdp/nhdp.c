@@ -56,31 +56,11 @@
 /* definitions */
 #define _LOG_NHDP_NAME "nhdp"
 
-struct _nhdp_config {
-  struct netaddr originator;
-};
-
 /* prototypes */
 static enum olsr_telnet_result _cb_nhdp(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _cb_nhdp_neighbor(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _cb_nhdp_link(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _cb_nhdp_interface(struct olsr_telnet_data *con);
-
-static void _cb_cfg_nhdp_changed(void);
-
-/* configuration options for nhdp section */
-static struct cfg_schema_section _nhdp_section = {
-  .type = CFG_NHDP_SECTION,
-  .mode = CFG_SSMODE_UNNAMED,
-  .cb_delta_handler = _cb_cfg_nhdp_changed,
-};
-
-static struct cfg_schema_entry _nhdp_entries[] = {
-  CFG_MAP_NETADDR_V46(_nhdp_config, originator, "originator", "-",
-      "Originator address for all NHDP messages", false, true),
-};
-
-static struct _nhdp_config _config;
 
 /* nhdp telnet commands */
 struct olsr_telnet_command _cmds[] = {
@@ -125,12 +105,6 @@ nhdp_init(void) {
   nhdp_interfaces_init(_protocol);
   nhdp_db_init();
 
-  /* add additional configuration for interface section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_nhdp_section,
-      _nhdp_entries, ARRAYSIZE(_nhdp_entries));
-
-  memset(&_config, 0, sizeof(_config));
-
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
   }
@@ -153,21 +127,11 @@ nhdp_cleanup(void) {
     olsr_telnet_remove(&_cmds[i]);
   }
 
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_nhdp_section);
-
   nhdp_db_cleanup();
   nhdp_interfaces_cleanup();
 
   nhdp_writer_cleanup();
   nhdp_reader_cleanup();
-}
-
-/**
- * @return NHDP originator address for HELLOs
- */
-const struct netaddr *
-nhdp_get_originator(void) {
-  return &_config.originator;
 }
 
 static enum olsr_telnet_result
@@ -312,16 +276,4 @@ _cb_nhdp_interface(struct olsr_telnet_data *con) {
     }
   }
   return TELNET_RESULT_ACTIVE;
-}
-
-/**
- * Configuration has changed, handle the changes
- */
-static void
-_cb_cfg_nhdp_changed(void) {
-  if (cfg_schema_tobin(&_config, _nhdp_section.post,
-      _nhdp_entries, ARRAYSIZE(_nhdp_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP settings.");
-    return;
-  }
 }
