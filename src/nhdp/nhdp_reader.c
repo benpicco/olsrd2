@@ -445,6 +445,10 @@ _cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
 
       /* Section 12.5.2: remove link if no address left */
       if (lnk != NULL && lnk->_addresses.count == 0) {
+        if (lnk == _current.link) {
+          /* cleanup marker */
+          _current.link = NULL;
+        }
         nhdp_db_link_remove(lnk);
       }
 
