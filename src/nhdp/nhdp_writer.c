@@ -146,7 +146,6 @@ static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
   struct olsr_rfc5444_target *target;
-  struct nhdp_interface *interf;
   struct netaddr_str buf;
 
   if (!message->if_specific) {
@@ -161,9 +160,6 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
         netaddr_to_string(&buf, &target->dst));
     return;
   }
-
-  interf = nhdp_interface_get(target->interface->name);
-  assert(interf);
 
   if (netaddr_get_address_family(&target->dst) == AF_INET) {
     rfc5444_writer_set_msg_addrlen(writer, message, 4);
