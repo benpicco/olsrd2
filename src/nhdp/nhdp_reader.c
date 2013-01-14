@@ -202,6 +202,10 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __a
   /* remember local NHDP interface */
   _current.localif = nhdp_interface_get(_protocol->input_interface->name);
 
+  if ((context->addr_len == 4 && _current.localif->mode == NHDP_IPV6)
+      || (context->addr_len == 16 && _current.localif->mode == NHDP_IPV4)) {
+    return RFC5444_DROP_MESSAGE;
+  }
   return RFC5444_OKAY;
 }
 

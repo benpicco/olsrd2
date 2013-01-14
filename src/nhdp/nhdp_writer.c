@@ -176,8 +176,8 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
   rfc5444_writer_set_msg_hoplimit(writer, message, 1);
   rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_next_target_seqno(target));
 
-  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s",
-      target->interface->name);
+  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s (%s)",
+      target->interface->name, message->addr_len == 16 ? "ipv6" : "ipv4");
 }
 
 /**

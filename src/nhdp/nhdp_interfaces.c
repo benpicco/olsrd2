@@ -200,23 +200,21 @@ void
 nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf) {
   struct nhdp_link *lnk;
   struct nhdp_addr *addr;
-  bool v4;
+  bool v4only;
 
   interf->neigh_onlyv4 = false;
 
   list_for_each_element(&interf->_links, lnk, _if_node) {
-    v4 = false;
+    v4only = true;
 
     avl_for_each_element(&lnk->_addresses, addr, _link_node) {
       if (netaddr_get_address_family(&addr->if_addr) == AF_INET6) {
-        v4 = false;
+        v4only = false;
         break;
       }
-
-      v4 |= netaddr_get_address_family(&addr->if_addr) == AF_INET;
     }
 
-    interf->neigh_onlyv4 = v4;
+    interf->neigh_onlyv4 |= v4only;
   }
 }
 
@@ -413,7 +411,8 @@ _cb_generate_hello(void *ptr) {
 
   interf = ptr;
 
-  OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s", nhdp_interface_get_name(interf));
+  OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s (mode=%d)",
+      nhdp_interface_get_name(interf), interf->mode);
 
   /* send IPv4 if this interface is IPv4-only or if this interface has such neighbors */
   if (interf->mode == NHDP_IPV4 || interf->neigh_onlyv4) {
