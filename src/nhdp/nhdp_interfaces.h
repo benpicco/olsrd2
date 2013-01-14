@@ -136,7 +136,7 @@ void nhdp_interfaces_add_link(struct nhdp_interface *interf,
     struct nhdp_link *lnk);
 void nhdp_interfaces_remove_link(struct nhdp_link *lnk);
 
-void nhdp_interfaces_update_neighonly(struct nhdp_interface *interf);
+void nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf);
 void nhdp_interface_update_addresses(void);
 
 /**

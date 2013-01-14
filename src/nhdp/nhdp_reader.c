@@ -72,7 +72,8 @@ enum {
 };
 
 /* prototypes */
-static struct nhdp_addr *_process_localif(struct netaddr *addr);
+static struct nhdp_addr *_process_localif(struct netaddr *addr, bool ipv6);
+static void _initialize_neighbor_for_processing(struct nhdp_neighbor *neigh, bool ipv6);
 
 static enum rfc5444_result _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *,
     struct rfc5444_reader_tlvblock_context *context);
@@ -175,11 +176,12 @@ nhdp_reader_cleanup(void) {
  * @param neigh nhdp neighbor
  */
 static void
-_initialize_neighbor_for_processing(struct nhdp_neighbor *neigh) {
+_initialize_neighbor_for_processing(struct nhdp_neighbor *neigh, bool ipv6) {
   struct nhdp_addr *naddr;
 
   avl_for_each_element(&neigh->_addresses, naddr, _neigh_node) {
-    if (!naddr->lost) {
+    if (!naddr->lost
+        && (netaddr_get_address_family(&naddr->if_addr) == AF_INET || ipv6)) {
       naddr->_might_be_removed = true;
     }
     naddr->_this_if = false;
@@ -231,7 +233,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
  * @return nhdp address
  */
 static struct nhdp_addr *
-_process_localif(struct netaddr *addr) {
+_process_localif(struct netaddr *addr, bool ipv6) {
   struct netaddr_str buf;
   struct nhdp_addr *naddr;
 
@@ -265,14 +267,14 @@ _process_localif(struct netaddr *addr) {
   /* address already exists, handle overlapping neighbor references */
   if (_current.neighbor == NULL) {
     /* its just the first address, everything is fine */
-    _initialize_neighbor_for_processing(naddr->neigh);
+    _initialize_neighbor_for_processing(naddr->neigh, ipv6);
     _current.neighbor = naddr->neigh;
   }
   else if (_current.neighbor != naddr->neigh) {
     /* overlapping neighbors, join them */
-    _initialize_neighbor_for_processing(naddr->neigh);
+    _initialize_neighbor_for_processing(naddr->neigh, ipv6);
 
-    nhdp_db_neighbor_join(_current.neighbor, naddr->neigh);
+    nhdp_db_neighbor_join(naddr->neigh, _current.neighbor);
   }
 
   /* mark the current address */
@@ -332,7 +334,7 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
       context->msg_type, netaddr_to_string(&buf, addr), local_if, link_status);
 
   if (local_if != 255) {
-    naddr = _process_localif(addr);
+    naddr = _process_localif(addr, context->addr_len == 16);
     if (naddr == NULL) {
       return RFC5444_DROP_MESSAGE;
     }
@@ -392,8 +394,7 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
  */
 static enum rfc5444_result
 _cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
-    bool dropped) {
+    struct rfc5444_reader_tlvblock_context *context, bool dropped) {
   struct nhdp_addr *naddr, *na_it;
   struct nhdp_2hop *twohop, *twohop_it;
   struct nhdp_link *lnk;
@@ -415,7 +416,7 @@ _cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
     /* add source address of incoming message as this_if */
     netaddr_from_socket(&addr, _protocol->input_address);
 
-    naddr = _process_localif(&addr);
+    naddr = _process_localif(&addr, context->addr_len == 16);
     if (!naddr) {
       /* out of memory */
       return RFC5444_DROP_MESSAGE;
@@ -525,7 +526,12 @@ _cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
   nhdp_db_link_update_status(_current.link);
 
   /* update v4/v6-only status of interface */
-  nhdp_interfaces_update_neighonly(_current.localif);
+  nhdp_interfaces_update_neigh_addresstype(_current.localif);
+
+  if (context->addr_len == 16) {
+    /* update vtime_v6 timer */
+    olsr_timer_set(&_current.link->vtime_v6, _current.vtime);
+  }
   return RFC5444_OKAY;
 }
 

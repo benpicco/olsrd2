@@ -37,6 +37,9 @@ struct nhdp_link {
   /* timer that fires when the link has to be removed from the database */
   struct olsr_timer_entry vtime;
 
+  /* timer that fires when the ipv6 addresses of this link have to be removed */
+  struct olsr_timer_entry vtime_v6;
+
   /* cached status of the linked */
   enum nhdp_link_status status;
 
@@ -87,7 +90,7 @@ struct nhdp_addr {
   /* neighbor entry for address */
   struct nhdp_neighbor *neigh;
 
-  /* validty time for this address */
+  /* validty time for this address if it is lost */
   struct olsr_timer_entry vtime;
 
   /* true if address has timed out */

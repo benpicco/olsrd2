@@ -27,6 +27,7 @@ static void _link_status_not_symmetric_anymore(struct nhdp_link *lnk);
 int _nhdp_db_link_calculate_status(struct nhdp_link *lnk);
 
 static void _cb_link_vtime(void *);
+static void _cb_link_vtime_v6(void *);
 static void _cb_link_heard(void *);
 static void _cb_link_symtime(void *);
 static void _cb_addr_vtime(void *);
@@ -56,6 +57,11 @@ static struct olsr_memcookie_info _2hop_info = {
 static struct olsr_timer_info _link_vtime_info = {
   .name = "NHDP link vtime",
   .callback = _cb_link_vtime,
+};
+
+static struct olsr_timer_info _link_vtimev6_info = {
+  .name = "NHDP link vtime v6",
+  .callback = _cb_link_vtime_v6,
 };
 
 static struct olsr_timer_info _link_heard_info = {
@@ -106,6 +112,7 @@ nhdp_db_init(void) {
   olsr_memcookie_add(&_2hop_info);
 
   olsr_timer_add(&_link_vtime_info);
+  olsr_timer_add(&_link_vtimev6_info);
   olsr_timer_add(&_link_heard_info);
   olsr_timer_add(&_link_symtime_info);
   olsr_timer_add(&_addr_vtime_info);
@@ -135,6 +142,7 @@ nhdp_db_cleanup(void) {
   olsr_timer_remove(&_addr_vtime_info);
   olsr_timer_remove(&_link_symtime_info);
   olsr_timer_remove(&_link_heard_info);
+  olsr_timer_remove(&_link_vtimev6_info);
   olsr_timer_remove(&_link_vtime_info);
 
   /* cleanup all memory cookies */
@@ -271,6 +279,8 @@ nhdp_db_link_insert(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if
   lnk->heard_time.cb_context = lnk;
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
+  lnk->vtime_v6.info = &_link_vtimev6_info;
+  lnk->vtime_v6.cb_context = lnk;
 
   return lnk;
 }
@@ -292,6 +302,7 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   olsr_timer_stop(&lnk->sym_time);
   olsr_timer_stop(&lnk->heard_time);
   olsr_timer_stop(&lnk->vtime);
+  olsr_timer_stop(&lnk->vtime_v6);
 
   /* detach all addresses */
   avl_for_each_element_safe(&lnk->_addresses, naddr, _link_node, na_it) {
@@ -632,6 +643,30 @@ _cb_link_vtime(void *ptr) {
   /* check if neighbor still has links */
   if (list_is_empty(&neigh->_links)) {
     nhdp_db_neighbor_remove(neigh);
+  }
+}
+
+/**
+ * Callback triggered when link validity timer for ipv6 addresses fires
+ * @param ptr nhdp link
+ */
+static void
+_cb_link_vtime_v6(void *ptr) {
+  struct nhdp_link *lnk = ptr;
+  struct nhdp_addr *naddr, *na_it;
+
+  OLSR_DEBUG(LOG_NHDP, "Link vtime_v6 fired: 0x%0zx", (size_t)ptr);
+
+  /* remove all IPv6 addresses from link */
+  avl_for_each_element_safe(&lnk->_addresses, naddr, _link_node, na_it) {
+    if (netaddr_get_address_family(&naddr->if_addr) == AF_INET6) {
+      nhdp_db_addr_remove(naddr);
+    }
+  }
+
+  if (lnk->_addresses.count == 0) {
+    /* no address left, remove link */
+    _cb_link_vtime(lnk);
   }
 }
 
