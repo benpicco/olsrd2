@@ -125,6 +125,7 @@ static enum log_source LOG_NHDP_CHECK = LOG_MAIN;
  */
 static int
 _cb_plugin_load(void) {
+  LOG_NHDP_CHECK = olsr_log_register_source("nhdp_check");
   return 0;
 }
 
@@ -147,8 +148,6 @@ _cb_plugin_enable(void) {
   if (_protocol == NULL) {
     return -1;
   }
-
-  LOG_NHDP_CHECK = olsr_log_register_source("nhdp_check");
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_message_consumer,
