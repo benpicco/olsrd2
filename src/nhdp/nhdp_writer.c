@@ -54,9 +54,9 @@
 
 /* constants */
 enum {
-  IDX_TLV_LOCALIF,
-  IDX_TLV_LINKSTATUS,
-  IDX_TLV_OTHERNEIGHB,
+  IDX_ADDRTLV_LOCAL_IF,
+  IDX_ADDRTLV_LINK_STATUS,
+  IDX_ADDRTLV_OTHER_NEIGHB,
 };
 
 /* prototypes */
@@ -87,9 +87,9 @@ static struct rfc5444_writer_content_provider _nhdp_msgcontent_provider = {
 };
 
 static struct rfc5444_writer_addrtlv_block _nhdp_addrtlvs[] = {
-  [IDX_TLV_LOCALIF] =     { .type = RFC5444_ADDRTLV_LOCAL_IF },
-  [IDX_TLV_LINKSTATUS] =  { .type = RFC5444_ADDRTLV_LINK_STATUS },
-  [IDX_TLV_OTHERNEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB },
+  [IDX_ADDRTLV_LOCAL_IF] =     { .type = RFC5444_ADDRTLV_LOCAL_IF },
+  [IDX_ADDRTLV_LINK_STATUS] =  { .type = RFC5444_ADDRTLV_LINK_STATUS },
+  [IDX_ADDRTLV_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB },
 };
 
 static struct olsr_rfc5444_protocol *_protocol;
@@ -279,7 +279,7 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
     value = RFC5444_LOCALIF_OTHER_IF;
   }
   rfc5444_writer_add_addrtlv(writer, address,
-      _nhdp_addrtlvs[IDX_TLV_LOCALIF]._tlvtype,
+      _nhdp_addrtlvs[IDX_ADDRTLV_LOCAL_IF]._tlvtype,
       &value, sizeof(value), true);
 }
 
@@ -330,7 +330,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
 
   if (linkstatus != 255) {
     rfc5444_writer_add_addrtlv(writer, address,
-          _nhdp_addrtlvs[IDX_TLV_LINKSTATUS]._tlvtype,
+          _nhdp_addrtlvs[IDX_ADDRTLV_LINK_STATUS]._tlvtype,
           &linkstatus, sizeof(linkstatus), true);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (linkstatus=%d) to NHDP hello",
@@ -340,7 +340,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   if (otherneigh != 255) {
     value = RFC5444_OTHERNEIGHB_SYMMETRIC;
     rfc5444_writer_add_addrtlv(writer, address,
-        _nhdp_addrtlvs[IDX_TLV_OTHERNEIGHB]._tlvtype,
+        _nhdp_addrtlvs[IDX_ADDRTLV_OTHER_NEIGHB]._tlvtype,
         &value, sizeof(value), true);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (otherneigh=%d) to NHDP hello",

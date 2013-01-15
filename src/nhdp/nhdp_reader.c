@@ -147,13 +147,16 @@ nhdp_reader_init(struct olsr_rfc5444_protocol *p) {
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_message_consumer,
-      _nhdp_message_tlvs, ARRAYSIZE(_nhdp_message_tlvs), RFC5444_MSGTYPE_HELLO, 0);
+      _nhdp_message_tlvs, ARRAYSIZE(_nhdp_message_tlvs),
+      RFC5444_MSGTYPE_HELLO, RFC5444_MAIN_PARSER_PRIORITY);
   rfc5444_reader_add_address_consumer(
       &_protocol->reader, &_nhdp_localif_address_consumer,
-      _nhdp_localif_address_tlvs, ARRAYSIZE(_nhdp_localif_address_tlvs), RFC5444_MSGTYPE_HELLO, 0);
+      _nhdp_localif_address_tlvs, ARRAYSIZE(_nhdp_localif_address_tlvs),
+      RFC5444_MSGTYPE_HELLO, RFC5444_MAIN_PARSER_PRIORITY);
   rfc5444_reader_add_address_consumer(
       &_protocol->reader, &_nhdp_neigh_address_consumer,
-      _nhdp_neigh_address_tlvs, ARRAYSIZE(_nhdp_neigh_address_tlvs), RFC5444_MSGTYPE_HELLO, 1);
+      _nhdp_neigh_address_tlvs, ARRAYSIZE(_nhdp_neigh_address_tlvs),
+      RFC5444_MSGTYPE_HELLO, RFC5444_MAIN_PARSER_PRIORITY+1);
 }
 
 /**
