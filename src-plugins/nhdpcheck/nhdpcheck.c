@@ -172,6 +172,9 @@ _cb_plugin_disable(void) {
       &_protocol->reader, &_nhdp_message_consumer);
   rfc5444_reader_remove_address_consumer(
       &_protocol->reader, &_nhdp_address_consumer);
+
+  olsr_rfc5444_remove_protocol(_protocol);
+  _protocol = NULL;
   return 0;
 }
 
