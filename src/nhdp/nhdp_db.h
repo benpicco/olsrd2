@@ -52,6 +52,12 @@ struct nhdp_link {
   /* true if link is considered lost at the moment */
   bool hyst_lost;
 
+  /* true if link is used as flooding MPR */
+  bool mpr_flooding;
+
+  /* true if link is used as routing MPR */
+  bool mpr_routing;
+
   /* pointer to local interface for this link */
   struct nhdp_interface *local_if;
 
@@ -149,6 +155,15 @@ struct nhdp_neighbor {
   struct list_entity _node;
 };
 
+/* handler for generating MPR information of a link */
+struct nhdp_mpr_handler {
+  /* name of handler */
+  const char *name;
+
+  /* update mprs of link, update all mprs if link is NULL */
+  void (* update_mprs)(struct nhdp_link *);
+};
+
 EXPORT extern struct avl_tree nhdp_addr_tree;
 EXPORT extern struct avl_tree nhdp_2hop_tree;
 EXPORT extern struct list_entity nhdp_neigh_list;
@@ -178,6 +193,11 @@ EXPORT void nhdp_db_addr_remove_lost(struct nhdp_addr *);
 EXPORT struct nhdp_2hop *nhdp_db_2hop_insert(
     struct nhdp_link *, struct netaddr *);
 EXPORT void nhdp_db_2hop_remove(struct nhdp_2hop *);
+
+EXPORT void nhdp_db_set_flooding_mpr(struct nhdp_mpr_handler *);
+EXPORT void nhdp_db_set_routing_mpr(struct nhdp_mpr_handler *);
+EXPORT void nhdp_db_update_flooding_mpr(struct nhdp_link *);
+EXPORT void nhdp_db_update_routing_mpr(struct nhdp_link *);
 
 /**
  * Sets the validity time of a nhdp link
@@ -257,5 +277,4 @@ nhdp_db_2hop_set_vtime(
     struct nhdp_2hop *n2, uint64_t vtime) {
   olsr_timer_set(&n2->_vtime, vtime);
 }
-
 #endif /* NHDP_DB_H_ */

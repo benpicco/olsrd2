@@ -58,9 +58,9 @@
 
 /* prototypes */
 static enum olsr_telnet_result _cb_nhdp(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _cb_nhdp_neighbor(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _cb_nhdp_link(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _cb_nhdp_interface(struct olsr_telnet_data *con);
+static enum olsr_telnet_result _telnet_nhdp_neighbor(struct olsr_telnet_data *con);
+static enum olsr_telnet_result _telnet_nhdp_link(struct olsr_telnet_data *con);
+static enum olsr_telnet_result _telnet_nhdp_interface(struct olsr_telnet_data *con);
 
 /* nhdp telnet commands */
 struct olsr_telnet_command _cmds[] = {
@@ -71,6 +71,7 @@ struct olsr_telnet_command _cmds[] = {
         "\"nhdp interface\": shows all local nhdp interfaces including addresses\n"),
 };
 
+/* other global variables */
 OLSR_SUBSYSTEM_STATE(_nhdp_state);
 
 enum log_source LOG_NHDP = LOG_MAIN;
@@ -134,18 +135,23 @@ nhdp_cleanup(void) {
   nhdp_reader_cleanup();
 }
 
+/**
+ * Callback triggered when the nhdp telnet command is called
+ * @param con
+ * @return
+ */
 static enum olsr_telnet_result
 _cb_nhdp(struct olsr_telnet_data *con) {
   const char *next;
 
   if ((next = str_hasnextword(con->parameter, "link"))) {
-    return _cb_nhdp_link(con);
+    return _telnet_nhdp_link(con);
   }
   if ((next = str_hasnextword(con->parameter, "neighbor"))) {
-    return _cb_nhdp_neighbor(con);
+    return _telnet_nhdp_neighbor(con);
   }
   if ((next = str_hasnextword(con->parameter, "interface"))) {
-    return _cb_nhdp_interface(con);
+    return _telnet_nhdp_interface(con);
   }
 
 
@@ -157,12 +163,12 @@ _cb_nhdp(struct olsr_telnet_data *con) {
 }
 
 /**
- * Callback triggered for nhdp_neighbor telnet command
+ * handle the "nhdp neighbor" command
  * @param con
  * @return
  */
 static enum olsr_telnet_result
-_cb_nhdp_neighbor(struct olsr_telnet_data *con) {
+_telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
   struct nhdp_neighbor *neigh;
   struct nhdp_addr *naddr;
   struct netaddr_str nbuf;
@@ -189,12 +195,12 @@ _cb_nhdp_neighbor(struct olsr_telnet_data *con) {
 }
 
 /**
- * Callback triggered for nhdp_link command
+ * Handle the "nhdp link" command
  * @param con
  * @return
  */
 static enum olsr_telnet_result
-_cb_nhdp_link(struct olsr_telnet_data *con) {
+_telnet_nhdp_link(struct olsr_telnet_data *con) {
   static const char *PENDING = "pending";
   static const char *HEARD = "heard";
   static const char *SYMMETRIC = "symmetric";
@@ -247,8 +253,13 @@ _cb_nhdp_link(struct olsr_telnet_data *con) {
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Handle the "nhdp interface" telnet command
+ * @param con
+ * @return
+ */
 static enum olsr_telnet_result
-_cb_nhdp_interface(struct olsr_telnet_data *con) {
+_telnet_nhdp_interface(struct olsr_telnet_data *con) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
   struct timeval_str tbuf1, tbuf2;

@@ -315,6 +315,11 @@ _cb_localif_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attr
 
   if (netaddr_is_in_subnet(&NETADDR_IPV6_IPV4EMBEDDED, &addrbuf1)) {
     /* embedded IPv4 address */
+    if (_current.localif->mode == NHDP_IPV6) {
+      /* ignore it, not dualstack mode */
+      return RFC5444_OKAY;
+    }
+
     netaddr_extract_ipv4(&addrbuf2, &addrbuf1);
     addr = &addrbuf2;
   }
@@ -535,6 +540,10 @@ _cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
   /* update v4/v6-only status of interface */
   nhdp_interfaces_update_neigh_addresstype(_current.localif);
 
+  /* update MPR set */
+  nhdp_db_update_flooding_mpr(_current.link);
+  nhdp_db_update_flooding_mpr(_current.link);
+
   if (context->addr_len == 16) {
     /* update vtime_v6 timer */
     olsr_timer_set(&_current.link->vtime_v6, _current.vtime);
@@ -568,9 +577,13 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
     return RFC5444_DROP_ADDRESS;
   }
 
-  if (netaddr_get_address_family(&addrbuf1) == AF_INET6
-      && netaddr_is_in_subnet(&NETADDR_IPV6_IPV4EMBEDDED, &addrbuf1)) {
+  if (netaddr_is_in_subnet(&NETADDR_IPV6_IPV4EMBEDDED, &addrbuf1)) {
     /* embedded IPv4 address */
+    if (_current.localif->mode == NHDP_IPV6) {
+      /* ignore it, not dualstack mode */
+      return RFC5444_OKAY;
+    }
+
     netaddr_extract_ipv4(&addrbuf2, &addrbuf1);
     addr = &addrbuf2;
   }

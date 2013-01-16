@@ -124,7 +124,7 @@ static struct cfg_schema_entry _interface_entries[] = {
     "Time interval between two NHDP Hello Messages", 100),
 };
 
-/* pointer to default rfc5444 protocol */
+/* other global variables */
 static struct olsr_rfc5444_protocol *_protocol;
 
 // TODO: add callback provider

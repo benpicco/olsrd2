@@ -96,6 +96,9 @@ struct list_entity nhdp_neigh_list;
 /* list of links (to neighbors) */
 struct list_entity nhdp_link_list;
 
+/* MPR handlers */
+struct nhdp_mpr_handler *_flooding_mpr, *_routing_mpr;
+
 /**
  * Initialize NHDP databases
  */
@@ -117,6 +120,9 @@ nhdp_db_init(void) {
   olsr_timer_add(&_link_symtime_info);
   olsr_timer_add(&_addr_vtime_info);
   olsr_timer_add(&_2hop_vtime_info);
+
+  _flooding_mpr = NULL;
+  _routing_mpr = NULL;
 }
 
 /**
@@ -281,6 +287,10 @@ nhdp_db_link_insert(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if
   lnk->vtime.cb_context = lnk;
   lnk->vtime_v6.info = &_link_vtimev6_info;
   lnk->vtime_v6.cb_context = lnk;
+
+  /* init MPR settings to default */
+  lnk->mpr_flooding = true;
+  lnk->mpr_routing = true;
 
   return lnk;
 }
@@ -519,6 +529,70 @@ nhdp_db_2hop_remove(struct nhdp_2hop *twohop) {
   olsr_timer_stop(&twohop->_vtime);
 
   olsr_memcookie_free(&_2hop_info, twohop);
+}
+
+/**
+ * Sets a new NHDP flooding MPR handler
+ * @param mprh pointer to handler, NULL if no handler
+ */
+void
+nhdp_db_set_flooding_mpr(struct nhdp_mpr_handler *mprh) {
+  _flooding_mpr = mprh;
+  nhdp_db_update_flooding_mpr(NULL);
+}
+
+/**
+ * Sets a new NHDP routing MPR handler
+ * @param mprh pointer to handler, NULL if no handler
+ */
+void
+nhdp_db_set_routing_mpr(struct nhdp_mpr_handler *mprh) {
+  _routing_mpr = mprh;
+  nhdp_db_update_routing_mpr(NULL);
+}
+
+/**
+ * Update the set of flooding MPRs
+ * @param lnk pointer to link that changed, NULL if a change
+ *   on multiple links might have happened
+ */
+void
+nhdp_db_update_flooding_mpr(struct nhdp_link *lnk) {
+  if (_flooding_mpr) {
+    _flooding_mpr->update_mprs(lnk);
+    return;
+  }
+
+  if (lnk) {
+    lnk->mpr_flooding = true;
+    return;
+  }
+
+  list_for_each_element(&nhdp_link_list, lnk, _global_node) {
+    lnk->mpr_flooding = true;
+  }
+}
+
+/**
+ * Update the set of routing MPRs
+ * @param lnk pointer to link that changed, NULL if a change
+ *   on multiple links might have happened
+ */
+void
+nhdp_db_update_routing_mpr(struct nhdp_link *lnk) {
+  if (_routing_mpr) {
+    _routing_mpr->update_mprs(lnk);
+    return;
+  }
+
+  if (lnk) {
+    lnk->mpr_routing = true;
+    return;
+  }
+
+  list_for_each_element(&nhdp_link_list, lnk, _global_node) {
+    lnk->mpr_routing = true;
+  }
 }
 
 /**
