@@ -468,7 +468,7 @@ _cb_cfg_interface_changed(void) {
 
   if (cfg_schema_tobin(interf, _interface_section.post,
       _interface_entries, ARRAYSIZE(_interface_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert timing settings for Hello.");
+    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP configuration for interface.");
     return;
   }
 
@@ -523,11 +523,11 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
   for (i = 0; i<olsr_interf->data.addrcount; i++) {
     struct netaddr *ifaddr = &olsr_interf->data.addresses[i];
 
-    if (netaddr_get_address_family(ifaddr) == AF_INET && !interf->mode ==  NHDP_IPV6) {
+    if (netaddr_get_address_family(ifaddr) == AF_INET && interf->mode ==  NHDP_IPV6) {
       /* ignore IPv6 addresses in IPv4 mode */
       continue;
     }
-    if (netaddr_get_address_family(ifaddr) == AF_INET6 && !interf->mode == NHDP_IPV4) {
+    if (netaddr_get_address_family(ifaddr) == AF_INET6 && interf->mode == NHDP_IPV4) {
       /* ignore IPv4 addresses in IPv6 mode */
       continue;
     }

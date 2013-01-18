@@ -541,8 +541,8 @@ _cb_message_end_callback(struct rfc5444_reader_tlvblock_consumer *consumer __att
   nhdp_interfaces_update_neigh_addresstype(_current.localif);
 
   /* update MPR set */
-  nhdp_db_update_flooding_mpr(_current.link);
-  nhdp_db_update_flooding_mpr(_current.link);
+  nhdp_mpr_update_flooding(_current.link);
+  nhdp_mpr_update_flooding(_current.link);
 
   if (context->addr_len == 16) {
     /* update vtime_v6 timer */

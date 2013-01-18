@@ -194,11 +194,6 @@ EXPORT struct nhdp_2hop *nhdp_db_2hop_insert(
     struct nhdp_link *, struct netaddr *);
 EXPORT void nhdp_db_2hop_remove(struct nhdp_2hop *);
 
-EXPORT void nhdp_db_set_flooding_mpr(struct nhdp_mpr_handler *);
-EXPORT void nhdp_db_set_routing_mpr(struct nhdp_mpr_handler *);
-EXPORT void nhdp_db_update_flooding_mpr(struct nhdp_link *);
-EXPORT void nhdp_db_update_routing_mpr(struct nhdp_link *);
-
 /**
  * Sets the validity time of a nhdp link
  * @param lnk pointer to nhdp link

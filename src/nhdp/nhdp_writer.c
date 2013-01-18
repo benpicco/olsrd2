@@ -57,6 +57,7 @@ enum {
   IDX_ADDRTLV_LOCAL_IF,
   IDX_ADDRTLV_LINK_STATUS,
   IDX_ADDRTLV_OTHER_NEIGHB,
+  IDX_ADDRTLV_MPR
 };
 
 /* prototypes */
@@ -90,6 +91,7 @@ static struct rfc5444_writer_addrtlv_block _nhdp_addrtlvs[] = {
   [IDX_ADDRTLV_LOCAL_IF] =     { .type = RFC5444_ADDRTLV_LOCAL_IF },
   [IDX_ADDRTLV_LINK_STATUS] =  { .type = RFC5444_ADDRTLV_LINK_STATUS },
   [IDX_ADDRTLV_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB },
+  [IDX_ADDRTLV_MPR] =          { .type = RFC5444_ADDRTLV_MPR },
 };
 
 static struct olsr_rfc5444_protocol *_protocol;
@@ -184,7 +186,7 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
 static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
-  uint8_t vtime_encoded, itime_encoded;
+  uint8_t vtime_encoded, itime_encoded, will;
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
 
@@ -210,6 +212,13 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
       &itime_encoded, sizeof(itime_encoded));
   rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
       &vtime_encoded, sizeof(vtime_encoded));
+
+  if (nhdp_mpr_is_active()) {
+    will = nhdp_mpr_get_willingness();
+
+    rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, 0,
+        &will, sizeof(will));
+  }
 }
 
 /**
@@ -297,6 +306,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   struct netaddr_str buf;
   uint8_t linkstatus, otherneigh;
   uint8_t value;
+  bool flooding, routing;
 
   /* initialize flags for this address */
   linkstatus = 255;
@@ -316,10 +326,6 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
     otherneigh = RFC5444_OTHERNEIGHB_LOST;
   }
 
-  if (linkstatus == 255 && otherneigh == 255) {
-    return;
-  }
-
   /* generate RFC5444 address */
   address = _add_rfc5444_address(writer, prv->creator, &naddr->if_addr);
   if (address == NULL) {
@@ -331,7 +337,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   if (linkstatus != 255) {
     rfc5444_writer_add_addrtlv(writer, address,
           _nhdp_addrtlvs[IDX_ADDRTLV_LINK_STATUS]._tlvtype,
-          &linkstatus, sizeof(linkstatus), true);
+          &linkstatus, sizeof(linkstatus), false);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (linkstatus=%d) to NHDP hello",
         netaddr_to_string(&buf, &naddr->if_addr), naddr->link->status);
@@ -341,11 +347,35 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
     value = RFC5444_OTHERNEIGHB_SYMMETRIC;
     rfc5444_writer_add_addrtlv(writer, address,
         _nhdp_addrtlvs[IDX_ADDRTLV_OTHER_NEIGHB]._tlvtype,
-        &value, sizeof(value), true);
+        &value, sizeof(value), false);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (otherneigh=%d) to NHDP hello",
         netaddr_to_string(&buf, &naddr->if_addr), otherneigh);
   }
+
+  if (!nhdp_mpr_is_active()) {
+    return;
+  }
+
+  flooding = naddr->link != NULL && naddr->link->mpr_flooding;
+  routing = naddr->link != NULL && naddr->link->mpr_routing;
+
+  if (flooding && routing) {
+    value = RFC5444_MPR_FLOOD_ROUTE;
+  }
+  else if (flooding) {
+    value = RFC5444_MPR_FLOODING;
+  }
+  else {
+    value = RFC5444_MPR_ROUTING;
+  }
+
+  rfc5444_writer_add_addrtlv(writer, address,
+      _nhdp_addrtlvs[IDX_ADDRTLV_MPR]._tlvtype,
+      &value, sizeof(value), false);
+
+  OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d) to NHDP hello",
+      netaddr_to_string(&buf, &naddr->if_addr), value);
 }
 
 /**
