@@ -71,7 +71,7 @@ static int avl_comp_ifaddr(const void *k1, const void *k2, void *ptr);
 
 static void _cb_generate_hello(void *ptr);
 static void _cb_cfg_interface_changed(void);
-static void _cb_interface_event(struct olsr_rfc5444_interface_listener *);
+static void _cb_interface_event(struct olsr_rfc5444_interface_listener *, bool);
 
 /* global tree of nhdp interfaces, filters and addresses */
 struct avl_tree nhdp_interface_tree;
@@ -223,7 +223,7 @@ nhdp_interface_update_addresses(void) {
   struct nhdp_interface *interf;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
-    _cb_interface_event(&interf->rfc5444_if);
+    _cb_interface_event(&interf->rfc5444_if, true);
   }
 }
 
@@ -473,7 +473,7 @@ _cb_cfg_interface_changed(void) {
   }
 
   /* trigger interface address change handler */
-  _cb_interface_event(&interf->rfc5444_if);
+  _cb_interface_event(&interf->rfc5444_if, false);
 
   /* reset hello generation frequency */
   olsr_timer_set(&interf->_hello_timer, interf->refresh_interval);
@@ -488,9 +488,11 @@ _cb_cfg_interface_changed(void) {
  * Configuration of an interface changed,
  *  fix the nhdp addresses if necessary
  * @param ifl olsr rfc5444 interface listener
+ * @param changed true if socket address changed
  */
 static void
-_cb_interface_event(struct olsr_rfc5444_interface_listener *ifl) {
+_cb_interface_event(struct olsr_rfc5444_interface_listener *ifl,
+    bool changed __attribute__((unused))) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr, *addr_it;
   struct olsr_interface *olsr_interf;

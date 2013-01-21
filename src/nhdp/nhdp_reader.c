@@ -183,11 +183,15 @@ _initialize_neighbor_for_processing(struct nhdp_neighbor *neigh, bool ipv6) {
   struct nhdp_addr *naddr;
 
   avl_for_each_element(&neigh->_addresses, naddr, _neigh_node) {
-    if (!naddr->lost
-        && (netaddr_get_address_family(&naddr->if_addr) == AF_INET || ipv6)) {
+    naddr->_this_if = false;
+
+    if (naddr->lost) {
+      /* ignore addresses already lost */
+      continue;
+    }
+    if (netaddr_get_address_family(&naddr->if_addr) == AF_INET || ipv6) {
       naddr->_might_be_removed = true;
     }
-    naddr->_this_if = false;
   }
 }
 
@@ -569,9 +573,6 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
     return RFC5444_OKAY;
   }
 
-  link_status = 255;
-  other_neigh = 255;
-
   if (netaddr_from_binary(&addrbuf1, context->addr, context->addr_len, 0)) {
     OLSR_WARN(LOG_NHDP_R, "Could not read incoming address of length %u", context->addr_len);
     return RFC5444_DROP_ADDRESS;
@@ -603,8 +604,15 @@ _cb_neigh2_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attri
   if (_nhdp_neigh_address_tlvs[IDX_ADDRTLV2_LINK_STATUS].tlv) {
     link_status = _nhdp_neigh_address_tlvs[IDX_ADDRTLV2_LINK_STATUS].tlv->single_value[0];
   }
+  else {
+    link_status = 255;
+  }
+
   if (_nhdp_neigh_address_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv) {
     other_neigh = _nhdp_neigh_address_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv->single_value[0];
+  }
+  else {
+    other_neigh = 255;
   }
 
   OLSR_DEBUG(LOG_NHDP_R, "Incoming NHDP message type %d, address %s, link_status %u, other_neigh: %u",

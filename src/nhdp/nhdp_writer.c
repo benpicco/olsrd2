@@ -305,25 +305,21 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   struct rfc5444_writer_address *address;
   struct netaddr_str buf;
   uint8_t linkstatus, otherneigh;
-  uint8_t value;
-  bool flooding, routing;
 
-  /* initialize flags for this address */
+  /* initialize flags for default (lost address) address */
   linkstatus = 255;
-  otherneigh = 255;
+  otherneigh = RFC5444_OTHERNEIGHB_LOST;
 
-  if (naddr->link != NULL && naddr->link->local_if == interf
-      && naddr->link->status != NHDP_LINK_PENDING) {
-    linkstatus = naddr->link->status;
-  }
+  if (!naddr->lost) {
+    if (naddr->link != NULL && naddr->link->local_if == interf
+        && naddr->link->status != NHDP_LINK_PENDING) {
+      linkstatus = naddr->link->status;
+    }
 
-  if (naddr->neigh != NULL && naddr->neigh->symmetric > 0
-      && linkstatus != RFC5444_LINKSTATUS_SYMMETRIC) {
-    otherneigh = RFC5444_OTHERNEIGHB_SYMMETRIC;
-  }
-
-  if (naddr->lost && linkstatus == 255 && otherneigh == 255) {
-    otherneigh = RFC5444_OTHERNEIGHB_LOST;
+    if (naddr->neigh != NULL && naddr->neigh->symmetric > 0
+        && linkstatus != RFC5444_LINKSTATUS_SYMMETRIC) {
+      otherneigh = RFC5444_OTHERNEIGHB_SYMMETRIC;
+    }
   }
 
   /* generate RFC5444 address */
@@ -344,38 +340,38 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   }
 
   if (otherneigh != 255) {
-    value = RFC5444_OTHERNEIGHB_SYMMETRIC;
     rfc5444_writer_add_addrtlv(writer, address,
         _nhdp_addrtlvs[IDX_ADDRTLV_OTHER_NEIGHB]._tlvtype,
-        &value, sizeof(value), false);
+        &otherneigh, sizeof(otherneigh), false);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (otherneigh=%d) to NHDP hello",
         netaddr_to_string(&buf, &naddr->if_addr), otherneigh);
   }
 
-  if (!nhdp_mpr_is_active()) {
-    return;
-  }
+  if (nhdp_mpr_is_active()) {
+    uint8_t value;
+    bool flooding, routing;
 
-  flooding = naddr->link != NULL && naddr->link->mpr_flooding;
-  routing = naddr->link != NULL && naddr->link->mpr_routing;
+    flooding = naddr->link != NULL && naddr->link->mpr_flooding;
+    routing = naddr->link != NULL && naddr->link->mpr_routing;
 
-  if (flooding && routing) {
-    value = RFC5444_MPR_FLOOD_ROUTE;
-  }
-  else if (flooding) {
-    value = RFC5444_MPR_FLOODING;
-  }
-  else {
-    value = RFC5444_MPR_ROUTING;
-  }
+    if (flooding && routing) {
+      value = RFC5444_MPR_FLOOD_ROUTE;
+    }
+    else if (flooding) {
+      value = RFC5444_MPR_FLOODING;
+    }
+    else {
+      value = RFC5444_MPR_ROUTING;
+    }
 
-  rfc5444_writer_add_addrtlv(writer, address,
-      _nhdp_addrtlvs[IDX_ADDRTLV_MPR]._tlvtype,
-      &value, sizeof(value), false);
+    rfc5444_writer_add_addrtlv(writer, address,
+        _nhdp_addrtlvs[IDX_ADDRTLV_MPR]._tlvtype,
+        &value, sizeof(value), false);
 
-  OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d) to NHDP hello",
-      netaddr_to_string(&buf, &naddr->if_addr), value);
+    OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d) to NHDP hello",
+        netaddr_to_string(&buf, &naddr->if_addr), value);
+  }
 }
 
 /**

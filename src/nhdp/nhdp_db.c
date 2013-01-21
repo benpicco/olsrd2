@@ -416,11 +416,7 @@ nhdp_db_addr_remove(struct nhdp_addr *naddr) {
 void
 nhdp_db_addr_attach_neigh(
     struct nhdp_addr *naddr, struct nhdp_neighbor *neigh) {
-  if (naddr->lost) {
-    olsr_timer_stop(&naddr->vtime);
-    naddr->lost = false;
-  }
-
+  nhdp_db_addr_remove_lost(naddr);
   _addr_move(naddr, neigh, NULL);
 }
 
@@ -431,11 +427,7 @@ nhdp_db_addr_attach_neigh(
  */
 void
 nhdp_db_addr_attach_link(struct nhdp_addr *naddr, struct nhdp_link *lnk) {
-  if (naddr->lost) {
-    olsr_timer_stop(&naddr->vtime);
-    naddr->lost = false;
-  }
-
+  nhdp_db_addr_remove_lost(naddr);
   _addr_move(naddr, lnk->neigh, lnk);
 }
 
@@ -464,8 +456,10 @@ nhdp_db_addr_detach_link(struct nhdp_addr *naddr) {
  */
 void
 nhdp_db_addr_set_lost(struct nhdp_addr *naddr, uint64_t vtime) {
-  naddr->lost = true;
-  olsr_timer_set(&naddr->vtime, vtime);
+  if (!naddr->lost) {
+    naddr->lost = true;
+    olsr_timer_set(&naddr->vtime, vtime);
+  }
 }
 
 /**
@@ -475,8 +469,10 @@ nhdp_db_addr_set_lost(struct nhdp_addr *naddr, uint64_t vtime) {
  */
 void
 nhdp_db_addr_remove_lost(struct nhdp_addr *naddr) {
-  naddr->lost = false;
-  olsr_timer_stop(&naddr->vtime);
+  if (naddr->lost) {
+    naddr->lost = false;
+    olsr_timer_stop(&naddr->vtime);
+  }
 }
 
 /**
@@ -534,15 +530,16 @@ nhdp_db_2hop_remove(struct nhdp_2hop *twohop) {
 static void
 _addr_move(struct nhdp_addr *naddr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk) {
+/*
   struct netaddr_str buf;
-
+*/
   assert (lnk == NULL || (neigh != NULL && neigh == lnk->neigh));
-
+/*
   OLSR_DEBUG(LOG_NHDP, "Move address %s from neigh=0x%zx, link=0x%zx to neigh=0x%zx, link=0x%zx",
       netaddr_to_string(&buf, &naddr->if_addr),
       (size_t)naddr->neigh, (size_t)naddr->link,
       (size_t)neigh, (size_t)lnk);
-
+*/
   if (naddr->neigh != neigh) {
     /* fix neighbor hook */
     if (naddr->neigh) {
@@ -705,13 +702,13 @@ _cb_addr_vtime(void *ptr) {
   OLSR_DEBUG(LOG_NHDP, "Neighbor Address Lost fired: 0x%0zx", (size_t)ptr);
 
   /* lost neighbor vtime triggered */
-  if (naddr->neigh == NULL) {
+//  if (naddr->neigh == NULL) {
     nhdp_db_addr_remove(naddr);
-  }
-  else {
+//  }
+//  else {
     /* address is still used as non-symmetric */
-    naddr->lost = false;
-  }
+//    naddr->lost = false;
+//  }
 }
 
 /**
