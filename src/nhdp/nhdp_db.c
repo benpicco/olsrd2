@@ -530,16 +530,8 @@ nhdp_db_2hop_remove(struct nhdp_2hop *twohop) {
 static void
 _addr_move(struct nhdp_addr *naddr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk) {
-/*
-  struct netaddr_str buf;
-*/
   assert (lnk == NULL || (neigh != NULL && neigh == lnk->neigh));
-/*
-  OLSR_DEBUG(LOG_NHDP, "Move address %s from neigh=0x%zx, link=0x%zx to neigh=0x%zx, link=0x%zx",
-      netaddr_to_string(&buf, &naddr->if_addr),
-      (size_t)naddr->neigh, (size_t)naddr->link,
-      (size_t)neigh, (size_t)lnk);
-*/
+
   if (naddr->neigh != neigh) {
     /* fix neighbor hook */
     if (naddr->neigh) {
