@@ -396,13 +396,11 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
           lnk->hyst_pending ? " pending" : "",
           lnk->hyst_lost ? " lost" : "");
 
-      abuf_appendf(con->out, "\t    Link addresses:\n");
       avl_for_each_element(&lnk->_addresses, naddr, _link_node) {
-        abuf_appendf(con->out, "\t\t%s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
+        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
       }
-      abuf_appendf(con->out, "\t    2-Hop addresses:\n");
       avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
-        abuf_appendf(con->out, "\t\t%s\n", netaddr_to_string(&nbuf, &twohop->neigh_addr));
+        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->neigh_addr));
       }
     }
 
@@ -473,19 +471,16 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
           lnk->hyst_pending ? " pending" : "",
           lnk->hyst_lost ? " lost" : "");
 
-      abuf_appendf(con->out, "\t    Link addresses:\n");
       avl_for_each_element(&lnk->_addresses, naddr, _link_node) {
-        abuf_appendf(con->out, "\t\t%s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
+        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
       }
-      abuf_appendf(con->out, "\t    Other addresses:\n");
       avl_for_each_element(&lnk->neigh->_addresses, naddr, _neigh_node) {
         if (!naddr->lost && naddr->link != lnk) {
-          abuf_appendf(con->out, "\t\t%s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
+          abuf_appendf(con->out, "\t    Other addresses: %s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
         }
       }
-      abuf_appendf(con->out, "\t    2-Hop addresses:\n");
       avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
-        abuf_appendf(con->out, "\t\t%s\n", netaddr_to_string(&nbuf, &twohop->neigh_addr));
+        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->neigh_addr));
       }
     }
   }
