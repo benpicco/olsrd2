@@ -508,35 +508,37 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl,
     addr->_to_be_removed = true;
   }
 
-  /* handle local socket main addresses */
-  if (interf->mode != NHDP_IPV6) {
-    OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv4", ifl->interface->name);
-    netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
-    _addr_add(interf, &ip);
-  }
-  if (interf->mode != NHDP_IPV4) {
-    OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv6", ifl->interface->name);
-    netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v6.local_socket);
-    _addr_add(interf, &ip);
-  }
-
-  /* get all socket addresses that are matching the filter */
   olsr_interf = olsr_rfc5444_get_core_interface(ifl->interface);
-  for (i = 0; i<olsr_interf->data.addrcount; i++) {
-    struct netaddr *ifaddr = &olsr_interf->data.addresses[i];
-
-    if (netaddr_get_address_family(ifaddr) == AF_INET && interf->mode ==  NHDP_IPV6) {
-      /* ignore IPv6 addresses in IPv4 mode */
-      continue;
+  if (olsr_interf->data.up) {
+    /* handle local socket main addresses */
+    if (interf->mode != NHDP_IPV6) {
+      OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv4", ifl->interface->name);
+      netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
+      _addr_add(interf, &ip);
     }
-    if (netaddr_get_address_family(ifaddr) == AF_INET6 && interf->mode == NHDP_IPV4) {
-      /* ignore IPv4 addresses in IPv6 mode */
-      continue;
+    if (interf->mode != NHDP_IPV4) {
+      OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv6", ifl->interface->name);
+      netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v6.local_socket);
+      _addr_add(interf, &ip);
     }
 
-    /* check if IP address fits to ACL */
-    if (olsr_acl_check_accept(&interf->ifaddr_filter, ifaddr)) {
-      _addr_add(interf, ifaddr);
+    /* get all socket addresses that are matching the filter */
+    for (i = 0; i<olsr_interf->data.addrcount; i++) {
+      struct netaddr *ifaddr = &olsr_interf->data.addresses[i];
+
+      if (netaddr_get_address_family(ifaddr) == AF_INET && interf->mode ==  NHDP_IPV6) {
+        /* ignore IPv6 addresses in IPv4 mode */
+        continue;
+      }
+      if (netaddr_get_address_family(ifaddr) == AF_INET6 && interf->mode == NHDP_IPV4) {
+        /* ignore IPv4 addresses in IPv6 mode */
+        continue;
+      }
+
+      /* check if IP address fits to ACL */
+      if (olsr_acl_check_accept(&interf->ifaddr_filter, ifaddr)) {
+        _addr_add(interf, ifaddr);
+      }
     }
   }
 
