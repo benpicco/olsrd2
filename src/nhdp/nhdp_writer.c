@@ -70,7 +70,7 @@ static void _cb_addAddresses(
 
 static void _add_link_address(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv,
-    struct nhdp_interface *interf, struct nhdp_addr *naddr);
+    struct nhdp_interface *interf, struct nhdp_naddr *naddr);
 static void _add_localif_address(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv,
     struct nhdp_interface *interf, struct nhdp_interface_addr *addr);
@@ -301,8 +301,9 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
  */
 static void
 _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_provider *prv,
-    struct nhdp_interface *interf, struct nhdp_addr *naddr) {
+    struct nhdp_interface *interf, struct nhdp_naddr *naddr) {
   struct rfc5444_writer_address *address;
+  struct nhdp_laddr *laddr;
   struct netaddr_str buf;
   uint8_t linkstatus, otherneigh;
 
@@ -310,10 +311,11 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   linkstatus = 255;
   otherneigh = RFC5444_OTHERNEIGHB_LOST;
 
-  if (!naddr->lost) {
-    if (naddr->link != NULL && naddr->link->local_if == interf
-        && naddr->link->status != NHDP_LINK_PENDING) {
-      linkstatus = naddr->link->status;
+  laddr = nhdp_interfaces_get_link_addr(interf, &naddr->neigh_addr);
+  if (!nhdp_db_neighbor_addr_is_lost(naddr)) {
+    if (laddr != NULL && laddr->link->local_if == interf
+        && laddr->link->status != NHDP_LINK_PENDING) {
+      linkstatus = laddr->link->status;
     }
 
     if (naddr->neigh != NULL && naddr->neigh->symmetric > 0
@@ -323,10 +325,10 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   }
 
   /* generate RFC5444 address */
-  address = _add_rfc5444_address(writer, prv->creator, &naddr->if_addr);
+  address = _add_rfc5444_address(writer, prv->creator, &naddr->neigh_addr);
   if (address == NULL) {
     OLSR_WARN(LOG_NHDP_W, "Could not add address %s to NHDP hello",
-        netaddr_to_string(&buf, &naddr->if_addr));
+        netaddr_to_string(&buf, &naddr->neigh_addr));
     return;
   }
 
@@ -336,7 +338,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
           &linkstatus, sizeof(linkstatus), false);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (linkstatus=%d) to NHDP hello",
-        netaddr_to_string(&buf, &naddr->if_addr), naddr->link->status);
+        netaddr_to_string(&buf, &naddr->neigh_addr), laddr->link->status);
   }
 
   if (otherneigh != 255) {
@@ -345,15 +347,15 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
         &otherneigh, sizeof(otherneigh), false);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (otherneigh=%d) to NHDP hello",
-        netaddr_to_string(&buf, &naddr->if_addr), otherneigh);
+        netaddr_to_string(&buf, &naddr->neigh_addr), otherneigh);
   }
 
   if (nhdp_mpr_is_active()) {
     uint8_t value;
     bool flooding, routing;
 
-    flooding = naddr->link != NULL && naddr->link->mpr_flooding;
-    routing = naddr->link != NULL && naddr->link->mpr_routing;
+    flooding = laddr != NULL && laddr->link->mpr_flooding;
+    routing = laddr != NULL && laddr->link->mpr_routing;
 
     if (flooding && routing) {
       value = RFC5444_MPR_FLOOD_ROUTE;
@@ -370,7 +372,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
         &value, sizeof(value), false);
 
     OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d) to NHDP hello",
-        netaddr_to_string(&buf, &naddr->if_addr), value);
+        netaddr_to_string(&buf, &naddr->neigh_addr), value);
   }
 }
 
@@ -386,20 +388,20 @@ _cb_addAddresses(struct rfc5444_writer *writer,
 
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
-  struct nhdp_addr *naddr;
+  struct nhdp_naddr *naddr;
 
   /* have already be checked for message TLVs, so they cannot be NULL */
   target = olsr_rfc5444_get_target_from_provider(prv);
   interf = nhdp_interface_get(target->interface->name);
 
   addr = avl_first_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
-  naddr = avl_first_element_safe(&nhdp_addr_tree, naddr, _global_node);
+  naddr = avl_first_element_safe(&nhdp_naddr_tree, naddr, _global_node);
 
   /* produce a sorted list of addr/naddr objects */
   while (addr != NULL || naddr != NULL) {
     /* if there is no naddr anymore or naddr>addr then... */
     if (naddr == NULL || (addr != NULL &&
-        avl_comp_netaddr_socket(&naddr->if_addr, &addr->if_addr, NULL) > 0)) {
+        avl_comp_netaddr_socket(&naddr->neigh_addr, &addr->if_addr, NULL) > 0)) {
       /* add another addr with TLV to the steam */
       if (!addr->_global_node.follower && !addr->removed) {
         /* each address only once and only active ones */
@@ -415,13 +417,13 @@ _cb_addAddresses(struct rfc5444_writer *writer,
     }
     else {
       /* otherwise add another naddr with TLVs to the stream */
-      if (netaddr_get_address_family(&naddr->if_addr) != AF_INET6
+      if (netaddr_get_address_family(&naddr->neigh_addr) != AF_INET6
           || netaddr_get_address_family(&target->dst) != AF_INET) {
         _add_link_address(writer, prv, interf, naddr);
       }
 
       /* move to next naddr, NULL if end reached */
-      naddr = avl_next_element_safe(&nhdp_addr_tree, naddr, _global_node);
+      naddr = avl_next_element_safe(&nhdp_naddr_tree, naddr, _global_node);
     }
   }
 }

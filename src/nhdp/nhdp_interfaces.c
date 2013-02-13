@@ -168,30 +168,6 @@ nhdp_interfaces_cleanup(void) {
   olsr_memcookie_remove(&_addr_info);
 }
 
-
-/**
- * Add a link to a nhdp interface
- * @param interf nhdp interface
- * @param lnk nhdp link
- */
-void
-nhdp_interfaces_add_link(struct nhdp_interface *interf,
-    struct nhdp_link *lnk) {
-  lnk->local_if = interf;
-
-  list_add_tail(&interf->_links, &lnk->_if_node);
-}
-
-/**
- * Remove a nhdp link from a nhdp interface
- * @param lnk nhdp link
- */
-void
-nhdp_interfaces_remove_link(struct nhdp_link *lnk) {
-  list_remove(&lnk->_if_node);
-  lnk->local_if = NULL;
-}
-
 /**
  * Updates the neigh_v4/6only variables of an interface
  * @param interf nhdp interface
@@ -199,7 +175,7 @@ nhdp_interfaces_remove_link(struct nhdp_link *lnk) {
 void
 nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf) {
   struct nhdp_link *lnk;
-  struct nhdp_addr *addr;
+  struct nhdp_laddr *addr;
   bool v4only;
 
   interf->neigh_onlyv4 = false;
@@ -208,7 +184,7 @@ nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf) {
     v4only = true;
 
     avl_for_each_element(&lnk->_addresses, addr, _link_node) {
-      if (netaddr_get_address_family(&addr->if_addr) == AF_INET6) {
+      if (netaddr_get_address_family(&addr->link_addr) == AF_INET6) {
         v4only = false;
         break;
       }
@@ -264,8 +240,11 @@ _interface_add(const char *name) {
     /* init address tree */
     avl_init(&interf->_if_addresses, avl_comp_netaddr, false, NULL);
 
-    /* init link treee */
+    /* init link list */
     list_init_head(&interf->_links);
+
+    /* init link address tree */
+    avl_init(&interf->_link_addresses, avl_comp_netaddr, false, NULL);
   }
   return interf;
 }

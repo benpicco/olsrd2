@@ -310,7 +310,6 @@ _cb_nhdp(struct olsr_telnet_data *con) {
     return _telnet_nhdp_interface(con);
   }
 
-
   if (con->parameter == NULL || *con->parameter == 0) {
     abuf_puts(con->out, "Error, 'nhdp' needs a parameter\n");
   }
@@ -326,23 +325,23 @@ _cb_nhdp(struct olsr_telnet_data *con) {
 static enum olsr_telnet_result
 _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
   struct nhdp_neighbor *neigh;
-  struct nhdp_addr *naddr;
+  struct nhdp_naddr *naddr;
   struct netaddr_str nbuf;
   struct timeval_str tbuf;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
 
-    avl_for_each_element(&neigh->_addresses, naddr, _neigh_node) {
-      if (!naddr->lost) {
-        abuf_appendf(con->out, "\tAddress: %s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
+    avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
+      if (!nhdp_db_neighbor_addr_is_lost(naddr)) {
+        abuf_appendf(con->out, "\tAddress: %s\n", netaddr_to_string(&nbuf, &naddr->neigh_addr));
       }
     }
-    avl_for_each_element(&neigh->_addresses, naddr, _neigh_node) {
-      if (naddr->lost) {
+    avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
+      if (nhdp_db_neighbor_addr_is_lost(naddr)) {
         abuf_appendf(con->out, "\tLost address: %s (vtime=%s)\n",
-            netaddr_to_string(&nbuf, &naddr->if_addr),
-            olsr_clock_toIntervalString(&tbuf, olsr_timer_get_due(&naddr->vtime)));
+            netaddr_to_string(&nbuf, &naddr->neigh_addr),
+            olsr_clock_toIntervalString(&tbuf, olsr_timer_get_due(&naddr->_lost_vtime)));
       }
     }
   }
@@ -363,9 +362,10 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
   static const char *LOST = "lost";
 
   struct nhdp_neighbor *neigh;
+  struct nhdp_naddr *naddr;
   struct nhdp_link *lnk;
-  struct nhdp_addr *naddr;
-  struct nhdp_2hop *twohop;
+  struct nhdp_laddr *laddr;
+  struct nhdp_l2hop *twohop;
   const char *status;
   struct netaddr_str nbuf;
   struct timeval_str tbuf1, tbuf2, tbuf3;
@@ -396,18 +396,18 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
           lnk->hyst_pending ? " pending" : "",
           lnk->hyst_lost ? " lost" : "");
 
-      avl_for_each_element(&lnk->_addresses, naddr, _link_node) {
-        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
+      avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
+        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
       }
       avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
-        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->neigh_addr));
+        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->twohop_addr));
       }
     }
 
-    avl_for_each_element(&neigh->_addresses, naddr, _neigh_node) {
-      if (naddr->link == NULL) {
+    avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
+      if (avl_find(&neigh->_link_addresses, &naddr->neigh_addr) == NULL) {
         abuf_appendf(con->out, "\tAddress on other interface: %s",
-            netaddr_to_string(&nbuf, &naddr->if_addr));
+            netaddr_to_string(&nbuf, &naddr->neigh_addr));
       }
     }
   }
@@ -428,9 +428,10 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
 
+  struct nhdp_naddr *naddr;
   struct nhdp_link *lnk;
-  struct nhdp_addr *naddr;
-  struct nhdp_2hop *twohop;
+  struct nhdp_laddr *laddr;
+  struct nhdp_l2hop *twohop;
   const char *status;
   struct netaddr_str nbuf;
   struct timeval_str tbuf1, tbuf2, tbuf3;
@@ -471,16 +472,16 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
           lnk->hyst_pending ? " pending" : "",
           lnk->hyst_lost ? " lost" : "");
 
-      avl_for_each_element(&lnk->_addresses, naddr, _link_node) {
-        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
+      avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
+        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
       }
-      avl_for_each_element(&lnk->neigh->_addresses, naddr, _neigh_node) {
-        if (!naddr->lost && naddr->link != lnk) {
-          abuf_appendf(con->out, "\t    Other addresses: %s\n", netaddr_to_string(&nbuf, &naddr->if_addr));
+      avl_for_each_element(&lnk->neigh->_neigh_addresses, naddr, _neigh_node) {
+        if (!nhdp_db_neighbor_addr_is_lost(naddr) && avl_find(&lnk->_addresses, &naddr->neigh_addr) == NULL) {
+          abuf_appendf(con->out, "\t    Other addresses: %s\n", netaddr_to_string(&nbuf, &naddr->neigh_addr));
         }
       }
       avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
-        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->neigh_addr));
+        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->twohop_addr));
       }
     }
   }

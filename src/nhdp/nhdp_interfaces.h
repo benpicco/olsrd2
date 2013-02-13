@@ -43,9 +43,11 @@
 #define NHDP_INTERFACES_H_
 
 struct nhdp_interface;
+struct nhdp_interface_addr;
 
 #include "common/common_types.h"
 #include "common/avl.h"
+#include "common/list.h"
 #include "common/netaddr.h"
 #include "core/olsr_interface.h"
 #include "core/olsr_netaddr_acl.h"
@@ -96,8 +98,11 @@ struct nhdp_interface {
   /* tree of interface addresses */
   struct avl_tree _if_addresses;
 
-  /* list of interface nhdp links */
+  /* list of interface nhdp links (nhdp_link objects) */
   struct list_entity _links;
+
+  /* tree of addresses of links (nhdp_laddr objects) */
+  struct avl_tree _link_addresses;
 };
 
 /**
@@ -131,10 +136,6 @@ EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 
 void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
-
-void nhdp_interfaces_add_link(struct nhdp_interface *interf,
-    struct nhdp_link *lnk);
-void nhdp_interfaces_remove_link(struct nhdp_link *lnk);
 
 void nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf);
 void nhdp_interface_update_addresses(void);
@@ -182,5 +183,43 @@ nhdp_interface_addr_global_get(struct netaddr *addr) {
   return avl_find_element(&nhdp_ifaddr_tree, addr, iaddr, _global_node);
 }
 
+/**
+ * Add a link to a nhdp interface
+ * @param interf nhdp interface
+ * @param lnk nhdp link
+ */
+static INLINE void
+nhdp_interfaces_add_link(struct nhdp_interface *interf,
+    struct nhdp_link *lnk) {
+  lnk->local_if = interf;
 
+  list_add_tail(&interf->_links, &lnk->_if_node);
+}
+
+/**
+ * Remove a nhdp link from a nhdp interface
+ * @param lnk nhdp link
+ */
+static INLINE void
+nhdp_interfaces_remove_link(struct nhdp_link *lnk) {
+  list_remove(&lnk->_if_node);
+  lnk->local_if = NULL;
+}
+
+static INLINE void
+nhdp_interfaces_add_laddr(struct nhdp_laddr *laddr) {
+  avl_insert(&laddr->link->local_if->_link_addresses, &laddr->_if_node);
+}
+
+static INLINE void
+nhdp_interfaces_remove_laddr(struct nhdp_laddr *laddr) {
+  avl_remove(&laddr->link->local_if->_link_addresses, &laddr->_if_node);
+}
+
+static INLINE struct nhdp_laddr *
+nhdp_interfaces_get_link_addr(struct nhdp_interface *interf, struct netaddr *addr) {
+  struct nhdp_laddr *laddr;
+
+  return avl_find_element(&interf->_link_addresses, addr, laddr, _if_node);
+}
 #endif /* NHDP_INTERFACES_H_ */

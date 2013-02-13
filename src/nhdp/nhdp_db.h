@@ -8,6 +8,12 @@
 #ifndef NHDP_DB_H_
 #define NHDP_DB_H_
 
+struct nhdp_link;
+struct nhdp_laddr;
+struct nhdp_l2hop;
+struct nhdp_neighbor;
+struct nhdp_naddr;
+
 #include "common/common_types.h"
 #include "common/avl.h"
 #include "common/list.h"
@@ -64,6 +70,9 @@ struct nhdp_link {
   /* pointer to neighbor entry of the other side of the link */
   struct nhdp_neighbor *neigh;
 
+  /* internal field for NHDP processing */
+  int _process_count;
+
   /* tree of local addresses of the other side of the link */
   struct avl_tree _addresses;
 
@@ -81,46 +90,34 @@ struct nhdp_link {
 };
 
 /**
- * nhdp_addr represents an interface address of a neighbor
+ * nhdp_laddr represents an interface address of a link
  */
-struct nhdp_addr {
-  /* interface address */
-  struct netaddr if_addr;
+struct nhdp_laddr {
+  /* links interface address */
+  struct netaddr link_addr;
 
-  /*
-   * link entry for address, might be NULL if only learned as
-   * an "other interface" through a HELLO
-   */
+  /* link entry for address */
   struct nhdp_link *link;
 
-  /* neighbor entry for address */
-  struct nhdp_neighbor *neigh;
-
-  /* validty time for this address if it is lost */
-  struct olsr_timer_entry vtime;
-
-  /* true if address has timed out */
-  bool lost;
-
   /* internal variable for NHDP processing */
-  bool _might_be_removed, _this_if;
+  bool _might_be_removed;
 
   /* member entry for addresses of neighbor link */
   struct avl_node _link_node;
 
-  /* member entry for addresses of neighbor node */
+  /* member entry for addresss of neighbor */
   struct avl_node _neigh_node;
 
-  /* member entry for global tree of link addresses */
-  struct avl_node _global_node;
+  /* member entry for interface tree of link addresses */
+  struct avl_node _if_node;
 };
 
 /**
- * nhdp_2hop represents an address of a two-hop neighbor
+ * nhdp_l2hop represents an address of a two-hop neighbor
  */
-struct nhdp_2hop {
+struct nhdp_l2hop {
   /* address of two-hop neighbor */
-  struct netaddr neigh_addr;
+  struct netaddr twohop_addr;
 
   /*
    * link entry for two-hop address, might be NULL if only learned as
@@ -133,9 +130,6 @@ struct nhdp_2hop {
 
   /* member entry for two-hop addresses of neighbor link */
   struct avl_node _link_node;
-
-  /* member entry for global list of two-hop addresses */
-  struct avl_node _global_node;
 };
 
 /**
@@ -145,14 +139,47 @@ struct nhdp_neighbor {
   /* number of links to this neighbor which are symmetric */
   int symmetric;
 
+  /* internal field for NHDP processing */
+  int _process_count;
+
   /* list of links for this neighbor */
   struct list_entity _links;
 
   /* tree of addresses of this neighbor */
-  struct avl_tree _addresses;
+  struct avl_tree _neigh_addresses;
+
+  /* tree of addresses of this neighbors links */
+  struct avl_tree _link_addresses;
 
   /* member entry for global list of neighbors */
   struct list_entity _node;
+};
+
+/**
+ * nhdp_naddr represents an address of a known 1-hop neighbor
+ * or a former (lost) address which will be removed soon
+ */
+struct nhdp_naddr {
+    /* neighbor interface address */
+    struct netaddr neigh_addr;
+
+    /* backlink to neighbor */
+    struct nhdp_neighbor *neigh;
+
+    /* link address usage counter */
+    int laddr_count;
+
+    /* validity time for this address when its lost */
+    struct olsr_timer_entry _lost_vtime;
+
+    /* member entry for neighbor address tree */
+    struct avl_node _neigh_node;
+
+    /* member entry for global neighbor address tree */
+    struct avl_node _global_node;
+
+    /* temporary variables for NHDP Hello processing */
+    bool _this_if, _might_be_removed;
 };
 
 /* handler for generating MPR information of a link */
@@ -164,35 +191,50 @@ struct nhdp_mpr_handler {
   void (* update_mprs)(struct nhdp_link *);
 };
 
-EXPORT extern struct avl_tree nhdp_addr_tree;
-EXPORT extern struct avl_tree nhdp_2hop_tree;
 EXPORT extern struct list_entity nhdp_neigh_list;
 EXPORT extern struct list_entity nhdp_link_list;
+EXPORT extern struct avl_tree nhdp_naddr_tree;
 
 void nhdp_db_init(void);
 void nhdp_db_cleanup(void);
 
-EXPORT struct nhdp_neighbor *nhdp_db_neighbor_insert(void);
+EXPORT struct nhdp_neighbor *nhdp_db_neighbor_add(void);
 EXPORT void nhdp_db_neighbor_remove(struct nhdp_neighbor *);
 EXPORT void nhdp_db_neighbor_join(struct nhdp_neighbor *, struct nhdp_neighbor *);
+EXPORT struct nhdp_naddr *nhdp_db_neighbor_addr_add(struct nhdp_neighbor *, struct netaddr *);
+EXPORT void nhdp_db_neighbor_addr_remove(struct nhdp_naddr *);
+EXPORT void nhdp_db_neighbor_addr_move(struct nhdp_neighbor *, struct nhdp_naddr *);
 
-EXPORT struct nhdp_link *nhdp_db_link_insert(struct nhdp_neighbor *, struct nhdp_interface *);
+EXPORT struct nhdp_link *nhdp_db_link_add(struct nhdp_neighbor *, struct nhdp_interface *);
 EXPORT void nhdp_db_link_remove(struct nhdp_link *);
+EXPORT struct nhdp_laddr *nhdp_db_link_addr_add(struct nhdp_link *, struct netaddr*);
+EXPORT void nhdp_db_link_addr_remove(struct nhdp_laddr *);
+EXPORT void nhdp_db_link_addr_move(struct nhdp_link *, struct nhdp_laddr *);
+EXPORT struct nhdp_l2hop *nhdp_db_link_2hop_add(
+    struct nhdp_link *, struct netaddr *);
+EXPORT void nhdp_db_link_2hop_remove(struct nhdp_l2hop *);
+
 EXPORT int _nhdp_db_link_calculate_status(struct nhdp_link *lnk);
 EXPORT void nhdp_db_link_update_status(struct nhdp_link *);
 
-EXPORT struct nhdp_addr *nhdp_db_addr_insert(struct netaddr *);
-EXPORT void nhdp_db_addr_remove(struct nhdp_addr *);
-EXPORT void nhdp_db_addr_attach_neigh(struct nhdp_addr *, struct nhdp_neighbor *);
-EXPORT void nhdp_db_addr_detach_neigh(struct nhdp_addr *);
-EXPORT void nhdp_db_addr_attach_link(struct nhdp_addr *, struct nhdp_link *);
-EXPORT void nhdp_db_addr_detach_link(struct nhdp_addr *);
-EXPORT void nhdp_db_addr_set_lost(struct nhdp_addr *, uint64_t);
-EXPORT void nhdp_db_addr_remove_lost(struct nhdp_addr *);
+static INLINE struct nhdp_naddr *
+nhdp_db_neighbor_addr_get(struct netaddr *addr) {
+  struct nhdp_naddr *naddr;
 
-EXPORT struct nhdp_2hop *nhdp_db_2hop_insert(
-    struct nhdp_link *, struct netaddr *);
-EXPORT void nhdp_db_2hop_remove(struct nhdp_2hop *);
+  return avl_find_element(&nhdp_naddr_tree, addr, naddr, _global_node);
+}
+
+static INLINE struct nhdp_laddr *
+nhdp_db_link_addr_get(struct nhdp_link *lnk, struct netaddr *addr) {
+  struct nhdp_laddr *laddr;
+  return avl_find_element(&lnk->_addresses, addr, laddr, _link_node);
+}
+
+static INLINE struct nhdp_l2hop *
+ndhp_db_link_2hop_get(struct nhdp_link *lnk, struct netaddr *addr) {
+  struct nhdp_l2hop *l2hop;
+  return avl_find_element(&lnk->_2hop, addr, l2hop, _link_node);
+}
 
 /**
  * Sets the validity time of a nhdp link
@@ -228,48 +270,24 @@ nhdp_db_link_set_symtime(
   nhdp_db_link_update_status(lnk);
 }
 
-/**
- * @param addr pointer to address
- * @return nhdp_addr object for address, NULL if not found
- */
-static INLINE struct nhdp_addr *
-nhdp_db_addr_get(struct netaddr *addr) {
-  struct nhdp_addr *naddr;
-
-  return avl_find_element(&nhdp_addr_tree, addr, naddr, _global_node);
-}
-
-/**
- * Sets the validity time of a nhdp address
- * @param naddr pointer to nhdp address
- * @param vtime validity time of address
- */
 static INLINE void
-nhdp_db_addr_set_vtime(
-    struct nhdp_addr *naddr, uint64_t vtime) {
-  olsr_timer_set(&naddr->vtime, vtime);
+nhdp_db_link_2hop_set_vtime(
+    struct nhdp_l2hop *l2hop, uint64_t vtime) {
+  olsr_timer_set(&l2hop->_vtime, vtime);
 }
 
-/**
- * @param lnk pointer to nhdp link
- * @param addr 2-hop neighbor network address
- * @return pointer to 2hop neighbor of the link, NULL if not found
- */
-static INLINE struct nhdp_2hop *
-nhdp_db_2hop_get(struct nhdp_link *lnk, struct netaddr *addr) {
-  struct nhdp_2hop *n2;
-
-  return avl_find_element(&lnk->_2hop, addr, n2, _link_node);
-}
-
-/**
- * Sets the validity time of a 2-hop neighbor address
- * @param n2 pointer to 2-hop neighbor address
- * @param vtime validity time in milliseconds
- */
 static INLINE void
-nhdp_db_2hop_set_vtime(
-    struct nhdp_2hop *n2, uint64_t vtime) {
-  olsr_timer_set(&n2->_vtime, vtime);
+nhdp_db_neighbor_addr_set_lost(struct nhdp_naddr *naddr, uint64_t vtime) {
+  olsr_timer_set(&naddr->_lost_vtime, vtime);
+}
+
+static INLINE void
+nhdp_db_neighbor_addr_not_lost(struct nhdp_naddr *naddr) {
+  olsr_timer_stop(&naddr->_lost_vtime);
+}
+
+static INLINE bool
+nhdp_db_neighbor_addr_is_lost(struct nhdp_naddr *naddr) {
+  return olsr_timer_is_active(&naddr->_lost_vtime);
 }
 #endif /* NHDP_DB_H_ */
