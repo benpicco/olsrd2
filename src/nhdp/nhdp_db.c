@@ -25,6 +25,7 @@ static void _link_status_not_symmetric_anymore(struct nhdp_link *lnk);
 int _nhdp_db_link_calculate_status(struct nhdp_link *lnk);
 
 static void _cb_link_vtime(void *);
+static void _cb_link_vtime_v4(void *);
 static void _cb_link_vtime_v6(void *);
 static void _cb_link_heard(void *);
 static void _cb_link_symtime(void *);
@@ -62,7 +63,12 @@ static struct olsr_timer_info _link_vtime_info = {
   .callback = _cb_link_vtime,
 };
 
-static struct olsr_timer_info _link_vtimev6_info = {
+static struct olsr_timer_info _neigh_vtimev4_info = {
+  .name = "NHDP link vtime v4",
+  .callback = _cb_link_vtime_v4,
+};
+
+static struct olsr_timer_info _neigh_vtimev6_info = {
   .name = "NHDP link vtime v6",
   .callback = _cb_link_vtime_v6,
 };
@@ -113,7 +119,8 @@ nhdp_db_init(void) {
 
   olsr_timer_add(&_naddr_vtime_info);
   olsr_timer_add(&_link_vtime_info);
-  olsr_timer_add(&_link_vtimev6_info);
+  olsr_timer_add(&_neigh_vtimev4_info);
+  olsr_timer_add(&_neigh_vtimev6_info);
   olsr_timer_add(&_link_heard_info);
   olsr_timer_add(&_link_symtime_info);
   olsr_timer_add(&_l2hop_vtime_info);
@@ -135,7 +142,8 @@ nhdp_db_cleanup(void) {
   olsr_timer_remove(&_l2hop_vtime_info);
   olsr_timer_remove(&_link_symtime_info);
   olsr_timer_remove(&_link_heard_info);
-  olsr_timer_remove(&_link_vtimev6_info);
+  olsr_timer_remove(&_neigh_vtimev6_info);
+  olsr_timer_remove(&_neigh_vtimev4_info);
   olsr_timer_remove(&_link_vtime_info);
   olsr_timer_remove(&_naddr_vtime_info);
 
@@ -162,10 +170,19 @@ nhdp_db_neighbor_add(void) {
 
   OLSR_DEBUG(LOG_NHDP, "New Neighbor: 0x%0zx", (size_t)neigh);
 
+  /* initialize timers */
+  neigh->vtime_v4.cb_context = neigh;
+  neigh->vtime_v4.info = &_neigh_vtimev4_info;
+
+  neigh->vtime_v6.cb_context = neigh;
+  neigh->vtime_v6.info = &_neigh_vtimev6_info;
+
+  /* initialize trees and lists */
   avl_init(&neigh->_neigh_addresses, avl_comp_netaddr, false, NULL);
   avl_init(&neigh->_link_addresses, avl_comp_netaddr, true, NULL);
   list_init_head(&neigh->_links);
 
+  /* hook into global neighbor list */
   list_add_tail(&nhdp_neigh_list, &neigh->_node);
   return neigh;
 }
@@ -180,6 +197,10 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk, *l_it;
 
   OLSR_DEBUG(LOG_NHDP, "Remove Neighbor: 0x%0zx", (size_t)neigh);
+
+  /* stop timers */
+  olsr_timer_stop(&neigh->vtime_v4);
+  olsr_timer_stop(&neigh->vtime_v6);
 
   /* remove all links */
   list_for_each_element_safe(&neigh->_links, lnk, _neigh_node, l_it) {
@@ -328,8 +349,6 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->heard_time.cb_context = lnk;
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
-  lnk->vtime_v6.info = &_link_vtimev6_info;
-  lnk->vtime_v6.cb_context = lnk;
 
   /* MPR settings to default */
   lnk->mpr_flooding = false;
@@ -355,7 +374,6 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   olsr_timer_stop(&lnk->sym_time);
   olsr_timer_stop(&lnk->heard_time);
   olsr_timer_stop(&lnk->vtime);
-  olsr_timer_stop(&lnk->vtime_v6);
 
   /* detach all addresses */
   avl_for_each_element_safe(&lnk->_addresses, laddr, _link_node, la_it) {
@@ -581,28 +599,69 @@ _cb_link_vtime(void *ptr) {
   }
 }
 
+static void
+_cleanup_neighbor(struct nhdp_neighbor *neigh, int af_type) {
+  struct nhdp_naddr *naddr, *na_it;
+  struct nhdp_link *lnk, *l_it;
+  struct nhdp_laddr *laddr, *la_it;
+  struct nhdp_l2hop *l2hop, *l2_it;
+
+  /* remove all IPv4 addresses from neighbor */
+  avl_for_each_element_safe(&neigh->_neigh_addresses, naddr, _neigh_node, na_it) {
+    if (netaddr_get_address_family(&naddr->neigh_addr) == af_type) {
+      nhdp_db_neighbor_addr_remove(naddr);
+    }
+  }
+
+  if (neigh->_neigh_addresses.count == 0) {
+    /* no address left, remove link */
+    nhdp_db_neighbor_remove(neigh);
+    return;
+  }
+
+  list_for_each_element_safe(&neigh->_links, lnk, _neigh_node, l_it) {
+    avl_for_each_element_safe(&lnk->_addresses, laddr, _link_node, la_it) {
+      if (netaddr_get_address_family(&laddr->link_addr) == af_type) {
+        nhdp_db_link_addr_remove(laddr);
+      }
+    }
+
+    if (lnk->_addresses.count == 0) {
+      nhdp_db_link_remove(lnk);
+      return;
+    }
+
+    avl_for_each_element_safe(&lnk->_2hop, l2hop, _link_node, l2_it) {
+      if (netaddr_get_address_family(&l2hop->twohop_addr) == af_type) {
+        nhdp_db_link_2hop_remove(l2hop);
+      }
+    }
+  }
+}
+
 /**
- * Callback triggered when link validity timer for ipv6 addresses fires
+ * Callback triggered when neighbor validity timer for ipv6 addresses fires
+ * @param ptr nhdp link
+ */
+static void
+_cb_link_vtime_v4(void *ptr) {
+  struct nhdp_neighbor *neigh = ptr;
+
+  OLSR_DEBUG(LOG_NHDP, "Neighbor vtime_v4 fired: 0x%0zx", (size_t)ptr);
+  _cleanup_neighbor(neigh, AF_INET);
+}
+
+/**
+ * Callback triggered when neighbor validity timer for ipv6 addresses fires
  * @param ptr nhdp link
  */
 static void
 _cb_link_vtime_v6(void *ptr) {
-  struct nhdp_link *lnk = ptr;
-  struct nhdp_laddr *laddr, *la_it;
+  struct nhdp_neighbor *neigh = ptr;
 
-  OLSR_DEBUG(LOG_NHDP, "Link vtime_v6 fired: 0x%0zx", (size_t)ptr);
+  OLSR_DEBUG(LOG_NHDP, "Neighbor vtime_v6 fired: 0x%0zx", (size_t)ptr);
 
-  /* remove all IPv6 addresses from link */
-  avl_for_each_element_safe(&lnk->_addresses, laddr, _link_node, la_it) {
-    if (netaddr_get_address_family(&laddr->link_addr) == AF_INET6) {
-      nhdp_db_link_addr_remove(laddr);
-    }
-  }
-
-  if (lnk->_addresses.count == 0) {
-    /* no address left, remove link */
-    _cb_link_vtime(lnk);
-  }
+  _cleanup_neighbor(neigh, AF_INET6);
 }
 
 /**

@@ -43,9 +43,6 @@ struct nhdp_link {
   /* timer that fires when the link has to be removed from the database */
   struct olsr_timer_entry vtime;
 
-  /* timer that fires when the ipv6 addresses of this link have to be removed */
-  struct olsr_timer_entry vtime_v6;
-
   /* cached status of the linked */
   enum nhdp_link_status status;
 
@@ -141,6 +138,18 @@ struct nhdp_neighbor {
 
   /* internal field for NHDP processing */
   int _process_count;
+
+  /*
+   * timer that fires when the ipv6 addresses
+   * of this neighbor have to be removed
+   */
+  struct olsr_timer_entry vtime_v4;
+
+  /*
+   * timer that fires when the ipv6 addresses
+   * of this neighbor have to be removed
+   */
+  struct olsr_timer_entry vtime_v6;
 
   /* list of links for this neighbor */
   struct list_entity _links;

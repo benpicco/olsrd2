@@ -137,6 +137,8 @@ static struct {
   bool link_heard, link_lost;
   bool has_thisif;
 
+  bool has_ipv4, has_ipv6;
+
   uint64_t vtime;
 } _current;
 
@@ -284,6 +286,17 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
     /* mark as not lost */
     nhdp_db_neighbor_addr_not_lost(naddr);
   }
+
+
+  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET) {
+    /* update vtime_v6 timer */
+    olsr_timer_set(&_current.neighbor->vtime_v4, _current.vtime);
+  }
+  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6) {
+    /* update vtime_v6 timer */
+    olsr_timer_set(&_current.neighbor->vtime_v6, _current.vtime);
+  }
+
   return RFC5444_OKAY;
 }
 
@@ -353,6 +366,9 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
     default:
       break;
   }
+
+  _current.has_ipv4 |= netaddr_get_address_family(&addr) == AF_INET;
+  _current.has_ipv6 |= netaddr_get_address_family(&addr) == AF_INET6;
 
   if (_nhdp_address_pass1_tlvs[IDX_ADDRTLV1_LOCAL_IF].tlv) {
     local_if = _nhdp_address_pass1_tlvs[IDX_ADDRTLV1_LOCAL_IF].tlv->single_value[0];
@@ -466,7 +482,10 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
 
   /* mark existing neighbor addresses */
   avl_for_each_element(&_current.neighbor->_neigh_addresses, naddr, _neigh_node) {
-    naddr->_might_be_removed = true;
+    if ((netaddr_get_address_family(&naddr->neigh_addr) == AF_INET && _current.has_ipv4)
+      || (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6 && _current.has_ipv6)) {
+      naddr->_might_be_removed = true;
+    }
   }
 
   /* mark existing link addresses */
@@ -589,6 +608,14 @@ _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
     return RFC5444_OKAY;
   }
 
+  /* remember when we saw the last IPv4/IPv6 */
+  if (_current.has_ipv4) {
+    olsr_timer_set(&_current.neighbor->vtime_v4, _current.vtime);
+  }
+  if (_current.has_ipv6) {
+    olsr_timer_set(&_current.neighbor->vtime_v6, _current.vtime);
+  }
+
   /* remove leftover link addresses */
   avl_for_each_element_safe(&_current.link->_addresses, laddr, _link_node, la_it) {
     if (laddr->_might_be_removed) {
@@ -664,10 +691,5 @@ _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   /* update MPR set */
   nhdp_mpr_update_flooding(_current.link);
   nhdp_mpr_update_flooding(_current.link);
-
-  if (context->addr_len == 16) {
-    /* update vtime_v6 timer */
-    olsr_timer_set(&_current.link->vtime_v6, _current.vtime);
-  }
   return RFC5444_OKAY;
 }

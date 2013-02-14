@@ -327,7 +327,6 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
 static void
 _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime) {
   struct netaddr_str buf;
-  assert (!addr->removed);
 
   OLSR_DEBUG(LOG_NHDP, "Remove %s from NHDP interface %s",
       netaddr_to_string(&buf, &addr->if_addr), nhdp_interface_get_name(addr->interf));
@@ -523,7 +522,7 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl,
 
   /* remove outdated socket addresses */
   avl_for_each_element_safe(&interf->_if_addresses, addr, _if_node, addr_it) {
-    if (addr->_to_be_removed) {
+    if (addr->_to_be_removed && !addr->removed) {
       addr->_to_be_removed = false;
       _addr_remove(addr, interf->i_hold_time);
     }
