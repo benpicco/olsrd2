@@ -265,6 +265,17 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
   uint8_t value;
   bool this_if;
 
+  if (netaddr_get_address_family(&addr->if_addr) == AF_INET
+      && interf->mode == NHDP_IPV6) {
+    /* ignore */
+    return;
+  }
+  if (netaddr_get_address_family(&addr->if_addr) == AF_INET6
+      && interf->mode == NHDP_IPV4) {
+    /* ignore */
+    return;
+  }
+
   /* check if address of local interface */
   this_if = NULL != avl_find_element(
       &interf->_if_addresses, &addr->if_addr, addr, _if_node);
@@ -306,6 +317,18 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
   uint8_t linkstatus, otherneigh;
+
+  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET
+      && interf->mode == NHDP_IPV6) {
+    /* ignore */
+    return;
+  }
+  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6
+      && interf->mode == NHDP_IPV4) {
+    /* ignore */
+    return;
+  }
+
 
   /* initialize flags for default (lost address) address */
   linkstatus = 255;
