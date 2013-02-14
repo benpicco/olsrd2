@@ -186,7 +186,7 @@ nhdp_reader_cleanup(void) {
 static int
 _parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
   if (len == 16
-      && netaddr_binary_is_in_subnet(&NETADDR_IPV6_IPV4EMBEDDED, ptr, len, AF_INET6)) {
+      && netaddr_binary_is_in_subnet(&NETADDR_IPV6_IPV4COMPATIBLE, ptr, len, AF_INET6)) {
     struct netaddr addr;
 
     if (_current.localif->mode == NHDP_IPV6) {
@@ -199,7 +199,7 @@ _parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
       return -1;
     }
 
-    netaddr_extract_ipv4(dst, &addr);
+    netaddr_extract_ipv4_compatible(dst, &addr);
     return 0;
   }
 

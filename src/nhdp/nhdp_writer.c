@@ -236,7 +236,7 @@ _add_rfc5444_address(struct rfc5444_writer *writer,   struct rfc5444_writer_mess
   if (netaddr_get_address_family(addr) == AF_INET
       && creator->addr_len == 16) {
     /* generate embedded address */
-    netaddr_embed_ipv4(&embedded, addr);
+    netaddr_embed_ipv4_compatible(&embedded, addr);
     return rfc5444_writer_add_address(writer, creator,
         netaddr_get_binptr(&embedded),
         netaddr_get_prefix_length(&embedded), true);
