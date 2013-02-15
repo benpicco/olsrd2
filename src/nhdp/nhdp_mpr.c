@@ -61,10 +61,11 @@ static struct nhdp_mpr_handler *_flooding_mpr = NULL;
 static struct nhdp_mpr_handler *_routing_mpr = NULL;
 static int _mpr_active_counter = 0;
 static int _mpr_willingness = RFC5444_WILLINGNESS_DEFAULT;
+static int _mpr_willingness_default = RFC5444_WILLINGNESS_DEFAULT;
 
 /* configuration section */
 static struct cfg_schema_section _nhdp_section = {
-  .type = "nhdp",
+  .type = CFG_NHDP_SECTION,
   .cb_delta_handler = _cb_cfg_changed,
 };
 
@@ -117,11 +118,16 @@ nhdp_mpr_is_active(void) {
 
 /**
  * Set the MPR willingness parameter of NHDP messages
- * @param will MPR willingness (0-15)
+ * @param will MPR willingness (0-15) or -1 to use default willingness
  */
 void
 nhdp_mpr_set_willingness(int will) {
-  _mpr_willingness = will;
+  if (will >= 0) {
+    _mpr_willingness = will;
+  }
+  else {
+    _mpr_willingness = _mpr_willingness_default;
+  }
 }
 
 /**
@@ -213,4 +219,6 @@ _cb_cfg_changed(void) {
     OLSR_WARN(LOG_NHDP, "Cannot convert NHDP global settings.");
     return;
   }
+
+  _mpr_willingness_default = config.mpr_willingness;
 }
