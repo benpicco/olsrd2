@@ -350,10 +350,6 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
 
-  /* MPR settings to default */
-  lnk->mpr_flooding = false;
-  lnk->mpr_routing = false;
-
   return lnk;
 }
 
@@ -522,9 +518,9 @@ nhdp_db_link_update_status(struct nhdp_link *lnk) {
  */
 int
 _nhdp_db_link_calculate_status(struct nhdp_link *lnk) {
-  if (lnk->hyst_pending)
+  if (lnk->hysteresis.pending)
     return NHDP_LINK_PENDING;
-  else if (lnk->hyst_lost)
+  else if (lnk->hysteresis.lost)
     return RFC5444_LINKSTATUS_LOST;
   else if (olsr_timer_is_active(&lnk->sym_time))
     return RFC5444_LINKSTATUS_SYMMETRIC;

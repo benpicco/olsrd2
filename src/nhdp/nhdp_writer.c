@@ -377,8 +377,8 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
     uint8_t value;
     bool flooding, routing;
 
-    flooding = laddr != NULL && laddr->link->mpr_flooding;
-    routing = laddr != NULL && laddr->link->mpr_routing;
+    flooding = laddr != NULL && laddr->link->mpr_flooding.mpr;
+    routing = laddr != NULL && laddr->link->mpr_routing.mpr;
 
     if (flooding && routing) {
       value = RFC5444_MPR_FLOOD_ROUTE;

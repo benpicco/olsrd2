@@ -255,12 +255,12 @@ nhdp_mpr_update_flooding(struct nhdp_link *lnk) {
   }
 
   if (lnk) {
-    lnk->mpr_flooding = active;
+    lnk->mpr_flooding.mpr = active;
     return;
   }
 
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
-    lnk->mpr_flooding = active;
+    lnk->mpr_flooding.mpr = active;
   }
 }
 
@@ -279,12 +279,12 @@ nhdp_db_mpr_update_routing(struct nhdp_link *lnk) {
   }
 
   if (lnk) {
-    lnk->mpr_routing = active;
+    lnk->mpr_routing.mpr = active;
     return;
   }
 
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
-    lnk->mpr_routing = active;
+    lnk->mpr_routing.mpr = active;
   }
 }
 
@@ -393,8 +393,8 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
           olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
           olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          lnk->hyst_pending ? " pending" : "",
-          lnk->hyst_lost ? " lost" : "");
+          lnk->hysteresis.pending ? " pending" : "",
+          lnk->hysteresis.lost ? " lost" : "");
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
         abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
@@ -469,8 +469,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
           olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
           olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          lnk->hyst_pending ? " pending" : "",
-          lnk->hyst_lost ? " lost" : "");
+          lnk->hysteresis.pending ? " pending" : "",
+          lnk->hysteresis.lost ? " lost" : "");
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
         abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));

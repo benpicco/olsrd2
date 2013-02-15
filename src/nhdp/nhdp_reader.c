@@ -70,9 +70,14 @@ enum {
   IDX_ADDRTLV2_LOCAL_IF,
   IDX_ADDRTLV2_LINK_STATUS,
   IDX_ADDRTLV2_OTHER_NEIGHB,
+  IDX_ADDRTLV2_MPR,
 };
 
 /* prototypes */
+static void cleanup_error(void);
+static int _parse_address(struct netaddr *dst, const void *ptr, uint8_t len);
+static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t local_if);
+
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
       struct rfc5444_reader_tlvblock_context *context);
@@ -119,6 +124,7 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass2_tlvs[] 
   [IDX_ADDRTLV2_LOCAL_IF] = { .type = RFC5444_ADDRTLV_LOCAL_IF, .min_length = 1, .match_length = true },
   [IDX_ADDRTLV2_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS, .min_length = 1, .match_length = true },
   [IDX_ADDRTLV2_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB, .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV2_MPR] = { .type = RFC5444_ADDRTLV_MPR, .min_length = 1, .match_length = true },
 };
 
 /* nhdp multiplexer/protocol */
@@ -185,6 +191,32 @@ nhdp_reader_cleanup(void) {
   olsr_rfc5444_remove_protocol(_protocol);
 }
 
+/**
+ * An error happened during processing and the message was dropped.
+ * Make sure that there are no uninitialized datastructures left.
+ */
+static void
+cleanup_error(void) {
+  if (_current.link) {
+    nhdp_db_link_remove(_current.link);
+    _current.link = NULL;
+  }
+
+  if (_current.neighbor) {
+    nhdp_db_neighbor_remove(_current.neighbor);
+    _current.neighbor = NULL;
+  }
+}
+
+/**
+ * Parse an incoming address, do a IPv6 to IPv4 translation if necessary and
+ * check if the address should be processed.
+ * @param dst pointer to destination netaddr object
+ * @param ptr pointer to source of address
+ * @param len length of address in bytes
+ * @return -1 if an error happened, 0 if address should be processed,
+ *   1 if address should not be processed.
+ */
 static int
 _parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
   if (len == 16
@@ -205,6 +237,7 @@ _parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
     return 0;
   }
 
+  /* convert binary address to netaddr object */
   if (netaddr_from_binary(dst, ptr, len, 0)) {
     OLSR_WARN(LOG_NHDP_R, "Could not read incoming address of length %u", len);
     return -1;
@@ -221,6 +254,12 @@ _parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
   return 0;
 }
 
+/**
+ * Process an address with a LOCAL_IF TLV
+ * @param addr pointer to netaddr object with address
+ * @param local_if value of LOCAL_IF TLV
+ * @return
+ */
 static enum rfc5444_result
 _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
   struct nhdp_neighbor *neigh;
@@ -342,6 +381,12 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
   return RFC5444_OKAY;
 }
 
+/**
+ * Process addresses of NHDP Hello message to determine link/neighbor status
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
@@ -447,7 +492,8 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
 }
 
 /**
- * Handle end of message for pass1 processing
+ * Handle end of message for pass1 processing. Create link/neighbor if necessary,
+ * mark addresses as potentially lost.
  * @param consumer
  * @param context
  * @param dropped
@@ -460,7 +506,7 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   struct nhdp_laddr *laddr;
 
   if (dropped) {
-    // TODO: cleanup of current neighbor/link
+    cleanup_error();
     return RFC5444_OKAY;
   }
 
@@ -513,10 +559,17 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   return RFC5444_OKAY;
 }
 
+/**
+ * Second pass for processing the addresses of the NHDP Hello. This one will update
+ * the database
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
-  uint8_t local_if, link_status, other_neigh;
+  uint8_t local_if, link_status, other_neigh, mprs;
   struct nhdp_l2hop *l2hop;
   struct netaddr addr;
   struct netaddr_str buf;
@@ -524,6 +577,7 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
   local_if = 255;
   link_status = 255;
   other_neigh = 255;
+  mprs = 255;
 
   switch(_parse_address(&addr, context->addr, context->addr_len)) {
     case -1:
@@ -544,17 +598,24 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
   if (_nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINK_STATUS].tlv) {
     link_status = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINK_STATUS].tlv->single_value[0];
   }
-
   if (_nhdp_address_pass2_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv) {
     other_neigh = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv->single_value[0];
   }
+  if (_nhdp_address_pass2_tlvs[IDX_ADDRTLV2_MPR].tlv) {
+    mprs = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_MPR].tlv->single_value[0];
+  }
 
-  OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, local_if %u, link_status: %u, other_neigh: %u",
-      netaddr_to_string(&buf, &addr), local_if, link_status, other_neigh);
+  OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, local_if %u, link_status: %u, other_neigh: %u, mprs: %u",
+      netaddr_to_string(&buf, &addr), local_if, link_status, other_neigh, mprs);
 
   if (local_if == RFC5444_LOCALIF_THIS_IF || local_if == RFC5444_LOCALIF_OTHER_IF) {
+    /* parse LOCAL_IF TLV */
     _pass2_process_localif(&addr, local_if);
   }
+
+  /* update MPR selector */
+  _current.link->mpr_flooding.mprs = mprs == RFC5444_MPR_FLOODING || mprs == RFC5444_MPR_FLOOD_ROUTE;
+  _current.link->mpr_routing.mprs = mprs == RFC5444_MPR_ROUTING || mprs == RFC5444_MPR_FLOOD_ROUTE;
 
   /* handle 2hop-addresses */
   if (link_status != 255 || other_neigh != 255) {
@@ -589,7 +650,7 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
 }
 
 /**
- * Handle end of message for pass2 processing
+ * Finalize changes of the database and update the status of the link
  * @param consumer
  * @param context
  * @param dropped
@@ -604,7 +665,7 @@ _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   uint64_t t;
 
   if (dropped) {
-    // TODO: cleanup of current neighbor/link
+    cleanup_error();
     return RFC5444_OKAY;
   }
 
