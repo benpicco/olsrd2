@@ -48,8 +48,9 @@
 #include "core/olsr_logging.h"
 #include "tools/olsr_rfc5444.h"
 
-#include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp.h"
+#include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_writer.h"
 
 /* constants */

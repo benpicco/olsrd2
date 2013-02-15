@@ -350,6 +350,8 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
 
+  /* hysteresis initialization */
+  lnk->hysteresis.pending = true;
   return lnk;
 }
 

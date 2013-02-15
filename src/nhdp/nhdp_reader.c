@@ -50,7 +50,9 @@
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"
+#include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_reader.h"
 
 /* NHDP message TLV array index */
@@ -145,7 +147,7 @@ static struct {
 
   bool has_ipv4, has_ipv6;
 
-  uint64_t vtime;
+  uint64_t vtime, itime;
 } _current;
 
 /**
@@ -369,6 +371,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 
   _current.vtime = rfc5444_timetlv_decode(
       _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0]);
+  _current.itime = rfc5444_timetlv_decode(
+      _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0]);
 
   /* clear flags in neighbors */
   list_for_each_element(&nhdp_neigh_list, neigh, _node) {
@@ -556,6 +560,10 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
     /* parse as if it would be tagged with a LOCAL_IF = THIS_IF TLV */
     _pass2_process_localif(&addr2, RFC5444_LOCALIF_THIS_IF);
   }
+
+  /* update hysteresis */
+  nhdp_hysteresis_update(_current.link, context, _current.vtime, _current.itime);
+
   return RFC5444_OKAY;
 }
 

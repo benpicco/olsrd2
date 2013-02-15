@@ -204,15 +204,6 @@ struct nhdp_naddr {
     bool _this_if, _might_be_removed;
 };
 
-/* handler for generating MPR information of a link */
-struct nhdp_mpr_handler {
-  /* name of handler */
-  const char *name;
-
-  /* update mprs of link, update all mprs if link is NULL */
-  void (* update_mprs)(struct nhdp_link *);
-};
-
 EXPORT extern struct list_entity nhdp_neigh_list;
 EXPORT extern struct list_entity nhdp_link_list;
 EXPORT extern struct avl_tree nhdp_naddr_tree;
