@@ -96,16 +96,17 @@ nhdp_init(void) {
     return -1;
   }
 
+  if (nhdp_writer_init(_protocol)) {
+    olsr_rfc5444_remove_protocol(_protocol);
+    return -1;
+  }
+
+  nhdp_reader_init(_protocol);
   nhdp_interfaces_init(_protocol);
   nhdp_db_init();
   nhdp_mpr_init();
 
   nhdp_reader_init(_protocol);
-  if (nhdp_writer_init(_protocol)) {
-    nhdp_reader_cleanup();
-    olsr_rfc5444_remove_protocol(_protocol);
-    return -1;
-  }
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
