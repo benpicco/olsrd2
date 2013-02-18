@@ -49,41 +49,10 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_mpr.h"
 
-/* Prototypes */
-struct _nhdp_config {
-  int mpr_willingness;
-};
-
-static void _cb_cfg_changed(void);
-
 /* MPR handlers */
 static struct nhdp_mpr_handler *_flooding_mpr = NULL;
 static struct nhdp_mpr_handler *_routing_mpr = NULL;
 static int _mpr_active_counter = 0;
-static int _mpr_willingness = RFC5444_WILLINGNESS_DEFAULT;
-static int _mpr_willingness_default = RFC5444_WILLINGNESS_DEFAULT;
-
-/* configuration section */
-static struct cfg_schema_section _nhdp_section = {
-  .type = CFG_NHDP_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
-};
-
-static struct cfg_schema_entry _nhdp_entries[] = {
-  CFG_MAP_INT(_nhdp_config, mpr_willingness, "willingness",
-      "7", "Willingness for MPR calculation"),
-};
-
-void
-nhdp_mpr_init(void) {
-  /* add additional configuration for interface section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_nhdp_section,
-      _nhdp_entries, ARRAYSIZE(_nhdp_entries));
-}
-
-void nhdp_mpr_cleanup(void) {
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_nhdp_section);
-}
 
 /**
  * Register a user of MPR TLVs in NHDP Hellos
@@ -114,28 +83,6 @@ nhdp_mpr_remove(void) {
 bool
 nhdp_mpr_is_active(void) {
   return _mpr_active_counter > 0;
-}
-
-/**
- * Set the MPR willingness parameter of NHDP messages
- * @param will MPR willingness (0-15) or -1 to use default willingness
- */
-void
-nhdp_mpr_set_willingness(int will) {
-  if (will >= 0) {
-    _mpr_willingness = will;
-  }
-  else {
-    _mpr_willingness = _mpr_willingness_default;
-  }
-}
-
-/**
- * @return current MPR willingness (0-15)
- */
-int
-nhdp_mpr_get_willingness(void) {
-  return _mpr_willingness;
 }
 
 /**
@@ -204,21 +151,4 @@ nhdp_db_mpr_update_routing(struct nhdp_link *lnk) {
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     lnk->mpr_routing.mpr = active;
   }
-}
-
-
-/**
- * Configuration has changed, handle the changes
- */
-static void
-_cb_cfg_changed(void) {
-  struct _nhdp_config config;
-
-  if (cfg_schema_tobin(&config, _nhdp_section.post,
-      _nhdp_entries, ARRAYSIZE(_nhdp_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP global settings.");
-    return;
-  }
-
-  _mpr_willingness_default = config.mpr_willingness;
 }

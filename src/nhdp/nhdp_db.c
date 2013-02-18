@@ -363,7 +363,7 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   }
 
   /* hook into interface */
-  nhdp_interfaces_add_link(local_if, lnk);
+  nhdp_interface_add_link(local_if, lnk);
 
   /* hook into neighbor */
   list_add_tail(&neigh->_links, &lnk->_neigh_node);
@@ -418,7 +418,7 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   }
 
   /* unlink */
-  nhdp_interfaces_remove_link(lnk);
+  nhdp_interface_remove_link(lnk);
   list_remove(&lnk->_neigh_node);
 
   /* remove from global list */
@@ -449,7 +449,7 @@ nhdp_db_link_addr_add(struct nhdp_link *lnk, struct netaddr *addr) {
   /* add to trees */
   avl_insert(&lnk->_addresses, &laddr->_link_node);
   avl_insert(&lnk->neigh->_link_addresses, &laddr->_neigh_node);
-  nhdp_interfaces_add_laddr(laddr);
+  nhdp_interface_add_laddr(laddr);
 
   /* find corresponding neighbor address */
 
@@ -459,7 +459,7 @@ nhdp_db_link_addr_add(struct nhdp_link *lnk, struct netaddr *addr) {
 void
 nhdp_db_link_addr_remove(struct nhdp_laddr *laddr) {
   /* remove from trees */
-  nhdp_interfaces_remove_laddr(laddr);
+  nhdp_interface_remove_laddr(laddr);
   avl_remove(&laddr->link->_addresses, &laddr->_link_node);
   avl_remove(&laddr->link->neigh->_link_addresses, &laddr->_neigh_node);
 

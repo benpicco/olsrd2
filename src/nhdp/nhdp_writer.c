@@ -215,8 +215,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
       &vtime_encoded, sizeof(vtime_encoded));
 
   if (nhdp_mpr_is_active()) {
-    will = nhdp_mpr_get_willingness();
-
+    will = nhdp_interface_get_mpr_willingness(interf);
     rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, 0,
         &will, sizeof(will));
   }
@@ -335,7 +334,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   linkstatus = 255;
   otherneigh = RFC5444_OTHERNEIGHB_LOST;
 
-  laddr = nhdp_interfaces_get_link_addr(interf, &naddr->neigh_addr);
+  laddr = nhdp_interface_get_link_addr(interf, &naddr->neigh_addr);
   if (!nhdp_db_neighbor_addr_is_lost(naddr)) {
     if (laddr != NULL && laddr->link->local_if == interf
         && laddr->link->status != NHDP_LINK_PENDING) {

@@ -122,6 +122,10 @@ static struct cfg_schema_entry _interface_entries[] = {
     "Validity time for NHDP Hello Messages", 100),
   CFG_MAP_CLOCK_MIN(nhdp_interface, refresh_interval, "hello-interval", "2.0",
     "Time interval between two NHDP Hello Messages", 100),
+  CFG_MAP_INT_MINMAX(nhdp_interface, mpr_willingness_default, "willingness",
+      RFC5444_WILLINGNESS_DEFAULT_STRING, "Willingness for MPR calculation",
+      RFC5444_WILLINGNESS_MIN, RFC5444_WILLINGNESS_MAX),
+
 };
 
 /* other global variables */

@@ -271,7 +271,7 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
 
   /* make sure link addresses are added to the right link */
   if (local_if == RFC5444_LOCALIF_THIS_IF) {
-    laddr = nhdp_interfaces_get_link_addr(_current.localif, addr);
+    laddr = nhdp_interface_get_link_addr(_current.localif, addr);
     if (laddr == NULL) {
       /* create new link address */
       laddr = nhdp_db_link_addr_add(_current.link, addr);
@@ -371,8 +371,11 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 
   _current.vtime = rfc5444_timetlv_decode(
       _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0]);
-  _current.itime = rfc5444_timetlv_decode(
-      _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0]);
+
+  if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv) {
+    _current.itime = rfc5444_timetlv_decode(
+        _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0]);
+  }
 
   /* clear flags in neighbors */
   list_for_each_element(&nhdp_neigh_list, neigh, _node) {
@@ -454,7 +457,7 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
 
   if (local_if == RFC5444_LOCALIF_THIS_IF) {
     /* check for link address conflict */
-    laddr = nhdp_interfaces_get_link_addr(_current.localif, &addr);
+    laddr = nhdp_interface_get_link_addr(_current.localif, &addr);
     if (laddr != NULL) {
       OLSR_DEBUG(LOG_NHDP_R, "Found link in database");
       laddr->link->_process_count++;

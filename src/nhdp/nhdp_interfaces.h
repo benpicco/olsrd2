@@ -52,6 +52,7 @@ struct nhdp_interface_addr;
 #include "core/olsr_interface.h"
 #include "core/olsr_netaddr_acl.h"
 #include "core/olsr_timer.h"
+#include "rfc5444/rfc5444_iana.h"
 #include "tools/olsr_rfc5444.h"
 
 #include "nhdp/nhdp_db.h"
@@ -71,14 +72,20 @@ struct nhdp_interface {
   /* listener for interface events */
   struct olsr_rfc5444_interface_listener rfc5444_if;
 
-  /* interval between two hellos sent through this interface */
-  uint64_t refresh_interval;
-
   /* does this interface only work with IPv4/IPv6 or does it dualstack? */
   enum nhdp_interface_mode mode;
 
   /* true if this interface has a neighbors that support only ipv4 */
   bool neigh_onlyv4;
+
+  /* Willingness for MPR */
+  enum rfc5444_willingness_values mpr_willingness;
+
+  /* Willingness as configured */
+  int mpr_willingness_default;
+
+  /* interval between two hellos sent through this interface */
+  uint64_t refresh_interval;
 
   /* See RFC 6130, 5.3.2 and 5.4.1 */
   uint64_t h_hold_time;
@@ -189,7 +196,7 @@ nhdp_interface_addr_global_get(struct netaddr *addr) {
  * @param lnk nhdp link
  */
 static INLINE void
-nhdp_interfaces_add_link(struct nhdp_interface *interf,
+nhdp_interface_add_link(struct nhdp_interface *interf,
     struct nhdp_link *lnk) {
   lnk->local_if = interf;
 
@@ -201,25 +208,70 @@ nhdp_interfaces_add_link(struct nhdp_interface *interf,
  * @param lnk nhdp link
  */
 static INLINE void
-nhdp_interfaces_remove_link(struct nhdp_link *lnk) {
+nhdp_interface_remove_link(struct nhdp_link *lnk) {
   list_remove(&lnk->_if_node);
   lnk->local_if = NULL;
 }
 
+/**
+ * Attach a link address to the local nhdp interface
+ * @param laddr
+ */
 static INLINE void
-nhdp_interfaces_add_laddr(struct nhdp_laddr *laddr) {
+nhdp_interface_add_laddr(struct nhdp_laddr *laddr) {
   avl_insert(&laddr->link->local_if->_link_addresses, &laddr->_if_node);
 }
 
+/**
+ * Detach a link address from the local nhdp interface
+ * @param laddr
+ */
 static INLINE void
-nhdp_interfaces_remove_laddr(struct nhdp_laddr *laddr) {
+nhdp_interface_remove_laddr(struct nhdp_laddr *laddr) {
   avl_remove(&laddr->link->local_if->_link_addresses, &laddr->_if_node);
 }
 
+/**
+ * @param interf local nhdp interface
+ * @param addr network address
+ * @return link address object fitting the network address, NULL if not found
+ */
 static INLINE struct nhdp_laddr *
-nhdp_interfaces_get_link_addr(struct nhdp_interface *interf, struct netaddr *addr) {
+nhdp_interface_get_link_addr(struct nhdp_interface *interf, struct netaddr *addr) {
   struct nhdp_laddr *laddr;
 
   return avl_find_element(&interf->_link_addresses, addr, laddr, _if_node);
 }
+
+/**
+ * Set custom MPR willingness for local nhdp interface
+ * @param interf local nhdp interface
+ * @param will new willingness
+ */
+static INLINE void
+nhdp_interface_set_mpr_willingness(struct nhdp_interface *interf, enum rfc5444_willingness_values will) {
+  interf->mpr_willingness = will;
+}
+
+/**
+ * Resets the MPR willingness for the local nhdp interface
+ * @param interf local nhdp interface
+ */
+static INLINE void
+nhdp_interface_reset_mpr_willingness(struct nhdp_interface *interf) {
+  interf->mpr_willingness = RFC5444_WILLINGNESS_UNDEFINED;
+}
+
+/**
+ * @param interf local nhdp interface
+ * @return current mpr willingness
+ */
+static INLINE enum rfc5444_willingness_values
+nhdp_interface_get_mpr_willingness(struct nhdp_interface *interf) {
+  if (interf->mpr_willingness == RFC5444_WILLINGNESS_UNDEFINED) {
+    return interf->mpr_willingness_default;
+  }
+  return interf->mpr_willingness;
+}
+
 #endif /* NHDP_INTERFACES_H_ */

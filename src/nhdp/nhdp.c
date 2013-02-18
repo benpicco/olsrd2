@@ -104,7 +104,6 @@ nhdp_init(void) {
   nhdp_reader_init(_protocol);
   nhdp_interfaces_init(_protocol);
   nhdp_db_init();
-  nhdp_mpr_init();
 
   nhdp_reader_init(_protocol);
 
@@ -130,12 +129,10 @@ nhdp_cleanup(void) {
     olsr_telnet_remove(&_cmds[i]);
   }
 
-  nhdp_mpr_cleanup();
   nhdp_writer_cleanup();
   nhdp_reader_cleanup();
   nhdp_db_cleanup();
   nhdp_interfaces_cleanup();
-
 }
 
 

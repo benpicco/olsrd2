@@ -55,14 +55,9 @@ struct nhdp_mpr_handler {
   void (* update_mpr)(struct nhdp_link *);
 };
 
-void nhdp_mpr_init(void);
-void nhdp_mpr_cleanup(void);
-
 EXPORT void nhdp_mpr_add(void);
 EXPORT void nhdp_mpr_remove(void);
 EXPORT bool nhdp_mpr_is_active(void);
-EXPORT void nhdp_mpr_set_willingness(int);
-EXPORT int nhdp_mpr_get_willingness(void);
 EXPORT void nhdp_mpr_set_flooding_handler(struct nhdp_mpr_handler *);
 EXPORT void nhdp_mpr_set_routing_handler(struct nhdp_mpr_handler *);
 EXPORT void nhdp_mpr_update_flooding(struct nhdp_link *);
