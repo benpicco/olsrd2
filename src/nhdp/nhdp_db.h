@@ -63,25 +63,6 @@ enum nhdp_link_status {
   NHDP_LINK_HEARD     = RFC5444_LINKSTATUS_HEARD,    //!< NHDP_LINK_HEARD
 };
 
-struct nhdp_link_hysteresis {
-  /* quality value for link hysteresis */
-  uint32_t quality;
-
-  /* true if link is still pending (but might be considered online heard later) */
-  bool pending;
-
-  /* true if link is considered lost at the moment */
-  bool lost;
-};
-
-struct nhdp_link_mpr {
-  /* true if this router wants to use a link as a MPR */
-  bool mpr;
-
-  /* true if a link wants to use this router as a MPR */
-  bool mprs;
-};
-
 /**
  * nhdl_link represents a link by a specific local interface to one interface
  * of a one-hop neighbor.
@@ -98,15 +79,6 @@ struct nhdp_link {
 
   /* cached status of the linked */
   enum nhdp_link_status status;
-
-  /* data of the links hysteresis */
-  struct nhdp_link_hysteresis hysteresis;
-
-  /* status of the flooding mpr in relation to this link */
-  struct nhdp_link_mpr mpr_flooding;
-
-  /* status of the routing mpr in relation to this link */
-  struct nhdp_link_mpr mpr_routing;
 
   /* pointer to local interface for this link */
   struct nhdp_interface *local_if;

@@ -624,9 +624,13 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
     _pass2_process_localif(&addr, local_if);
   }
 
-  /* update MPR selector */
-  _current.link->mpr_flooding.mprs = mprs == RFC5444_MPR_FLOODING || mprs == RFC5444_MPR_FLOOD_ROUTE;
-  _current.link->mpr_routing.mprs = mprs == RFC5444_MPR_ROUTING || mprs == RFC5444_MPR_FLOOD_ROUTE;
+  if (nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
+    /* update MPR selector if this is "our" address */
+    nhdp_mpr_set_mprs(nhdp_flooding_mpr, _current.link,
+        mprs == RFC5444_MPR_FLOODING || mprs == RFC5444_MPR_FLOOD_ROUTE);
+    nhdp_mpr_set_mprs(nhdp_routing_mpr, _current.link,
+        mprs == RFC5444_MPR_ROUTING || mprs == RFC5444_MPR_FLOOD_ROUTE);
+  }
 
   /* handle 2hop-addresses */
   if (link_status != 255 || other_neigh != 255) {
@@ -761,7 +765,7 @@ _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   nhdp_interfaces_update_neigh_addresstype(_current.localif);
 
   /* update MPR set */
-  nhdp_mpr_update_flooding(_current.link);
-  nhdp_mpr_update_flooding(_current.link);
+  nhdp_mpr_update(nhdp_flooding_mpr, _current.localif);
+  nhdp_mpr_update(nhdp_routing_mpr, _current.localif);
   return RFC5444_OKAY;
 }

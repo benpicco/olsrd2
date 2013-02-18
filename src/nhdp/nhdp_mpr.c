@@ -49,106 +49,85 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_mpr.h"
 
-/* MPR handlers */
-static struct nhdp_mpr_handler *_flooding_mpr = NULL;
-static struct nhdp_mpr_handler *_routing_mpr = NULL;
-static int _mpr_active_counter = 0;
+/* Prototypes */
+static void _update_mpr(struct nhdp_interface *);
+static void _set_mprs(struct nhdp_link *lnk, bool);
+static bool _is_mpr(struct nhdp_link *);
+static bool _use_willingness(struct nhdp_interface *);
+
+/* MPR default handler */
+static struct nhdp_mpr_handler _handler = {
+  .name = "No MPRs",
+  .update_mpr = _update_mpr,
+  .set_mprs = _set_mprs,
+  .is_mpr = _is_mpr,
+  .use_willingness = _use_willingness,
+};
+
+struct nhdp_mpr_handler *nhdp_routing_mpr = &_handler;
+struct nhdp_mpr_handler *nhdp_flooding_mpr = &_handler;
 
 /**
- * Register a user of MPR TLVs in NHDP Hellos
+ * Set a handler for routing or flodding MPR calculation
+ * @param handler pointer to handler of NULL to reset to default
+ * @param routing true if routing handler, false for flooding handler
  */
 void
-nhdp_mpr_add(void) {
-  _mpr_active_counter++;
-  if (_mpr_active_counter == 1) {
-    nhdp_mpr_update_flooding(NULL);
-    nhdp_db_mpr_update_routing(NULL);
+nhdp_mpr_set_handler(struct nhdp_mpr_handler *handler, bool routing) {
+  struct nhdp_mpr_handler **ptr;
+
+  if (routing) {
+    ptr = &nhdp_routing_mpr;
   }
-}
-/**
- * Unregister a user of MPR TLVs in NHDP Hellos
- */
-void
-nhdp_mpr_remove(void) {
-  _mpr_active_counter--;
-  if (_mpr_active_counter == 0) {
-    nhdp_mpr_update_flooding(NULL);
-    nhdp_db_mpr_update_routing(NULL);
-  }
-}
-
-/**
- * @return true if MPRs are in use at the moment
- */
-bool
-nhdp_mpr_is_active(void) {
-  return _mpr_active_counter > 0;
-}
-
-/**
- * Sets a new NHDP flooding MPR handler
- * @param mprh pointer to handler, NULL if no handler
- */
-void
-nhdp_mpr_set_flooding_handler(struct nhdp_mpr_handler *mprh) {
-  _flooding_mpr = mprh;
-  nhdp_mpr_update_flooding(NULL);
-}
-
-/**
- * Sets a new NHDP routing MPR handler
- * @param mprh pointer to handler, NULL if no handler
- */
-void
-nhdp_mpr_set_routing_handler(struct nhdp_mpr_handler *mprh) {
-  _routing_mpr = mprh;
-  nhdp_db_mpr_update_routing(NULL);
-}
-
-/**
- * Update the set of flooding MPRs
- * @param lnk pointer to link that changed, NULL if a change
- *   on multiple links might have happened
- */
-void
-nhdp_mpr_update_flooding(struct nhdp_link *lnk) {
-  bool active = _mpr_active_counter > 0;
-
-  if (active && _flooding_mpr != NULL) {
-    _flooding_mpr->update_mpr(lnk);
-    return;
+  else {
+    ptr = &nhdp_flooding_mpr;
   }
 
-  if (lnk) {
-    lnk->mpr_flooding.mpr = active;
-    return;
+  if (handler == NULL) {
+    *ptr = &_handler;
   }
-
-  list_for_each_element(&nhdp_link_list, lnk, _global_node) {
-    lnk->mpr_flooding.mpr = active;
+  else {
+    *ptr = handler;
   }
 }
 
 /**
- * Update the set of routing MPRs
- * @param lnk pointer to link that changed, NULL if a change
- *   on multiple links might have happened
+ * Dummy function for updating MPR set (does nothing)
+ * @param interf pointer to local nhdp interface
  */
-void
-nhdp_db_mpr_update_routing(struct nhdp_link *lnk) {
-  bool active = _mpr_active_counter > 0;
+static void
+_update_mpr(struct nhdp_interface *interf __attribute((unused))) {
+  return;
+}
 
-  if (active && _routing_mpr != NULL) {
-    _routing_mpr->update_mpr(lnk);
-    return;
-  }
+/**
+ * Dummy function to story MPR selectors of a neighbor (does nothing)
+ * @param lnk pointer to nhdp link
+ * @param selected true if neighbor selected us as a MPR
+ */
+static void
+_set_mprs(struct nhdp_link *lnk __attribute((unused)),
+    bool selected __attribute((unused))) {
+  return;
+}
 
-  if (lnk) {
-    lnk->mpr_routing.mpr = active;
-    return;
-  }
+/**
+ * Dummy function to calculate links mpr TLV value.
+ * @param lnk pointer to link
+ * @return always true
+ */
+static bool
+_is_mpr(struct nhdp_link *lnk __attribute((unused))) {
+  return true;
+}
 
-  list_for_each_element(&nhdp_link_list, lnk, _global_node) {
-    lnk->mpr_routing.mpr = active;
-  }
+/**
+ * Dummy function to decide if interface hello message should
+ * contain willingness TLV
+ * @param interf pointer to local nhdp interface
+ * @return always false
+ */
+static bool
+_use_willingness(struct nhdp_interface *interf __attribute((unused))) {
+  return false;
 }

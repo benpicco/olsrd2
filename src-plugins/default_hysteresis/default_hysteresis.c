@@ -39,59 +39,71 @@
  *
  */
 
-#ifndef NHDP_HYSTERESIS_H_
-#define NHDP_HYSTERESIS_H_
-
 #include "common/common_types.h"
+#include "common/autobuf.h"
+
+#include "core/olsr_logging.h"
+#include "core/olsr_plugins.h"
+#include "rfc5444/rfc5444_iana.h"
+#include "rfc5444/rfc5444_conversion.h"
 #include "rfc5444/rfc5444_reader.h"
+#include "tools/olsr_rfc5444.h"
+#include "tools/olsr_cfg.h"
 
-#include "nhdp/nhdp_db.h"
+#include "nhdp/nhdp_interfaces.h"
 
-struct nhdp_hysteresis_handler {
-  /* name of the handler */
-  const char *name;
+/* prototypes */
+static int _cb_plugin_load(void);
+static int _cb_plugin_unload(void);
+static int _cb_plugin_enable(void);
+static int _cb_plugin_disable(void);
 
-  /* update pending/Lost (and maybe quality) of links hysteresis */
-  void (*update_hysteresis)(struct nhdp_link *,
-      struct rfc5444_reader_tlvblock_context *context, uint64_t, uint64_t);
+/* plugin declaration */
+OLSR_PLUGIN7 {
+  .descr = "OLSRD2 default hysteresis plugin",
+  .author = "Henning Rogge",
 
-  bool (*is_pending)(struct nhdp_link *);
-  bool (*is_lost)(struct nhdp_link *);
+  .load = _cb_plugin_load,
+  .unload = _cb_plugin_unload,
+  .enable = _cb_plugin_enable,
+  .disable = _cb_plugin_disable,
+
+  .can_disable = true,
+  .can_unload = false,
 };
 
-EXPORT extern struct nhdp_hysteresis_handler *nhdp_hysteresis;
-
-EXPORT void nhdp_hysteresis_set_handler(struct nhdp_hysteresis_handler *);
-
 /**
- * Update a links hysteresis because of an incoming NHDP Hello message
- * @param lnk pointer to NHDP link
- * @param context pointer to rfc5444 context (message context)
- * @param vtime validity time of message
- * @param itime interval time of message, 0 if not defined
+ * Constructor of plugin
+ * @return 0 if initialization was successful, -1 otherwise
  */
-static INLINE void
-nhdp_hysteresis_update(struct nhdp_link *lnk,
-    struct rfc5444_reader_tlvblock_context *context,
-    uint64_t vtime, uint64_t itime) {
-  return nhdp_hysteresis->update_hysteresis(lnk, context, vtime, itime);
+static int
+_cb_plugin_load(void) {
+  return 0;
 }
 
 /**
- * @param lnk pointer to nhdp link
- * @return true if link is pending
+ * Destructor of plugin
+ * @return always returns 0 (cannot fail)
  */
-static INLINE bool
-nhdp_hysteresis_is_pending(struct nhdp_link *lnk) {
-  return nhdp_hysteresis->is_pending(lnk);
+static int
+_cb_plugin_unload(void) {
+  return 0;
 }
 
 /**
- * @param lnk pointer to nhdp link
- * @return true if link is lost
+ * Enable plugin
+ * @return always returns 0 (cannot fail)
  */
-static INLINE bool
-nhdp_hysteresis_is_lost(struct nhdp_link *lnk) {
-  return nhdp_hysteresis->is_lost(lnk);
+static int
+_cb_plugin_enable(void) {
+  return 0;
 }
-#endif /* NHDP_HYSTERESIS_H_ */
+
+/**
+ * Disable plugin
+ * @return always returns 0 (cannot fail)
+ */
+static int
+_cb_plugin_disable(void) {
+  return 0;
+}

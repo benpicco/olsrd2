@@ -214,7 +214,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
   rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
       &vtime_encoded, sizeof(vtime_encoded));
 
-  if (nhdp_mpr_is_active()) {
+  if (nhdp_mpr_use_willingness(nhdp_flooding_mpr, interf)) {
     will = nhdp_interface_get_mpr_willingness(interf);
     rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, 0,
         &will, sizeof(will));
@@ -316,7 +316,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   struct rfc5444_writer_address *address;
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
-  uint8_t linkstatus, otherneigh;
+  uint8_t linkstatus, otherneigh, mpr_flooding, mpr_routing;
 
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET
       && interf->mode == NHDP_IPV6) {
@@ -373,17 +373,15 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
         netaddr_to_string(&buf, &naddr->neigh_addr), otherneigh);
   }
 
-  if (nhdp_mpr_is_active()) {
+  mpr_flooding = nhdp_mpr_is_mpr(nhdp_flooding_mpr, laddr->link);
+  mpr_routing = nhdp_mpr_is_mpr(nhdp_routing_mpr, laddr->link);
+  if (mpr_flooding || mpr_routing) {
     uint8_t value;
-    bool flooding, routing;
 
-    flooding = laddr != NULL && laddr->link->mpr_flooding.mpr;
-    routing = laddr != NULL && laddr->link->mpr_routing.mpr;
-
-    if (flooding && routing) {
+    if (mpr_flooding && mpr_routing) {
       value = RFC5444_MPR_FLOOD_ROUTE;
     }
-    else if (flooding) {
+    else if (mpr_flooding) {
       value = RFC5444_MPR_FLOODING;
     }
     else {

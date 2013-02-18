@@ -50,6 +50,7 @@
 #include "core/olsr_timer.h"
 
 #include "nhdp/nhdp.h"
+#include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_db.h"
 
@@ -384,8 +385,6 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
 
-  /* hysteresis initialization */
-  lnk->hysteresis.pending = true;
   return lnk;
 }
 
@@ -554,13 +553,13 @@ nhdp_db_link_update_status(struct nhdp_link *lnk) {
  */
 int
 _nhdp_db_link_calculate_status(struct nhdp_link *lnk) {
-  if (lnk->hysteresis.pending)
+  if (nhdp_hysteresis_is_pending(lnk))
     return NHDP_LINK_PENDING;
-  else if (lnk->hysteresis.lost)
+  if (nhdp_hysteresis_is_lost(lnk))
     return RFC5444_LINKSTATUS_LOST;
-  else if (olsr_timer_is_active(&lnk->sym_time))
+  if (olsr_timer_is_active(&lnk->sym_time))
     return RFC5444_LINKSTATUS_SYMMETRIC;
-  else if (olsr_timer_is_active(&lnk->heard_time))
+  if (olsr_timer_is_active(&lnk->heard_time))
     return RFC5444_LINKSTATUS_HEARD;
   return RFC5444_LINKSTATUS_LOST;
 }

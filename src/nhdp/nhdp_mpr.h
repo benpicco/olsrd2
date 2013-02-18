@@ -43,6 +43,7 @@
 #define NHDP_MPR_H_
 
 #include "common/common_types.h"
+#include "rfc5444/rfc5444_iana.h"
 
 #include "nhdp/nhdp_db.h"
 
@@ -51,16 +52,62 @@ struct nhdp_mpr_handler {
   /* name of handler */
   const char *name;
 
-  /* update mpr settings of link, update all mpr settings if link is NULL */
-  void (* update_mpr)(struct nhdp_link *);
+  /* update mpr settings */
+  void (*update_mpr)(struct nhdp_interface *);
+
+  /* set MPR selector choice of neighbor */
+  void (*set_mprs)(struct nhdp_link *, bool);
+
+  /* get MPR state of a link */
+  bool (*is_mpr)(struct nhdp_link *);
+
+  /* true if nhdp message for interface should contain willingness */
+  bool (*use_willingness)(struct nhdp_interface *);
 };
 
-EXPORT void nhdp_mpr_add(void);
-EXPORT void nhdp_mpr_remove(void);
-EXPORT bool nhdp_mpr_is_active(void);
-EXPORT void nhdp_mpr_set_flooding_handler(struct nhdp_mpr_handler *);
-EXPORT void nhdp_mpr_set_routing_handler(struct nhdp_mpr_handler *);
-EXPORT void nhdp_mpr_update_flooding(struct nhdp_link *);
-EXPORT void nhdp_db_mpr_update_routing(struct nhdp_link *);
+EXPORT extern struct nhdp_mpr_handler *nhdp_routing_mpr, *nhdp_flooding_mpr;
 
+EXPORT void nhdp_mpr_set_handler(struct nhdp_mpr_handler *, bool);
+
+/**
+ * Update the MPR settings of an interface
+ * @param h pointer to MPR handler
+ * @param interf pointer to local nhdp interface
+ */
+static INLINE void
+nhdp_mpr_update(struct nhdp_mpr_handler *h, struct nhdp_interface *interf) {
+  h->update_mpr(interf);
+}
+
+/**
+ * Stores the MPR selectors of a neighbor
+ * @param h pointer to MPR handler
+ * @param lnk pointer to nhdp link
+ * @param selected true if neighbor selected us as a MPR
+ */
+static INLINE void
+nhdp_mpr_set_mprs(struct nhdp_mpr_handler *h, struct nhdp_link *lnk,
+    bool selected) {
+  h->set_mprs(lnk, selected);
+}
+
+/**
+ * @param h pointer to MPR handler
+ * @param lnk pointer to nhdp link
+ * @return true if neighbor is our MPR
+ */
+static INLINE bool
+nhdp_mpr_is_mpr(struct nhdp_mpr_handler *h, struct nhdp_link *lnk) {
+  return h->is_mpr(lnk);
+}
+
+/**
+ * @param h pointer to MPR handler
+ * @param interf pointer to local nhdp interface
+ * @return true if NHDP Hello message should contain Willingness TLV
+ */
+static INLINE bool
+nhdp_mpr_use_willingness(struct nhdp_mpr_handler *h, struct nhdp_interface *interf) {
+  return h->use_willingness(interf);
+}
 #endif /* NHDP_MPR_H_ */

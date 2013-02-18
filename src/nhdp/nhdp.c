@@ -45,6 +45,7 @@
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_telnet.h"
 
+#include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_reader.h"
@@ -241,8 +242,8 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
           olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
           olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          lnk->hysteresis.pending ? " pending" : "",
-          lnk->hysteresis.lost ? " lost" : "");
+          nhdp_hysteresis_is_pending(lnk) ? " pending" : "",
+          nhdp_hysteresis_is_lost(lnk) ? " lost" : "");
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
         abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
@@ -317,8 +318,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
           olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
           olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          lnk->hysteresis.pending ? " pending" : "",
-          lnk->hysteresis.lost ? " lost" : "");
+          nhdp_hysteresis_is_pending(lnk) ? " pending" : "",
+          nhdp_hysteresis_is_lost(lnk) ? " lost" : "");
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
         abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
