@@ -51,7 +51,7 @@
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_interface.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_memcookie.h"
+#include "core/olsr_object.h"
 #include "core/olsr_netaddr_acl.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
@@ -125,7 +125,6 @@ static struct cfg_schema_entry _interface_entries[] = {
   CFG_MAP_INT_MINMAX(nhdp_interface, mpr_willingness_default, "willingness",
       RFC5444_WILLINGNESS_DEFAULT_STRING, "Willingness for MPR calculation",
       RFC5444_WILLINGNESS_MIN, RFC5444_WILLINGNESS_MAX),
-
 };
 
 /* other global variables */

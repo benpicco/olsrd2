@@ -52,11 +52,24 @@
 
 #include "nhdp/nhdp_interfaces.h"
 
+/* definitions and constants */
+#define CFG_DEFAULTHYSTERESIS_SECTION "defaulthysteresis"
+
+struct _config {
+  int accept;
+  int reject;
+  int scaling;
+};
+
 /* prototypes */
 static int _cb_plugin_load(void);
 static int _cb_plugin_unload(void);
 static int _cb_plugin_enable(void);
 static int _cb_plugin_disable(void);
+
+static void _cb_cfg_changed(void);
+static int _cb_cfg_validate(const char *section_name,
+    struct cfg_named_section *, struct autobuf *);
 
 /* plugin declaration */
 OLSR_PLUGIN7 {
@@ -72,12 +85,36 @@ OLSR_PLUGIN7 {
   .can_unload = false,
 };
 
+/* configuration options */
+static struct cfg_schema_section _hysteresis_section = {
+  .type = CFG_DEFAULTHYSTERESIS_SECTION,
+  .cb_delta_handler = _cb_cfg_changed,
+  .cb_validate = _cb_cfg_validate,
+};
+
+static struct cfg_schema_entry _hysteresis_entries[] = {
+  CFG_MAP_FRACTIONAL_MINMAX(_config, accept, "accept", "0.7",
+      "link quality to consider a link up", 3, 0, 1000),
+  CFG_MAP_FRACTIONAL_MINMAX(_config, reject, "reject", "0.3",
+      "link quality to consider a link down", 3, 0, 1000),
+  CFG_MAP_FRACTIONAL_MINMAX(_config, scaling, "scaling", "0.25",
+      "exponential aging to control speed of link hysteresis", 3, 1, 1000),
+};
+
+static struct _config _hysteresis_config;
+
+/* storage extension for nhdp_link */
+
+
 /**
  * Constructor of plugin
  * @return 0 if initialization was successful, -1 otherwise
  */
 static int
 _cb_plugin_load(void) {
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_hysteresis_section,
+      _hysteresis_entries, ARRAYSIZE(_hysteresis_entries));
+
   return 0;
 }
 
@@ -87,6 +124,7 @@ _cb_plugin_load(void) {
  */
 static int
 _cb_plugin_unload(void) {
+  cfg_schema_remove_section(olsr_cfg_get_schema(), &_hysteresis_section);
   return 0;
 }
 
@@ -105,5 +143,32 @@ _cb_plugin_enable(void) {
  */
 static int
 _cb_plugin_disable(void) {
+  return 0;
+}
+
+static void
+_cb_cfg_changed(void) {
+  cfg_schema_tobin(&_hysteresis_config, _hysteresis_section.post,
+      _hysteresis_entries, ARRAYSIZE(_hysteresis_entries));
+}
+
+static int
+_cb_cfg_validate(const char *section_name,
+    struct cfg_named_section *named, struct autobuf *out) {
+  struct _config cfg;
+  struct fraction_str buf1, buf2;
+
+  if (cfg_schema_tobin(&cfg, named, _hysteresis_entries, ARRAYSIZE(_hysteresis_entries))) {
+    cfg_append_printable_line(out, "Could not parse hysteresis configuration in section %s",
+        section_name);
+    return -1;
+  }
+
+  if (cfg.accept >= cfg.reject) {
+    cfg_append_printable_line(out, "hysteresis accept %s is not smaller than reject %s value",
+        cfg_fraction_to_string(&buf1, cfg.accept, 3),
+        cfg_fraction_to_string(&buf2, cfg.reject, 3));
+    return -1;
+  }
   return 0;
 }

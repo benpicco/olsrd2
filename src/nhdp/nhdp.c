@@ -176,7 +176,7 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
   struct nhdp_neighbor *neigh;
   struct nhdp_naddr *naddr;
   struct netaddr_str nbuf;
-  struct timeval_str tbuf;
+  struct fraction_str tbuf;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
@@ -217,7 +217,7 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
   struct nhdp_l2hop *twohop;
   const char *status;
   struct netaddr_str nbuf;
-  struct timeval_str tbuf1, tbuf2, tbuf3;
+  struct fraction_str tbuf1, tbuf2, tbuf3;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
@@ -283,7 +283,7 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
   struct nhdp_l2hop *twohop;
   const char *status;
   struct netaddr_str nbuf;
-  struct timeval_str tbuf1, tbuf2, tbuf3;
+  struct fraction_str tbuf1, tbuf2, tbuf3;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
@@ -346,7 +346,7 @@ static enum olsr_telnet_result
 _telnet_nhdp_interface(struct olsr_telnet_data *con) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
-  struct timeval_str tbuf1, tbuf2;
+  struct fraction_str tbuf1, tbuf2;
   struct netaddr_str nbuf;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {

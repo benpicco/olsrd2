@@ -64,7 +64,7 @@
 #include "core/olsr_interface.h"
 #include "core/olsr_libdata.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_memcookie.h"
+#include "core/olsr_object.h"
 #include "core/olsr_packet_socket.h"
 #include "core/olsr_plugins.h"
 #include "core/olsr_socket.h"
