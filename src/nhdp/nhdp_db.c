@@ -46,7 +46,7 @@
 #include "common/netaddr.h"
 
 #include "core/olsr_logging.h"
-#include "core/olsr_object.h"
+#include "core/olsr_class.h"
 #include "core/olsr_timer.h"
 
 #include "nhdp/nhdp.h"
