@@ -250,7 +250,7 @@ main(int argc, char **argv) {
 
   /* initialize basic framework */
   os_syslog_init();
-  olsr_memcookie_init();
+  olsr_class_init();
   if (os_clock_init()) {
     goto olsrd_cleanup;
   }
@@ -356,7 +356,7 @@ olsrd_cleanup:
   olsr_callback_cleanup();
   olsr_clock_cleanup();
   os_clock_cleanup();
-  olsr_memcookie_cleanup();
+  olsr_class_cleanup();
   os_syslog_cleanup();
   olsr_logcfg_cleanup();
 

@@ -78,7 +78,7 @@ struct avl_tree nhdp_interface_tree;
 struct avl_tree nhdp_ifaddr_tree;
 
 /* memory and timers for nhdp interface objects */
-static struct olsr_memcookie_info _interface_info = {
+static struct olsr_class _interface_info = {
   .name = "NHDP Interface",
   .size = sizeof(struct nhdp_interface),
 };
@@ -89,7 +89,7 @@ static struct olsr_timer_info _interface_hello_timer = {
   .callback = _cb_generate_hello,
 };
 
-static struct olsr_memcookie_info _addr_info = {
+static struct olsr_class _addr_info = {
   .name = "NHDP interface address",
   .size = sizeof(struct nhdp_interface_addr),
 };
@@ -139,8 +139,8 @@ void
 nhdp_interfaces_init(struct olsr_rfc5444_protocol *p) {
   avl_init(&nhdp_interface_tree, avl_comp_strcasecmp, false, NULL);
   avl_init(&nhdp_ifaddr_tree, avl_comp_ifaddr, true, NULL);
-  olsr_memcookie_add(&_interface_info);
-  olsr_memcookie_add(&_addr_info);
+  olsr_class_add(&_interface_info);
+  olsr_class_add(&_addr_info);
   olsr_timer_add(&_interface_hello_timer);
   olsr_timer_add(&_removed_address_hold_timer);
 
@@ -167,8 +167,8 @@ nhdp_interfaces_cleanup(void) {
 
   olsr_timer_remove(&_interface_hello_timer);
   olsr_timer_remove(&_removed_address_hold_timer);
-  olsr_memcookie_remove(&_interface_info);
-  olsr_memcookie_remove(&_addr_info);
+  olsr_class_remove(&_interface_info);
+  olsr_class_remove(&_addr_info);
 }
 
 /**
@@ -219,7 +219,7 @@ _interface_add(const char *name) {
 
   interf = avl_find_element(&nhdp_interface_tree, name, interf, _node);
   if (interf == NULL) {
-    interf = olsr_memcookie_malloc(&_interface_info);
+    interf = olsr_class_malloc(&_interface_info);
     if (interf == NULL) {
       OLSR_WARN(LOG_NHDP, "No memory left for NHDP interface");
       return NULL;
@@ -227,7 +227,7 @@ _interface_add(const char *name) {
 
     interf->rfc5444_if.cb_interface_changed = _cb_interface_event;
     if (!olsr_rfc5444_add_interface(_protocol, &interf->rfc5444_if, name)) {
-      olsr_memcookie_free(&_interface_info, interf);
+      olsr_class_free(&_interface_info, interf);
       OLSR_WARN(LOG_NHDP, "Cannot allocate rfc5444 interface for %s", name);
       return NULL;
     }
@@ -276,7 +276,7 @@ _interface_remove(struct nhdp_interface *interf) {
 
   olsr_rfc5444_remove_interface(interf->rfc5444_if.interface, &interf->rfc5444_if);
   avl_remove(&nhdp_interface_tree, &interf->_node);
-  olsr_memcookie_free(&_interface_info, interf);
+  olsr_class_free(&_interface_info, interf);
 }
 
 /**
@@ -295,7 +295,7 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
 
   if_addr = avl_find_element(&interf->_if_addresses, addr, if_addr, _if_node);
   if (if_addr == NULL) {
-    if_addr = olsr_memcookie_malloc(&_addr_info);
+    if_addr = olsr_class_malloc(&_addr_info);
     if (if_addr == NULL) {
       OLSR_WARN(LOG_NHDP, "No memory left for NHDP interface address");
       return NULL;
@@ -352,7 +352,7 @@ _cb_remove_addr(void *ptr) {
   olsr_timer_stop(&addr->_vtime);
   avl_remove(&nhdp_ifaddr_tree, &addr->_global_node);
   avl_remove(&addr->interf->_if_addresses, &addr->_if_node);
-  olsr_memcookie_free(&_addr_info, addr);
+  olsr_class_free(&_addr_info, addr);
 }
 
 /**

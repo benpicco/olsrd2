@@ -68,27 +68,27 @@ static void _cb_l2hop_vtime(void *);
 static void _cb_naddr_vtime(void *);
 
 /* memory and timer classes necessary for NHDP */
-static struct olsr_memcookie_info _neigh_info = {
+static struct olsr_class _neigh_info = {
   .name = "NHDP neighbor",
   .size = sizeof(struct nhdp_neighbor),
 };
 
-static struct olsr_memcookie_info _link_info = {
+static struct olsr_class _link_info = {
   .name = "NHDP link",
   .size = sizeof(struct nhdp_link),
 };
 
-static struct olsr_memcookie_info _laddr_info = {
+static struct olsr_class _laddr_info = {
   .name = "NHDP link address",
   .size = sizeof(struct nhdp_laddr),
 };
 
-static struct olsr_memcookie_info _l2hop_info = {
+static struct olsr_class _l2hop_info = {
   .name = "NHDP link twohop address",
   .size = sizeof(struct nhdp_l2hop),
 };
 
-static struct olsr_memcookie_info _naddr_info = {
+static struct olsr_class _naddr_info = {
   .name = "NHDP neighbor address",
   .size = sizeof(struct nhdp_naddr),
 };
@@ -146,11 +146,11 @@ nhdp_db_init(void) {
   list_init_head(&nhdp_neigh_list);
   list_init_head(&nhdp_link_list);
 
-  olsr_memcookie_add(&_neigh_info);
-  olsr_memcookie_add(&_naddr_info);
-  olsr_memcookie_add(&_link_info);
-  olsr_memcookie_add(&_laddr_info);
-  olsr_memcookie_add(&_l2hop_info);
+  olsr_class_add(&_neigh_info);
+  olsr_class_add(&_naddr_info);
+  olsr_class_add(&_link_info);
+  olsr_class_add(&_laddr_info);
+  olsr_class_add(&_l2hop_info);
 
   olsr_timer_add(&_naddr_vtime_info);
   olsr_timer_add(&_link_vtime_info);
@@ -183,11 +183,11 @@ nhdp_db_cleanup(void) {
   olsr_timer_remove(&_naddr_vtime_info);
 
   /* cleanup all memory cookies */
-  olsr_memcookie_remove(&_l2hop_info);
-  olsr_memcookie_remove(&_laddr_info);
-  olsr_memcookie_remove(&_link_info);
-  olsr_memcookie_remove(&_naddr_info);
-  olsr_memcookie_remove(&_neigh_info);
+  olsr_class_remove(&_l2hop_info);
+  olsr_class_remove(&_laddr_info);
+  olsr_class_remove(&_link_info);
+  olsr_class_remove(&_naddr_info);
+  olsr_class_remove(&_neigh_info);
 }
 
 /**
@@ -198,7 +198,7 @@ struct nhdp_neighbor *
 nhdp_db_neighbor_add(void) {
   struct nhdp_neighbor *neigh;
 
-  neigh = olsr_memcookie_malloc(&_neigh_info);
+  neigh = olsr_class_malloc(&_neigh_info);
   if (neigh == NULL) {
     return NULL;
   }
@@ -248,7 +248,7 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   }
 
   list_remove(&neigh->_node);
-  olsr_memcookie_free(&_neigh_info, neigh);
+  olsr_class_free(&_neigh_info, neigh);
 }
 
 /**
@@ -299,7 +299,7 @@ struct nhdp_naddr *
 nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh, struct netaddr *addr) {
   struct nhdp_naddr *naddr;
 
-  naddr = olsr_memcookie_malloc(&_naddr_info);
+  naddr = olsr_class_malloc(&_naddr_info);
   if (naddr == NULL) {
     return NULL;
   }
@@ -333,7 +333,7 @@ nhdp_db_neighbor_addr_remove(struct nhdp_naddr *naddr) {
   olsr_timer_stop(&naddr->_lost_vtime);
 
   /* free memory */
-  olsr_memcookie_free(&_naddr_info, naddr);
+  olsr_class_free(&_naddr_info, naddr);
 }
 
 void
@@ -358,7 +358,7 @@ struct nhdp_link *
 nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   struct nhdp_link *lnk;
 
-  lnk = olsr_memcookie_malloc(&_link_info);
+  lnk = olsr_class_malloc(&_link_info);
   if (lnk == NULL) {
     return NULL;
   }
@@ -424,14 +424,14 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   list_remove(&lnk->_global_node);
 
   /* free memory */
-  olsr_memcookie_free(&_link_info, lnk);
+  olsr_class_free(&_link_info, lnk);
 }
 
 struct nhdp_laddr *
 nhdp_db_link_addr_add(struct nhdp_link *lnk, struct netaddr *addr) {
   struct nhdp_laddr *laddr;
 
-  laddr = olsr_memcookie_malloc(&_laddr_info);
+  laddr = olsr_class_malloc(&_laddr_info);
   if (laddr == NULL) {
     return NULL;
   }
@@ -463,7 +463,7 @@ nhdp_db_link_addr_remove(struct nhdp_laddr *laddr) {
   avl_remove(&laddr->link->neigh->_link_addresses, &laddr->_neigh_node);
 
   /* free memory */
-  olsr_memcookie_free(&_laddr_info, laddr);
+  olsr_class_free(&_laddr_info, laddr);
 }
 
 void
@@ -490,7 +490,7 @@ struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
   struct nhdp_l2hop *l2hop;
 
-  l2hop = olsr_memcookie_malloc(&_l2hop_info);
+  l2hop = olsr_class_malloc(&_l2hop_info);
   if (l2hop == NULL) {
     return NULL;
   }
@@ -520,7 +520,7 @@ nhdp_db_link_2hop_remove(struct nhdp_l2hop *l2hop) {
   olsr_timer_stop(&l2hop->_vtime);
 
   /* free memory */
-  olsr_memcookie_free(&_l2hop_info, l2hop);
+  olsr_class_free(&_l2hop_info, l2hop);
 }
 
 /**
