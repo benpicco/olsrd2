@@ -41,6 +41,7 @@
 
 #include "common/common_types.h"
 #include "rfc5444/rfc5444_reader.h"
+#include "core/olsr_logging.h"
 
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_hysteresis.h"
@@ -50,6 +51,8 @@ static void _update_hysteresis(struct nhdp_link *lnk,
     struct rfc5444_reader_tlvblock_context *context, uint64_t, uint64_t);
 static bool _is_pending(struct nhdp_link *);
 static bool _is_lost(struct nhdp_link *);
+static const char * _to_string(struct nhdp_hysteresis_str *buf,
+    struct nhdp_link *lnk);
 
 /* default handler */
 struct nhdp_hysteresis_handler _handler = {
@@ -57,10 +60,11 @@ struct nhdp_hysteresis_handler _handler = {
   .update_hysteresis = _update_hysteresis,
   .is_pending = _is_pending,
   .is_lost = _is_lost,
+  .to_string = _to_string,
 };
 
 /* hysteresis handler */
-struct nhdp_hysteresis_handler *nhdp_hysteresis = &_handler;
+static struct nhdp_hysteresis_handler *nhdp_hysteresis = &_handler;
 
 /**
  * Set new handler hysteresis handler
@@ -77,6 +81,15 @@ nhdp_hysteresis_set_handler(struct nhdp_hysteresis_handler *handler) {
 }
 
 /**
+ * @return current nhdp hysteresis handler
+ */
+struct nhdp_hysteresis_handler *
+nhdp_hysteresis_get_handler(void) {
+  return nhdp_hysteresis;
+}
+
+
+/**
  * Dummy function for hysteresis update (does nothing)
  * @param lnk
  * @param context
@@ -88,6 +101,7 @@ _update_hysteresis(struct nhdp_link *lnk __attribute__((unused)),
     struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
     uint64_t vtime __attribute__((unused)), uint64_t itime __attribute__((unused))) {
   /* do nothing */
+  OLSR_DEBUG(LOG_MAIN, "1");
   return;
 }
 
@@ -109,4 +123,18 @@ _is_pending(struct nhdp_link *lnk __attribute((unused))) {
 static bool
 _is_lost(struct nhdp_link *lnk __attribute__((unused))) {
   return false;
+}
+
+/**
+ * Dummy function to create text representation of
+ * hysteresis data.
+ * @param buf pointer to output buffer
+ * @param lnk pointer to link to describe in text
+ * @return always returns pointer to empty string
+ */
+static const char *
+_to_string(struct nhdp_hysteresis_str *buf,
+    struct nhdp_link *lnk __attribute__((unused))) {
+  buf->buf[0] = 0;
+  return buf->buf;
 }

@@ -79,7 +79,7 @@ struct avl_tree nhdp_ifaddr_tree;
 
 /* memory and timers for nhdp interface objects */
 static struct olsr_class _interface_info = {
-  .name = "NHDP Interface",
+  .name = NHDP_INTERFACE,
   .size = sizeof(struct nhdp_interface),
 };
 
@@ -90,7 +90,7 @@ static struct olsr_timer_info _interface_hello_timer = {
 };
 
 static struct olsr_class _addr_info = {
-  .name = "NHDP interface address",
+  .name = NHDP_INTERFACE_ADDRESS,
   .size = sizeof(struct nhdp_interface_addr),
 };
 
@@ -248,6 +248,9 @@ _interface_add(const char *name) {
 
     /* init link address tree */
     avl_init(&interf->_link_addresses, avl_comp_netaddr, false, NULL);
+
+    /* trigger event */
+    olsr_class_event(&_interface_info, interf, OLSR_OBJECT_ADDED);
   }
   return interf;
 }
@@ -260,6 +263,9 @@ static void
 _interface_remove(struct nhdp_interface *interf) {
   struct nhdp_interface_addr *addr, *a_it;
   struct nhdp_link *lnk, *l_it;
+
+  /* trigger event */
+  olsr_class_event(&_interface_info, interf, OLSR_OBJECT_REMOVED);
 
   /* free filter */
   olsr_acl_remove(&interf->ifaddr_filter);
@@ -315,6 +321,9 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
     /* initialize validity timer for removed addresses */
     if_addr->_vtime.info = &_removed_address_hold_timer;
     if_addr->_vtime.cb_context = if_addr;
+
+    /* trigger event */
+    olsr_class_event(&_addr_info, if_addr, OLSR_OBJECT_ADDED);
   }
   else {
     if_addr->_to_be_removed = false;
@@ -348,6 +357,9 @@ _cb_remove_addr(void *ptr) {
   struct nhdp_interface_addr *addr;
 
   addr = ptr;
+
+  /* trigger event */
+  olsr_class_event(&_addr_info, addr, OLSR_OBJECT_REMOVED);
 
   olsr_timer_stop(&addr->_vtime);
   avl_remove(&nhdp_ifaddr_tree, &addr->_global_node);

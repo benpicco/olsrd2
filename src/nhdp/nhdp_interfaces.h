@@ -57,6 +57,9 @@ struct nhdp_interface_addr;
 
 #include "nhdp/nhdp_db.h"
 
+#define NHDP_INTERFACE         "nhdp_interf"
+#define NHDP_INTERFACE_ADDRESS "nhdp_iaddr"
+
 enum nhdp_interface_mode {
   NHDP_IPV4,
   NHDP_IPV6,

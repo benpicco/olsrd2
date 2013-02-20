@@ -47,6 +47,10 @@
 
 #include "nhdp/nhdp_db.h"
 
+struct nhdp_hysteresis_str {
+  char buf[128];
+};
+
 struct nhdp_hysteresis_handler {
   /* name of the handler */
   const char *name;
@@ -55,13 +59,20 @@ struct nhdp_hysteresis_handler {
   void (*update_hysteresis)(struct nhdp_link *,
       struct rfc5444_reader_tlvblock_context *context, uint64_t, uint64_t);
 
+  /* returns true if link is pending */
   bool (*is_pending)(struct nhdp_link *);
+
+  /* returns true if link is lost */
   bool (*is_lost)(struct nhdp_link *);
+
+  /* returns text representation of hysteresis data */
+  const char *(*to_string)(struct nhdp_hysteresis_str *, struct nhdp_link *);
 };
 
-EXPORT extern struct nhdp_hysteresis_handler *nhdp_hysteresis;
+// EXPORT extern struct nhdp_hysteresis_handler *nhdp_hysteresis;
 
 EXPORT void nhdp_hysteresis_set_handler(struct nhdp_hysteresis_handler *);
+EXPORT struct nhdp_hysteresis_handler *nhdp_hysteresis_get_handler(void);
 
 /**
  * Update a links hysteresis because of an incoming NHDP Hello message
@@ -74,7 +85,7 @@ static INLINE void
 nhdp_hysteresis_update(struct nhdp_link *lnk,
     struct rfc5444_reader_tlvblock_context *context,
     uint64_t vtime, uint64_t itime) {
-  return nhdp_hysteresis->update_hysteresis(lnk, context, vtime, itime);
+  nhdp_hysteresis_get_handler()->update_hysteresis(lnk, context, vtime, itime);
 }
 
 /**
@@ -83,7 +94,7 @@ nhdp_hysteresis_update(struct nhdp_link *lnk,
  */
 static INLINE bool
 nhdp_hysteresis_is_pending(struct nhdp_link *lnk) {
-  return nhdp_hysteresis->is_pending(lnk);
+  return nhdp_hysteresis_get_handler()->is_pending(lnk);
 }
 
 /**
@@ -92,6 +103,17 @@ nhdp_hysteresis_is_pending(struct nhdp_link *lnk) {
  */
 static INLINE bool
 nhdp_hysteresis_is_lost(struct nhdp_link *lnk) {
-  return nhdp_hysteresis->is_lost(lnk);
+  return nhdp_hysteresis_get_handler()->is_lost(lnk);
 }
+
+/**
+ * @param buf pointer to nhdp hysteresis text buffer
+ * @param lnk pointer to nhdp link
+ * @return pointer to text description of nhdp links hysteresis status
+ */
+static INLINE const char *
+nhdp_hysteresis_to_string(struct nhdp_hysteresis_str *buf, struct nhdp_link *lnk) {
+  return nhdp_hysteresis_get_handler()->to_string(buf, lnk);
+}
+
 #endif /* NHDP_HYSTERESIS_H_ */

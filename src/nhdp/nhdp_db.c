@@ -69,27 +69,27 @@ static void _cb_naddr_vtime(void *);
 
 /* memory and timer classes necessary for NHDP */
 static struct olsr_class _neigh_info = {
-  .name = "NHDP neighbor",
+  .name = NHDP_CLASS_NEIGHBOR,
   .size = sizeof(struct nhdp_neighbor),
 };
 
 static struct olsr_class _link_info = {
-  .name = "NHDP link",
+  .name = NHDP_CLASS_LINK,
   .size = sizeof(struct nhdp_link),
 };
 
 static struct olsr_class _laddr_info = {
-  .name = "NHDP link address",
+  .name = NHDP_CLASS_LINK_ADDRESS,
   .size = sizeof(struct nhdp_laddr),
 };
 
 static struct olsr_class _l2hop_info = {
-  .name = "NHDP link twohop address",
+  .name = NHDP_CLASS_LINK_2HOP,
   .size = sizeof(struct nhdp_l2hop),
 };
 
 static struct olsr_class _naddr_info = {
-  .name = "NHDP neighbor address",
+  .name = NHDP_CLASS_NEIGHBOR_ADDRESS,
   .size = sizeof(struct nhdp_naddr),
 };
 
@@ -219,6 +219,9 @@ nhdp_db_neighbor_add(void) {
 
   /* hook into global neighbor list */
   list_add_tail(&nhdp_neigh_list, &neigh->_node);
+
+  /* trigger event */
+  olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_ADDED);
   return neigh;
 }
 
@@ -232,6 +235,9 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk, *l_it;
 
   OLSR_DEBUG(LOG_NHDP, "Remove Neighbor: 0x%0zx", (size_t)neigh);
+
+  /* trigger event */
+  olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_REMOVED);
 
   /* stop timers */
   olsr_timer_stop(&neigh->vtime_v4);
@@ -320,11 +326,17 @@ nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh, struct netaddr *addr) {
   avl_insert(&nhdp_naddr_tree, &naddr->_global_node);
   avl_insert(&neigh->_neigh_addresses, &naddr->_neigh_node);
 
+  /* trigger event */
+  olsr_class_event(&_naddr_info, naddr, OLSR_OBJECT_ADDED);
+
   return naddr;
 }
 
 void
 nhdp_db_neighbor_addr_remove(struct nhdp_naddr *naddr) {
+  /* trigger event */
+  olsr_class_event(&_naddr_info, naddr, OLSR_OBJECT_REMOVED);
+
   /* remove from trees */
   avl_remove(&nhdp_naddr_tree, &naddr->_global_node);
   avl_remove(&naddr->neigh->_neigh_addresses, &naddr->_neigh_node);
@@ -385,6 +397,9 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
 
+  /* trigger event */
+  olsr_class_event(&_link_info, lnk, OLSR_OBJECT_ADDED);
+
   return lnk;
 }
 
@@ -396,6 +411,9 @@ void
 nhdp_db_link_remove(struct nhdp_link *lnk) {
   struct nhdp_laddr *laddr, *la_it;
   struct nhdp_l2hop *twohop, *th_it;
+
+  /* trigger event */
+  olsr_class_event(&_link_info, lnk, OLSR_OBJECT_REMOVED);
 
   if (lnk->status == NHDP_LINK_SYMMETRIC) {
     _link_status_not_symmetric_anymore(lnk);
@@ -450,13 +468,17 @@ nhdp_db_link_addr_add(struct nhdp_link *lnk, struct netaddr *addr) {
   avl_insert(&lnk->neigh->_link_addresses, &laddr->_neigh_node);
   nhdp_interface_add_laddr(laddr);
 
-  /* find corresponding neighbor address */
+  /* trigger event */
+  olsr_class_event(&_laddr_info, laddr, OLSR_OBJECT_ADDED);
 
   return laddr;
 }
 
 void
 nhdp_db_link_addr_remove(struct nhdp_laddr *laddr) {
+  /* trigger event */
+  olsr_class_event(&_laddr_info, laddr, OLSR_OBJECT_REMOVED);
+
   /* remove from trees */
   nhdp_interface_remove_laddr(laddr);
   avl_remove(&laddr->link->_addresses, &laddr->_link_node);
@@ -508,11 +530,18 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
 
   /* add to trees */
   avl_insert(&lnk->_2hop, &l2hop->_link_node);
+
+  /* trigger event */
+  olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_ADDED);
+
   return l2hop;
 }
 
 void
 nhdp_db_link_2hop_remove(struct nhdp_l2hop *l2hop) {
+  /* trigger event */
+  olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_REMOVED);
+
   /* remove from tree */
   avl_remove(&l2hop->link->_2hop, &l2hop->_link_node);
 

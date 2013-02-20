@@ -56,6 +56,12 @@ struct nhdp_naddr;
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 
+#define NHDP_CLASS_LINK             "nhdp_link"
+#define NHDP_CLASS_LINK_ADDRESS     "nhdp_laddr"
+#define NHDP_CLASS_LINK_2HOP        "nhdp_l2hop"
+#define NHDP_CLASS_NEIGHBOR         "nhdp_neighbor"
+#define NHDP_CLASS_NEIGHBOR_ADDRESS "nhdp_naddr"
+
 enum nhdp_link_status {
   NHDP_LINK_PENDING   = -1,                          //!< NHDP_LINK_PENDING
   NHDP_LINK_LOST      = RFC5444_LINKSTATUS_LOST,     //!< NHDP_LINK_LOST

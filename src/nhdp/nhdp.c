@@ -106,8 +106,6 @@ nhdp_init(void) {
   nhdp_interfaces_init(_protocol);
   nhdp_db_init();
 
-  nhdp_reader_init(_protocol);
-
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
   }
@@ -218,6 +216,7 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
   const char *status;
   struct netaddr_str nbuf;
   struct fraction_str tbuf1, tbuf2, tbuf3;
+  struct nhdp_hysteresis_str hbuf;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
@@ -236,14 +235,13 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
         status = LOST;
       }
       abuf_appendf(con->out, "\tLink: status=%s localif=%s"
-          " vtime=%s heard=%s symmetric=%s%s%s\n",
+          " vtime=%s heard=%s symmetric=%s %s\n",
           status,
           nhdp_interface_get_name(lnk->local_if),
           olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
           olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          nhdp_hysteresis_is_pending(lnk) ? " pending" : "",
-          nhdp_hysteresis_is_lost(lnk) ? " lost" : "");
+          nhdp_hysteresis_to_string(&hbuf, lnk));
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
         abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
@@ -284,6 +282,7 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
   const char *status;
   struct netaddr_str nbuf;
   struct fraction_str tbuf1, tbuf2, tbuf3;
+  struct nhdp_hysteresis_str hbuf;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
@@ -311,15 +310,12 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
       else {
         status = LOST;
       }
-      abuf_appendf(con->out, "\tLink: status=%s localif=%s"
-          " vtime=%s heard=%s symmetric=%s%s%s\n",
+      abuf_appendf(con->out, "\tLink: status=%s vtime=%s heard=%s symmetric=%s %s\n",
           status,
-          nhdp_interface_get_name(lnk->local_if),
           olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
           olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          nhdp_hysteresis_is_pending(lnk) ? " pending" : "",
-          nhdp_hysteresis_is_lost(lnk) ? " lost" : "");
+          nhdp_hysteresis_to_string(&hbuf, lnk));
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
         abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));

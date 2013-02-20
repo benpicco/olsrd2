@@ -567,6 +567,8 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   /* update hysteresis */
   nhdp_hysteresis_update(_current.link, context, _current.vtime, _current.itime);
 
+  OLSR_DEBUG(LOG_NHDP_R, "pass1 finished");
+
   return RFC5444_OKAY;
 }
 
