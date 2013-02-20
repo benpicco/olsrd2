@@ -58,7 +58,7 @@
 #include "nhdp/nhdp_interfaces.h"
 
 /* definitions and constants */
-#define CFG_DEFAULTHYSTERESIS_SECTION "default_hysteresis"
+#define CFG_HYSTERESIS_OLSRV1_SECTION "hysteresis_olsrv1"
 
 struct _config {
   int accept;
@@ -100,7 +100,7 @@ static int _cb_cfg_validate(const char *section_name,
 
 /* plugin declaration */
 OLSR_PLUGIN7 {
-  .descr = "OLSRD2 default hysteresis plugin",
+  .descr = "OLSRD2 olsrV1 hysteresis plugin",
   .author = "Henning Rogge",
 
   .load = _cb_plugin_load,
@@ -114,7 +114,7 @@ OLSR_PLUGIN7 {
 
 /* configuration options */
 static struct cfg_schema_section _hysteresis_section = {
-  .type = CFG_DEFAULTHYSTERESIS_SECTION,
+  .type = CFG_HYSTERESIS_OLSRV1_SECTION,
   .cb_delta_handler = _cb_cfg_changed,
   .cb_validate = _cb_cfg_validate,
 };
