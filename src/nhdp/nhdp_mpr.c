@@ -64,31 +64,45 @@ static struct nhdp_mpr_handler _handler = {
   .use_willingness = _use_willingness,
 };
 
-struct nhdp_mpr_handler *nhdp_routing_mpr = &_handler;
-struct nhdp_mpr_handler *nhdp_flooding_mpr = &_handler;
+static struct nhdp_mpr_handler *_routing_mpr_handler = &_handler;
+static struct nhdp_mpr_handler *_flooding_mpr_handler = &_handler;
 
 /**
- * Set a handler for routing or flodding MPR calculation
+ * Set a handler for flooding MPR calculation
  * @param handler pointer to handler of NULL to reset to default
- * @param routing true if routing handler, false for flooding handler
  */
 void
-nhdp_mpr_set_handler(struct nhdp_mpr_handler *handler, bool routing) {
-  struct nhdp_mpr_handler **ptr;
-
-  if (routing) {
-    ptr = &nhdp_routing_mpr;
-  }
-  else {
-    ptr = &nhdp_flooding_mpr;
-  }
-
+nhdp_mpr_set_flooding_handler(struct nhdp_mpr_handler *handler) {
   if (handler == NULL) {
-    *ptr = &_handler;
+    _flooding_mpr_handler = &_handler;
   }
   else {
-    *ptr = handler;
+    _flooding_mpr_handler = handler;
   }
+}
+
+/**
+ * Set a handler for routing MPR calculation
+ * @param handler pointer to handler of NULL to reset to default
+ */
+void
+nhdp_mpr_set_routing_handler(struct nhdp_mpr_handler *handler) {
+  if (handler == NULL) {
+    _routing_mpr_handler = &_handler;
+  }
+  else {
+    _routing_mpr_handler = handler;
+  }
+}
+
+struct nhdp_mpr_handler *
+nhdp_mpr_get_flooding_handler(void) {
+  return _flooding_mpr_handler;
+}
+
+struct nhdp_mpr_handler *
+nhdp_mpr_get_routing_handler(void) {
+  return _routing_mpr_handler;
 }
 
 /**
@@ -101,7 +115,7 @@ _update_mpr(struct nhdp_interface *interf __attribute((unused))) {
 }
 
 /**
- * Dummy function to story MPR selectors of a neighbor (does nothing)
+ * Dummy function to store MPR selectors of a link (does nothing)
  * @param lnk pointer to nhdp link
  * @param selected true if neighbor selected us as a MPR
  */
@@ -112,7 +126,7 @@ _set_mprs(struct nhdp_link *lnk __attribute((unused)),
 }
 
 /**
- * Dummy function to calculate links mpr TLV value.
+ * Dummy function to get a links mpr TLV value.
  * @param lnk pointer to link
  * @return always true
  */

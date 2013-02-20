@@ -65,9 +65,10 @@ struct nhdp_mpr_handler {
   bool (*use_willingness)(struct nhdp_interface *);
 };
 
-EXPORT extern struct nhdp_mpr_handler *nhdp_routing_mpr, *nhdp_flooding_mpr;
-
-EXPORT void nhdp_mpr_set_handler(struct nhdp_mpr_handler *, bool);
+EXPORT void nhdp_mpr_set_flooding_handler(struct nhdp_mpr_handler *);
+EXPORT void nhdp_mpr_set_routing_handler(struct nhdp_mpr_handler *);
+EXPORT struct nhdp_mpr_handler *nhdp_mpr_get_flooding_handler(void);
+EXPORT struct nhdp_mpr_handler *nhdp_mpr_get_routing_handler(void);
 
 /**
  * Update the MPR settings of an interface

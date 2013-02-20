@@ -214,7 +214,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
   rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
       &vtime_encoded, sizeof(vtime_encoded));
 
-  if (nhdp_mpr_use_willingness(nhdp_flooding_mpr, interf)) {
+  if (nhdp_mpr_use_willingness(nhdp_mpr_get_flooding_handler(), interf)) {
     will = nhdp_interface_get_mpr_willingness(interf);
     rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, 0,
         &will, sizeof(will));
@@ -373,8 +373,8 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
         netaddr_to_string(&buf, &naddr->neigh_addr), otherneigh);
   }
 
-  mpr_flooding = nhdp_mpr_is_mpr(nhdp_flooding_mpr, laddr->link);
-  mpr_routing = nhdp_mpr_is_mpr(nhdp_routing_mpr, laddr->link);
+  mpr_flooding = nhdp_mpr_is_mpr(nhdp_mpr_get_flooding_handler(), laddr->link);
+  mpr_routing = nhdp_mpr_is_mpr(nhdp_mpr_get_routing_handler(), laddr->link);
   if (mpr_flooding || mpr_routing) {
     uint8_t value;
 
