@@ -265,8 +265,6 @@ _cb_link_added(void *ptr) {
   struct link_hysteresis_data *data;
   data = olsr_class_get_extension(&_link_extenstion, ptr);
 
-  OLSR_DEBUG(LOG_PLUGINS, "Link added");
-
   memset(data, 0, sizeof(*data));
   data->pending = true;
 
@@ -282,8 +280,6 @@ static void
 _cb_link_removed(void *ptr) {
   struct link_hysteresis_data *data;
   data = olsr_class_get_extension(&_link_extenstion, ptr);
-
-  OLSR_DEBUG(LOG_PLUGINS, "Link removed");
 
   olsr_timer_stop(&data->interval_timer);
 }
