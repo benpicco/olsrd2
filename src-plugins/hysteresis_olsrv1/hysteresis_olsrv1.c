@@ -132,7 +132,7 @@ static struct _config _hysteresis_config;
 
 /* storage extension for nhdp_link */
 struct olsr_class_extension _link_extenstion = {
-  .name = "default hysteresis",
+  .name = "hysteresis_olsrv1",
   .class_name = NHDP_CLASS_LINK,
   .size = sizeof(struct link_hysteresis_data),
 };
@@ -152,7 +152,7 @@ struct olsr_timer_info _hello_timer_info = {
 
 /* hysteresis handler */
 struct nhdp_hysteresis_handler _hysteresis_handler = {
-  .name = "default hysteresis",
+  .name = "hysteresis_olsrv1",
   .update_hysteresis = _cb_update_hysteresis,
   .is_pending = _cb_is_pending,
   .is_lost = _cb_is_lost,
