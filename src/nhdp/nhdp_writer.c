@@ -50,6 +50,7 @@
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_linkmetric.h"
 #include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_writer.h"
 
@@ -58,7 +59,7 @@ enum {
   IDX_ADDRTLV_LOCAL_IF,
   IDX_ADDRTLV_LINK_STATUS,
   IDX_ADDRTLV_OTHER_NEIGHB,
-  IDX_ADDRTLV_MPR
+  IDX_ADDRTLV_MPR,
 };
 
 /* prototypes */
@@ -76,8 +77,13 @@ static void _add_localif_address(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv,
     struct nhdp_interface *interf, struct nhdp_interface_addr *addr);
 static struct rfc5444_writer_address *_add_rfc5444_address(
-    struct rfc5444_writer *writer,   struct rfc5444_writer_message *creator,
+    struct rfc5444_writer *writer, struct rfc5444_writer_message *creator,
     struct netaddr *addr);
+
+static void _write_metric_tlv(struct rfc5444_writer *writer,
+    struct rfc5444_writer_address *addr,
+    struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
+    struct nhdp_linkmetric_handler *handler);
 
 /* definition of NHDP writer */
 static struct rfc5444_writer_message *_nhdp_message = NULL;
@@ -312,6 +318,7 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
 static void
 _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_provider *prv,
     struct nhdp_interface *interf, struct nhdp_naddr *naddr) {
+  struct nhdp_linkmetric_handler *metric_handler;
   struct rfc5444_writer_address *address;
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
@@ -397,8 +404,90 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
           netaddr_to_string(&buf, &naddr->neigh_addr), value);
     }
   }
+
+  metric_handler = nhdp_linkmetric_handler_get();
+  if (metric_handler->create_tlvs) {
+    struct nhdp_link *lnk = NULL;
+    struct nhdp_neighbor *neigh = NULL;
+
+    if (linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
+      lnk = laddr->link;
+    }
+    if (otherneigh == RFC5444_OTHERNEIGHB_SYMMETRIC) {
+      neigh = naddr->neigh;
+    }
+
+    _write_metric_tlv(writer, address, neigh, lnk, metric_handler);
+  }
 }
 
+/**
+ * Write up to four metric TLVs to an address
+ * @param writer rfc5444 writer
+ * @param addr rfc5444 address
+ * @param neigh pointer to symmetric neighbor, might be NULL
+ * @param lnk pointer to symmetric link, might be NULL
+ * @param handler pointer to link metric handler
+ */
+static void
+_write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *addr,
+    struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
+    struct nhdp_linkmetric_handler *handler) {
+  static const uint16_t flags[4] = {
+      RFC5444_LINKMETRIC_INCOMING_LINK,
+      RFC5444_LINKMETRIC_OUTGOING_LINK,
+      RFC5444_LINKMETRIC_INCOMING_NEIGH,
+      RFC5444_LINKMETRIC_OUTGOING_NEIGH,
+  };
+  bool unsent[4];
+  uint32_t values[4];
+  uint16_t tlv_value;
+  int i,j,k;
+
+  if (lnk == NULL && neigh == NULL) {
+    /* nothing to do */
+    return;
+  }
+
+  /* get link metrics if available */
+  unsent[0] = unsent[1] =
+      (lnk != NULL && (lnk->status == NHDP_LINK_HEARD || lnk->status == NHDP_LINK_SYMMETRIC));
+
+  if (unsent[0]) {
+    handler->get_link_metric(&values[0], &values[1], lnk);
+  }
+
+  /* get neighbor metrics if available */
+  unsent[2] = unsent[3] = (neigh != NULL && neigh->symmetric > 0);
+  if (unsent[2]) {
+    handler->get_neighbor_metric(&values[2], &values[3], neigh);
+  }
+
+  /* compress four metrics into 1-4 TLVs */
+  k = 0;
+  for (i=0; i<4; i++) {
+    /* find first metric value which still must be sent */
+    if (!unsent[i]) {
+      continue;
+    }
+
+    /* create value */
+    tlv_value = rfc5444_metric_encode(values[i]);
+
+    /* mark all metric values that have the same linkmetric */
+    for (j=i; j<4; j++) {
+      if (values[i] == values[j]) {
+        tlv_value |= flags[j];
+        unsent[j] = false;
+      }
+    }
+
+    /* add to rfc5444 address */
+    rfc5444_writer_add_addrtlv(writer, addr,
+        &handler->_metric_addrtlvs[k++],
+        &tlv_value, sizeof(tlv_value), true);
+  }
+}
 /**
  * Callback to add the addresses and address TLVs to a HELLO message
  * @param writer

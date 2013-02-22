@@ -52,6 +52,7 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_linkmetric.h"
 #include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_reader.h"
 
@@ -93,6 +94,8 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer,
       struct rfc5444_reader_tlvblock_context *context);
 static enum rfc5444_result _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *,
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
+static enum rfc5444_result _cb_linkcost_tlv(struct rfc5444_reader_tlvblock_consumer *,
+    struct rfc5444_reader_tlvblock_entry *, struct rfc5444_reader_tlvblock_context *);
 
 /* definition of the RFC5444 reader components */
 static struct rfc5444_reader_tlvblock_consumer _nhdp_message_pass1_consumer = {
@@ -127,6 +130,10 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass2_tlvs[] 
   [IDX_ADDRTLV2_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS, .min_length = 1, .match_length = true },
   [IDX_ADDRTLV2_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB, .min_length = 1, .match_length = true },
   [IDX_ADDRTLV2_MPR] = { .type = RFC5444_ADDRTLV_MPR, .min_length = 1, .match_length = true },
+};
+
+struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass3_consumer = {
+  .tlv_callback = _cb_linkcost_tlv,
 };
 
 /* nhdp multiplexer/protocol */
@@ -769,5 +776,30 @@ _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   /* update MPR set */
   nhdp_mpr_update(nhdp_mpr_get_flooding_handler(), _current.localif);
   nhdp_mpr_update(nhdp_mpr_get_routing_handler(), _current.localif);
+  return RFC5444_OKAY;
+}
+
+
+static enum rfc5444_result
+_cb_linkcost_tlv(struct rfc5444_reader_tlvblock_consumer *c __attribute((unused)),
+    struct rfc5444_reader_tlvblock_entry *entry,
+    struct rfc5444_reader_tlvblock_context *context __attribute((unused))) {
+  uint16_t tlvvalue;
+  if (entry->type != RFC5444_ADDRTLV_LINK_METRIC) {
+    /* ignore all TLVs except link metric TLVs */
+    return RFC5444_OKAY;
+  }
+
+  if (entry->length != 2) {
+    /* ignore everything except length 2 */
+    return RFC5444_OKAY;
+  }
+
+  /* read value and convert it to host byteorder */
+  memcpy(&tlvvalue, entry->single_value, sizeof(tlvvalue));
+  tlvvalue = ntohs(tlvvalue);
+
+  /* send TLV value to processing */
+  nhdp_linkmetric_process_tlv(_current.link, entry->type_ext, tlvvalue);
   return RFC5444_OKAY;
 }

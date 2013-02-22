@@ -10,6 +10,7 @@ set(OONF_SRCS olsr_main.c
               nhdp/nhdp_db.c
               nhdp/nhdp_hysteresis.c
               nhdp/nhdp_interfaces.c
+              nhdp/nhdp_linkmetric.c
               nhdp/nhdp_mpr.c
               nhdp/nhdp_reader.c
               nhdp/nhdp_writer.c
