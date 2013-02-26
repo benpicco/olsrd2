@@ -50,6 +50,10 @@ void
 nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h) {
   int i;
 
+  if (_handler != &_no_linkcost) {
+    nhdp_linkmetric_handler_remove(_handler);
+  }
+
   _handler = h;
 
   for (i=0; i<4; i++) {
@@ -65,6 +69,10 @@ void
 nhdp_linkmetric_handler_remove(
     struct nhdp_linkmetric_handler *h) {
   int i;
+
+  if (h != _handler) {
+    return;
+  }
 
   for (i=0; i<4; i++) {
     rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,

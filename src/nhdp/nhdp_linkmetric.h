@@ -92,8 +92,13 @@ nhdp_linkmetric_get_neighbor_metric(struct nhdp_linkmetric *dst,
 
 static INLINE void
 nhdp_linkmetric_process_tlv(struct nhdp_link *lnk,
-    uint8_t ext __attribute__((unused)), uint16_t value) {
-  nhdp_linkmetric_handler_get()->process_linkmetric_tlv(lnk, value);
+    uint8_t ext, uint16_t value) {
+  struct nhdp_linkmetric_handler *h;
+
+  h = nhdp_linkmetric_handler_get();
+  if (h->ext == ext) {
+    h->process_linkmetric_tlv(lnk, value);
+  }
 }
 
 #endif /* NHDP_LINKCOST_H_ */
