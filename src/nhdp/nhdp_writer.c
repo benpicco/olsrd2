@@ -440,7 +440,7 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       RFC5444_LINKMETRIC_OUTGOING_NEIGH,
   };
   bool unsent[4];
-  uint32_t values[4];
+  union nhdp_metricpair pair;
   uint16_t tlv_value;
   int i,j,k;
 
@@ -454,13 +454,13 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       (lnk != NULL && (lnk->status == NHDP_LINK_HEARD || lnk->status == NHDP_LINK_SYMMETRIC));
 
   if (unsent[0]) {
-    handler->get_link_metric(&values[0], &values[1], lnk);
+    handler->get_link_metric(&pair.metric[0], lnk);
   }
 
   /* get neighbor metrics if available */
   unsent[2] = unsent[3] = (neigh != NULL && neigh->symmetric > 0);
   if (unsent[2]) {
-    handler->get_neighbor_metric(&values[2], &values[3], neigh);
+    handler->get_neighbor_metric(&pair.metric[1], neigh);
   }
 
   /* compress four metrics into 1-4 TLVs */
@@ -472,11 +472,11 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
     }
 
     /* create value */
-    tlv_value = rfc5444_metric_encode(values[i]);
+    tlv_value = rfc5444_metric_encode(pair.value[i]);
 
-    /* mark all metric values that have the same linkmetric */
+    /* mark all metric pair that have the same linkmetric */
     for (j=i; j<4; j++) {
-      if (values[i] == values[j]) {
+      if (pair.value[i] == pair.value[j]) {
         tlv_value |= flags[j];
         unsent[j] = false;
       }

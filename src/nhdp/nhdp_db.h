@@ -74,6 +74,12 @@ enum nhdp_link_status {
  * of a one-hop neighbor.
  */
 struct nhdp_link {
+  /* last received validity time */
+  uint64_t vtime_value;
+
+  /* last received interval time */
+  uint64_t itime_value;
+
   /* timer that fires if this link is not symmetric anymore */
   struct olsr_timer_entry sym_time;
 

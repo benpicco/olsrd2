@@ -48,9 +48,14 @@
 
 #include "nhdp/nhdp_db.h"
 
-struct nhdp_linkmetric {
+struct nhdp_metric {
   uint32_t incoming;
   uint32_t outgoing;
+};
+
+union nhdp_metricpair {
+  struct nhdp_metric metric[2];
+  uint32_t value[4];
 };
 
 struct nhdp_linkmetric_handler {
@@ -59,8 +64,8 @@ struct nhdp_linkmetric_handler {
   uint8_t ext;
   bool create_tlvs;
 
-  void (*get_link_metric)(uint32_t *, uint32_t *, struct nhdp_link *);
-  void (*get_neighbor_metric)(uint32_t *, uint32_t *,struct nhdp_neighbor *);
+  void (*get_link_metric)(struct nhdp_metric *, struct nhdp_link *);
+  void (*get_neighbor_metric)(struct nhdp_metric *,struct nhdp_neighbor *);
 
   void (*process_linkmetric_tlv)(struct nhdp_link *, uint16_t);
 
@@ -75,19 +80,19 @@ void nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h);
 void nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h);
 
 EXPORT struct nhdp_linkmetric_handler *nhdp_linkmetric_handler_get(void);
+EXPORT void nhdp_linkmetric_calculate_neighbor_metric(
+    struct nhdp_neighbor *, struct nhdp_metric *);
 
 static INLINE void
-nhdp_linkmetric_get_link_metric(struct nhdp_linkmetric *dst,
+nhdp_linkmetric_get_link_metric(struct nhdp_metric *dst,
     struct nhdp_link *lnk, uint8_t ext __attribute__((unused))) {
-  nhdp_linkmetric_handler_get()->get_link_metric(
-      &dst->incoming, &dst->outgoing, lnk);
+  nhdp_linkmetric_handler_get()->get_link_metric(dst, lnk);
 }
 
 static INLINE void
-nhdp_linkmetric_get_neighbor_metric(struct nhdp_linkmetric *dst,
+nhdp_linkmetric_get_neighbor_metric(struct nhdp_metric *dst,
     struct nhdp_neighbor *neigh, uint8_t ext __attribute__((unused))) {
-  nhdp_linkmetric_handler_get()->get_neighbor_metric(
-      &dst->incoming, &dst->outgoing, neigh);
+  nhdp_linkmetric_handler_get()->get_neighbor_metric(dst, neigh);
 }
 
 static INLINE void

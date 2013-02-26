@@ -48,7 +48,7 @@
 
 /* prototypes */
 static void _update_hysteresis(struct nhdp_link *lnk,
-    struct rfc5444_reader_tlvblock_context *context, uint64_t, uint64_t);
+    struct rfc5444_reader_tlvblock_context *context);
 static bool _is_pending(struct nhdp_link *);
 static bool _is_lost(struct nhdp_link *);
 static const char * _to_string(struct nhdp_hysteresis_str *buf,
@@ -98,8 +98,7 @@ nhdp_hysteresis_get_handler(void) {
  */
 static void
 _update_hysteresis(struct nhdp_link *lnk __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
-    uint64_t vtime __attribute__((unused)), uint64_t itime __attribute__((unused))) {
+    struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   /* do nothing */
   OLSR_DEBUG(LOG_MAIN, "1");
   return;

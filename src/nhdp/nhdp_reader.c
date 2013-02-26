@@ -363,7 +363,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
   struct netaddr_str buf;
 
   OLSR_DEBUG(LOG_NHDP_R, "Incoming message type %d from %s through %s, got message tlvs",
-      context->msg_type, netaddr_socket_to_string(&buf, _protocol->input_address),
+      context->msg_type, netaddr_socket_to_string(&buf, _protocol->input_socket),
       _protocol->input_interface->name);
 
   if (!_protocol->input_is_multicast) {
@@ -559,25 +559,24 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   }
 
   if (!_current.has_thisif) {
-    struct netaddr addr1, addr2;
-
-    /* get UDP source address */
-    if (netaddr_from_socket(&addr1, _protocol->input_address)) {
-      return RFC5444_DROP_MESSAGE;
-    }
+    struct netaddr addr;
 
     /* translate like a RFC5444 address */
-    if(_parse_address(&addr2, netaddr_get_binptr(&addr1),
-        netaddr_get_binlength(&addr1)) != 0) {
+    if(_parse_address(&addr, netaddr_get_binptr(_protocol->input_address),
+        netaddr_get_binlength(_protocol->input_address)) != 0) {
       return RFC5444_DROP_MESSAGE;
     }
 
     /* parse as if it would be tagged with a LOCAL_IF = THIS_IF TLV */
-    _pass2_process_localif(&addr2, RFC5444_LOCALIF_THIS_IF);
+    _pass2_process_localif(&addr, RFC5444_LOCALIF_THIS_IF);
   }
 
+  /* remember vtime and itime */
+  _current.link->vtime_value = _current.vtime;
+  _current.link->itime_value = _current.itime;
+
   /* update hysteresis */
-  nhdp_hysteresis_update(_current.link, context, _current.vtime, _current.itime);
+  nhdp_hysteresis_update(_current.link, context);
 
   OLSR_DEBUG(LOG_NHDP_R, "pass1 finished");
 

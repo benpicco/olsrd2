@@ -57,7 +57,7 @@ struct nhdp_hysteresis_handler {
 
   /* update pending/Lost (and maybe quality) of links hysteresis */
   void (*update_hysteresis)(struct nhdp_link *,
-      struct rfc5444_reader_tlvblock_context *context, uint64_t, uint64_t);
+      struct rfc5444_reader_tlvblock_context *context);
 
   /* returns true if link is pending */
   bool (*is_pending)(struct nhdp_link *);
@@ -78,14 +78,11 @@ EXPORT struct nhdp_hysteresis_handler *nhdp_hysteresis_get_handler(void);
  * Update a links hysteresis because of an incoming NHDP Hello message
  * @param lnk pointer to NHDP link
  * @param context pointer to rfc5444 context (message context)
- * @param vtime validity time of message
- * @param itime interval time of message, 0 if not defined
  */
 static INLINE void
 nhdp_hysteresis_update(struct nhdp_link *lnk,
-    struct rfc5444_reader_tlvblock_context *context,
-    uint64_t vtime, uint64_t itime) {
-  nhdp_hysteresis_get_handler()->update_hysteresis(lnk, context, vtime, itime);
+    struct rfc5444_reader_tlvblock_context *context) {
+  nhdp_hysteresis_get_handler()->update_hysteresis(lnk, context);
 }
 
 /**

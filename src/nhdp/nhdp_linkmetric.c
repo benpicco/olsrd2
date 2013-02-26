@@ -1,5 +1,5 @@
 /*
- * nhdp_linkmetric.c
+ * nhdp_metric.c
  *
  *  Created on: Feb 21, 2013
  *      Author: rogge
@@ -11,9 +11,9 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_linkmetric.h"
 
-static void _cb_get_link_metric(uint32_t *, uint32_t *,
+static void _cb_get_link_metric(struct nhdp_metric *,
     struct nhdp_link *);
-static void _cb_get_neighbor_metric(uint32_t *, uint32_t *,
+static void _cb_get_neighbor_metric(struct nhdp_metric *,
     struct nhdp_neighbor *);
 static void _cb_process_tlv(struct nhdp_link *, uint16_t);
 
@@ -81,21 +81,39 @@ nhdp_linkmetric_handler_remove(
   _handler = &_no_linkcost;
 }
 
+void
+nhdp_linkmetric_calculate_neighbor_metric(
+    struct nhdp_neighbor *neigh, struct nhdp_metric *metric) {
+  struct nhdp_link *lnk;
+  struct nhdp_metric lmetric;
+
+  metric->incoming = RFC5444_LINKMETRIC_INFINITE;
+  metric->outgoing = RFC5444_LINKMETRIC_INFINITE;
+
+  list_for_each_element(&neigh->_links, lnk, _neigh_node) {
+    _handler->get_link_metric(&lmetric, lnk);
+
+    if (lmetric.outgoing < metric->outgoing) {
+      memcpy(metric, &lmetric, sizeof(*metric));
+    }
+  }
+}
+
 static void
 _cb_process_tlv(struct nhdp_link *lnk __attribute__((unused)),
     uint16_t value __attribute__((unused))) {
 }
 
 static void
-_cb_get_link_metric(uint32_t *incoming, uint32_t *outgoing,
+_cb_get_link_metric(struct nhdp_metric *m,
     struct nhdp_link *lnk __attribute__((unused))) {
-  *incoming = 0x10000;
-  *outgoing = 0x10000;
+  m->incoming = 0x10000;
+  m->outgoing = 0x10000;
 }
 
 static void
-_cb_get_neighbor_metric(uint32_t *incoming, uint32_t *outgoing,
+_cb_get_neighbor_metric(struct nhdp_metric *m,
     struct nhdp_neighbor *neigh __attribute__((unused))) {
-  *incoming = 0x10000;
-  *outgoing = 0x10000;
+  m->incoming = 0x10000;
+  m->outgoing = 0x10000;
 }

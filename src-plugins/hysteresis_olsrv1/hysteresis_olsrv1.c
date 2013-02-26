@@ -87,7 +87,7 @@ static void _cb_link_added(void *);
 static void _cb_link_removed(void *);
 
 static void _cb_update_hysteresis(struct nhdp_link *,
-    struct rfc5444_reader_tlvblock_context *context, uint64_t, uint64_t);
+    struct rfc5444_reader_tlvblock_context *context);
 static bool _cb_is_pending(struct nhdp_link *);
 static bool _cb_is_lost(struct nhdp_link *);
 static const char *_cb_to_string(
@@ -294,8 +294,7 @@ _cb_link_removed(void *ptr) {
  */
 static void
 _cb_update_hysteresis(struct nhdp_link *lnk,
-    struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
-    uint64_t vtime __attribute__((unused)), uint64_t itime) {
+    struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   struct link_hysteresis_data *data;
 
   data = olsr_class_get_extension(&_link_extenstion, lnk);
@@ -304,13 +303,13 @@ _cb_update_hysteresis(struct nhdp_link *lnk,
   _update_hysteresis(lnk, data, false);
 
   /* store interval */
-  data->interval = itime;
+  data->interval = lnk->itime_value;
 
   /* first timer gets a delay */
-  if (itime == 0) {
-    itime = vtime;
+  if (data->interval == 0) {
+    data->interval = lnk->vtime_value;
   }
-  olsr_timer_set(&data->interval_timer, (itime * 3) / 2);
+  olsr_timer_set(&data->interval_timer, (data->interval * 3) / 2);
 }
 
 /**
