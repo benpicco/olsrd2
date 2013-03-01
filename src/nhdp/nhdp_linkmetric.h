@@ -76,8 +76,8 @@ struct nhdp_linkmetric_handler {
 void nhdp_linkmetric_init(struct olsr_rfc5444_protocol *);
 void nhdp_linkmetric_cleanup(void);
 
-void nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h);
-void nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h);
+EXPORT void nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h);
+EXPORT void nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h);
 
 EXPORT struct nhdp_linkmetric_handler *nhdp_linkmetric_handler_get(void);
 EXPORT void nhdp_linkmetric_calculate_neighbor_metric(
