@@ -476,11 +476,6 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
     ldata->buckets[0].total = 1;
     ldata->last_seq_nr = context->pkt_seqno;
 
-    fprintf(stderr, "first packet received: %d/%d => %d/%d (%u)\n",
-        1,1,
-        ldata->buckets[ldata->activePtr].received,
-        ldata->buckets[ldata->activePtr].total,
-        context->pkt_seqno);
     return RFC5444_OKAY;
   }
 
@@ -497,12 +492,6 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
   ldata->buckets[ldata->activePtr].received++;
   ldata->buckets[ldata->activePtr].total += total;
   ldata->last_seq_nr = context->pkt_seqno;
-
-  fprintf(stderr, "packet received: %d/%d => %d/%d (%u)\n",
-      1, total,
-      ldata->buckets[ldata->activePtr].received,
-      ldata->buckets[ldata->activePtr].total,
-      context->pkt_seqno);
 
   return RFC5444_OKAY;
 }
