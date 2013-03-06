@@ -405,19 +405,23 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
     }
   }
 
-  metric_handler = nhdp_linkmetric_handler_get();
-  if (metric_handler->create_tlvs) {
-    struct nhdp_link *lnk = NULL;
-    struct nhdp_neighbor *neigh = NULL;
+  list_for_each_element(&nhdp_metric_handler_list, metric_handler, _node) {
+    if (metric_handler->create_tlvs) {
+      struct nhdp_link *lnk = NULL;
+      struct nhdp_neighbor *neigh = NULL;
 
-    if (linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
-      lnk = laddr->link;
-    }
-    if (otherneigh == RFC5444_OTHERNEIGHB_SYMMETRIC) {
-      neigh = naddr->neigh;
-    }
+      if (linkstatus == RFC5444_LINKSTATUS_HEARD
+          || linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
+        lnk = laddr->link;
+      }
+      if (naddr->neigh->symmetric > 0
+          && (linkstatus == RFC5444_LINKSTATUS_SYMMETRIC
+              || otherneigh == RFC5444_OTHERNEIGHB_SYMMETRIC)) {
+        neigh = naddr->neigh;
+      }
 
-    _write_metric_tlv(writer, address, neigh, lnk, metric_handler);
+      _write_metric_tlv(writer, address, neigh, lnk, metric_handler);
+    }
   }
 }
 
@@ -440,7 +444,7 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       RFC5444_LINKMETRIC_OUTGOING_NEIGH,
   };
   bool unsent[4];
-  union nhdp_metricpair pair;
+  uint32_t metrics[4];
   uint16_t tlv_value;
   int i,j,k;
 
@@ -454,13 +458,20 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       (lnk != NULL && (lnk->status == NHDP_LINK_HEARD || lnk->status == NHDP_LINK_SYMMETRIC));
 
   if (unsent[0]) {
-    handler->get_link_metric(&pair.metric[0], lnk);
+    memcpy(&metrics[0], &lnk->_metric[handler->_index], sizeof(uint32_t)*2);
   }
 
   /* get neighbor metrics if available */
   unsent[2] = unsent[3] = (neigh != NULL && neigh->symmetric > 0);
   if (unsent[2]) {
-    handler->get_neighbor_metric(&pair.metric[1], neigh);
+    memcpy(&metrics[2], &neigh->_metric[handler->_index], sizeof(uint32_t)*2);
+  }
+
+  /* encode metrics */
+  for (i=0; i<4; i++) {
+    if (unsent[i]) {
+      metrics[i] = rfc5444_metric_encode(metrics[i]);
+    }
   }
 
   /* compress four metrics into 1-4 TLVs */
@@ -472,15 +483,20 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
     }
 
     /* create value */
-    tlv_value = rfc5444_metric_encode(pair.value[i]);
+    tlv_value = metrics[i];
 
     /* mark all metric pair that have the same linkmetric */
     for (j=i; j<4; j++) {
-      if (pair.value[i] == pair.value[j]) {
+      if (unsent[j] && metrics[i] == metrics[j]) {
         tlv_value |= flags[j];
         unsent[j] = false;
       }
     }
+
+    OLSR_DEBUG(LOG_NHDP_W, "Add Metric (ext %u): 0x%04x", handler->ext, tlv_value);
+
+    /* conversion into network byte order */
+    tlv_value = htons(tlv_value);
 
     /* add to rfc5444 address */
     rfc5444_writer_add_addrtlv(writer, addr,

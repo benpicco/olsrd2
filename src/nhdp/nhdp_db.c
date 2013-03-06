@@ -52,6 +52,7 @@
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_linkmetric.h"
 #include "nhdp/nhdp_db.h"
 
 /* Prototypes of local functions */
@@ -137,6 +138,10 @@ struct list_entity nhdp_neigh_list;
 /* list of links (to neighbors) */
 struct list_entity nhdp_link_list;
 
+/* handling of link metrics */
+int _metric_count = 0;
+bool _metric_initialized = false;
+
 /**
  * Initialize NHDP databases
  */
@@ -191,12 +196,55 @@ nhdp_db_cleanup(void) {
 }
 
 /**
+ * Sets the total number of metrics for NHDP. Can only be used as long as the NHDP
+ * databases are empty.
+ * @return 0 if successfully set, -1 if NHDP database has already been used.
+ */
+int
+nhdp_db_add_metric(void) {
+  if (_metric_initialized) {
+    return -1;
+  }
+
+  _metric_count++;;
+  return 0;
+}
+
+/**
+ * @return total number of link metrics used by NHDP
+ */
+int
+nhdp_db_get_metriccount(void) {
+  return _metric_count;
+}
+
+/**
  * @return new NHDP neighbor without links and addresses,
  *  NULL if out of memory
  */
 struct nhdp_neighbor *
 nhdp_db_neighbor_add(void) {
   struct nhdp_neighbor *neigh;
+  struct nhdp_linkmetric_handler *h;
+
+  if (!_metric_initialized) {
+    /* lazy memory size initialization */
+    _neigh_info.size += sizeof(struct nhdp_metric) * _metric_count;
+    _link_info.size += sizeof(struct nhdp_metric) * _metric_count;
+    _l2hop_info.size += sizeof(struct nhdp_metric) * _metric_count;
+
+    if (olsr_class_resize(&_neigh_info)) {
+      return NULL;
+    }
+    if (olsr_class_resize(&_link_info)) {
+      return NULL;
+    }
+    if (olsr_class_resize(&_l2hop_info)) {
+      return NULL;
+    }
+
+    _metric_initialized = true;
+  }
 
   neigh = olsr_class_malloc(&_neigh_info);
   if (neigh == NULL) {
@@ -219,6 +267,12 @@ nhdp_db_neighbor_add(void) {
 
   /* hook into global neighbor list */
   list_add_tail(&nhdp_neigh_list, &neigh->_node);
+
+  /* initialize metrics */
+  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+    memcpy(&neigh->_metric[h->_index], &h->metric_default,
+        sizeof(struct nhdp_metric));
+  }
 
   /* trigger event */
   olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_ADDED);
@@ -368,6 +422,7 @@ nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr
  */
 struct nhdp_link *
 nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
+  struct nhdp_linkmetric_handler *h;
   struct nhdp_link *lnk;
 
   lnk = olsr_class_malloc(&_link_info);
@@ -396,6 +451,12 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->heard_time.cb_context = lnk;
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
+
+  /* initialize metrics */
+  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+    memcpy(&lnk->_metric[h->_index], &h->metric_default,
+        sizeof(struct nhdp_metric));
+  }
 
   /* trigger event */
   olsr_class_event(&_link_info, lnk, OLSR_OBJECT_ADDED);
@@ -510,6 +571,7 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
 
 struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
+  struct nhdp_linkmetric_handler *h;
   struct nhdp_l2hop *l2hop;
 
   l2hop = olsr_class_malloc(&_l2hop_info);
@@ -530,6 +592,12 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
 
   /* add to trees */
   avl_insert(&lnk->_2hop, &l2hop->_link_node);
+
+  /* initialize metrics */
+  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+    memcpy(&l2hop->_metric[h->_index], &h->metric_default,
+        sizeof(struct nhdp_metric));
+  }
 
   /* trigger event */
   olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_ADDED);
@@ -573,6 +641,8 @@ nhdp_db_link_update_status(struct nhdp_link *lnk) {
   if (!was_symmetric && lnk->status == NHDP_LINK_SYMMETRIC) {
     _link_status_now_symmetric(lnk);
   }
+
+  olsr_class_event(&_link_info, lnk, OLSR_OBJECT_CHANGED);
 }
 
 /**

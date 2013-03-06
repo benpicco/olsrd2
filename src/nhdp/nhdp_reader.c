@@ -74,6 +74,7 @@ enum {
   IDX_ADDRTLV2_LINK_STATUS,
   IDX_ADDRTLV2_OTHER_NEIGHB,
   IDX_ADDRTLV2_MPR,
+  IDX_ADDRTLV2_LINKMETRIC,
 };
 
 /* prototypes */
@@ -84,21 +85,24 @@ static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
       struct rfc5444_reader_tlvblock_context *context);
+
 static enum rfc5444_result
 _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer,
       struct rfc5444_reader_tlvblock_context *context);
 static enum rfc5444_result _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *,
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
-static enum rfc5444_result
-_cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer,
+
+static enum rfc5444_result _cb_addr_pass2_block(
+    struct rfc5444_reader_tlvblock_consumer *consumer,
       struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *,
+static enum rfc5444_result _cb_msg_pass2_end(
+    struct rfc5444_reader_tlvblock_consumer *,
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
-static enum rfc5444_result _cb_linkcost_tlv(struct rfc5444_reader_tlvblock_consumer *,
-    struct rfc5444_reader_tlvblock_entry *, struct rfc5444_reader_tlvblock_context *);
 
 /* definition of the RFC5444 reader components */
 static struct rfc5444_reader_tlvblock_consumer _nhdp_message_pass1_consumer = {
+  .order = RFC5444_MAIN_PARSER_PRIORITY,
+  .msg_id = RFC5444_MSGTYPE_HELLO,
   .block_callback = _cb_messagetlvs,
   .end_callback = _cb_addresstlvs_pass1_end,
 };
@@ -109,6 +113,9 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass1_consumer = {
+  .order = RFC5444_MAIN_PARSER_PRIORITY,
+  .msg_id = RFC5444_MSGTYPE_HELLO,
+  .addrblock_consumer = true,
   .block_callback = _cb_addresstlvs_pass1,
 };
 
@@ -118,11 +125,16 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass1_tlvs[] 
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_message_pass2_consumer = {
-  .end_callback = _cb_addresstlvs_pass2_end,
+  .order = RFC5444_MAIN_PARSER_PRIORITY + 1,
+  .msg_id = RFC5444_MSGTYPE_HELLO,
+  .end_callback = _cb_msg_pass2_end,
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass2_consumer= {
-  .block_callback = _cb_addresstlvs_pass2,
+  .order = RFC5444_MAIN_PARSER_PRIORITY + 1,
+  .msg_id = RFC5444_MSGTYPE_HELLO,
+  .addrblock_consumer = true,
+  .block_callback = _cb_addr_pass2_block,
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass2_tlvs[] = {
@@ -130,10 +142,7 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass2_tlvs[] 
   [IDX_ADDRTLV2_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS, .min_length = 1, .match_length = true },
   [IDX_ADDRTLV2_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB, .min_length = 1, .match_length = true },
   [IDX_ADDRTLV2_MPR] = { .type = RFC5444_ADDRTLV_MPR, .min_length = 1, .match_length = true },
-};
-
-struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass3_consumer = {
-  .tlv_callback = _cb_linkcost_tlv,
+  [IDX_ADDRTLV2_LINKMETRIC] = { .type = RFC5444_ADDRTLV_LINK_METRIC, .min_length = 2, .match_length = true },
 };
 
 /* nhdp multiplexer/protocol */
@@ -168,19 +177,15 @@ nhdp_reader_init(struct olsr_rfc5444_protocol *p) {
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_message_pass1_consumer,
-      _nhdp_message_tlvs, ARRAYSIZE(_nhdp_message_tlvs),
-      RFC5444_MSGTYPE_HELLO, RFC5444_MAIN_PARSER_PRIORITY);
-  rfc5444_reader_add_address_consumer(
-      &_protocol->reader, &_nhdp_address_pass1_consumer,
-      _nhdp_address_pass1_tlvs, ARRAYSIZE(_nhdp_address_pass1_tlvs),
-      RFC5444_MSGTYPE_HELLO, RFC5444_MAIN_PARSER_PRIORITY);
+      _nhdp_message_tlvs, ARRAYSIZE(_nhdp_message_tlvs));
   rfc5444_reader_add_message_consumer(
-      &_protocol->reader, &_nhdp_message_pass2_consumer,
-      NULL, 0, RFC5444_MSGTYPE_HELLO, RFC5444_MAIN_PARSER_PRIORITY+1);
-  rfc5444_reader_add_address_consumer(
+      &_protocol->reader, &_nhdp_address_pass1_consumer,
+      _nhdp_address_pass1_tlvs, ARRAYSIZE(_nhdp_address_pass1_tlvs));
+  rfc5444_reader_add_message_consumer(
+      &_protocol->reader, &_nhdp_message_pass2_consumer, NULL, 0);
+  rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_address_pass2_consumer,
-      _nhdp_address_pass2_tlvs, ARRAYSIZE(_nhdp_address_pass2_tlvs),
-      RFC5444_MSGTYPE_HELLO, RFC5444_MAIN_PARSER_PRIORITY+1);
+      _nhdp_address_pass2_tlvs, ARRAYSIZE(_nhdp_address_pass2_tlvs));
 }
 
 /**
@@ -188,11 +193,11 @@ nhdp_reader_init(struct olsr_rfc5444_protocol *p) {
  */
 void
 nhdp_reader_cleanup(void) {
-  rfc5444_reader_remove_address_consumer(
+  rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_address_pass2_consumer);
   rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_message_pass2_consumer);
-  rfc5444_reader_remove_address_consumer(
+  rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_address_pass1_consumer);
   rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_message_pass1_consumer);
@@ -583,6 +588,58 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   return RFC5444_OKAY;
 }
 
+// TODO: move to block callback
+#if 0
+/**
+ * Parse Linkmetric TLVs and store them in the handlers buffer
+ * @param c
+ * @param entry
+ * @param context
+ * @return
+ */
+static enum rfc5444_result
+_cb_addr_pass2_tlvs(struct rfc5444_reader_tlvblock_consumer *c __attribute((unused)),
+    struct rfc5444_reader_tlvblock_entry *entry,
+    struct rfc5444_reader_tlvblock_context *context __attribute((unused))) {
+  struct nhdp_linkmetric_handler *h;
+
+  uint16_t tlvvalue;
+  uint32_t metric;
+  if (entry->type != RFC5444_ADDRTLV_LINK_METRIC) {
+    /* ignore all TLVs except link metric TLVs */
+    return RFC5444_OKAY;
+  }
+
+  if (entry->length != 2) {
+    /* ignore everything except length 2 */
+    return RFC5444_OKAY;
+  }
+
+  /* read value and convert it to metric */
+  memcpy(&tlvvalue, entry->single_value, sizeof(tlvvalue));
+  tlvvalue = ntohs(tlvvalue);
+
+  metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
+
+  /* store the TLV(s) for later processing */
+  h = nhdp_linkmetric_handler_get_by_ext(entry->type_ext);
+
+  if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
+    h->_metric[NHDP_TEMP_INCOMING_LINK] = metric;
+  }
+  if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_LINK) {
+    h->_metric[NHDP_TEMP_INCOMING_NEIGH] = metric;
+  }
+  if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
+    h->_metric[NHDP_TEMP_OUTGOING_LINK] = metric;
+  }
+  if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
+    h->_metric[NHDP_TEMP_OUTGOING_NEIGH] = metric;
+  }
+  return RFC5444_OKAY;
+}
+#endif
+
 /**
  * Second pass for processing the addresses of the NHDP Hello. This one will update
  * the database
@@ -591,17 +648,16 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
  * @return
  */
 static enum rfc5444_result
-_cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
+_cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   uint8_t local_if, link_status, other_neigh, mprs;
+  struct rfc5444_reader_tlvblock_entry *tlv;
+  struct nhdp_linkmetric_handler *h;
   struct nhdp_l2hop *l2hop;
   struct netaddr addr;
   struct netaddr_str buf;
-
-  local_if = 255;
-  link_status = 255;
-  other_neigh = 255;
-  mprs = 255;
+  uint16_t tlvvalue;
+  uint32_t metric;
 
   switch(_parse_address(&addr, context->addr, context->addr_len)) {
     case -1:
@@ -616,6 +672,12 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
       break;
   }
 
+  local_if = 255;
+  link_status = 255;
+  other_neigh = 255;
+  mprs = 255;
+
+  /* read values of TLVs that can only be present once */
   if (_nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LOCAL_IF].tlv) {
     local_if = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LOCAL_IF].tlv->single_value[0];
   }
@@ -637,17 +699,46 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
     _pass2_process_localif(&addr, local_if);
   }
 
-  if (nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
-    /* update MPR selector if this is "our" address */
-    nhdp_mpr_set_mprs(nhdp_mpr_get_flooding_handler(), _current.link,
-        mprs == RFC5444_MPR_FLOODING || mprs == RFC5444_MPR_FLOOD_ROUTE);
-    nhdp_mpr_set_mprs(nhdp_mpr_get_routing_handler(), _current.link,
-        mprs == RFC5444_MPR_ROUTING || mprs == RFC5444_MPR_FLOOD_ROUTE);
-  }
-
   /* handle 2hop-addresses */
   if (link_status != 255 || other_neigh != 255) {
-    if (nhdp_interface_addr_global_get(&addr) != NULL) {
+    if (nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
+      /* update MPR selector if this is "our" address on the local interface */
+
+      // TODO: what is with MPRs and multitopology routing?
+      nhdp_mpr_set_mprs(nhdp_mpr_get_flooding_handler(), _current.link,
+          mprs == RFC5444_MPR_FLOODING || mprs == RFC5444_MPR_FLOOD_ROUTE);
+      nhdp_mpr_set_mprs(nhdp_mpr_get_routing_handler(), _current.link,
+          mprs == RFC5444_MPR_ROUTING || mprs == RFC5444_MPR_FLOOD_ROUTE);
+
+      /* clear metric values that should be present in HELLO */
+      list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+        _current.link->_metric[h->_index].outgoing = h->metric_default.outgoing;
+        _current.neighbor->_metric[h->_index].outgoing = h->metric_default.outgoing;
+      }
+
+      /* update outgoing metric with other sides incoming metric */
+      tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINKMETRIC].tlv;
+      while (tlv) {
+        /* extract tlv value */
+        memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
+        tlvvalue = ntohs(tlvvalue);
+
+        /* get metric handler */
+        h = nhdp_linkmetric_handler_get_by_ext(tlv->type_ext);
+
+        /* decode metric part */
+        metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
+
+        if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
+          _current.link->_metric[h->_index].outgoing = metric;
+        }
+        if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
+          _current.neighbor->_metric[h->_index].outgoing = metric;
+        }
+        tlv = tlv->next_entry;
+      }
+    }
+    else if (nhdp_interface_addr_global_get(&addr) != NULL) {
       OLSR_DEBUG(LOG_NHDP_R, "Link neighbor heard this node address: %s",
           netaddr_to_string(&buf, &addr));
     }
@@ -664,6 +755,34 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
 
       /* refresh validity time of 2hop address */
       nhdp_db_link_2hop_set_vtime(l2hop, _current.vtime);
+
+      /* clear metric values that should be present in HELLO */
+      list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+        l2hop->_metric[h->_index].incoming = h->metric_default.incoming;
+        l2hop->_metric[h->_index].outgoing = h->metric_default.outgoing;
+      }
+
+      /* update 2-hop metric (no direction reversal!) */
+      tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINKMETRIC].tlv;
+      while (tlv) {
+        /* extract tlv value */
+        memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
+        tlvvalue = ntohs(tlvvalue);
+
+        /* get metric handler */
+        h = nhdp_linkmetric_handler_get_by_ext(tlv->type_ext);
+
+        /* decode metric part */
+        metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
+
+        if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
+          l2hop->_metric[h->_index].incoming= metric;
+        }
+        if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
+          l2hop->_metric[h->_index].outgoing= metric;
+        }
+        tlv = tlv->next_entry;
+      }
     }
     else {
       l2hop = ndhp_db_link_2hop_get(_current.link, &addr);
@@ -685,11 +804,12 @@ _cb_addresstlvs_pass2(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
  * @return
  */
 static enum rfc5444_result
-_cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
+_cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
     struct rfc5444_reader_tlvblock_context *context __attribute__((unused)), bool dropped) {
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr, *la_it;
   struct nhdp_l2hop *twohop, *twohop_it;
+  struct nhdp_linkmetric_handler *h;
   uint64_t t;
 
   if (dropped) {
@@ -771,39 +891,20 @@ _cb_addresstlvs_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
     olsr_timer_set(&_current.link->vtime, t);
   }
 
-  /* update link status */
-  nhdp_db_link_update_status(_current.link);
-
   /* update v4/v6-only status of interface */
   nhdp_interfaces_update_neigh_addresstype(_current.localif);
 
   /* update MPR set */
   nhdp_mpr_update(nhdp_mpr_get_flooding_handler(), _current.localif);
   nhdp_mpr_update(nhdp_mpr_get_routing_handler(), _current.localif);
-  return RFC5444_OKAY;
-}
 
-
-static enum rfc5444_result
-_cb_linkcost_tlv(struct rfc5444_reader_tlvblock_consumer *c __attribute((unused)),
-    struct rfc5444_reader_tlvblock_entry *entry,
-    struct rfc5444_reader_tlvblock_context *context __attribute((unused))) {
-  uint16_t tlvvalue;
-  if (entry->type != RFC5444_ADDRTLV_LINK_METRIC) {
-    /* ignore all TLVs except link metric TLVs */
-    return RFC5444_OKAY;
+  /* update link metrics */
+  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+    nhdp_linkmetric_calculate_neighbor_metric(h, _current.neighbor);
   }
 
-  if (entry->length != 2) {
-    /* ignore everything except length 2 */
-    return RFC5444_OKAY;
-  }
+  /* update link status */
+  nhdp_db_link_update_status(_current.link);
 
-  /* read value and convert it to host byteorder */
-  memcpy(&tlvvalue, entry->single_value, sizeof(tlvvalue));
-  tlvvalue = ntohs(tlvvalue);
-
-  /* send TLV value to processing */
-  nhdp_linkmetric_process_tlv(_current.link, entry->type_ext, tlvvalue);
   return RFC5444_OKAY;
 }

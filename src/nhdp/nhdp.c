@@ -47,6 +47,7 @@
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_linkmetric.h"
 #include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_reader.h"
 #include "nhdp/nhdp_writer.h"
@@ -105,6 +106,7 @@ nhdp_init(void) {
   nhdp_reader_init(_protocol);
   nhdp_interfaces_init(_protocol);
   nhdp_db_init();
+  nhdp_linkmetric_init(_protocol);
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
@@ -128,6 +130,7 @@ nhdp_cleanup(void) {
     olsr_telnet_remove(&_cmds[i]);
   }
 
+  nhdp_linkmetric_cleanup();
   nhdp_writer_cleanup();
   nhdp_reader_cleanup();
   nhdp_db_cleanup();
@@ -280,9 +283,13 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
   struct nhdp_laddr *laddr;
   struct nhdp_l2hop *twohop;
   const char *status;
+
+  struct nhdp_linkmetric_handler *h;
+
   struct netaddr_str nbuf;
   struct fraction_str tbuf1, tbuf2, tbuf3;
   struct nhdp_hysteresis_str hbuf;
+  struct nhdp_linkmetric_str mbuf1, mbuf2;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
@@ -317,6 +324,13 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
           nhdp_hysteresis_to_string(&hbuf, lnk));
 
+      list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+        abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n",
+            h->name,
+            h->to_string(&mbuf1, lnk->_metric[h->_index].incoming),
+            h->to_string(&mbuf2, lnk->_metric[h->_index].outgoing));
+      }
+
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
         abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
       }
@@ -327,6 +341,13 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
       }
       avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
         abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->twohop_addr));
+
+        list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+          abuf_appendf(con->out, "\t\tMetric '%s': in=%s out=%s\n",
+              h->name,
+              h->to_string(&mbuf1, twohop->_metric[h->_index].incoming),
+              h->to_string(&mbuf2, twohop->_metric[h->_index].outgoing));
+        }
       }
     }
   }

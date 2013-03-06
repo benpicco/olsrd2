@@ -95,6 +95,8 @@ static enum rfc5444_result _cb_addresstlvs(struct rfc5444_reader_tlvblock_consum
 
 /* definition of the RFC5444 reader components */
 static struct rfc5444_reader_tlvblock_consumer _nhdp_message_consumer = {
+  .order = RFC5444_VALIDATOR_PRIORITY,
+  .msg_id = RFC5444_MSGTYPE_HELLO,
   .start_callback = _cb_message_start_callback,
   .block_callback = _cb_messagetlvs,
 };
@@ -105,6 +107,8 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_address_consumer = {
+  .order = RFC5444_VALIDATOR_PRIORITY,
+  .msg_id = RFC5444_MSGTYPE_HELLO,
   .block_callback = _cb_addresstlvs,
 };
 
@@ -152,12 +156,10 @@ _cb_plugin_enable(void) {
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_message_consumer,
-      _nhdp_message_tlvs, ARRAYSIZE(_nhdp_message_tlvs),
-      RFC5444_MSGTYPE_HELLO, RFC5444_VALIDATOR_PRIORITY);
-  rfc5444_reader_add_address_consumer(
+      _nhdp_message_tlvs, ARRAYSIZE(_nhdp_message_tlvs));
+  rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_address_consumer,
-      _nhdp_address_tlvs, ARRAYSIZE(_nhdp_address_tlvs),
-      RFC5444_MSGTYPE_HELLO, RFC5444_VALIDATOR_PRIORITY);
+      _nhdp_address_tlvs, ARRAYSIZE(_nhdp_address_tlvs));
 
   return 0;
 }
@@ -170,7 +172,7 @@ static int
 _cb_plugin_disable(void) {
   rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_message_consumer);
-  rfc5444_reader_remove_address_consumer(
+  rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_address_consumer);
 
   olsr_rfc5444_remove_protocol(_protocol);
@@ -219,7 +221,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   /* drop message if it has no VTIME TLV or has more than one */
   if (_nhdp_message_tlvs[IDX_TLV_VTIME].tlv == NULL
-      || _nhdp_message_tlvs[IDX_TLV_VTIME].duplicate_tlv) {
+      || _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->next_entry != NULL) {
     OLSR_INFO(LOG_NHDP_CHECK,
             "Dropped NHDP message with no or multiple VTIME TLVs");
     return RFC5444_DROP_MESSAGE;
@@ -235,7 +237,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 
   if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv) {
     /* check if message has multiple ITIME TLVs */
-    if (_nhdp_message_tlvs[IDX_TLV_ITIME].duplicate_tlv) {
+    if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv->next_entry != NULL) {
       OLSR_INFO(LOG_NHDP_CHECK,
                   "Dropped NHDP message with multiple ITIME TLVs");
       return RFC5444_DROP_MESSAGE;
@@ -265,7 +267,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 
   if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv != NULL) {
     /* check for duplicate LOCAL_IF TLV */
-    if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].duplicate_tlv) {
+    if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv->next_entry != NULL) {
       OLSR_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had multiple LOCAL_IF TLVs",
           buf.buf);
@@ -309,7 +311,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 
   if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv != NULL) {
     /* check for duplicate LINK_STATUS TLV */
-    if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].duplicate_tlv) {
+    if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv->next_entry != NULL) {
       OLSR_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had multiple LINK_STATUS TLVs",
           buf.buf);
@@ -338,7 +340,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 
   if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv != NULL) {
     /* check for duplicate OTHER_NEIGH TLV */
-    if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].duplicate_tlv) {
+    if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv->next_entry != NULL) {
       OLSR_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had multiple OTHER_NEIGHB TLVs",
           buf.buf);

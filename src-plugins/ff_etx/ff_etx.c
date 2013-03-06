@@ -72,8 +72,6 @@ struct link_etxff_bucket {
 };
 
 struct link_etxff_data {
-  struct nhdp_metric metric;
-
   int activePtr;
   int missed_hellos;
 
@@ -81,6 +79,8 @@ struct link_etxff_data {
   uint16_t last_seq_nr;
 
   struct olsr_timer_entry hello_lost_timer;
+
+  uint64_t hello_interval;
 
   struct link_etxff_bucket buckets[0];
 };
@@ -100,6 +100,7 @@ static int _cb_plugin_enable(void);
 static int _cb_plugin_disable(void);
 
 static void _cb_link_added(void *);
+static void _cb_link_changed(void *);
 static void _cb_link_removed(void *);
 
 static void _cb_etx_sampling(void *);
@@ -108,6 +109,9 @@ static void _cb_hello_lost(void *);
 static enum rfc5444_result _cb_process_packet(
     struct rfc5444_reader_tlvblock_consumer *,
       struct rfc5444_reader_tlvblock_context *context);
+
+static const char *_to_string(
+    struct nhdp_linkmetric_str *buf, uint32_t metric);
 
 static int _cb_cfg_validate(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
@@ -123,7 +127,7 @@ OLSR_PLUGIN7 {
   .enable = _cb_plugin_enable,
   .disable = _cb_plugin_disable,
 
-  .can_disable = true,
+  .can_disable = false,
   .can_unload = false,
 };
 
@@ -165,34 +169,44 @@ struct olsr_class_extension _link_extenstion = {
   .size = sizeof(struct link_etxff_data),
 };
 
-struct olsr_class_extension _neigh_extenstion = {
-  .name = "etxff neighmetric",
-  .class_name = NHDP_CLASS_NEIGHBOR,
-  .size = sizeof(struct neighbor_etxff_data),
-};
-
-struct olsr_class_extension _twohop_extenstion = {
-  .name = "etxff twohop-metric",
-  .class_name = NHDP_CLASS_LINK_2HOP,
-  .size = sizeof(struct l2hop_etxff_data),
-};
-
 struct olsr_class_listener _link_listener = {
   .name = "etxff link listener",
   .class_name = NHDP_CLASS_LINK,
   .cb_add = _cb_link_added,
+  .cb_change = _cb_link_changed,
   .cb_remove = _cb_link_removed,
 };
 
-/* timer class to measure interval between Hellos */
+/* timer for sampling incoming RFC5444 packets */
 struct olsr_timer_info _sampling_timer_info = {
   .name = "Sampling timer for ETXFF-metric",
   .callback = _cb_etx_sampling,
+  .periodic = true,
 };
 
+struct olsr_timer_entry _sampling_timer = {
+  .info = &_sampling_timer_info,
+};
+
+/* timer class to measure interval between Hellos */
 struct olsr_timer_info _hello_lost_info = {
   .name = "Hello lost timer for ETXFF-metric",
   .callback = _cb_hello_lost,
+};
+
+/* nhdp metric handler */
+struct nhdp_linkmetric_handler _etxff_handler = {
+  .name = "ETXFF metric handler",
+
+  .create_tlvs = true,
+  .metric_default = {
+      .incoming = 0x100000,
+      .outgoing = 0x100000,
+  },
+  .metric_minimum = 0x1000,
+  .metric_maximum = 0x100000,
+
+  .to_string = _to_string,
 };
 
 /**
@@ -223,32 +237,13 @@ _cb_plugin_unload(void) {
  */
 static int
 _cb_plugin_enable(void) {
-  if (olsr_class_is_extension_registered(&_link_extenstion)) {
-    struct nhdp_link *lnk;
-
-    /* add all custom extensions for link */
-    list_for_each_element(&nhdp_link_list, lnk, _global_node) {
-      _cb_link_added(lnk);
-    }
-  }
-  else {
-    _link_extenstion.size +=
-        sizeof(struct link_etxff_bucket) * _etxff_config.window;
-
-    if (olsr_class_extend(&_link_extenstion)) {
-      return -1;
-    }
-  }
-
-  if (olsr_class_extend(&_neigh_extenstion)) {
-    return -1;
-  }
-
-  if (olsr_class_extend(&_twohop_extenstion)) {
-    return -1;
-  }
 
   if (olsr_class_listener_add(&_link_listener)) {
+    return -1;
+  }
+
+  if (nhdp_linkmetric_handler_add(&_etxff_handler)) {
+    olsr_class_listener_remove(&_link_listener);
     return -1;
   }
 
@@ -257,7 +252,8 @@ _cb_plugin_enable(void) {
 
   _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
 
-  // TODO: set metric handler
+  olsr_rfc5444_add_protocol_seqno(_protocol);
+  rfc5444_reader_add_packet_consumer(&_protocol->reader, &_packet_consumer, NULL, 0);
   return 0;
 }
 
@@ -268,11 +264,15 @@ _cb_plugin_enable(void) {
 static int
 _cb_plugin_disable(void) {
   struct nhdp_link *lnk;
-  // TODO: remove metric handler
-
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     _cb_link_removed(lnk);
   }
+
+  rfc5444_reader_remove_packet_consumer(&_protocol->reader, &_packet_consumer);
+  olsr_rfc5444_remove_protocol_seqno(_protocol);
+  olsr_rfc5444_remove_protocol(_protocol);
+
+  nhdp_linkmetric_handler_remove(&_etxff_handler);
 
   olsr_class_listener_remove(&_link_listener);
 
@@ -305,13 +305,30 @@ _cb_link_added(void *ptr) {
   /* start 'hello lost' timer for link */
   data->hello_lost_timer.info = &_hello_lost_info;
   data->hello_lost_timer.cb_context = ptr;
+}
+
+/**
+ * Callback triggered when a new nhdp link is changed
+ * @param ptr nhdp link
+ */
+static void
+_cb_link_changed(void *ptr) {
+  struct link_etxff_data *data;
+  struct nhdp_link *lnk;
+
+  lnk = ptr;
+  data = olsr_class_get_extension(&_link_extenstion, lnk);
 
   if (lnk->itime_value > 0) {
-    olsr_timer_start(&data->hello_lost_timer, lnk->itime_value);
+    data->hello_interval = lnk->itime_value;
   }
   else {
-    olsr_timer_start(&data->hello_lost_timer, lnk->vtime_value);
+    data->hello_interval = lnk->vtime_value;
   }
+
+  olsr_timer_set(&data->hello_lost_timer, (data->hello_interval * 3) / 2);
+
+  data->missed_hellos = 0;
 }
 
 static void
@@ -329,13 +346,12 @@ _cb_link_removed(void *ptr) {
  */
 static void
 _cb_etx_sampling(void *ptr __attribute__((unused))) {
-  struct neighbor_etxff_data *ndata;
   struct link_etxff_data *ldata;
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
-  int i,j;
+  int i;
 
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     ldata = olsr_class_get_extension(&_link_extenstion, lnk);
@@ -349,12 +365,19 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     total = 0;
     received = 0;
 
+    /* enlarge windows size if we are still in quickstart phase */
+    if (ldata->window_size < _etxff_config.window) {
+      ldata->window_size++;
+    }
+
     /* calculate ETX */
     for (i=0; i<ldata->window_size; i++) {
-      j = (ldata->activePtr + i) % _etxff_config.window;
+      received += ldata->buckets[i].received;
+      total += ldata->buckets[i].total;
+    }
 
-      received += ldata->buckets[j].received;
-      total += ldata->buckets[j].total;
+    if (ldata->missed_hellos > 0) {
+      total += ldata->missed_hellos * ldata->missed_hellos;
     }
 
     /* calculate MAX(0x1000 * total / received, 0x100000) */
@@ -368,17 +391,26 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     /* convert into incoming metric value */
     if (metric > RFC5444_METRIC_MAX) {
       /* metric overflow */
-      ldata->metric.incoming = RFC5444_METRIC_MAX;
+      metric = RFC5444_METRIC_MAX;
     }
-    else {
-      ldata->metric.incoming = (uint32_t)metric;
+    lnk->_metric[_etxff_handler._index].incoming = (uint32_t)metric;
+
+    OLSR_DEBUG(LOG_PLUGINS, "New sampling rate: %d/%d = %" PRIu64 " (w=%d)\n",
+        received, total, metric, ldata->window_size);
+
+
+    /* update rolling buffer */
+    ldata->activePtr++;
+    if (ldata->activePtr >= _etxff_config.window) {
+      ldata->activePtr = 0;
     }
+    ldata->buckets[ldata->activePtr].received = 0;
+    ldata->buckets[ldata->activePtr].total = 0;
   }
 
+  /* update neighbor metrics */
   list_for_each_element(&nhdp_neigh_list, neigh, _node) {
-    ndata = olsr_class_get_extension(&_neigh_extenstion, neigh);
-
-    nhdp_linkmetric_calculate_neighbor_metric(neigh, &ndata->metric);
+    nhdp_linkmetric_calculate_neighbor_metric(&_etxff_handler, neigh);
   }
 }
 
@@ -392,7 +424,10 @@ _cb_hello_lost(void *ptr) {
 
   if (ldata->activePtr != -1) {
     ldata->missed_hellos++;
-    ldata->buckets[ldata->activePtr].total += ldata->missed_hellos * ldata->missed_hellos;
+
+    olsr_timer_set(&ldata->hello_lost_timer, ldata->hello_interval);
+
+    OLSR_DEBUG(LOG_PLUGINS, "Missed Hello: %d", ldata->missed_hellos);
   }
 }
 
@@ -424,6 +459,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
     /* silently ignore unknown interface */
     return RFC5444_OKAY;
   }
+
   laddr = nhdp_interface_get_link_addr(interf, _protocol->input_address);
   if (laddr == NULL) {
     /* silently ignore unknown link*/
@@ -438,14 +474,20 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
     ldata->activePtr = 0;
     ldata->buckets[0].received = 1;
     ldata->buckets[0].total = 1;
+    ldata->last_seq_nr = context->pkt_seqno;
+
+    fprintf(stderr, "first packet received: %d/%d => %d/%d (%u)\n",
+        1,1,
+        ldata->buckets[ldata->activePtr].received,
+        ldata->buckets[ldata->activePtr].total,
+        context->pkt_seqno);
     return RFC5444_OKAY;
   }
 
-  total = ldata->last_seq_nr;
-  if (ldata->last_seq_nr > context->pkt_seqno) {
+  total = (int)(context->pkt_seqno) - (int)(ldata->last_seq_nr);
+  if (total < 0) {
     total += 65536;
   }
-  total -= context->pkt_seqno;
 
   if (total > 255) {
     /* most likely a restart of the pkt seqno counter */
@@ -454,8 +496,33 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
 
   ldata->buckets[ldata->activePtr].received++;
   ldata->buckets[ldata->activePtr].total += total;
+  ldata->last_seq_nr = context->pkt_seqno;
+
+  fprintf(stderr, "packet received: %d/%d => %d/%d (%u)\n",
+      1, total,
+      ldata->buckets[ldata->activePtr].received,
+      ldata->buckets[ldata->activePtr].total,
+      context->pkt_seqno);
 
   return RFC5444_OKAY;
+}
+
+/**
+ * Convert ETX-ff metric into string representation
+ * @param buf pointer to output buffer
+ * @param metric metric value
+ * @return pointer to output string
+ */
+static const char *
+_to_string(struct nhdp_linkmetric_str *buf, uint32_t metric) {
+  uint32_t frac;
+
+  frac = metric % 0x1000;
+  frac *= 1000;
+  frac /= 0x1000;
+  snprintf(buf->buf, sizeof(*buf), "%u.%03u", metric / 0x1000, frac);
+
+  return buf->buf;
 }
 
 /**
@@ -463,8 +530,28 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
  */
 static void
 _cb_cfg_changed(void) {
-  cfg_schema_tobin(&_etxff_config, _etxff_section.post,
-      _etxff_entries, ARRAYSIZE(_etxff_entries));
+  bool first;
+
+  first = _etxff_config.window == 0;
+
+  if (cfg_schema_tobin(&_etxff_config, _etxff_section.post,
+      _etxff_entries, ARRAYSIZE(_etxff_entries))) {
+    OLSR_WARN(LOG_PLUGINS, "Cannot convert configuration for %s",
+        OLSR_PLUGIN7_GET_NAME());
+    return;
+  }
+
+  if (first) {
+    _link_extenstion.size +=
+        sizeof(struct link_etxff_bucket) * _etxff_config.window;
+
+    if (olsr_class_extend(&_link_extenstion)) {
+      return;
+    }
+  }
+
+  /* start/change sampling timer */
+  olsr_timer_set(&_sampling_timer, _etxff_config.interval);
 }
 
 /**
@@ -479,14 +566,18 @@ _cb_cfg_validate(const char *section_name,
     struct cfg_named_section *named, struct autobuf *out) {
   struct _config cfg;
 
-  if (cfg_schema_tobin(&_etxff_config, named,
+  /* clear temporary buffer */
+  memset(&cfg, 0, sizeof(cfg));
+
+  /* convert configuration to binary */
+  if (cfg_schema_tobin(&cfg, named,
       _etxff_entries, ARRAYSIZE(_etxff_entries))) {
     cfg_append_printable_line(out, "Could not parse hysteresis configuration in section %s",
         section_name);
     return -1;
   }
 
-  if (cfg.window != 0) {
+  if (_etxff_config.window != 0 && cfg.window != _etxff_config.window) {
     cfg_append_printable_line(out, "%s: ETXff window cannot be changed during runtime",
         section_name);
     return -1;

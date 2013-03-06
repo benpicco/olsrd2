@@ -70,6 +70,14 @@ enum nhdp_link_status {
 };
 
 /**
+ * Represents a NHDP link metric pair
+ */
+struct nhdp_metric {
+  uint32_t incoming;
+  uint32_t outgoing;
+};
+
+/**
  * nhdl_link represents a link by a specific local interface to one interface
  * of a one-hop neighbor.
  */
@@ -115,6 +123,9 @@ struct nhdp_link {
 
   /* member entry for nhdp links of neighbor node */
   struct list_entity _neigh_node;
+
+  /* Array of link metrics */
+  struct nhdp_metric _metric[0];
 };
 
 /**
@@ -158,6 +169,9 @@ struct nhdp_l2hop {
 
   /* member entry for two-hop addresses of neighbor link */
   struct avl_node _link_node;
+
+  /* Array of link metrics */
+  struct nhdp_metric _metric[0];
 };
 
 /**
@@ -193,6 +207,9 @@ struct nhdp_neighbor {
 
   /* member entry for global list of neighbors */
   struct list_entity _node;
+
+  /* Array of link metrics */
+  struct nhdp_metric _metric[0];
 };
 
 /**
@@ -200,26 +217,26 @@ struct nhdp_neighbor {
  * or a former (lost) address which will be removed soon
  */
 struct nhdp_naddr {
-    /* neighbor interface address */
-    struct netaddr neigh_addr;
+  /* neighbor interface address */
+  struct netaddr neigh_addr;
 
-    /* backlink to neighbor */
-    struct nhdp_neighbor *neigh;
+  /* backlink to neighbor */
+  struct nhdp_neighbor *neigh;
 
-    /* link address usage counter */
-    int laddr_count;
+  /* link address usage counter */
+  int laddr_count;
 
-    /* validity time for this address when its lost */
-    struct olsr_timer_entry _lost_vtime;
+  /* validity time for this address when its lost */
+  struct olsr_timer_entry _lost_vtime;
 
-    /* member entry for neighbor address tree */
-    struct avl_node _neigh_node;
+  /* member entry for neighbor address tree */
+  struct avl_node _neigh_node;
 
-    /* member entry for global neighbor address tree */
-    struct avl_node _global_node;
+  /* member entry for global neighbor address tree */
+  struct avl_node _global_node;
 
-    /* temporary variables for NHDP Hello processing */
-    bool _this_if, _might_be_removed;
+  /* temporary variables for NHDP Hello processing */
+  bool _this_if, _might_be_removed;
 };
 
 EXPORT extern struct list_entity nhdp_neigh_list;
@@ -228,6 +245,9 @@ EXPORT extern struct avl_tree nhdp_naddr_tree;
 
 void nhdp_db_init(void);
 void nhdp_db_cleanup(void);
+
+int nhdp_db_add_metric(void);
+EXPORT int nhdp_db_get_metriccount(void);
 
 EXPORT struct nhdp_neighbor *nhdp_db_neighbor_add(void);
 EXPORT void nhdp_db_neighbor_remove(struct nhdp_neighbor *);

@@ -42,68 +42,65 @@
 #ifndef NHDP_LINKCOST_H_
 #define NHDP_LINKCOST_H_
 
+struct nhdp_metric;
+
 #include "common/common_types.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "tools/olsr_rfc5444.h"
 
 #include "nhdp/nhdp_db.h"
 
-struct nhdp_metric {
-  uint32_t incoming;
-  uint32_t outgoing;
-};
-
-union nhdp_metricpair {
-  struct nhdp_metric metric[2];
-  uint32_t value[4];
+struct nhdp_linkmetric_str {
+  char buf[128];
 };
 
 struct nhdp_linkmetric_handler {
+  /* name of linkmetric */
   const char *name;
 
-  uint8_t ext;
+  /* TLV extension value */
+  int ext;
+
+  /* true if NHDP writer should create metric TLVs */
   bool create_tlvs;
 
-  void (*get_link_metric)(struct nhdp_metric *, struct nhdp_link *);
-  void (*get_neighbor_metric)(struct nhdp_metric *,struct nhdp_neighbor *);
+  /* default values for metric */
+  struct nhdp_metric metric_default;
 
-  void (*process_linkmetric_tlv)(struct nhdp_link *, uint16_t);
+  /* range of metric */
+  uint32_t metric_minimum, metric_maximum;
+
+  const char *(*to_string)(struct nhdp_linkmetric_str *, uint32_t);
 
   /* storage for the up to four additional link metrics */
   struct rfc5444_writer_tlvtype _metric_addrtlvs[4];
+
+  /* index in the metric array */
+  int _index;
+
+  /* list of metric handlers */
+  struct list_entity _node;
 };
+
+EXPORT extern struct nhdp_linkmetric_handler *nhdp_metric_handler[256];
+EXPORT extern struct list_entity nhdp_metric_handler_list;
 
 void nhdp_linkmetric_init(struct olsr_rfc5444_protocol *);
 void nhdp_linkmetric_cleanup(void);
 
-void nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h);
-void nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h);
+EXPORT int nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h);
+EXPORT void nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h);
 
-EXPORT struct nhdp_linkmetric_handler *nhdp_linkmetric_handler_get(void);
+EXPORT void nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
+    struct nhdp_link *lnk, uint16_t tlvvalue);
+EXPORT void nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
+    struct nhdp_l2hop *l2hop, uint16_t tlvvalue);
 EXPORT void nhdp_linkmetric_calculate_neighbor_metric(
-    struct nhdp_neighbor *, struct nhdp_metric *);
+    struct nhdp_linkmetric_handler *, struct nhdp_neighbor *);
 
-static INLINE void
-nhdp_linkmetric_get_link_metric(struct nhdp_metric *dst,
-    struct nhdp_link *lnk, uint8_t ext __attribute__((unused))) {
-  nhdp_linkmetric_handler_get()->get_link_metric(dst, lnk);
-}
-
-static INLINE void
-nhdp_linkmetric_get_neighbor_metric(struct nhdp_metric *dst,
-    struct nhdp_neighbor *neigh, uint8_t ext __attribute__((unused))) {
-  nhdp_linkmetric_handler_get()->get_neighbor_metric(dst, neigh);
-}
-
-static INLINE void
-nhdp_linkmetric_process_tlv(struct nhdp_link *lnk,
-    uint8_t ext, uint16_t value) {
-  struct nhdp_linkmetric_handler *h;
-
-  h = nhdp_linkmetric_handler_get();
-  if (h->ext == ext) {
-    h->process_linkmetric_tlv(lnk, value);
-  }
+static INLINE struct nhdp_linkmetric_handler *
+nhdp_linkmetric_handler_get_by_ext(uint8_t ext) {
+  return nhdp_metric_handler[ext];
 }
 
 #endif /* NHDP_LINKCOST_H_ */
