@@ -19,6 +19,21 @@ include (./cmake/app_config.cmake)
 # include compiler flags
 include (./cmake/cc_flags.cmake)
 
+########################
+#### Doxygen target ####
+########################
+
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/files/olsrv2.doxyfile.in
+        ${CMAKE_CURRENT_BINARY_DIR}/olsrv2.doxyfile @ONLY)
+    add_custom_target(doc
+        ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/olsrv2.doxyfile
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Generating OLSRv2 documentation with Doxygen" VERBATIM
+    )
+endif(DOXYGEN_FOUND)
+
 ###############################
 #### Include API framework ####
 ###############################
