@@ -529,7 +529,7 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   while (addr != NULL || naddr != NULL) {
     /* if there is no naddr anymore or naddr>addr then... */
     if (naddr == NULL || (addr != NULL &&
-        avl_comp_netaddr_socket(&naddr->neigh_addr, &addr->if_addr, NULL) > 0)) {
+        avl_comp_netaddr_socket(&naddr->neigh_addr, &addr->if_addr) > 0)) {
       /* add another addr with TLV to the steam */
       if (!addr->_global_node.follower && !addr->removed) {
         /* each address only once and only active ones */

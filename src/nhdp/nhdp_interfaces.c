@@ -67,7 +67,7 @@ static struct nhdp_interface_addr *_addr_add(
 static void _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime);
 static void _cb_remove_addr(void *ptr);
 
-static int avl_comp_ifaddr(const void *k1, const void *k2, void *ptr);
+static int avl_comp_ifaddr(const void *k1, const void *k2);
 
 static void _cb_generate_hello(void *ptr);
 static void _cb_cfg_interface_changed(void);
@@ -137,8 +137,8 @@ static struct olsr_rfc5444_protocol *_protocol;
  */
 void
 nhdp_interfaces_init(struct olsr_rfc5444_protocol *p) {
-  avl_init(&nhdp_interface_tree, avl_comp_strcasecmp, false, NULL);
-  avl_init(&nhdp_ifaddr_tree, avl_comp_ifaddr, true, NULL);
+  avl_init(&nhdp_interface_tree, avl_comp_strcasecmp, false);
+  avl_init(&nhdp_ifaddr_tree, avl_comp_ifaddr, true);
   olsr_class_add(&_interface_info);
   olsr_class_add(&_addr_info);
   olsr_timer_add(&_interface_hello_timer);
@@ -241,13 +241,13 @@ _interface_add(const char *name) {
     avl_insert(&nhdp_interface_tree, &interf->_node);
 
     /* init address tree */
-    avl_init(&interf->_if_addresses, avl_comp_netaddr, false, NULL);
+    avl_init(&interf->_if_addresses, avl_comp_netaddr, false);
 
     /* init link list */
     list_init_head(&interf->_links);
 
     /* init link address tree */
-    avl_init(&interf->_link_addresses, avl_comp_netaddr, false, NULL);
+    avl_init(&interf->_link_addresses, avl_comp_netaddr, false);
 
     /* trigger event */
     olsr_class_event(&_interface_info, interf, OLSR_OBJECT_ADDED);
@@ -375,8 +375,7 @@ _cb_remove_addr(void *ptr) {
  * @return +1 if k1>k2, -1 if k1<k2, 0 if k1==k2
  */
 static int
-avl_comp_ifaddr(const void *k1, const void *k2,
-    void *ptr __attribute__ ((unused))) {
+avl_comp_ifaddr(const void *k1, const void *k2) {
   const struct netaddr *n1 = k1;
   const struct netaddr *n2 = k2;
 

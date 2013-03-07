@@ -147,7 +147,7 @@ bool _metric_initialized = false;
  */
 void
 nhdp_db_init(void) {
-  avl_init(&nhdp_naddr_tree, avl_comp_netaddr, false, NULL);
+  avl_init(&nhdp_naddr_tree, avl_comp_netaddr, false);
   list_init_head(&nhdp_neigh_list);
   list_init_head(&nhdp_link_list);
 
@@ -261,8 +261,8 @@ nhdp_db_neighbor_add(void) {
   neigh->vtime_v6.info = &_neigh_vtimev6_info;
 
   /* initialize trees and lists */
-  avl_init(&neigh->_neigh_addresses, avl_comp_netaddr, false, NULL);
-  avl_init(&neigh->_link_addresses, avl_comp_netaddr, true, NULL);
+  avl_init(&neigh->_neigh_addresses, avl_comp_netaddr, false);
+  avl_init(&neigh->_link_addresses, avl_comp_netaddr, true);
   list_init_head(&neigh->_links);
 
   /* hook into global neighbor list */
@@ -441,8 +441,8 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   list_add_tail(&nhdp_link_list, &lnk->_global_node);
 
   /* init local trees */
-  avl_init(&lnk->_addresses, avl_comp_netaddr, false, NULL);
-  avl_init(&lnk->_2hop, avl_comp_netaddr, false, NULL);
+  avl_init(&lnk->_addresses, avl_comp_netaddr, false);
+  avl_init(&lnk->_2hop, avl_comp_netaddr, false);
 
   /* init timers */
   lnk->sym_time.info = &_link_symtime_info;
