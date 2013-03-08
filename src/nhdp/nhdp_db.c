@@ -45,6 +45,8 @@
 #include "common/list.h"
 #include "common/netaddr.h"
 
+#include "rfc5444/rfc5444_conversion.h"
+
 #include "core/olsr_logging.h"
 #include "core/olsr_class.h"
 #include "core/olsr_timer.h"
@@ -270,8 +272,8 @@ nhdp_db_neighbor_add(void) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    memcpy(&neigh->_metric[h->_index], &h->metric_default,
-        sizeof(struct nhdp_metric));
+    neigh->_metric[h->_index].incoming = h->metric_start;
+    neigh->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
   }
 
   /* trigger event */
@@ -454,8 +456,8 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    memcpy(&lnk->_metric[h->_index], &h->metric_default,
-        sizeof(struct nhdp_metric));
+    lnk->_metric[h->_index].incoming = h->metric_start;
+    lnk->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
   }
 
   /* trigger event */
@@ -595,8 +597,8 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    memcpy(&l2hop->_metric[h->_index], &h->metric_default,
-        sizeof(struct nhdp_metric));
+    l2hop->_metric[h->_index].incoming = RFC5444_METRIC_DEFAULT;
+    l2hop->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
   }
 
   /* trigger event */

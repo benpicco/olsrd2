@@ -712,8 +712,8 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
       /* clear metric values that should be present in HELLO */
       list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-        _current.link->_metric[h->_index].outgoing = h->metric_default.outgoing;
-        _current.neighbor->_metric[h->_index].outgoing = h->metric_default.outgoing;
+        _current.link->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
+        _current.neighbor->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
       }
 
       /* update outgoing metric with other sides incoming metric */
@@ -758,8 +758,8 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
       /* clear metric values that should be present in HELLO */
       list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-        l2hop->_metric[h->_index].incoming = h->metric_default.incoming;
-        l2hop->_metric[h->_index].outgoing = h->metric_default.outgoing;
+        l2hop->_metric[h->_index].incoming = RFC5444_METRIC_DEFAULT;
+        l2hop->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
       }
 
       /* update 2-hop metric (no direction reversal!) */

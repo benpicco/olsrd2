@@ -60,6 +60,10 @@
 /* definitions and constants */
 #define CFG_HYSTERESIS_OLSRV1_SECTION "ff_etx"
 
+#define ETXFF_LINKCOST_MINIMUM 0x1000
+#define ETXFF_LINKCOST_START   0x10000
+#define ETXFF_LINKCOST_MAXIMUM 0x10000
+
 struct _config {
   uint64_t interval;
   int window;
@@ -198,13 +202,9 @@ struct olsr_timer_info _hello_lost_info = {
 struct nhdp_linkmetric_handler _etxff_handler = {
   .name = "ETXFF metric handler",
 
-  .create_tlvs = true,
-  .metric_default = {
-      .incoming = 0x100000,
-      .outgoing = 0x100000,
-  },
-  .metric_minimum = 0x1000,
-  .metric_maximum = 0x100000,
+  .metric_minimum = ETXFF_LINKCOST_MINIMUM,
+  .metric_start = ETXFF_LINKCOST_START,
+  .metric_maximum = ETXFF_LINKCOST_MAXIMUM,
 
   .to_string = _to_string,
 };
@@ -377,15 +377,16 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     }
 
     if (ldata->missed_hellos > 0) {
-      total += ldata->missed_hellos * ldata->missed_hellos;
+      total += (total * ldata->missed_hellos * ldata->hello_interval) /
+          (_etxff_config.interval * _etxff_config.window);
     }
 
-    /* calculate MAX(0x1000 * total / received, 0x100000) */
-    if ((received << 8) < total) {
-      metric = 0x100000;
+    /* calculate MIN(MIN * total / received, MAX) */
+    if (received * (ETXFF_LINKCOST_MAXIMUM/ETXFF_LINKCOST_MINIMUM) < total) {
+      metric = ETXFF_LINKCOST_MAXIMUM;
     }
     else {
-      metric = (0x1000 * total) / received;
+      metric = (ETXFF_LINKCOST_MINIMUM * total) / received;
     }
 
     /* convert into incoming metric value */
@@ -393,6 +394,11 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
       /* metric overflow */
       metric = RFC5444_METRIC_MAX;
     }
+
+    /* convert into something that can be transmitted over the network */
+    metric = rfc5444_metric_encode(metric);
+    metric = rfc5444_metric_decode(metric);
+
     lnk->_metric[_etxff_handler._index].incoming = (uint32_t)metric;
 
     OLSR_DEBUG(LOG_PLUGINS, "New sampling rate: %d/%d = %" PRIu64 " (w=%d)\n",
@@ -506,10 +512,11 @@ static const char *
 _to_string(struct nhdp_linkmetric_str *buf, uint32_t metric) {
   uint32_t frac;
 
-  frac = metric % 0x1000;
+  frac = metric % ETXFF_LINKCOST_MINIMUM;
   frac *= 1000;
-  frac /= 0x1000;
-  snprintf(buf->buf, sizeof(*buf), "%u.%03u", metric / 0x1000, frac);
+  frac /= ETXFF_LINKCOST_MINIMUM;
+  snprintf(buf->buf, sizeof(*buf), "%u.%03u",
+      metric / ETXFF_LINKCOST_MINIMUM, frac);
 
   return buf->buf;
 }

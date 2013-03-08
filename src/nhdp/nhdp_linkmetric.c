@@ -20,13 +20,10 @@ static const char *_to_string(struct nhdp_linkmetric_str *, uint32_t);
 
 static struct nhdp_linkmetric_handler _no_linkcost = {
   .name = "No link metric",
-  .create_tlvs = false,
+  .no_tlvs = true,
 
-  .metric_default = {
-      .incoming = RFC5444_METRIC_DEFAULT,
-      .outgoing = RFC5444_METRIC_DEFAULT,
-  },
   .metric_minimum = RFC5444_METRIC_DEFAULT,
+  .metric_start = RFC5444_METRIC_DEFAULT,
   .metric_maximum = RFC5444_METRIC_DEFAULT,
 
   .to_string = _to_string,

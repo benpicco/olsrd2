@@ -61,14 +61,11 @@ struct nhdp_linkmetric_handler {
   /* TLV extension value */
   int ext;
 
-  /* true if NHDP writer should create metric TLVs */
-  bool create_tlvs;
-
-  /* default values for metric */
-  struct nhdp_metric metric_default;
+  /* true if NHDP writer should NOT create metric TLVs */
+  bool no_tlvs;
 
   /* range of metric */
-  uint32_t metric_minimum, metric_maximum;
+  uint32_t metric_minimum, metric_start, metric_maximum;
 
   const char *(*to_string)(struct nhdp_linkmetric_str *, uint32_t);
 

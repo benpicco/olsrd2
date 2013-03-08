@@ -406,7 +406,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   }
 
   list_for_each_element(&nhdp_metric_handler_list, metric_handler, _node) {
-    if (metric_handler->create_tlvs) {
+    if (!metric_handler->no_tlvs) {
       struct nhdp_link *lnk = NULL;
       struct nhdp_neighbor *neigh = NULL;
 
