@@ -252,7 +252,7 @@ _cb_plugin_enable(void) {
 
   _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
 
-  olsr_rfc5444_add_protocol_seqno(_protocol);
+  olsr_rfc5444_add_protocol_pktseqno(_protocol);
   rfc5444_reader_add_packet_consumer(&_protocol->reader, &_packet_consumer, NULL, 0);
   return 0;
 }
@@ -269,7 +269,7 @@ _cb_plugin_disable(void) {
   }
 
   rfc5444_reader_remove_packet_consumer(&_protocol->reader, &_packet_consumer);
-  olsr_rfc5444_remove_protocol_seqno(_protocol);
+  olsr_rfc5444_remove_protocol_pktseqno(_protocol);
   olsr_rfc5444_remove_protocol(_protocol);
 
   nhdp_linkmetric_handler_remove(&_etxff_handler);

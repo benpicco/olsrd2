@@ -157,7 +157,7 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
   struct olsr_rfc5444_target *target;
   struct netaddr_str buf;
 
-  if (!message->if_specific) {
+  if (!message->target_specific) {
     OLSR_WARN(LOG_NHDP_W, "non interface-specific NHDP message!");
     assert (0);
   }
@@ -179,7 +179,7 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
 
   rfc5444_writer_set_msg_header(writer, message, false, false, true, true);
   rfc5444_writer_set_msg_hoplimit(writer, message, 1);
-  rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_next_target_seqno(target));
+  rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_get_next_message_seqno(_protocol));
 
   OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s (%s)",
       target->interface->name, message->addr_len == 16 ? "ipv6" : "ipv4");
@@ -197,7 +197,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
 
-  target = olsr_rfc5444_get_target_from_provider(prv);
+  target = olsr_rfc5444_get_target_from_message(prv->creator);
 
   if (target != target->interface->multicast4
       && target != target->interface->multicast6) {
@@ -519,7 +519,7 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   struct nhdp_naddr *naddr;
 
   /* have already be checked for message TLVs, so they cannot be NULL */
-  target = olsr_rfc5444_get_target_from_provider(prv);
+  target = olsr_rfc5444_get_target_from_message(prv->creator);
   interf = nhdp_interface_get(target->interface->name);
 
   addr = avl_first_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
