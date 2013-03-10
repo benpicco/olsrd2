@@ -56,6 +56,10 @@
 #include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_reader.h"
 
+#ifdef RIOT
+#include "sys/net/net_help/net_help.h"
+#endif
+
 /* NHDP message TLV array index */
 enum {
   IDX_TLV_ITIME,

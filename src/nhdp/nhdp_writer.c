@@ -54,6 +54,10 @@
 #include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_writer.h"
 
+#ifdef RIOT
+#include "sys/net/net_help/net_help.h"
+#endif
+
 /* constants */
 enum {
   IDX_ADDRTLV_LOCAL_IF,
