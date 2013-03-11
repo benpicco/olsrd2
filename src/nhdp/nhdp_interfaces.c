@@ -197,15 +197,6 @@ nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf) {
   }
 }
 
-void
-nhdp_interface_update_addresses(void) {
-  struct nhdp_interface *interf;
-
-  avl_for_each_element(&nhdp_interface_tree, interf, _node) {
-    _cb_interface_event(&interf->rfc5444_if, true);
-  }
-}
-
 /**
  * Add a nhdp interface
  * @param name name of interface

@@ -268,19 +268,32 @@ EXPORT void nhdp_db_link_2hop_remove(struct nhdp_l2hop *);
 EXPORT int _nhdp_db_link_calculate_status(struct nhdp_link *lnk);
 EXPORT void nhdp_db_link_update_status(struct nhdp_link *);
 
+/**
+ * @param addr network address
+ * @return corresponding neighbor address object, NULL if not found
+ */
 static INLINE struct nhdp_naddr *
 nhdp_db_neighbor_addr_get(struct netaddr *addr) {
   struct nhdp_naddr *naddr;
-
   return avl_find_element(&nhdp_naddr_tree, addr, naddr, _global_node);
 }
 
+/**
+ * @param lnk nhdp link
+ * @param addr network address
+ * @return corresponding link address object, NULL if not found
+ */
 static INLINE struct nhdp_laddr *
 nhdp_db_link_addr_get(struct nhdp_link *lnk, struct netaddr *addr) {
   struct nhdp_laddr *laddr;
   return avl_find_element(&lnk->_addresses, addr, laddr, _link_node);
 }
 
+/**
+ * @param lnk nhdp link
+ * @param addr network address
+ * @return corresponding link two-hop neighbor address, NULL If not found
+ */
 static INLINE struct nhdp_l2hop *
 ndhp_db_link_2hop_get(struct nhdp_link *lnk, struct netaddr *addr) {
   struct nhdp_l2hop *l2hop;
@@ -321,22 +334,40 @@ nhdp_db_link_set_symtime(
   nhdp_db_link_update_status(lnk);
 }
 
+/**
+ * Set the validity time of a two-hop neighbor
+ * @param l2hop nhdp link two-hop neighbor
+ * @param vtime new validity time
+ */
 static INLINE void
 nhdp_db_link_2hop_set_vtime(
     struct nhdp_l2hop *l2hop, uint64_t vtime) {
   olsr_timer_set(&l2hop->_vtime, vtime);
 }
 
+/**
+ * Define a neighbor address as lost
+ * @param naddr nhdp neighbor address
+ * @param vtime time until lost address gets purged from the database
+ */
 static INLINE void
 nhdp_db_neighbor_addr_set_lost(struct nhdp_naddr *naddr, uint64_t vtime) {
   olsr_timer_set(&naddr->_lost_vtime, vtime);
 }
 
+/**
+ * Define a neighbor address as not lost anymore
+ * @param naddr nhdp neighbor address
+ */
 static INLINE void
 nhdp_db_neighbor_addr_not_lost(struct nhdp_naddr *naddr) {
   olsr_timer_stop(&naddr->_lost_vtime);
 }
 
+/**
+ * @param naddr nhdp neighbor address
+ * @return true if address is lost, false otherwise
+ */
 static INLINE bool
 nhdp_db_neighbor_addr_is_lost(struct nhdp_naddr *naddr) {
   return olsr_timer_is_active(&naddr->_lost_vtime);

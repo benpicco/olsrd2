@@ -1,8 +1,42 @@
+
 /*
- * nhdp_metric.c
+ * The olsr.org Optimized Link-State Routing daemon(olsrd)
+ * Copyright (c) 2004-2013, the olsr.org team - see HISTORY file
+ * All rights reserved.
  *
- *  Created on: Feb 21, 2013
- *      Author: rogge
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * * Redistributions of source code must retain the above copyright
+ *   notice, this list of conditions and the following disclaimer.
+ * * Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in
+ *   the documentation and/or other materials provided with the
+ *   distribution.
+ * * Neither the name of olsr.org, olsrd nor the names of its
+ *   contributors may be used to endorse or promote products derived
+ *   from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Visit http://www.olsr.org for more information.
+ *
+ * If you find this software useful feel free to make a donation
+ * to the project. For more information see the website or contact
+ * the copyright holders.
+ *
  */
 
 #include <stdio.h>
@@ -13,7 +47,7 @@
 #include "core/olsr_logging.h"
 
 #include "nhdp/nhdp_db.h"
-#include "nhdp/nhdp_linkmetric.h"
+#include "nhdp/nhdp_metric.h"
 #include "nhdp/nhdp.h"
 
 static const char *_to_string(struct nhdp_linkmetric_str *, uint32_t);
@@ -34,6 +68,10 @@ struct list_entity nhdp_metric_handler_list;
 
 static struct olsr_rfc5444_protocol *_protocol;
 
+/**
+ * Initialize nhdp metric core
+ * @param p pointer to rfc5444 protocol
+ */
 void
 nhdp_linkmetric_init(struct olsr_rfc5444_protocol *p) {
   size_t i;
@@ -47,6 +85,9 @@ nhdp_linkmetric_init(struct olsr_rfc5444_protocol *p) {
   }
 }
 
+/**
+ * cleanup allocated resources for nhdp metric core
+ */
 void
 nhdp_linkmetric_cleanup(void) {
   size_t i,j;
@@ -63,6 +104,11 @@ nhdp_linkmetric_cleanup(void) {
   }
 }
 
+/**
+ * Add a new metric handler to nhdp
+ * @param h pointer to handler
+ * @return 0 if successful, -1 if metric extension is already blocked
+ */
 int
 nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h) {
   int i;
@@ -99,6 +145,10 @@ nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h) {
   return 0;
 }
 
+/**
+ * Remove a metric handler from the nhdp metric core
+ * @param h pointer to handler
+ */
 void
 nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h) {
   int i;
@@ -116,25 +166,45 @@ nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h) {
   nhdp_metric_handler[h->ext] = &_no_linkcost;
 }
 
+/**
+ * Process an incoming linkmetric tlv for a nhdp link
+ * @param h pointer to metric handler
+ * @param lnk pointer to nhdp link
+ * @param tlvvalue value of metric tlv
+ */
 void
 nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
     struct nhdp_link *lnk, uint16_t tlvvalue) {
   uint32_t metric;
 
+  if (h == &_no_linkcost) {
+    return;
+  }
+
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_FLAGS_MASK);
 
-  if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_LINK) {
+  if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
     lnk->_metric[h->_index].outgoing = metric;
   }
-  if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
-    lnk->neigh->_metric[h->_index].incoming = metric;
+  if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
+    lnk->neigh->_metric[h->_index].outgoing = metric;
   }
 }
 
+/**
+ * Process an incoming linkmetric tlv for a nhdp twohop neighbor
+ * @param h pointer to metric handler
+ * @param l2hop pointer to nhdp twohop neighbor
+ * @param tlvvalue value of metric tlv
+ */
 void
 nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue) {
   uint32_t metric;
+
+  if (h == &_no_linkcost) {
+    return;
+  }
 
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_FLAGS_MASK);
 
@@ -146,26 +216,43 @@ nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
   }
 }
 
+/**
+ * Calculate the minimal metric cost for a neighbor
+ * @param h pointer to metric handler
+ * @param neigh nhdp neighbor
+ */
 void
 nhdp_linkmetric_calculate_neighbor_metric(
     struct nhdp_linkmetric_handler *h,
     struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk;
 
+  if (h == &_no_linkcost) {
+    return;
+  }
+
   neigh->_metric[h->ext].incoming = RFC5444_METRIC_INFINITE;
   neigh->_metric[h->ext].outgoing = RFC5444_METRIC_INFINITE;
 
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
     if (lnk->_metric[h->ext].outgoing < neigh->_metric[h->ext].outgoing) {
-      memcpy(&neigh->_metric[h->ext], &lnk->_metric[h->ext],
-          sizeof(struct nhdp_metric));
+      neigh->_metric[h->ext].outgoing = lnk->_metric[h->ext].outgoing;
+    }
+    if (lnk->_metric[h->ext].incoming < neigh->_metric[h->ext].incoming) {
+      neigh->_metric[h->ext].incoming = lnk->_metric[h->ext].incoming;
     }
   }
 }
 
+/**
+ * Default implementation to convert a metric value into text
+ * @param buf pointer to metric output buffer
+ * @param metric metric value
+ * @return pointer to string representation of metric value
+ */
 static const char *
 _to_string(struct nhdp_linkmetric_str *buf, uint32_t metric) {
-    snprintf(buf->buf, sizeof(*buf), "0x%x", metric);
+  snprintf(buf->buf, sizeof(*buf), "0x%x", metric);
 
   return buf->buf;
 }

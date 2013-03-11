@@ -54,7 +54,7 @@
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_cfg.h"
 
-#include "nhdp/nhdp_linkmetric.h"
+#include "nhdp/nhdp_metric.h"
 #include "nhdp/nhdp_interfaces.h"
 
 /* definitions and constants */
@@ -64,37 +64,49 @@
 #define ETXFF_LINKCOST_START   0x10000
 #define ETXFF_LINKCOST_MAXIMUM 0x10000
 
+/* Configuration settings of ETXFF Metric */
 struct _config {
+  /* Interval between two updates of the metric */
   uint64_t interval;
+
+  /* length of history in 'interval sized' memory cells */
   int window;
+
+  /* length of history window when a new link starts */
   int start_window;
 };
 
+/* a single history memory cell */
 struct link_etxff_bucket {
+  /* number of RFC5444 packets received in time interval */
   int received;
+
+  /* sum of received and lost RFC5444 packets in time interval */
   int total;
 };
 
+/* Additional data for a nhdp_link for metric calculation */
 struct link_etxff_data {
+  /* current position in history ringbuffer */
   int activePtr;
+
+  /* number of missed hellos based on timeouts since last received packet */
   int missed_hellos;
 
+  /* current window size for this link */
   uint16_t window_size;
+
+  /* last received packet sequence number */
   uint16_t last_seq_nr;
 
+  /* timer for measuring lost hellos when no further packets are received */
   struct olsr_timer_entry hello_lost_timer;
 
+  /* last known hello interval */
   uint64_t hello_interval;
 
+  /* history ringbuffer */
   struct link_etxff_bucket buckets[0];
-};
-
-struct neighbor_etxff_data {
-  struct nhdp_metric metric;
-};
-
-struct l2hop_etxff_data {
-  struct nhdp_metric metric;
 };
 
 /* prototypes */
@@ -331,6 +343,10 @@ _cb_link_changed(void *ptr) {
   data->missed_hellos = 0;
 }
 
+/**
+ * Callback triggered when a nhdp link is removed from the database
+ * @param ptr nhdp link
+ */
 static void
 _cb_link_removed(void *ptr) {
   struct link_etxff_data *data;
@@ -420,6 +436,10 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   }
 }
 
+/**
+ * Callback triggered when the next hellos should have been received
+ * @param ptr nhdp link
+ */
 static void
 _cb_hello_lost(void *ptr) {
   struct link_etxff_data *ldata;
@@ -437,6 +457,13 @@ _cb_hello_lost(void *ptr) {
   }
 }
 
+/**
+ * Callback to process all incoming RFC5444 packets for metric calculation. The
+ * Callback ignores all unicast packets.
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context) {

@@ -47,10 +47,14 @@
 
 #include "nhdp/nhdp_db.h"
 
+/*
+ * Output buffer for hysteresis data string representation
+ */
 struct nhdp_hysteresis_str {
   char buf[128];
 };
 
+/* hysteresis handler */
 struct nhdp_hysteresis_handler {
   /* name of the handler */
   const char *name;
@@ -68,8 +72,6 @@ struct nhdp_hysteresis_handler {
   /* returns text representation of hysteresis data */
   const char *(*to_string)(struct nhdp_hysteresis_str *, struct nhdp_link *);
 };
-
-// EXPORT extern struct nhdp_hysteresis_handler *nhdp_hysteresis;
 
 EXPORT void nhdp_hysteresis_set_handler(struct nhdp_hysteresis_handler *);
 EXPORT struct nhdp_hysteresis_handler *nhdp_hysteresis_get_handler(void);

@@ -50,7 +50,7 @@
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_interfaces.h"
-#include "nhdp/nhdp_linkmetric.h"
+#include "nhdp/nhdp_metric.h"
 #include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_writer.h"
 
