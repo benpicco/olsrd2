@@ -47,8 +47,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
+#ifndef RIOT
 #include <sys/socket.h>
 #include <net/if.h>
+#else
+#include "sys/net/destiny/socket.h"
+#include <signal.h>
+int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact) {
+	return 0;
+}
+#endif
 
 #include "common/daemonize.h"
 #include "common/list.h"
