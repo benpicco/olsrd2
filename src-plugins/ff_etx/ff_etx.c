@@ -343,6 +343,10 @@ _cb_link_changed(void *ptr) {
   data->missed_hellos = 0;
 }
 
+/**
+ * Callback triggered when a nhdp link is removed from the database
+ * @param ptr nhdp link
+ */
 static void
 _cb_link_removed(void *ptr) {
   struct link_etxff_data *data;
@@ -432,6 +436,10 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   }
 }
 
+/**
+ * Callback triggered when the next hellos should have been received
+ * @param ptr nhdp link
+ */
 static void
 _cb_hello_lost(void *ptr) {
   struct link_etxff_data *ldata;
@@ -449,6 +457,13 @@ _cb_hello_lost(void *ptr) {
   }
 }
 
+/**
+ * Callback to process all incoming RFC5444 packets for metric calculation. The
+ * Callback ignores all unicast packets.
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context) {
