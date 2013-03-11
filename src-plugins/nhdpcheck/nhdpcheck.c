@@ -180,6 +180,12 @@ _cb_plugin_disable(void) {
   return 0;
 }
 
+/**
+ * Callback triggered when a NHDP hello message is received by the stack
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
     struct rfc5444_reader_tlvblock_context *context) {
@@ -216,6 +222,12 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __a
   return RFC5444_OKAY;
 }
 
+/**
+ * Callblack triggered to deliver the message TLVs received in a NHDP Hello
+ * @param consumer
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
@@ -230,8 +242,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
   /* check if VTIME TLV has length 1 */
   if (_nhdp_message_tlvs[IDX_TLV_VTIME].tlv->length != 1) {
     OLSR_INFO(LOG_NHDP_CHECK,
-            "Dropped NHDP message with VTIME TLV length %d",
-            _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->length);
+        "Dropped NHDP message with VTIME TLV length %d",
+        _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->length);
     return RFC5444_DROP_MESSAGE;
   }
 
@@ -239,18 +251,35 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
     /* check if message has multiple ITIME TLVs */
     if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv->next_entry != NULL) {
       OLSR_INFO(LOG_NHDP_CHECK,
-                  "Dropped NHDP message with multiple ITIME TLVs");
+          "Dropped NHDP message with multiple ITIME TLVs");
       return RFC5444_DROP_MESSAGE;
     }
     if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv->length != 1) {
       OLSR_INFO(LOG_NHDP_CHECK,
-                  "Dropped NHDP message with ITIME TLV length %d",
-                  _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->length);
+          "Dropped NHDP message with ITIME TLV length %d",
+          _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->length);
+      return RFC5444_DROP_MESSAGE;
+    }
+
+    if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0]
+        > _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0]) {
+      OLSR_INFO(LOG_NHDP_CHECK,
+          "Dropped NHDP message because ITIME 0x%02x is larger"
+          "than VTIME 0x%02x",
+          _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0],
+          _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0]);
       return RFC5444_DROP_MESSAGE;
     }
   }
   return RFC5444_OKAY;
 }
+
+/**
+ * Callblack triggered to deliver the address TLVs received in a NHDP Hello
+ * @param consumer
+ * @param context
+ * @return
+ */
 
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
