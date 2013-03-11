@@ -54,7 +54,7 @@
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_cfg.h"
 
-#include "nhdp/nhdp_linkmetric.h"
+#include "nhdp/nhdp_metric.h"
 #include "nhdp/nhdp_interfaces.h"
 
 /* definitions and constants */
