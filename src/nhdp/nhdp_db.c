@@ -231,18 +231,20 @@ nhdp_db_neighbor_add(void) {
 
   if (!_metric_initialized) {
     /* lazy memory size initialization */
-    _neigh_info.size += sizeof(struct nhdp_metric) * _metric_count;
-    _link_info.size += sizeof(struct nhdp_metric) * _metric_count;
-    _l2hop_info.size += sizeof(struct nhdp_metric) * _metric_count;
+    if (_metric_count > 0) {
+      _neigh_info.size += sizeof(struct nhdp_metric) * _metric_count;
+      _link_info.size += sizeof(struct nhdp_metric) * _metric_count;
+      _l2hop_info.size += sizeof(struct nhdp_metric) * _metric_count;
 
-    if (olsr_class_resize(&_neigh_info)) {
-      return NULL;
-    }
-    if (olsr_class_resize(&_link_info)) {
-      return NULL;
-    }
-    if (olsr_class_resize(&_l2hop_info)) {
-      return NULL;
+      if (olsr_class_resize(&_neigh_info)) {
+        return NULL;
+      }
+      if (olsr_class_resize(&_link_info)) {
+        return NULL;
+      }
+      if (olsr_class_resize(&_l2hop_info)) {
+        return NULL;
+      }
     }
 
     _metric_initialized = true;
@@ -357,6 +359,12 @@ nhdp_db_neighbor_join(struct nhdp_neighbor *dst, struct nhdp_neighbor *src) {
   nhdp_db_neighbor_remove(src);
 }
 
+/**
+ * Adds an address to a nhdp neighbor
+ * @param neigh nhdp neighbor
+ * @param addr network address
+ * @return pointer to neighbor address, NULL if out of memory
+ */
 struct nhdp_naddr *
 nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh, struct netaddr *addr) {
   struct nhdp_naddr *naddr;
@@ -388,6 +396,10 @@ nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh, struct netaddr *addr) {
   return naddr;
 }
 
+/**
+ * Removes a nhdp neighbor address from its neighbor
+ * @param naddr neighbor address
+ */
 void
 nhdp_db_neighbor_addr_remove(struct nhdp_naddr *naddr) {
   /* trigger event */
@@ -404,6 +416,11 @@ nhdp_db_neighbor_addr_remove(struct nhdp_naddr *naddr) {
   olsr_class_free(&_naddr_info, naddr);
 }
 
+/**
+ * Moves a nhdp neighbor address to a different neighbor
+ * @param neigh
+ * @param naddr
+ */
 void
 nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr) {
   /* remove from old neighbor */
@@ -508,6 +525,12 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   olsr_class_free(&_link_info, lnk);
 }
 
+/**
+ * Add a network address as a link address to a nhdp link
+ * @param lnk nhpd link
+ * @param addr network address
+ * @return nhdp link address, NULL if out of memory
+ */
 struct nhdp_laddr *
 nhdp_db_link_addr_add(struct nhdp_link *lnk, struct netaddr *addr) {
   struct nhdp_laddr *laddr;
@@ -537,6 +560,10 @@ nhdp_db_link_addr_add(struct nhdp_link *lnk, struct netaddr *addr) {
   return laddr;
 }
 
+/**
+ * Removes a nhdp link address from its link
+ * @param laddr nhdp link address
+ */
 void
 nhdp_db_link_addr_remove(struct nhdp_laddr *laddr) {
   /* trigger event */
@@ -551,6 +578,11 @@ nhdp_db_link_addr_remove(struct nhdp_laddr *laddr) {
   olsr_class_free(&_laddr_info, laddr);
 }
 
+/**
+ * Moves a nhdp link address to a different link
+ * @param lnk
+ * @param laddr
+ */
 void
 nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
   /* remove from old link */
@@ -570,7 +602,12 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
   laddr->link = lnk;
 }
 
-
+/**
+ * Adds a network address as a 2-hop neighbor to a nhdp link
+ * @param lnk nhdp link
+ * @param addr network address
+ * @return nhdp link two-hop neighbor
+ */
 struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
   struct nhdp_linkmetric_handler *h;
@@ -607,6 +644,10 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
   return l2hop;
 }
 
+/**
+ * Removes a two-hop address from a nhdp link
+ * @param l2hop nhdp two-hop link address
+ */
 void
 nhdp_db_link_2hop_remove(struct nhdp_l2hop *l2hop) {
   /* trigger event */
@@ -731,6 +772,11 @@ _cb_link_vtime(void *ptr) {
   }
 }
 
+/**
+ * Clean up a all elements of a neighbor that fit a certain address family
+ * @param neigh nhdp neighbor
+ * @param af_type address family
+ */
 static void
 _cleanup_neighbor(struct nhdp_neighbor *neigh, int af_type) {
   struct nhdp_naddr *naddr, *na_it;

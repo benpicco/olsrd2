@@ -148,7 +148,6 @@ void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
 
 void nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf);
-void nhdp_interface_update_addresses(void);
 
 /**
  * @param interface name
