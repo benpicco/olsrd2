@@ -64,37 +64,49 @@
 #define ETXFF_LINKCOST_START   0x10000
 #define ETXFF_LINKCOST_MAXIMUM 0x10000
 
+/* Configuration settings of ETXFF Metric */
 struct _config {
+  /* Interval between two updates of the metric */
   uint64_t interval;
+
+  /* length of history in 'interval sized' memory cells */
   int window;
+
+  /* length of history window when a new link starts */
   int start_window;
 };
 
+/* a single history memory cell */
 struct link_etxff_bucket {
+  /* number of RFC5444 packets received in time interval */
   int received;
+
+  /* sum of received and lost RFC5444 packets in time interval */
   int total;
 };
 
+/* Additional data for a nhdp_link for metric calculation */
 struct link_etxff_data {
+  /* current position in history ringbuffer */
   int activePtr;
+
+  /* number of missed hellos based on timeouts since last received packet */
   int missed_hellos;
 
+  /* current window size for this link */
   uint16_t window_size;
+
+  /* last received packet sequence number */
   uint16_t last_seq_nr;
 
+  /* timer for measuring lost hellos when no further packets are received */
   struct olsr_timer_entry hello_lost_timer;
 
+  /* last known hello interval */
   uint64_t hello_interval;
 
+  /* history ringbuffer */
   struct link_etxff_bucket buckets[0];
-};
-
-struct neighbor_etxff_data {
-  struct nhdp_metric metric;
-};
-
-struct l2hop_etxff_data {
-  struct nhdp_metric metric;
 };
 
 /* prototypes */
