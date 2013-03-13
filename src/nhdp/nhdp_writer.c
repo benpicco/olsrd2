@@ -43,7 +43,7 @@
 #include "common/avl.h"
 #include "common/avl_comp.h"
 #include "rfc5444/rfc5444_iana.h"
-#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "tools/olsr_rfc5444.h"

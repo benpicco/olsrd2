@@ -42,7 +42,7 @@
 #include <stdio.h>
 
 #include "common/common_types.h"
-#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
 #include "core/olsr_logging.h"
 

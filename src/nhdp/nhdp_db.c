@@ -45,7 +45,7 @@
 #include "common/list.h"
 #include "common/netaddr.h"
 
-#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444.h"
 
 #include "core/olsr_logging.h"
 #include "core/olsr_class.h"
