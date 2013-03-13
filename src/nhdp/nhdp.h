@@ -56,4 +56,7 @@ EXPORT extern enum log_source LOG_NHDP;
 int nhdp_init(void)  __attribute__((warn_unused_result));
 void nhdp_cleanup(void);
 
+EXPORT void nhdp_set_originator(const struct netaddr *);
+EXPORT const struct netaddr *nhdp_get_originator(void);
+
 #endif /* NHDP_H_ */

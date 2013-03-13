@@ -79,6 +79,9 @@ OLSR_SUBSYSTEM_STATE(_nhdp_state);
 enum log_source LOG_NHDP = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
 
+/* NHDP originator address, might be undefined */
+static struct netaddr _originator;
+
 /**
  * Initialize NHDP subsystem
  * @return 0 if initialized, -1 if an error happened
@@ -112,6 +115,8 @@ nhdp_init(void) {
     olsr_telnet_add(&_cmds[i]);
   }
 
+  netaddr_invalidate(&_originator);
+
   olsr_subsystem_init(&_nhdp_state);
   return 0;
 }
@@ -137,6 +142,24 @@ nhdp_cleanup(void) {
   nhdp_interfaces_cleanup();
 }
 
+/**
+ * Sets the originator address used by NHDP to a new value.
+ * Originator address must be IPv4 to be used in dualstack mode.
+ *
+ * @param NHDP originator, might be type AF_UNSPEC.
+ */
+void
+nhdp_set_originator(const struct netaddr *addr) {
+  memcpy(&_originator, addr, sizeof(_originator));
+}
+
+/**
+ * @return current NHDP originator
+ */
+const struct netaddr *
+nhdp_get_originator(void) {
+  return &_originator;
+}
 
 /**
  * Callback triggered when the nhdp telnet command is called
@@ -179,7 +202,7 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
   struct netaddr_str nbuf;
   struct fraction_str tbuf;
 
-  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
+  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
 
     avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
@@ -221,7 +244,7 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
   struct fraction_str tbuf1, tbuf2, tbuf3;
   struct nhdp_hysteresis_str hbuf;
 
-  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
+  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
 
     list_for_each_element(&neigh->_links, lnk, _neigh_node) {

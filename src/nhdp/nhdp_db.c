@@ -137,6 +137,9 @@ struct avl_tree nhdp_naddr_tree;
 /* list of neighbors */
 struct list_entity nhdp_neigh_list;
 
+/* tree of neighbors with originator addresses */
+struct avl_tree nhdp_neigh_originator_tree;
+
 /* list of links (to neighbors) */
 struct list_entity nhdp_link_list;
 
@@ -151,6 +154,7 @@ void
 nhdp_db_init(void) {
   avl_init(&nhdp_naddr_tree, avl_comp_netaddr, false);
   list_init_head(&nhdp_neigh_list);
+  avl_init(&nhdp_neigh_originator_tree, avl_comp_netaddr, false);
   list_init_head(&nhdp_link_list);
 
   olsr_class_add(&_neigh_info);
@@ -176,7 +180,7 @@ nhdp_db_cleanup(void) {
   struct nhdp_neighbor *neigh, *n_it;
 
   /* remove all neighbors */
-  list_for_each_element_safe(&nhdp_neigh_list, neigh, _node, n_it) {
+  list_for_each_element_safe(&nhdp_neigh_list, neigh, _global_node, n_it) {
     nhdp_db_neighbor_remove(neigh);
   }
 
@@ -270,7 +274,11 @@ nhdp_db_neighbor_add(void) {
   list_init_head(&neigh->_links);
 
   /* hook into global neighbor list */
-  list_add_tail(&nhdp_neigh_list, &neigh->_node);
+  list_add_tail(&nhdp_neigh_list, &neigh->_global_node);
+
+
+  /* initialize originator node */
+  neigh->_originator_node.key = &neigh->originator;
 
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
@@ -311,7 +319,13 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
     nhdp_db_neighbor_addr_remove(naddr);
   }
 
-  list_remove(&neigh->_node);
+  /* remove from originator tree if necessary */
+  if (netaddr_get_address_family(&neigh->originator) != AF_UNSPEC) {
+    avl_remove(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+  }
+
+  /* remove from global list and free memory */
+  list_remove(&neigh->_global_node);
   olsr_class_free(&_neigh_info, neigh);
 }
 
@@ -431,6 +445,41 @@ nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr
 
   /* set new backlink */
   naddr->neigh = neigh;
+}
+
+/**
+ * Sets a new originator address for an NHDP neighbor
+ * @param nhdp neighbor
+ * @param originator originator address, might be type AF_UNSPEC
+ */
+void
+nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *originator) {
+  struct nhdp_neighbor *neigh2;
+
+  if (memcmp(&neigh->originator, originator, sizeof(*originator)) == 0) {
+    /* same originator, nothing to do */
+    return;
+  }
+
+  if (netaddr_get_address_family(&neigh->originator) != AF_UNSPEC) {
+    /* different originator, remove from tree */
+    avl_remove(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+  }
+
+  neigh2 = nhdp_db_neighbor_get_by_originator(originator);
+  if (neigh2) {
+    /* different neighbor has this originator, invalidate it */
+    avl_remove(&nhdp_neigh_originator_tree, &neigh2->_originator_node);
+    netaddr_invalidate(&neigh2->originator);
+  }
+
+  /* copy originator address into neighbor */
+  memcpy(&neigh->originator, originator, sizeof(*originator));
+
+  if (netaddr_get_address_family(originator) != AF_UNSPEC) {
+    /* add to tree if new originator is valid */
+    avl_insert(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+  }
 }
 
 /**

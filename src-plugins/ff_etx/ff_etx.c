@@ -431,7 +431,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   }
 
   /* update neighbor metrics */
-  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
+  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
     nhdp_linkmetric_calculate_neighbor_metric(&_etxff_handler, neigh);
   }
 }

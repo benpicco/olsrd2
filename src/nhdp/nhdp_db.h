@@ -181,6 +181,9 @@ struct nhdp_neighbor {
   /* number of links to this neighbor which are symmetric */
   int symmetric;
 
+  /* originator address of this node, might by type AF_UNSPEC */
+  struct netaddr originator;
+
   /* internal field for NHDP processing */
   int _process_count;
 
@@ -206,7 +209,10 @@ struct nhdp_neighbor {
   struct avl_tree _link_addresses;
 
   /* member entry for global list of neighbors */
-  struct list_entity _node;
+  struct list_entity _global_node;
+
+  /* optional tree node if originator is set */
+  struct avl_node _originator_node;
 
   /* Array of link metrics */
   struct nhdp_metric _metric[0];
@@ -242,6 +248,7 @@ struct nhdp_naddr {
 EXPORT extern struct list_entity nhdp_neigh_list;
 EXPORT extern struct list_entity nhdp_link_list;
 EXPORT extern struct avl_tree nhdp_naddr_tree;
+EXPORT extern struct avl_tree nhdp_neigh_originator_tree;
 
 void nhdp_db_init(void);
 void nhdp_db_cleanup(void);
@@ -255,6 +262,7 @@ EXPORT void nhdp_db_neighbor_join(struct nhdp_neighbor *, struct nhdp_neighbor *
 EXPORT struct nhdp_naddr *nhdp_db_neighbor_addr_add(struct nhdp_neighbor *, struct netaddr *);
 EXPORT void nhdp_db_neighbor_addr_remove(struct nhdp_naddr *);
 EXPORT void nhdp_db_neighbor_addr_move(struct nhdp_neighbor *, struct nhdp_naddr *);
+EXPORT void nhdp_db_neighbor_set_originator(struct nhdp_neighbor *, struct netaddr *);
 
 EXPORT struct nhdp_link *nhdp_db_link_add(struct nhdp_neighbor *, struct nhdp_interface *);
 EXPORT void nhdp_db_link_remove(struct nhdp_link *);
@@ -276,6 +284,16 @@ static INLINE struct nhdp_naddr *
 nhdp_db_neighbor_addr_get(struct netaddr *addr) {
   struct nhdp_naddr *naddr;
   return avl_find_element(&nhdp_naddr_tree, addr, naddr, _global_node);
+}
+
+/**
+ * @param originator originator address
+ * @return corresponding nhdp neighbor, NULL if not found
+ */
+static INLINE struct nhdp_neighbor *
+nhdp_db_neighbor_get_by_originator(struct netaddr *originator) {
+  struct nhdp_neighbor *neigh;
+  return avl_find_element(&nhdp_neigh_originator_tree, originator, neigh, _originator_node);
 }
 
 /**
