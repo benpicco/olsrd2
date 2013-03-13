@@ -155,6 +155,8 @@ static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
   struct olsr_rfc5444_target *target;
+  const struct netaddr *orig_ptr;
+  struct netaddr tmp_originator;
   struct netaddr_str buf;
 
   if (!message->target_specific) {
@@ -170,16 +172,32 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     return;
   }
 
+  /* get orig_ptr */
+  orig_ptr = nhdp_get_originator();
   if (netaddr_get_address_family(&target->dst) == AF_INET) {
     rfc5444_writer_set_msg_addrlen(writer, message, 4);
+
+    if (netaddr_get_address_family(orig_ptr) != AF_INET) {
+      netaddr_invalidate(&tmp_originator);
+      orig_ptr = &tmp_originator;
+    }
   }
   else {
     rfc5444_writer_set_msg_addrlen(writer, message, 16);
+
+    if (netaddr_get_address_family(orig_ptr) == AF_INET) {
+      netaddr_embed_ipv4_compatible(&tmp_originator, orig_ptr);
+      orig_ptr = &tmp_originator;
+    }
   }
 
-  rfc5444_writer_set_msg_header(writer, message, false, false, true, true);
-  rfc5444_writer_set_msg_hoplimit(writer, message, 1);
-  rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_get_next_message_seqno(_protocol));
+  rfc5444_writer_set_msg_header(writer, message,
+      netaddr_get_address_family(orig_ptr) != AF_UNSPEC, false, false, false);
+  /* rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_get_next_message_seqno(_protocol)); */
+
+  if (netaddr_get_address_family(orig_ptr) != AF_UNSPEC) {
+    rfc5444_writer_set_msg_originator(writer, message, netaddr_get_binptr(orig_ptr));
+  }
 
   OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s (%s)",
       target->interface->name, message->addr_len == 16 ? "ipv6" : "ipv4");
