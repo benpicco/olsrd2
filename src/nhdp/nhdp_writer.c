@@ -199,8 +199,8 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     rfc5444_writer_set_msg_originator(writer, message, netaddr_get_binptr(orig_ptr));
   }
 
-  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s (%s)",
-      target->interface->name, message->addr_len == 16 ? "ipv6" : "ipv4");
+  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s with destination %s",
+      target->interface->name, netaddr_to_string(&buf, &target->dst));
 }
 
 /**
