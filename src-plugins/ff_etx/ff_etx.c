@@ -487,9 +487,9 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
   if (!context->has_pktseqno) {
     struct netaddr_str buf;
 
-    OLSR_WARN(LOG_PLUGINS, "Error, neighbor %s does not send packet sequence numbers!",
+    OLSR_WARN(LOG_PLUGINS, "Neighbor %s does not send packet sequence numbers, cannot collect etxff data!",
         netaddr_socket_to_string(&buf, _protocol->input_socket));
-    return RFC5444_DROP_PACKET;
+    return RFC5444_OKAY;
   }
 
   /* get interface and link */
