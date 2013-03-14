@@ -210,10 +210,10 @@ nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
 
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
-  if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
+  if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
     l2hop->_metric[h->_index].incoming = metric;
   }
-  if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_LINK) {
+  if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
     l2hop->_metric[h->_index].outgoing = metric;
   }
 }
