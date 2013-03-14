@@ -536,40 +536,38 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   struct nhdp_interface_addr *addr;
   struct nhdp_naddr *naddr;
 
+  uint8_t block_af;
+
   /* have already be checked for message TLVs, so they cannot be NULL */
   target = olsr_rfc5444_get_target_from_message(prv->creator);
   interf = nhdp_interface_get(target->interface->name);
 
-  addr = avl_first_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
-  naddr = avl_first_element_safe(&nhdp_naddr_tree, naddr, _global_node);
+  /* select which address family we will NOT transmit */
+  if (interf->mode == NHDP_IPV4
+      || netaddr_get_address_family(&target->dst) == AF_INET) {
+    /* do not transmit ipv6 on IPv4 message or in IPv4 only mode */
+    block_af = AF_INET6;
+  }
+  else if (interf->mode == NHDP_IPV6) {
+    /* do not transmit ipv4 in IPv6-only mode */
+    block_af = AF_INET;
+  }
+  else {
+    /* transmit everything otherwise */
+    block_af = AF_UNSPEC;
+  }
 
-  /* produce a sorted list of addr/naddr objects */
-  while (addr != NULL || naddr != NULL) {
-    /* if there is no naddr anymore or naddr>addr then... */
-    if (naddr == NULL || (addr != NULL &&
-        avl_comp_netaddr_socket(&naddr->neigh_addr, &addr->if_addr) > 0)) {
-      /* add another addr with TLV to the steam */
-      if (!addr->_global_node.follower && !addr->removed) {
-        /* each address only once and only active ones */
-        if (netaddr_get_address_family(&addr->if_addr) != AF_INET6
-          || netaddr_get_address_family(&target->dst) != AF_INET) {
-          /* do not send IPv6 addresses over IPv4 */
-          _add_localif_address(writer, prv, interf, addr);
-        }
-      }
-
-      /* move to next addr, NULL if end reached */
-      addr = avl_next_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
+  /* transmit interface addresses first */
+  avl_for_each_element(&nhdp_ifaddr_tree, addr, _global_node) {
+    if (!addr->removed && netaddr_get_address_family(&addr->if_addr) != block_af) {
+      _add_localif_address(writer, prv, interf, addr);
     }
-    else {
-      /* otherwise add another naddr with TLVs to the stream */
-      if (netaddr_get_address_family(&naddr->neigh_addr) != AF_INET6
-          || netaddr_get_address_family(&target->dst) != AF_INET) {
-        _add_link_address(writer, prv, interf, naddr);
-      }
+  }
 
-      /* move to next naddr, NULL if end reached */
-      naddr = avl_next_element_safe(&nhdp_naddr_tree, naddr, _global_node);
+  /* then transmit neighbor addresses */
+  avl_for_each_element(&nhdp_naddr_tree, naddr, _global_node) {
+    if (netaddr_get_address_family(&naddr->neigh_addr) != block_af) {
+      _add_link_address(writer, prv, interf, naddr);
     }
   }
 }

@@ -166,6 +166,8 @@ nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h) {
   nhdp_metric_handler[h->ext] = &_no_linkcost;
 }
 
+#include <stdio.h>
+
 /**
  * Process an incoming linkmetric tlv for a nhdp link
  * @param h pointer to metric handler
@@ -181,7 +183,7 @@ nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
     return;
   }
 
-  metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_FLAGS_MASK);
+  metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
     lnk->_metric[h->_index].outgoing = metric;
@@ -206,7 +208,7 @@ nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
     return;
   }
 
-  metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_FLAGS_MASK);
+  metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
     l2hop->_metric[h->_index].incoming = metric;

@@ -368,6 +368,11 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   uint32_t total, received;
   uint64_t metric;
   int i;
+  struct nhdp_laddr *laddr;
+
+  struct netaddr_str buf;
+
+  OLSR_DEBUG(LOG_PLUGINS, "Calculate ETX from sampled data");
 
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     ldata = olsr_class_get_extension(&_link_extenstion, lnk);
@@ -417,9 +422,10 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
 
     lnk->_metric[_etxff_handler._index].incoming = (uint32_t)metric;
 
-    OLSR_DEBUG(LOG_PLUGINS, "New sampling rate: %d/%d = %" PRIu64 " (w=%d)\n",
+    OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
+        netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
+        nhdp_interface_get_name(lnk->local_if),
         received, total, metric, ldata->window_size);
-
 
     /* update rolling buffer */
     ldata->activePtr++;

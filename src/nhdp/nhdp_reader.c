@@ -732,6 +732,9 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
         memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
         tlvvalue = ntohs(tlvvalue);
 
+        OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, LQ (ext %u): %04x",
+            netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
+
         /* get metric handler */
         h = nhdp_linkmetric_handler_get_by_ext(tlv->type_ext);
         nhdp_linkmetric_process_linktlv(h, _current.link, tlvvalue);
@@ -769,6 +772,9 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
         /* extract tlv value */
         memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
         tlvvalue = ntohs(tlvvalue);
+
+        OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, LQ (ext %u): %04x",
+            netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
 
         /* get metric handler */
         h = nhdp_linkmetric_handler_get_by_ext(tlv->type_ext);
