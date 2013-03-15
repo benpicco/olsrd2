@@ -45,6 +45,10 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
+#define CFG_OLSRV2_SECTION "olsrv2"
+
+EXPORT extern enum log_source LOG_OLSRV2;
+
 void olsrv2_init(void);
 void olsrv2_cleanup(void);
 

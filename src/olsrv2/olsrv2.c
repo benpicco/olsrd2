@@ -41,13 +41,44 @@
 
 #include "common/common_types.h"
 #include "common/netaddr.h"
+#include "config/cfg_schema.h"
+#include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
+#include "tools/olsr_cfg.h"
 
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_lan.h"
 #include "olsrv2/olsrv2_originator_set.h"
 
-static struct netaddr _originator, _configured_originator;
+/* definitions */
+#define _LOG_OLSRV2_NAME "olsrv2"
+
+struct _config {
+  struct netaddr originator;
+  uint64_t o_hold_time;
+};
+
+/* prototypes */
+static void _cb_cfg_changed(void);
+
+/* olsrv2 configuration */
+static struct cfg_schema_section _olsrv2_section = {
+  .type = CFG_OLSRV2_SECTION,
+  .mode = CFG_SSMODE_NAMED,
+  .cb_delta_handler = _cb_cfg_changed,
+};
+
+static struct cfg_schema_entry _olsrv2_entries[] = {
+  CFG_MAP_NETADDR(_config, originator, "originator", "-",
+      "Originator address for Routing", false, true),
+  CFG_MAP_CLOCK_MIN(_config, o_hold_time, "originator_hold_time", "30.0",
+    "Validity time for former Originator addresses", 100),
+};
+
+static struct _config _olsrv2_config;
+static struct netaddr *_originator, _dynamic_originator;
+
+enum log_source LOG_OLSRV2 = LOG_MAIN;
 
 OLSR_SUBSYSTEM_STATE(_olsrv2_state);
 
@@ -60,10 +91,19 @@ olsrv2_init(void) {
     return;
   }
 
+  LOG_OLSRV2 = olsr_log_register_source(_LOG_OLSRV2_NAME);
+
+  /* add configuration for olsrv2 section */
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
+      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries));
+
   olsrv2_originatorset_init();
   olsrv2_lan_init();
 
-  memset(&_originator, 0, sizeof(_originator));
+  memset(&_olsrv2_config, 0, sizeof(_olsrv2_config));
+  memset(&_dynamic_originator, 0, sizeof(_dynamic_originator));
+
+  _originator = &_olsrv2_config.originator;
 }
 
 /**
@@ -77,6 +117,8 @@ olsrv2_cleanup(void) {
 
   olsrv2_originatorset_cleanup();
   olsrv2_lan_cleanup();
+
+  cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
 }
 
 /**
@@ -84,7 +126,7 @@ olsrv2_cleanup(void) {
  */
 const struct netaddr *
 olsrv2_get_originator(void) {
-  return &_originator;
+  return _originator;
 }
 
 /**
@@ -93,10 +135,35 @@ olsrv2_get_originator(void) {
  */
 void
 olsrv2_set_originator(const struct netaddr *originator) {
+  if (netaddr_get_address_family(_originator) != AF_UNSPEC) {
+    /* add old originator to originator set */
+    olsrv2_originatorset_add(_originator, _olsrv2_config.o_hold_time);
+  }
+
   if (originator == NULL) {
-    memcpy(&_originator, &_configured_originator, sizeof(_originator));
+    _originator = &_olsrv2_config.originator;
   }
   else {
-    memcpy(&_originator, originator, sizeof(_originator));
+    memcpy(&_dynamic_originator, originator, sizeof(_originator));
+    _originator = &_dynamic_originator;
+  }
+
+  /* remove new originator from set */
+  olsrv2_originatorset_remove(_originator);
+}
+
+/**
+ * Callback fired when configuration changed
+ */
+static void
+_cb_cfg_changed(void) {
+  if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
+      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
+    OLSR_WARN(LOG_OLSRV2, "Cannot convert OLSRv2 configuration.");
+    return;
+  }
+
+  if (_originator == &_olsrv2_config.originator) {
+    olsrv2_set_originator(NULL);
   }
 }
