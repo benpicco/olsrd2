@@ -40,70 +40,58 @@
  */
 
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
+#include "common/netaddr.h"
 #include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
 
-#include "nhdp/nhdp.h"
 #include "olsrv2/olsrv2.h"
+#include "olsrv2/olsrv2_originator_set.h"
 
-#include "olsr_setup.h"
+static struct netaddr _originator, _configured_originator;
 
-
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
-};
-
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
+OLSR_SUBSYSTEM_STATE(_olsrv2_state);
 
 /**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
- */
-int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
-
-  /* add custom service setup here */
-  if (nhdp_init()) {
-    return -1;
-  }
-
-  olsrv2_init();
-
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
-  return 0;
-}
-
-/**
- * Cleanup all resources allocated by setup initialization
+ * Initialize OLSRv2 subsystem
  */
 void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
+olsrv2_init(void) {
+  if (olsr_subsystem_init(&_olsrv2_state)) {
     return;
+  }
 
-  /* add cleanup for custom services here */
-  olsrv2_cleanup();
-  nhdp_cleanup();
+  memset(&_originator, 0, sizeof(_originator));
 }
 
 /**
- * @return number of logging sources for debug level 1
+ * Cleanup OLSRv2 subsystem
  */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
+void
+olsrv2_cleanup(void) {
+  if (olsr_subsystem_cleanup(&_olsrv2_state)) {
+    return;
+  }
+
+  olsrv2_originatorset_cleanup();
 }
 
 /**
- * @return array of logging sources for debug level 1
+ * @return current originator address
  */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
+const struct netaddr *
+olsrv2_get_originator(void) {
+  return &_originator;
+}
+
+/**
+ * Sets a new originator address
+ * @param originator originator address, NULL to return to configured one
+ */
+void
+olsrv2_set_originator(const struct netaddr *originator) {
+  if (originator == NULL) {
+    memcpy(&_originator, &_configured_originator, sizeof(_originator));
+  }
+  else {
+    memcpy(&_originator, originator, sizeof(_originator));
+  }
 }

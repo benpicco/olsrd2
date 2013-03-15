@@ -39,71 +39,16 @@
  *
  */
 
+#ifndef OLSRV2_H_
+#define OLSRV2_H_
+
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
+#include "common/netaddr.h"
 
-#include "nhdp/nhdp.h"
-#include "olsrv2/olsrv2.h"
+void olsrv2_init(void);
+void olsrv2_cleanup(void);
 
-#include "olsr_setup.h"
+EXPORT const struct netaddr *olsrv2_get_originator(void);
+EXPORT void olsrv2_set_originator(const struct netaddr *);
 
-
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
-};
-
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
-
-/**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
- */
-int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
-
-  /* add custom service setup here */
-  if (nhdp_init()) {
-    return -1;
-  }
-
-  olsrv2_init();
-
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
-  return 0;
-}
-
-/**
- * Cleanup all resources allocated by setup initialization
- */
-void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
-    return;
-
-  /* add cleanup for custom services here */
-  olsrv2_cleanup();
-  nhdp_cleanup();
-}
-
-/**
- * @return number of logging sources for debug level 1
- */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
-}
-
-/**
- * @return array of logging sources for debug level 1
- */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
-}
+#endif /* OLSRV2_H_ */
