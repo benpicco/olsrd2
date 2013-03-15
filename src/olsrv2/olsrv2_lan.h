@@ -39,64 +39,38 @@
  *
  */
 
+#ifndef OLSRV2_LAN_H_
+#define OLSRV2_LAN_H_
+
+#include "common/avl.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "core/olsr_subsystem.h"
 
-#include "olsrv2/olsrv2.h"
-#include "olsrv2/olsrv2_lan.h"
-#include "olsrv2/olsrv2_originator_set.h"
+struct olsrv2_lan_entry {
+  struct netaddr prefix;
 
-static struct netaddr _originator, _configured_originator;
+  uint32_t outgoing_metric;
 
-OLSR_SUBSYSTEM_STATE(_olsrv2_state);
+  struct avl_node _node;
+};
 
-/**
- * Initialize OLSRv2 subsystem
- */
-void
-olsrv2_init(void) {
-  if (olsr_subsystem_init(&_olsrv2_state)) {
-    return;
-  }
+EXPORT extern struct avl_tree olsrv2_lan_tree;
 
-  olsrv2_originatorset_init();
-  olsrv2_lan_init();
+void olsrv2_lan_init(void);
+void olsrv2_lan_cleanup(void);
 
-  memset(&_originator, 0, sizeof(_originator));
-}
+EXPORT struct olsrv2_lan_entry *olsrv2_lan_add(struct netaddr *);
+EXPORT void olsrv2_lan_remove(struct netaddr *);
 
 /**
- * Cleanup OLSRv2 subsystem
+ * @param addr originator address
+ * @return pointer to originator set entry, NULL if not found
  */
-void
-olsrv2_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_olsrv2_state)) {
-    return;
-  }
-
-  olsrv2_originatorset_cleanup();
-  olsrv2_lan_cleanup();
+static INLINE struct olsrv2_lan_entry *
+olsrv2_lan_get(struct netaddr *addr) {
+  struct olsrv2_lan_entry *entry;
+  return avl_find_element(&olsrv2_lan_tree, addr, entry, _node);
 }
 
-/**
- * @return current originator address
- */
-const struct netaddr *
-olsrv2_get_originator(void) {
-  return &_originator;
-}
 
-/**
- * Sets a new originator address
- * @param originator originator address, NULL to return to configured one
- */
-void
-olsrv2_set_originator(const struct netaddr *originator) {
-  if (originator == NULL) {
-    memcpy(&_originator, &_configured_originator, sizeof(_originator));
-  }
-  else {
-    memcpy(&_originator, originator, sizeof(_originator));
-  }
-}
+#endif /* OLSRV2_LAN_H_ */
