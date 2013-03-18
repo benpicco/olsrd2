@@ -46,6 +46,8 @@
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_cfg.h"
 
+#include "nhdp/nhdp.h"
+
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_lan.h"
 #include "olsrv2/olsrv2_originator_set.h"
@@ -64,7 +66,6 @@ static void _cb_cfg_changed(void);
 /* olsrv2 configuration */
 static struct cfg_schema_section _olsrv2_section = {
   .type = CFG_OLSRV2_SECTION,
-  .mode = CFG_SSMODE_NAMED,
   .cb_delta_handler = _cb_cfg_changed,
 };
 
@@ -150,6 +151,9 @@ olsrv2_set_originator(const struct netaddr *originator) {
 
   /* remove new originator from set */
   olsrv2_originatorset_remove(_originator);
+
+  /* update NHDP originator */
+  nhdp_set_originator(_originator);
 }
 
 /**

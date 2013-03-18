@@ -46,12 +46,15 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
+#define CFG_VALIDATE_LAN(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsrv2_lan_validate, ##args )
+
 struct olsrv2_lan_entry {
   struct netaddr prefix;
 
   uint32_t outgoing_metric;
 
   struct avl_node _node;
+  bool _new;
 };
 
 EXPORT extern struct avl_tree olsrv2_lan_tree;
@@ -61,6 +64,9 @@ void olsrv2_lan_cleanup(void);
 
 EXPORT struct olsrv2_lan_entry *olsrv2_lan_add(struct netaddr *);
 EXPORT void olsrv2_lan_remove(struct netaddr *);
+
+EXPORT int olsrv2_lan_validate(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
 
 /**
  * @param addr originator address
