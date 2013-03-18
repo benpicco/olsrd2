@@ -166,13 +166,13 @@ olsrv2_lan_validate(const struct cfg_schema_entry *entry,
     }
 
     if (cost < RFC5444_METRIC_MIN) {
-      cfg_append_printable_line(out, "Linkcost for prefix %s must be smaller than %u",
-          buf.buf, RFC5444_METRIC_MIN);
+      cfg_append_printable_line(out, "Linkcost for prefix %s must not be smaller than %u/%x",
+          buf.buf, RFC5444_METRIC_MIN, RFC5444_METRIC_MIN);
       return -1;
     }
     if (cost > RFC5444_METRIC_MAX) {
-      cfg_append_printable_line(out, "Linkcost for prefix %s must be larger than %u",
-          buf.buf, RFC5444_METRIC_MAX);
+      cfg_append_printable_line(out, "Linkcost for prefix %s must not be larger than %u/%x",
+          buf.buf, RFC5444_METRIC_MAX, RFC5444_METRIC_MAX);
       return -1;
     }
   }
@@ -202,7 +202,7 @@ _cb_cfg_changed(void) {
   const char *cost_ptr;
   uint32_t cost;
 
-  /* mark existing entries */
+  /* mark existing entries as 'old' */
   avl_for_each_element(&olsrv2_lan_tree, lan, _node) {
     lan->_new = false;
   }
@@ -221,9 +221,11 @@ _cb_cfg_changed(void) {
       cost = strtol(cost_ptr, NULL, 0);
     }
     else {
+      /* default cost (similar to HNAs in OLSRv1) */
       cost = 0;
     }
 
+    /* add new entries if necessary */
     lan = olsrv2_lan_add(&prefix);
     if (!lan) {
       return;
@@ -245,6 +247,7 @@ _cb_cfg_changed(void) {
 
     lan = olsrv2_lan_get(&prefix);
     if (lan != NULL && !lan->_new) {
+      /* remove old entries that are not also in new entries */
       _remove(lan);
     }
   }
