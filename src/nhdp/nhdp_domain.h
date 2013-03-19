@@ -42,12 +42,6 @@
 #ifndef NHDP_LINKCOST_H_
 #define NHDP_LINKCOST_H_
 
-struct nhdp_metric;
-
-enum {
-  NHDP_MAXIMUM_DOMAINS = 4,
-};
-
 #include "common/common_types.h"
 #include "common/list.h"
 #include "rfc5444/rfc5444_writer.h"

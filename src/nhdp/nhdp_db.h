@@ -42,12 +42,6 @@
 #ifndef NHDP_DB_H_
 #define NHDP_DB_H_
 
-struct nhdp_link;
-struct nhdp_laddr;
-struct nhdp_l2hop;
-struct nhdp_neighbor;
-struct nhdp_naddr;
-
 #include "common/common_types.h"
 #include "common/avl.h"
 #include "common/list.h"
@@ -56,7 +50,7 @@ struct nhdp_naddr;
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 
-#include "nhdp/nhdp_domain.h"
+#include "nhdp/nhdp.h"
 
 #define NHDP_CLASS_LINK             "nhdp_link"
 #define NHDP_CLASS_LINK_ADDRESS     "nhdp_laddr"

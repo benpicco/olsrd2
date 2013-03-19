@@ -50,6 +50,7 @@
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
 
+static struct nhdp_domain *_get_new_domain(uint8_t ext);
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
 static struct nhdp_domain_metric _no_metric = {
@@ -85,8 +86,9 @@ nhdp_domain_cleanup(void) {
   struct nhdp_domain *domain, *d_it;
 
   list_for_each_element_safe(&nhdp_domain_list, domain, _node, d_it) {
-    nhdp_domain_metric_remove(domain);
-    nhdp_domain_mpr_remove(domain);
+    /* remove metric */
+    list_remove(&domain->_node);
+    free(domain);
   }
 }
 
@@ -101,41 +103,34 @@ nhdp_domain_get_count(void) {
  * @return 0 if successful, -1 if metric extension is already blocked
  */
 struct nhdp_domain *
-nhdp_domain_metric_add(struct nhdp_domain_metric *h, uint8_t ext) {
+nhdp_domain_metric_add(struct nhdp_domain_metric *metric, uint8_t ext) {
   struct nhdp_domain *domain;
   int i;
 
-  domain = nhdp_domain_get_by_ext(ext);
-  if (domain != NULL && domain->metric != &_no_metric) {
+  domain = _get_new_domain(ext);
+  if (domain == NULL) {
+    return NULL;
+  }
+  if (domain->metric != &_no_metric) {
     OLSR_WARN(LOG_NHDP, "Error, link metric extension %u collision between '%s' and '%s'",
-        domain->ext, h->name, domain->metric->name);
+        domain->ext, metric->name, domain->metric->name);
     return NULL;
   }
 
-  if (domain == NULL) {
-    /* initialize new domain */
-    domain = calloc(1, sizeof(struct nhdp_domain));
-    domain->ext = ext;
-    domain->_index = _domain_counter++;
-    domain->mpr = &_everyone_mpr;
-
-    list_add_tail(&nhdp_domain_list, &domain->_node);
-  }
-
-  domain->metric = h;
+  domain->metric = metric;
 
   /* add to metric handler list */
   for (i=0; i<4; i++) {
-    h->_metric_addrtlvs[i].type = RFC5444_ADDRTLV_LINK_METRIC;
-    h->_metric_addrtlvs[i].exttype = ext;
+    metric->_metric_addrtlvs[i].type = RFC5444_ADDRTLV_LINK_METRIC;
+    metric->_metric_addrtlvs[i].exttype = ext;
 
     rfc5444_writer_register_addrtlvtype(&_protocol->writer,
-        &h->_metric_addrtlvs[i], RFC5444_MSGTYPE_HELLO);
+        &metric->_metric_addrtlvs[i], RFC5444_MSGTYPE_HELLO);
   }
 
   /* initialize to_string method if empty */
-  if (h->to_string == NULL) {
-    h->to_string = _to_string;
+  if (metric->to_string == NULL) {
+    metric->to_string = _to_string;
   }
 
   return domain;
@@ -155,14 +150,7 @@ nhdp_domain_metric_remove(struct nhdp_domain *domain) {
         &domain->metric->_metric_addrtlvs[i]);
   }
 
-  if (domain->mpr != &_everyone_mpr) {
-    domain->metric = &_no_metric;
-    return;
-  }
-
-  /* remove metric */
-  list_remove(&domain->_node);
-  free(domain);
+  domain->metric = &_no_metric;
 }
 
 /**
@@ -171,34 +159,27 @@ nhdp_domain_metric_remove(struct nhdp_domain *domain) {
  * @return 0 if successful, -1 if metric extension is already blocked
  */
 struct nhdp_domain *
-nhdp_domain_mpr_add(struct nhdp_domain_mpr *h, uint8_t ext) {
+nhdp_domain_mpr_add(struct nhdp_domain_mpr *mpr, uint8_t ext) {
   struct nhdp_domain *domain;
 
-  domain = nhdp_domain_get_by_ext(ext);
-  if (domain != NULL && domain->mpr != &_everyone_mpr) {
+  domain = _get_new_domain(ext);
+  if (domain == NULL) {
+    return NULL;
+  }
+  if (domain->mpr != &_everyone_mpr) {
     OLSR_WARN(LOG_NHDP, "Error, mpr extension %u collision between '%s' and '%s'",
-        domain->ext, h->name, domain->mpr->name);
+        domain->ext, mpr->name, domain->mpr->name);
     return NULL;
   }
 
-  if (domain == NULL) {
-    /* initialize new domain */
-    domain = calloc(1, sizeof(struct nhdp_domain));
-    domain->ext = ext;
-    domain->_index = _domain_counter++;
-    domain->metric = &_no_metric;
-
-    list_add_tail(&nhdp_domain_list, &domain->_node);
-  }
-
-  domain->mpr = h;
+  domain->mpr = mpr;
 
   /* add to metric handler list */
-  h->_mpr_addrtlv.type = RFC5444_ADDRTLV_MPR;
-  h->_mpr_addrtlv.exttype = ext;
+  mpr->_mpr_addrtlv.type = RFC5444_ADDRTLV_MPR;
+  mpr->_mpr_addrtlv.exttype = ext;
 
   rfc5444_writer_register_addrtlvtype(&_protocol->writer,
-      &h->_mpr_addrtlv, RFC5444_MSGTYPE_HELLO);
+      &mpr->_mpr_addrtlv, RFC5444_MSGTYPE_HELLO);
 
   return domain;
 }
@@ -213,14 +194,7 @@ nhdp_domain_mpr_remove(struct nhdp_domain *domain) {
   rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
       &domain->mpr->_mpr_addrtlv);
 
-  if (domain->metric != &_no_metric) {
-    domain->mpr = &_everyone_mpr;
-    return;
-  }
-
-  /* remove metric */
-  list_remove(&domain->_node);
-  free(domain);
+  domain->mpr = &_everyone_mpr;
 }
 
 struct nhdp_domain *
@@ -324,6 +298,28 @@ nhdp_domain_get_flooding_willingness(void) {
   return RFC5444_WILLINGNESS_DEFAULT;
 }
 
+static struct nhdp_domain *
+_get_new_domain(uint8_t ext) {
+  struct nhdp_domain *domain;
+
+  domain = nhdp_domain_get_by_ext(ext);
+  if (domain == NULL) {
+    if (_domain_counter == NHDP_MAXIMUM_DOMAINS) {
+      OLSR_WARN(LOG_NHDP, "Maximum number of NHDP domains reached: %d",
+          NHDP_MAXIMUM_DOMAINS);
+      return NULL;
+    }
+
+    /* initialize new domain */
+    domain = calloc(1, sizeof(struct nhdp_domain));
+    domain->ext = ext;
+    domain->_index = _domain_counter++;
+    domain->metric = &_no_metric;
+
+    list_add_tail(&nhdp_domain_list, &domain->_node);
+  }
+  return domain;
+}
 /**
  * Default implementation to convert a metric value into text
  * @param buf pointer to metric output buffer

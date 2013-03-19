@@ -50,6 +50,9 @@
 enum {
   /* default metric value */
   NHDP_METRIC_DEFAULT = 0x10000,
+
+  /* maximum number of metric domains */
+  NHDP_MAXIMUM_DOMAINS = 4,
 };
 
 EXPORT extern enum log_source LOG_NHDP;
