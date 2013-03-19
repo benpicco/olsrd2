@@ -56,7 +56,7 @@ struct nhdp_naddr;
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 
-#include "nhdp/nhdp_metric.h"
+#include "nhdp/nhdp_domain.h"
 
 #define NHDP_CLASS_LINK             "nhdp_link"
 #define NHDP_CLASS_LINK_ADDRESS     "nhdp_laddr"

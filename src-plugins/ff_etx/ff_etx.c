@@ -55,7 +55,7 @@
 #include "tools/olsr_cfg.h"
 
 #include "nhdp/nhdp.h"
-#include "nhdp/nhdp_metric.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_interfaces.h"
 
 /* definitions and constants */

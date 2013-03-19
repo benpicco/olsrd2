@@ -47,7 +47,7 @@
 #include "core/olsr_logging.h"
 
 #include "nhdp/nhdp_db.h"
-#include "nhdp/nhdp_metric.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
 
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);

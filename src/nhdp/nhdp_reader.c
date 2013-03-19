@@ -52,7 +52,7 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
-#include "nhdp/nhdp_metric.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_reader.h"
 
 /* NHDP message TLV array index */
