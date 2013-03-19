@@ -67,6 +67,9 @@ struct nhdp_linkmetric_handler {
   /* range of metric */
   uint32_t metric_minimum, metric_start, metric_maximum;
 
+  /* default value for neighbor routing_mpr field */
+  bool default_routing_mpr;
+
   const char *(*to_string)(struct nhdp_linkmetric_str *, uint32_t);
 
   /* storage for the up to four additional link metrics */

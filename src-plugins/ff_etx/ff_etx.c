@@ -420,7 +420,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    lnk->_metric[_etxff_handler._index].incoming = (uint32_t)metric;
+    lnk->_metric[_etxff_handler._index].m.incoming = (uint32_t)metric;
 
     OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),

@@ -236,8 +236,8 @@ nhdp_db_neighbor_add(void) {
   if (!_metric_initialized) {
     /* lazy memory size initialization */
     if (_metric_count > 0) {
-      _neigh_info.size += sizeof(struct nhdp_metric) * _metric_count;
-      _link_info.size += sizeof(struct nhdp_metric) * _metric_count;
+      _neigh_info.size += sizeof(struct nhdp_neighbor_metric) * _metric_count;
+      _link_info.size += sizeof(struct nhdp_link_metric) * _metric_count;
       _l2hop_info.size += sizeof(struct nhdp_metric) * _metric_count;
 
       if (olsr_class_resize(&_neigh_info)) {
@@ -282,8 +282,9 @@ nhdp_db_neighbor_add(void) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    neigh->_metric[h->_index].incoming = h->metric_start;
-    neigh->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
+    neigh->_metric[h->_index].m.incoming = h->metric_start;
+    neigh->_metric[h->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
+    neigh->_metric[h->_index].routing_mpr = h->default_routing_mpr;
   }
 
   /* trigger event */
@@ -522,8 +523,8 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    lnk->_metric[h->_index].incoming = h->metric_start;
-    lnk->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
+    lnk->_metric[h->_index].m.incoming = h->metric_start;
+    lnk->_metric[h->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
   }
 
   /* trigger event */

@@ -721,8 +721,8 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
       /* clear metric values that should be present in HELLO */
       list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-        _current.link->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
-        _current.neighbor->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
+        _current.link->_metric[h->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
+        _current.neighbor->_metric[h->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
       }
 
       /* update outgoing metric with other sides incoming metric */

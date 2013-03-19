@@ -77,6 +77,16 @@ struct nhdp_metric {
   uint32_t outgoing;
 };
 
+struct nhdp_link_metric {
+  struct nhdp_metric m;
+  bool mpr_selector;
+};
+
+struct nhdp_neighbor_metric {
+  struct nhdp_metric m;
+  bool routing_mpr;
+};
+
 /**
  * nhdl_link represents a link by a specific local interface to one interface
  * of a one-hop neighbor.
@@ -125,7 +135,7 @@ struct nhdp_link {
   struct list_entity _neigh_node;
 
   /* Array of link metrics */
-  struct nhdp_metric _metric[0];
+  struct nhdp_link_metric _metric[0];
 };
 
 /**
@@ -215,7 +225,7 @@ struct nhdp_neighbor {
   struct avl_node _originator_node;
 
   /* Array of link metrics */
-  struct nhdp_metric _metric[0];
+  struct nhdp_neighbor_metric _metric[0];
 };
 
 /**

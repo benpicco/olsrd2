@@ -350,8 +350,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
       list_for_each_element(&nhdp_metric_handler_list, h, _node) {
         abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n",
             h->name,
-            h->to_string(&mbuf1, lnk->_metric[h->_index].incoming),
-            h->to_string(&mbuf2, lnk->_metric[h->_index].outgoing));
+            h->to_string(&mbuf1, lnk->_metric[h->_index].m.incoming),
+            h->to_string(&mbuf2, lnk->_metric[h->_index].m.outgoing));
       }
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {

@@ -186,10 +186,10 @@ nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
-    lnk->_metric[h->_index].outgoing = metric;
+    lnk->_metric[h->_index].m.outgoing = metric;
   }
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
-    lnk->neigh->_metric[h->_index].outgoing = metric;
+    lnk->neigh->_metric[h->_index].m.outgoing = metric;
   }
 }
 
@@ -233,15 +233,15 @@ nhdp_linkmetric_calculate_neighbor_metric(
     return;
   }
 
-  neigh->_metric[h->ext].incoming = RFC5444_METRIC_INFINITE;
-  neigh->_metric[h->ext].outgoing = RFC5444_METRIC_INFINITE;
+  neigh->_metric[h->ext].m.incoming = RFC5444_METRIC_INFINITE;
+  neigh->_metric[h->ext].m.outgoing = RFC5444_METRIC_INFINITE;
 
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
-    if (lnk->_metric[h->ext].outgoing < neigh->_metric[h->ext].outgoing) {
-      neigh->_metric[h->ext].outgoing = lnk->_metric[h->ext].outgoing;
+    if (lnk->_metric[h->ext].m.outgoing < neigh->_metric[h->ext].m.outgoing) {
+      neigh->_metric[h->ext].m.outgoing = lnk->_metric[h->ext].m.outgoing;
     }
-    if (lnk->_metric[h->ext].incoming < neigh->_metric[h->ext].incoming) {
-      neigh->_metric[h->ext].incoming = lnk->_metric[h->ext].incoming;
+    if (lnk->_metric[h->ext].m.incoming < neigh->_metric[h->ext].m.incoming) {
+      neigh->_metric[h->ext].m.incoming = lnk->_metric[h->ext].m.incoming;
     }
   }
 }
