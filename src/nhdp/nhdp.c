@@ -349,7 +349,7 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
 
       list_for_each_element(&nhdp_domain_list, domain, _node) {
         abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n"
-                               "\t    MPR %s: MRP %s, MPRS %s:\n",
+                               "\t    MPR %s: MRP %s, MPRS %s\n",
             domain->metric->name,
             domain->metric->to_string(&mbuf1, lnk->_metric[domain->_index].m.incoming),
             domain->metric->to_string(&mbuf2, lnk->_metric[domain->_index].m.outgoing),

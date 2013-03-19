@@ -342,6 +342,7 @@ _get_new_domain(uint8_t ext) {
     domain->ext = ext;
     domain->_index = _domain_counter++;
     domain->metric = &_no_metric;
+    domain->mpr = &_no_mprs;
 
     list_add_tail(&nhdp_domain_list, &domain->_node);
   }
