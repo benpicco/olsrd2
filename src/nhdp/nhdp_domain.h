@@ -64,8 +64,8 @@ struct nhdp_domain_metric {
   uint32_t incoming_link_start, outgoing_link_start;
   uint32_t incoming_2hop_start, outgoing_2hop_start;
 
-  /* true if metric values should not be cleared if TLV is missing */
-  bool do_not_clear;
+  /* true if metrics should not be handled by nhdp reader/writer */
+  bool no_default_handling;
 
   /* conversion of metric value into string function */
   const char *(*to_string)(struct nhdp_metric_str *, uint32_t);
@@ -90,6 +90,9 @@ struct nhdp_domain_mpr {
 
   /* default value for local MPR (selector) setting */
   bool mprs_start;
+
+  /* true if MPRs/Willingness should not be handled by nhdp reader/writer */
+  bool no_default_handling;
 
   /* storage for the additional mpr tlv */
   struct rfc5444_writer_tlvtype _mpr_addrtlv;

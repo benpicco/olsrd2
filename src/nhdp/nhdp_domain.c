@@ -61,14 +61,16 @@ static struct nhdp_domain_metric _no_metric = {
   .incoming_2hop_start = NHDP_METRIC_DEFAULT,
   .outgoing_2hop_start = NHDP_METRIC_DEFAULT,
 
-  .do_not_clear = true,
+  .no_default_handling = true,
 };
 
-static struct nhdp_domain_mpr _everyone_mpr = {
-  .name = "Everyone mpr",
-  .willingness = RFC5444_WILLINGNESS_DEFAULT,
+static struct nhdp_domain_mpr _no_mprs = {
+  .name = "No MPRs",
+
   .mpr_start = true,
   .mprs_start = true,
+
+  .no_default_handling = true,
 };
 
 struct list_entity nhdp_domain_list;
@@ -190,7 +192,7 @@ nhdp_domain_mpr_add(struct nhdp_domain_mpr *mpr, uint8_t ext) {
   if (domain == NULL) {
     return NULL;
   }
-  if (domain->mpr != &_everyone_mpr) {
+  if (domain->mpr != &_no_mprs) {
     OLSR_WARN(LOG_NHDP, "Error, mpr extension %u collision between '%s' and '%s'",
         domain->ext, mpr->name, domain->mpr->name);
     return NULL;
@@ -219,7 +221,7 @@ nhdp_domain_mpr_remove(struct nhdp_domain *domain) {
   rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
       &domain->mpr->_mpr_addrtlv);
 
-  domain->mpr = &_everyone_mpr;
+  domain->mpr = &_no_mprs;
 }
 
 struct nhdp_domain *

@@ -707,9 +707,11 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
     if (nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
       /* clear routing mpr and metric values that should be present in HELLO */
       list_for_each_element(&nhdp_domain_list, domain, _node) {
-        _current.neighbor->_metric[domain->ext].local_is_mpr = false;
+        if (!domain->mpr->no_default_handling) {
+          _current.neighbor->_metric[domain->ext].local_is_mpr = false;
+        }
 
-        if (!domain->metric->do_not_clear) {
+        if (!domain->metric->no_default_handling) {
           _current.link->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
           _current.neighbor->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
         }
@@ -723,7 +725,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
         /* get MPR handler */
         domain = nhdp_domain_get_by_ext(tlv->type_ext);
-        if (domain) {
+        if (domain != NULL && !domain->mpr->no_default_handling) {
           nhdp_domain_process_mpr_tlv(domain, _current.link, tlv->single_value[0]);
         }
         tlv = tlv->next_entry;
@@ -741,7 +743,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
         /* get metric handler */
         domain = nhdp_domain_get_by_ext(tlv->type_ext);
-        if (domain) {
+        if (domain != NULL && !domain->metric->no_default_handling) {
           nhdp_domain_process_metric_linktlv(domain, _current.link, tlvvalue);
         }
 
@@ -768,7 +770,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
       /* clear metric values that should be present in HELLO */
       list_for_each_element(&nhdp_domain_list, domain, _node) {
-        if (!domain->metric->do_not_clear) {
+        if (!domain->metric->no_default_handling) {
           l2hop->_metric[domain->_index].incoming = RFC5444_METRIC_INFINITE;
           l2hop->_metric[domain->_index].outgoing = RFC5444_METRIC_INFINITE;
         }
@@ -786,7 +788,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
         /* get metric handler */
         domain = nhdp_domain_get_by_ext(tlv->type_ext);
-        if (domain) {
+        if (domain != NULL && !domain->metric->no_default_handling) {
           nhdp_domain_process_metric_2hoptlv(domain, l2hop, tlvvalue);
         }
 

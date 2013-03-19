@@ -243,6 +243,9 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
     will_flooding <<= 4;
 
     list_for_each_element(&nhdp_domain_list, domain, _node) {
+      if (domain->mpr->no_default_handling) {
+        continue;
+      }
       will_encoded = (uint8_t) will_flooding;
 
       will_encoded |= (uint8_t)domain->mpr->willingness;
@@ -410,6 +413,10 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
     mpr_flooding = laddr->link->flooding_mpr;
 
     list_for_each_element(&nhdp_domain_list, domain, _node) {
+      if (domain->mpr->no_default_handling) {
+        continue;
+      }
+
       mpr_routing = naddr->neigh->_metric[domain->_index].neigh_is_mpr;
 
       if (mpr_flooding || mpr_routing) {
@@ -438,6 +445,10 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   list_for_each_element(&nhdp_domain_list, domain, _node) {
     struct nhdp_link *lnk = NULL;
     struct nhdp_neighbor *neigh = NULL;
+
+    if (domain->metric->no_default_handling) {
+      continue;
+    }
 
     if (linkstatus == RFC5444_LINKSTATUS_HEARD
         || linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
