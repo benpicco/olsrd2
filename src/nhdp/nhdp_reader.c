@@ -708,8 +708,11 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
       /* clear routing mpr and metric values that should be present in HELLO */
       list_for_each_element(&nhdp_domain_list, domain, _node) {
         _current.neighbor->_metric[domain->ext].local_is_mpr = false;
-        _current.link->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
-        _current.neighbor->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+
+        if (!domain->metric->do_not_clear) {
+          _current.link->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+          _current.neighbor->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+        }
       }
 
       /* update MPR selector if this is "our" address on the local interface */
@@ -765,8 +768,10 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
       /* clear metric values that should be present in HELLO */
       list_for_each_element(&nhdp_domain_list, domain, _node) {
-        l2hop->_metric[domain->_index].incoming = RFC5444_METRIC_INFINITE;
-        l2hop->_metric[domain->_index].outgoing = RFC5444_METRIC_INFINITE;
+        if (!domain->metric->do_not_clear) {
+          l2hop->_metric[domain->_index].incoming = RFC5444_METRIC_INFINITE;
+          l2hop->_metric[domain->_index].outgoing = RFC5444_METRIC_INFINITE;
+        }
       }
 
       /* update 2-hop metric (no direction reversal!) */

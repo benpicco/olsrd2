@@ -234,8 +234,8 @@ nhdp_db_neighbor_add(void) {
 
   /* initialize metrics and mprs */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    neigh->_metric[domain->_index].m.incoming = domain->metric->metric_start;
-    neigh->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+    neigh->_metric[domain->_index].m.incoming = domain->metric->incoming_link_start;
+    neigh->_metric[domain->_index].m.outgoing = domain->metric->outgoing_link_start;
 
     neigh->_metric[domain->_index].local_is_mpr = domain->mpr->mprs_start;
     neigh->_metric[domain->_index].neigh_is_mpr = domain->mpr->mpr_start;
@@ -477,8 +477,8 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    lnk->_metric[domain->_index].m.incoming = domain->metric->metric_start;
-    lnk->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+    lnk->_metric[domain->_index].m.incoming = domain->metric->incoming_link_start;
+    lnk->_metric[domain->_index].m.outgoing = domain->metric->outgoing_link_start;
   }
 
   /* trigger event */
@@ -638,8 +638,8 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    l2hop->_metric[domain->_index].incoming = RFC5444_METRIC_INFINITE;
-    l2hop->_metric[domain->_index].outgoing = RFC5444_METRIC_INFINITE;
+    l2hop->_metric[domain->_index].incoming = domain->metric->incoming_2hop_start;
+    l2hop->_metric[domain->_index].outgoing = domain->metric->outgoing_2hop_start;
   }
 
   /* trigger event */

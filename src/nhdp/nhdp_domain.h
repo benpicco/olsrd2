@@ -58,11 +58,16 @@ struct nhdp_domain_metric {
   const char *name;
 
   /* range of metric */
-  uint32_t metric_minimum, metric_start, metric_maximum;
+  uint32_t metric_minimum, metric_maximum;
 
-  /* default value for neighbor routing_mpr field */
-  bool default_routing_mpr;
+  /* default values to initialize database */
+  uint32_t incoming_link_start, outgoing_link_start;
+  uint32_t incoming_2hop_start, outgoing_2hop_start;
 
+  /* true if metric values should not be cleared if TLV is missing */
+  bool do_not_clear;
+
+  /* conversion of metric value into string function */
   const char *(*to_string)(struct nhdp_metric_str *, uint32_t);
 
   /* storage for the up to four additional link metrics */
@@ -80,8 +85,10 @@ struct nhdp_domain_mpr {
   /* routing willingness */
   enum rfc5444_willingness_values willingness;
 
+  /* default value for neighbor MPR setting */
   bool mpr_start;
 
+  /* default value for local MPR (selector) setting */
   bool mprs_start;
 
   /* storage for the additional mpr tlv */

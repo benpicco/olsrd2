@@ -216,8 +216,9 @@ struct nhdp_domain_metric _etxff_handler = {
   .name = "ETXFF metric handler",
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
-  .metric_start = ETXFF_LINKCOST_START,
   .metric_maximum = ETXFF_LINKCOST_MAXIMUM,
+
+  .incoming_link_start = ETXFF_LINKCOST_START,
 
   .to_string = _to_string,
 };

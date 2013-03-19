@@ -55,11 +55,20 @@ static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
 static struct nhdp_domain_metric _no_metric = {
   .name = "No metric",
+
+  .incoming_link_start = NHDP_METRIC_DEFAULT,
+  .outgoing_link_start = NHDP_METRIC_DEFAULT,
+  .incoming_2hop_start = NHDP_METRIC_DEFAULT,
+  .outgoing_2hop_start = NHDP_METRIC_DEFAULT,
+
+  .do_not_clear = true,
 };
 
 static struct nhdp_domain_mpr _everyone_mpr = {
   .name = "Everyone mpr",
   .willingness = RFC5444_WILLINGNESS_DEFAULT,
+  .mpr_start = true,
+  .mprs_start = true,
 };
 
 struct list_entity nhdp_domain_list;
@@ -117,7 +126,22 @@ nhdp_domain_metric_add(struct nhdp_domain_metric *metric, uint8_t ext) {
     return NULL;
   }
 
+  /* link metric */
   domain->metric = metric;
+
+  /* insert default values if not set */
+  if (metric->incoming_link_start == 0) {
+    metric->incoming_link_start = NHDP_METRIC_DEFAULT;
+  }
+  if (metric->outgoing_link_start == 0) {
+    metric->outgoing_link_start = RFC5444_METRIC_INFINITE;
+  }
+  if (metric->incoming_2hop_start == 0) {
+    metric->incoming_2hop_start = RFC5444_METRIC_INFINITE;
+  }
+  if (metric->outgoing_2hop_start == 0) {
+    metric->outgoing_2hop_start = RFC5444_METRIC_INFINITE;
+  }
 
   /* add to metric handler list */
   for (i=0; i<4; i++) {
@@ -172,6 +196,7 @@ nhdp_domain_mpr_add(struct nhdp_domain_mpr *mpr, uint8_t ext) {
     return NULL;
   }
 
+  /* link mpr */
   domain->mpr = mpr;
 
   /* add to metric handler list */
