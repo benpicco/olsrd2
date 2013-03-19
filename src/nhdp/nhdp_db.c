@@ -143,10 +143,6 @@ struct avl_tree nhdp_neigh_originator_tree;
 /* list of links (to neighbors) */
 struct list_entity nhdp_link_list;
 
-/* handling of link metrics */
-int _metric_count = 0;
-bool _metric_initialized = false;
-
 /**
  * Initialize NHDP databases
  */
@@ -202,57 +198,13 @@ nhdp_db_cleanup(void) {
 }
 
 /**
- * Sets the total number of metrics for NHDP. Can only be used as long as the NHDP
- * databases are empty.
- * @return 0 if successfully set, -1 if NHDP database has already been used.
- */
-int
-nhdp_db_add_metric(void) {
-  if (_metric_initialized) {
-    return -1;
-  }
-
-  _metric_count++;;
-  return 0;
-}
-
-/**
- * @return total number of link metrics used by NHDP
- */
-int
-nhdp_db_get_metriccount(void) {
-  return _metric_count;
-}
-
-/**
  * @return new NHDP neighbor without links and addresses,
  *  NULL if out of memory
  */
 struct nhdp_neighbor *
 nhdp_db_neighbor_add(void) {
   struct nhdp_neighbor *neigh;
-  struct nhdp_metric_handler *h;
-
-  if (!_metric_initialized) {
-    /* lazy memory size initialization */
-    if (_metric_count > 0) {
-      _neigh_info.size += sizeof(struct nhdp_neighbor_metric) * _metric_count;
-      _link_info.size += sizeof(struct nhdp_link_metric) * _metric_count;
-      _l2hop_info.size += sizeof(struct nhdp_metric) * _metric_count;
-
-      if (olsr_class_resize(&_neigh_info)) {
-        return NULL;
-      }
-      if (olsr_class_resize(&_link_info)) {
-        return NULL;
-      }
-      if (olsr_class_resize(&_l2hop_info)) {
-        return NULL;
-      }
-    }
-
-    _metric_initialized = true;
-  }
+  struct nhdp_domain *domain;
 
   neigh = olsr_class_malloc(&_neigh_info);
   if (neigh == NULL) {
@@ -281,12 +233,12 @@ nhdp_db_neighbor_add(void) {
   neigh->_originator_node.key = &neigh->originator;
 
   /* initialize metrics and mprs */
-  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    neigh->_metric[h->_index].m.incoming = h->metric_start;
-    neigh->_metric[h->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    neigh->_metric[domain->_index].m.incoming = domain->metric->metric_start;
+    neigh->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
 
-    neigh->_metric[h->_index].local_is_mpr = false;
-    neigh->_metric[h->_index].neigh_is_mpr = false;
+    neigh->_metric[domain->_index].local_is_mpr = domain->mpr->mprs_start;
+    neigh->_metric[domain->_index].neigh_is_mpr = domain->mpr->mpr_start;
   }
 
   /* trigger event */
@@ -493,7 +445,7 @@ nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *ori
  */
 struct nhdp_link *
 nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
-  struct nhdp_metric_handler *h;
+  struct nhdp_domain *domain;
   struct nhdp_link *lnk;
 
   lnk = olsr_class_malloc(&_link_info);
@@ -524,9 +476,9 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.cb_context = lnk;
 
   /* initialize metrics */
-  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    lnk->_metric[h->_index].m.incoming = h->metric_start;
-    lnk->_metric[h->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    lnk->_metric[domain->_index].m.incoming = domain->metric->metric_start;
+    lnk->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
   }
 
   /* trigger event */
@@ -662,7 +614,7 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
  */
 struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
-  struct nhdp_metric_handler *h;
+  struct nhdp_domain *domain;
   struct nhdp_l2hop *l2hop;
 
   l2hop = olsr_class_malloc(&_l2hop_info);
@@ -685,9 +637,9 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
   avl_insert(&lnk->_2hop, &l2hop->_link_node);
 
   /* initialize metrics */
-  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    l2hop->_metric[h->_index].incoming = RFC5444_METRIC_INFINITE;
-    l2hop->_metric[h->_index].outgoing = RFC5444_METRIC_INFINITE;
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    l2hop->_metric[domain->_index].incoming = RFC5444_METRIC_INFINITE;
+    l2hop->_metric[domain->_index].outgoing = RFC5444_METRIC_INFINITE;
   }
 
   /* trigger event */

@@ -659,10 +659,9 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
 static enum rfc5444_result
 _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
-  uint8_t local_if, link_status, other_neigh, mprs;
+  uint8_t local_if, link_status, other_neigh;
   struct rfc5444_reader_tlvblock_entry *tlv;
-  struct nhdp_metric_handler *lq_handler;
-  struct nhdp_mpr_handler *mpr_handler;
+  struct nhdp_domain *domain;
   struct nhdp_l2hop *l2hop;
   struct netaddr addr;
   struct netaddr_str buf;
@@ -695,12 +694,8 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
   if (_nhdp_address_pass2_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv) {
     other_neigh = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv->single_value[0];
   }
-  if (_nhdp_address_pass2_tlvs[IDX_ADDRTLV2_MPR].tlv) {
-    mprs = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_MPR].tlv->single_value[0];
-  }
-
-  OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, local_if %u, link_status: %u, other_neigh: %u, mprs: %u",
-      netaddr_to_string(&buf, &addr), local_if, link_status, other_neigh, mprs);
+  OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, local_if %u, link_status: %u, other_neigh: %u",
+      netaddr_to_string(&buf, &addr), local_if, link_status, other_neigh);
 
   if (local_if == RFC5444_LOCALIF_THIS_IF || local_if == RFC5444_LOCALIF_OTHER_IF) {
     /* parse LOCAL_IF TLV */
@@ -710,9 +705,11 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
   /* handle 2hop-addresses */
   if (link_status != 255 || other_neigh != 255) {
     if (nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
-      /* clear routing mpr values that should be present in HELLO */
-      list_for_each_element(&nhdp_mpr_handler_list, mpr_handler, _node) {
-        _current.neighbor->_metric[mpr_handler->ext].local_is_mpr = false;
+      /* clear routing mpr and metric values that should be present in HELLO */
+      list_for_each_element(&nhdp_domain_list, domain, _node) {
+        _current.neighbor->_metric[domain->ext].local_is_mpr = false;
+        _current.link->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+        _current.neighbor->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
       }
 
       /* update MPR selector if this is "our" address on the local interface */
@@ -722,18 +719,11 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
             netaddr_to_string(&buf, &addr), tlv->type_ext, tlv->single_value[0]);
 
         /* get MPR handler */
-        mpr_handler = nhdp_domain_get_mpr_by_ext(tlv->type_ext);
-        if (mpr_handler) {
-          nhdp_domain_process_mpr_tlv(mpr_handler, _current.link,
-              tlv->single_value[0]);
+        domain = nhdp_domain_get_by_ext(tlv->type_ext);
+        if (domain) {
+          nhdp_domain_process_mpr_tlv(domain, _current.link, tlv->single_value[0]);
         }
         tlv = tlv->next_entry;
-      }
-
-      /* clear metric values that should be present in HELLO */
-      list_for_each_element(&nhdp_metric_handler_list, lq_handler, _node) {
-        _current.link->_metric[lq_handler->_index].m.outgoing = RFC5444_METRIC_INFINITE;
-        _current.neighbor->_metric[lq_handler->_index].m.outgoing = RFC5444_METRIC_INFINITE;
       }
 
       /* update outgoing metric with other sides incoming metric */
@@ -747,9 +737,9 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
             netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
 
         /* get metric handler */
-        lq_handler = nhdp_domain_get_metric_by_ext(tlv->type_ext);
-        if (lq_handler) {
-          nhdp_metric_process_linktlv(lq_handler, _current.link, tlvvalue);
+        domain = nhdp_domain_get_by_ext(tlv->type_ext);
+        if (domain) {
+          nhdp_metric_process_linktlv(domain, _current.link, tlvvalue);
         }
 
         tlv = tlv->next_entry;
@@ -774,9 +764,9 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
       nhdp_db_link_2hop_set_vtime(l2hop, _current.vtime);
 
       /* clear metric values that should be present in HELLO */
-      list_for_each_element(&nhdp_metric_handler_list, lq_handler, _node) {
-        l2hop->_metric[lq_handler->_index].incoming = RFC5444_METRIC_INFINITE;
-        l2hop->_metric[lq_handler->_index].outgoing = RFC5444_METRIC_INFINITE;
+      list_for_each_element(&nhdp_domain_list, domain, _node) {
+        l2hop->_metric[domain->_index].incoming = RFC5444_METRIC_INFINITE;
+        l2hop->_metric[domain->_index].outgoing = RFC5444_METRIC_INFINITE;
       }
 
       /* update 2-hop metric (no direction reversal!) */
@@ -790,9 +780,9 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
             netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
 
         /* get metric handler */
-        lq_handler = nhdp_domain_get_metric_by_ext(tlv->type_ext);
-        if (lq_handler) {
-          nhdp_metric_process_2hoptlv(lq_handler, l2hop, tlvvalue);
+        domain = nhdp_domain_get_by_ext(tlv->type_ext);
+        if (domain) {
+          nhdp_metric_process_2hoptlv(domain, l2hop, tlvvalue);
         }
 
         tlv = tlv->next_entry;
@@ -823,7 +813,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr, *la_it;
   struct nhdp_l2hop *twohop, *twohop_it;
-  struct nhdp_metric_handler *h;
+  struct nhdp_domain *domain;
   uint64_t t;
 
   if (dropped) {
@@ -915,8 +905,8 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
   nhdp_domain_update_mprs();
 
   /* update link metrics */
-  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    nhdp_metric_calculate_neighbor_metric(h, _current.neighbor);
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    nhdp_metric_calculate_neighbor_metric(domain, _current.neighbor);
   }
 
   /* update link status */

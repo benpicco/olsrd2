@@ -222,6 +222,8 @@ struct nhdp_metric_handler _etxff_handler = {
   .to_string = _to_string,
 };
 
+struct nhdp_domain *_domain;
+
 /**
  * Constructor of plugin
  * @return 0 if initialization was successful, -1 otherwise
@@ -255,7 +257,8 @@ _cb_plugin_enable(void) {
     return -1;
   }
 
-  if (nhdp_metric_handler_add(&_etxff_handler)) {
+  _domain = nhdp_metric_handler_add(&_etxff_handler, 0);
+  if (!_domain) {
     olsr_class_listener_remove(&_link_listener);
     return -1;
   }
@@ -285,7 +288,7 @@ _cb_plugin_disable(void) {
   olsr_rfc5444_remove_protocol_pktseqno(_protocol);
   olsr_rfc5444_remove_protocol(_protocol);
 
-  nhdp_metric_handler_remove(&_etxff_handler);
+  nhdp_metric_handler_remove(_domain);
 
   olsr_class_listener_remove(&_link_listener);
 
@@ -421,7 +424,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    lnk->_metric[_etxff_handler._index].m.incoming = (uint32_t)metric;
+    lnk->_metric[_domain->_index].m.incoming = (uint32_t)metric;
 
     OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
@@ -439,7 +442,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
 
   /* update neighbor metrics */
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    nhdp_metric_calculate_neighbor_metric(&_etxff_handler, neigh);
+    nhdp_metric_calculate_neighbor_metric(_domain, neigh);
   }
 }
 

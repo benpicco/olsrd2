@@ -52,11 +52,18 @@
 
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
-static struct nhdp_metric_handler *nhdp_metric_handler[256];
-static struct nhdp_mpr_handler *nhdp_mpr_handler[256];
-struct list_entity nhdp_metric_handler_list;
-struct list_entity nhdp_mpr_handler_list;
+static struct nhdp_metric_handler _no_metric = {
+  .name = "No metric",
+};
 
+static struct nhdp_mpr_handler _everyone_mpr = {
+  .name = "Everyone mpr",
+  .willingness = RFC5444_WILLINGNESS_DEFAULT,
+};
+
+struct list_entity nhdp_domain_list;
+
+static size_t _domain_counter = 0;
 static struct olsr_rfc5444_protocol *_protocol;
 
 /**
@@ -65,17 +72,9 @@ static struct olsr_rfc5444_protocol *_protocol;
  */
 void
 nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
-  size_t i;
-
   _protocol = p;
 
-  list_init_head(&nhdp_metric_handler_list);
-  list_init_head(&nhdp_mpr_handler_list);
-
-  for (i=0; i<ARRAYSIZE(nhdp_metric_handler); i++) {
-    nhdp_metric_handler[i] = NULL;
-    nhdp_mpr_handler[i] = NULL;
-  }
+  list_init_head(&nhdp_domain_list);
 }
 
 /**
@@ -83,16 +82,17 @@ nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
  */
 void
 nhdp_domain_cleanup(void) {
-  struct nhdp_metric_handler *metric, *metr_it;
-  struct nhdp_mpr_handler *mpr, *mpr_it;
+  struct nhdp_domain *domain, *d_it;
 
-  list_for_each_element_safe(&nhdp_metric_handler_list, metric, _node, metr_it) {
-    nhdp_metric_handler_remove(metric);
+  list_for_each_element_safe(&nhdp_domain_list, domain, _node, d_it) {
+    nhdp_metric_handler_remove(domain);
+    nhdp_mpr_handler_remove(domain);
   }
+}
 
-  list_for_each_element_safe(&nhdp_mpr_handler_list, mpr, _node, mpr_it) {
-    nhdp_mpr_handler_remove(mpr);
-  }
+size_t
+nhdp_domain_get_count(void) {
+  return _domain_counter;
 }
 
 /**
@@ -100,38 +100,37 @@ nhdp_domain_cleanup(void) {
  * @param h pointer to handler
  * @return 0 if successful, -1 if metric extension is already blocked
  */
-int
-nhdp_metric_handler_add(struct nhdp_metric_handler *h) {
+struct nhdp_domain *
+nhdp_metric_handler_add(struct nhdp_metric_handler *h, uint8_t ext) {
+  struct nhdp_domain *domain;
   int i;
 
-  if (nhdp_metric_handler[h->ext]) {
+  domain = nhdp_domain_get_by_ext(ext);
+  if (domain != NULL && domain->metric != &_no_metric) {
     OLSR_WARN(LOG_NHDP, "Error, link metric extension %u collision between '%s' and '%s'",
-        h->ext, h->name, nhdp_metric_handler[h->ext]->name);
-    return -1;
+        domain->ext, h->name, domain->metric->name);
+    return NULL;
   }
 
-  /* add to lq extension cache */
-  nhdp_metric_handler[h->ext] = h;
+  if (domain == NULL) {
+    /* initialize new domain */
+    domain = calloc(1, sizeof(struct nhdp_domain));
+    domain->ext = ext;
+    domain->_index = _domain_counter++;
+    domain->mpr = &_everyone_mpr;
+
+    list_add_tail(&nhdp_domain_list, &domain->_node);
+  }
+
+  domain->metric = h;
 
   /* add to metric handler list */
-  list_add_tail(&nhdp_metric_handler_list, &h->_node);
-
   for (i=0; i<4; i++) {
     h->_metric_addrtlvs[i].type = RFC5444_ADDRTLV_LINK_METRIC;
-    h->_metric_addrtlvs[i].exttype = h->ext;
+    h->_metric_addrtlvs[i].exttype = ext;
 
     rfc5444_writer_register_addrtlvtype(&_protocol->writer,
         &h->_metric_addrtlvs[i], RFC5444_MSGTYPE_HELLO);
-  }
-
-  if (nhdp_mpr_handler[h->ext]) {
-    /* copy index from mpr handler */
-    h->_index = nhdp_mpr_handler[h->ext]->_index;
-  }
-  else {
-    /* initialize index and update nhdp db */
-    h->_index = nhdp_db_get_metriccount();
-    nhdp_db_add_metric();
   }
 
   /* initialize to_string method if empty */
@@ -139,7 +138,7 @@ nhdp_metric_handler_add(struct nhdp_metric_handler *h) {
     h->to_string = _to_string;
   }
 
-  return 0;
+  return domain;
 }
 
 /**
@@ -147,24 +146,23 @@ nhdp_metric_handler_add(struct nhdp_metric_handler *h) {
  * @param h pointer to handler
  */
 void
-nhdp_metric_handler_remove(struct nhdp_metric_handler *h) {
+nhdp_metric_handler_remove(struct nhdp_domain *domain) {
   int i;
-
-  if (!h) {
-    return;
-  }
 
   /* unregister TLV handlers */
   for (i=0; i<4; i++) {
     rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
-        &h->_metric_addrtlvs[i]);
+        &domain->metric->_metric_addrtlvs[i]);
   }
 
-  /* remove from list */
-  list_remove(&h->_node);
+  if (domain->mpr != &_everyone_mpr) {
+    domain->metric = &_no_metric;
+    return;
+  }
 
-  /* remove from cache */
-  nhdp_metric_handler[h->ext] = NULL;
+  /* remove metric */
+  list_remove(&domain->_node);
+  free(domain);
 }
 
 /**
@@ -172,37 +170,37 @@ nhdp_metric_handler_remove(struct nhdp_metric_handler *h) {
  * @param h pointer to handler
  * @return 0 if successful, -1 if metric extension is already blocked
  */
-int
-nhdp_mpr_handler_add(struct nhdp_mpr_handler *h) {
-  if (nhdp_mpr_handler[h->ext]) {
+struct nhdp_domain *
+nhdp_mpr_handler_add(struct nhdp_mpr_handler *h, uint8_t ext) {
+  struct nhdp_domain *domain;
+
+  domain = nhdp_domain_get_by_ext(ext);
+  if (domain != NULL && domain->mpr != &_everyone_mpr) {
     OLSR_WARN(LOG_NHDP, "Error, mpr extension %u collision between '%s' and '%s'",
-        h->ext, h->name, nhdp_mpr_handler[h->ext]->name);
-    return -1;
+        domain->ext, h->name, domain->mpr->name);
+    return NULL;
   }
 
-  /* add to mpr handler cache */
-  nhdp_mpr_handler[h->ext] = h;
+  if (domain == NULL) {
+    /* initialize new domain */
+    domain = calloc(1, sizeof(struct nhdp_domain));
+    domain->ext = ext;
+    domain->_index = _domain_counter++;
+    domain->metric = &_no_metric;
 
-  /* add to mpr handler list */
-  list_add_tail(&nhdp_mpr_handler_list, &h->_node);
+    list_add_tail(&nhdp_domain_list, &domain->_node);
+  }
 
+  domain->mpr = h;
+
+  /* add to metric handler list */
   h->_mpr_addrtlv.type = RFC5444_ADDRTLV_MPR;
-  h->_mpr_addrtlv.exttype = h->ext;
+  h->_mpr_addrtlv.exttype = ext;
 
   rfc5444_writer_register_addrtlvtype(&_protocol->writer,
       &h->_mpr_addrtlv, RFC5444_MSGTYPE_HELLO);
 
-  if (nhdp_metric_handler[h->ext]) {
-    /* copy index from mpr handler */
-    h->_index = nhdp_metric_handler[h->ext]->_index;
-  }
-  else {
-    /* initialize index and update nhdp db */
-    h->_index = nhdp_db_get_metriccount();
-    nhdp_db_add_metric();
-  }
-
-  return 0;
+  return domain;
 }
 
 /**
@@ -210,30 +208,31 @@ nhdp_mpr_handler_add(struct nhdp_mpr_handler *h) {
  * @param h pointer to handler
  */
 void
-nhdp_mpr_handler_remove(struct nhdp_mpr_handler *h) {
-  if (!h) {
+nhdp_mpr_handler_remove(struct nhdp_domain *domain) {
+  /* unregister TLV handler */
+  rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
+      &domain->mpr->_mpr_addrtlv);
+
+  if (domain->metric != &_no_metric) {
+    domain->mpr = &_everyone_mpr;
     return;
   }
 
-  /* unregister TLV handler */
-  rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
-      &h->_mpr_addrtlv);
-
-  /* remove from list */
-  list_remove(&h->_node);
-
-  /* remove from cache */
-  nhdp_mpr_handler[h->ext] = NULL;
+  /* remove metric */
+  list_remove(&domain->_node);
+  free(domain);
 }
 
-struct nhdp_metric_handler *
-nhdp_domain_get_metric_by_ext(uint8_t ext) {
-  return nhdp_metric_handler[ext];
-}
+struct nhdp_domain *
+nhdp_domain_get_by_ext(uint8_t ext) {
+  struct nhdp_domain *d;
 
-struct nhdp_mpr_handler *
-nhdp_domain_get_mpr_by_ext(uint8_t ext) {
-  return nhdp_mpr_handler[ext];
+  list_for_each_element(&nhdp_domain_list, d, _node) {
+    if (d->ext == ext) {
+      return d;
+    }
+  }
+  return NULL;
 }
 
 /**
@@ -243,17 +242,17 @@ nhdp_domain_get_mpr_by_ext(uint8_t ext) {
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_metric_process_linktlv(struct nhdp_metric_handler *h,
+nhdp_metric_process_linktlv(struct nhdp_domain *d,
     struct nhdp_link *lnk, uint16_t tlvvalue) {
   uint32_t metric;
 
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
-    lnk->_metric[h->_index].m.outgoing = metric;
+    lnk->_metric[d->_index].m.outgoing = metric;
   }
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
-    lnk->neigh->_metric[h->_index].m.outgoing = metric;
+    lnk->neigh->_metric[d->_index].m.outgoing = metric;
   }
 }
 
@@ -264,17 +263,17 @@ nhdp_metric_process_linktlv(struct nhdp_metric_handler *h,
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_metric_process_2hoptlv(struct nhdp_metric_handler *h,
+nhdp_metric_process_2hoptlv(struct nhdp_domain *d,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue) {
   uint32_t metric;
 
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
-    l2hop->_metric[h->_index].incoming = metric;
+    l2hop->_metric[d->_index].incoming = metric;
   }
   if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
-    l2hop->_metric[h->_index].outgoing = metric;
+    l2hop->_metric[d->_index].outgoing = metric;
   }
 }
 
@@ -285,29 +284,29 @@ nhdp_metric_process_2hoptlv(struct nhdp_metric_handler *h,
  */
 void
 nhdp_metric_calculate_neighbor_metric(
-    struct nhdp_metric_handler *h,
+    struct nhdp_domain *d,
     struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk;
 
-  neigh->_metric[h->ext].m.incoming = RFC5444_METRIC_INFINITE;
-  neigh->_metric[h->ext].m.outgoing = RFC5444_METRIC_INFINITE;
+  neigh->_metric[d->ext].m.incoming = RFC5444_METRIC_INFINITE;
+  neigh->_metric[d->ext].m.outgoing = RFC5444_METRIC_INFINITE;
 
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
-    if (lnk->_metric[h->ext].m.outgoing < neigh->_metric[h->ext].m.outgoing) {
-      neigh->_metric[h->ext].m.outgoing = lnk->_metric[h->ext].m.outgoing;
+    if (lnk->_metric[d->ext].m.outgoing < neigh->_metric[d->ext].m.outgoing) {
+      neigh->_metric[d->ext].m.outgoing = lnk->_metric[d->ext].m.outgoing;
     }
-    if (lnk->_metric[h->ext].m.incoming < neigh->_metric[h->ext].m.incoming) {
-      neigh->_metric[h->ext].m.incoming = lnk->_metric[h->ext].m.incoming;
+    if (lnk->_metric[d->ext].m.incoming < neigh->_metric[d->ext].m.incoming) {
+      neigh->_metric[d->ext].m.incoming = lnk->_metric[d->ext].m.incoming;
     }
   }
 }
 
 void
-nhdp_domain_process_mpr_tlv(struct nhdp_mpr_handler *h,
+nhdp_domain_process_mpr_tlv(struct nhdp_domain *d,
     struct nhdp_link *lnk, uint8_t tlvvalue) {
   lnk->flooding_mpr = tlvvalue == RFC5444_MPR_FLOODING
       || tlvvalue == RFC5444_MPR_FLOOD_ROUTE;
-  lnk->neigh->_metric[h->_index].local_is_mpr =
+  lnk->neigh->_metric[d->_index].local_is_mpr =
       tlvvalue == RFC5444_MPR_ROUTING
       || tlvvalue == RFC5444_MPR_FLOOD_ROUTE;
 }
@@ -321,12 +320,7 @@ nhdp_domain_update_mprs(void) {
 }
 
 enum rfc5444_willingness_values
-nhdp_domain_get_willingness(void) {
-  if (nhdp_db_get_metriccount() == 0) {
-    return RFC5444_WILLINGNESS_UNDEFINED;
-  }
-
-  // TODO: make this configurable
+nhdp_domain_get_flooding_willingness(void) {
   return RFC5444_WILLINGNESS_DEFAULT;
 }
 

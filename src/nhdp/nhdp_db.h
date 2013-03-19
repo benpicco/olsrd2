@@ -56,6 +56,8 @@ struct nhdp_naddr;
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 
+#include "nhdp/nhdp_metric.h"
+
 #define NHDP_CLASS_LINK             "nhdp_link"
 #define NHDP_CLASS_LINK_ADDRESS     "nhdp_laddr"
 #define NHDP_CLASS_LINK_2HOP        "nhdp_l2hop"
@@ -138,7 +140,7 @@ struct nhdp_link {
   struct list_entity _neigh_node;
 
   /* Array of link metrics */
-  struct nhdp_link_metric _metric[0];
+  struct nhdp_link_metric _metric[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -184,7 +186,7 @@ struct nhdp_l2hop {
   struct avl_node _link_node;
 
   /* Array of link metrics */
-  struct nhdp_metric _metric[0];
+  struct nhdp_metric _metric[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -228,7 +230,7 @@ struct nhdp_neighbor {
   struct avl_node _originator_node;
 
   /* Array of link metrics */
-  struct nhdp_neighbor_metric _metric[0];
+  struct nhdp_neighbor_metric _metric[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -265,9 +267,6 @@ EXPORT extern struct avl_tree nhdp_neigh_originator_tree;
 
 void nhdp_db_init(void);
 void nhdp_db_cleanup(void);
-
-int nhdp_db_add_metric(void);
-EXPORT int nhdp_db_get_metriccount(void);
 
 EXPORT struct nhdp_neighbor *nhdp_db_neighbor_add(void);
 EXPORT void nhdp_db_neighbor_remove(struct nhdp_neighbor *);

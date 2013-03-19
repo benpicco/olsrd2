@@ -81,7 +81,7 @@ static struct rfc5444_writer_address *_add_rfc5444_address(
 static void _write_metric_tlv(struct rfc5444_writer *writer,
     struct rfc5444_writer_address *addr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
-    struct nhdp_metric_handler *handler);
+    struct nhdp_domain *domain);
 
 /* definition of NHDP writer */
 static struct rfc5444_writer_message *_nhdp_message = NULL;
@@ -210,7 +210,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
   uint8_t vtime_encoded, itime_encoded, will_encoded;
   enum rfc5444_willingness_values will_flooding;
-  struct nhdp_mpr_handler *mpr;
+  struct nhdp_domain *domain;
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
 
@@ -238,17 +238,17 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
       &vtime_encoded, sizeof(vtime_encoded));
 
   /* add willingness for all domains */
-  will_flooding = nhdp_domain_get_willingness();
+  will_flooding = nhdp_domain_get_flooding_willingness();
   if (will_flooding != RFC5444_WILLINGNESS_UNDEFINED) {
     will_flooding <<= 4;
 
-    list_for_each_element(&nhdp_mpr_handler_list, mpr, _node) {
+    list_for_each_element(&nhdp_domain_list, domain, _node) {
       will_encoded = (uint8_t) will_flooding;
 
-      will_encoded |= (uint8_t)mpr->willingness;
+      will_encoded |= (uint8_t)domain->mpr->willingness;
 
-      rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, mpr->ext,
-          &will_encoded, sizeof(will_encoded));
+      rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING,
+          domain->ext, &will_encoded, sizeof(will_encoded));
     }
   }
 }
@@ -344,8 +344,7 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
 static void
 _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_provider *prv,
     struct nhdp_interface *interf, struct nhdp_naddr *naddr) {
-  struct nhdp_metric_handler *metric_handler;
-  struct nhdp_mpr_handler *mpr_handler;
+  struct nhdp_domain *domain;
   struct rfc5444_writer_address *address;
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
@@ -410,8 +409,8 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   if (laddr != NULL) {
     mpr_flooding = laddr->link->flooding_mpr;
 
-    list_for_each_element(&nhdp_mpr_handler_list, mpr_handler, _node) {
-      mpr_routing = naddr->neigh->_metric[mpr_handler->_index].neigh_is_mpr;
+    list_for_each_element(&nhdp_domain_list, domain, _node) {
+      mpr_routing = naddr->neigh->_metric[domain->_index].neigh_is_mpr;
 
       if (mpr_flooding || mpr_routing) {
         uint8_t value;
@@ -427,17 +426,16 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
         }
 
         rfc5444_writer_add_addrtlv(writer, address,
-            &mpr_handler->_mpr_addrtlv,
-            &value, sizeof(value), false);
+            &domain->mpr->_mpr_addrtlv, &value, sizeof(value), false);
 
         OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d, etx=%d) to NHDP hello",
-            netaddr_to_string(&buf, &naddr->neigh_addr), value, mpr_handler->ext);
+            netaddr_to_string(&buf, &naddr->neigh_addr), value, domain->ext);
       }
     }
   }
 
   /* add linkcost TLVs */
-  list_for_each_element(&nhdp_metric_handler_list, metric_handler, _node) {
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
     struct nhdp_link *lnk = NULL;
     struct nhdp_neighbor *neigh = NULL;
 
@@ -451,7 +449,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
       neigh = naddr->neigh;
     }
 
-    _write_metric_tlv(writer, address, neigh, lnk, metric_handler);
+    _write_metric_tlv(writer, address, neigh, lnk, domain);
   }
 }
 
@@ -466,7 +464,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
 static void
 _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *addr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
-    struct nhdp_metric_handler *handler) {
+    struct nhdp_domain *domain) {
   static const uint16_t flags[4] = {
       RFC5444_LINKMETRIC_INCOMING_LINK,
       RFC5444_LINKMETRIC_OUTGOING_LINK,
@@ -488,13 +486,13 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       (lnk != NULL && (lnk->status == NHDP_LINK_HEARD || lnk->status == NHDP_LINK_SYMMETRIC));
 
   if (unsent[0]) {
-    memcpy(&metrics[0], &lnk->_metric[handler->_index], sizeof(uint32_t)*2);
+    memcpy(&metrics[0], &lnk->_metric[domain->_index], sizeof(uint32_t)*2);
   }
 
   /* get neighbor metrics if available */
   unsent[2] = unsent[3] = (neigh != NULL && neigh->symmetric > 0);
   if (unsent[2]) {
-    memcpy(&metrics[2], &neigh->_metric[handler->_index], sizeof(uint32_t)*2);
+    memcpy(&metrics[2], &neigh->_metric[domain->_index], sizeof(uint32_t)*2);
   }
 
   /* encode metrics */
@@ -523,14 +521,14 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       }
     }
 
-    OLSR_DEBUG(LOG_NHDP_W, "Add Metric (ext %u): 0x%04x", handler->ext, tlv_value);
+    OLSR_DEBUG(LOG_NHDP_W, "Add Metric (ext %u): 0x%04x", domain->ext, tlv_value);
 
     /* conversion into network byte order */
     tlv_value = htons(tlv_value);
 
     /* add to rfc5444 address */
     rfc5444_writer_add_addrtlv(writer, addr,
-        &handler->_metric_addrtlvs[k++],
+        &domain->metric->_metric_addrtlvs[k++],
         &tlv_value, sizeof(tlv_value), true);
   }
 }
