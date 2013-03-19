@@ -50,9 +50,9 @@
 #include "nhdp/nhdp_metric.h"
 #include "nhdp/nhdp.h"
 
-static const char *_to_string(struct nhdp_linkmetric_str *, uint32_t);
+static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
-static struct nhdp_linkmetric_handler _no_linkcost = {
+static struct nhdp_metric_handler _no_linkcost = {
   .name = "No link metric",
   .no_tlvs = true,
 
@@ -63,7 +63,7 @@ static struct nhdp_linkmetric_handler _no_linkcost = {
   .to_string = _to_string,
 };
 
-struct nhdp_linkmetric_handler *nhdp_metric_handler[256];
+struct nhdp_metric_handler *nhdp_metric_handler[256];
 struct list_entity nhdp_metric_handler_list;
 
 static struct olsr_rfc5444_protocol *_protocol;
@@ -73,7 +73,7 @@ static struct olsr_rfc5444_protocol *_protocol;
  * @param p pointer to rfc5444 protocol
  */
 void
-nhdp_linkmetric_init(struct olsr_rfc5444_protocol *p) {
+nhdp_metric_init(struct olsr_rfc5444_protocol *p) {
   size_t i;
 
   _protocol = p;
@@ -89,7 +89,7 @@ nhdp_linkmetric_init(struct olsr_rfc5444_protocol *p) {
  * cleanup allocated resources for nhdp metric core
  */
 void
-nhdp_linkmetric_cleanup(void) {
+nhdp_metric_cleanup(void) {
   size_t i,j;
 
   for (j=0; j<ARRAYSIZE(nhdp_metric_handler); j++) {
@@ -110,7 +110,7 @@ nhdp_linkmetric_cleanup(void) {
  * @return 0 if successful, -1 if metric extension is already blocked
  */
 int
-nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h) {
+nhdp_metric_handler_add(struct nhdp_metric_handler *h) {
   int i;
 
   if (nhdp_metric_handler[h->ext] != &_no_linkcost) {
@@ -150,8 +150,12 @@ nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h) {
  * @param h pointer to handler
  */
 void
-nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h) {
+nhdp_metric_handler_remove(struct nhdp_metric_handler *h) {
   int i;
+
+  if (h == &_no_linkcost) {
+    return;
+  }
 
   /* unregister TLV handlers */
   for (i=0; i<4; i++) {
@@ -175,7 +179,7 @@ nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h) {
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
+nhdp_metric_process_linktlv(struct nhdp_metric_handler *h,
     struct nhdp_link *lnk, uint16_t tlvvalue) {
   uint32_t metric;
 
@@ -200,7 +204,7 @@ nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
+nhdp_metric_process_2hoptlv(struct nhdp_metric_handler *h,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue) {
   uint32_t metric;
 
@@ -224,8 +228,8 @@ nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
  * @param neigh nhdp neighbor
  */
 void
-nhdp_linkmetric_calculate_neighbor_metric(
-    struct nhdp_linkmetric_handler *h,
+nhdp_metric_calculate_neighbor_metric(
+    struct nhdp_metric_handler *h,
     struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk;
 
@@ -253,7 +257,7 @@ nhdp_linkmetric_calculate_neighbor_metric(
  * @return pointer to string representation of metric value
  */
 static const char *
-_to_string(struct nhdp_linkmetric_str *buf, uint32_t metric) {
+_to_string(struct nhdp_metric_str *buf, uint32_t metric) {
   snprintf(buf->buf, sizeof(*buf), "0x%x", metric);
 
   return buf->buf;

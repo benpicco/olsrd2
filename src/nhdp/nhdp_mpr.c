@@ -49,99 +49,67 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_mpr.h"
 
-/* Prototypes */
 static void _update_mpr(struct nhdp_interface *);
-static void _set_mprs(struct nhdp_link *lnk, bool);
-static bool _is_mpr(struct nhdp_link *);
-static bool _use_willingness(struct nhdp_interface *);
 
-/* MPR default handler */
-static struct nhdp_mpr_handler _handler = {
-  .name = "No MPRs",
+static struct nhdp_mpr_handler _everyone_is_mpr = {
+  .name = "everyone is MPR",
+  .no_willingness = true,
   .update_mpr = _update_mpr,
-  .set_mprs = _set_mprs,
-  .is_mpr = _is_mpr,
-  .use_willingness = _use_willingness,
 };
 
-static struct nhdp_mpr_handler *_routing_mpr_handler = &_handler;
-static struct nhdp_mpr_handler *_flooding_mpr_handler = &_handler;
+struct nhdp_mpr_handler *nhdp_mpr_handler[256];
+struct list_entity nhdp_mpr_handler_list;
+struct nhdp_mpr_handler *nhdp_flooding_mpr;
 
-/**
- * Set a handler for flooding MPR calculation
- * @param handler pointer to handler of NULL to reset to default
- */
+static struct olsr_rfc5444_protocol *_protocol;
+
 void
-nhdp_mpr_set_flooding_handler(struct nhdp_mpr_handler *handler) {
-  if (handler == NULL) {
-    _flooding_mpr_handler = &_handler;
-  }
-  else {
-    _flooding_mpr_handler = handler;
+nhdp_mpr_init(struct olsr_rfc5444_protocol *p) {
+  size_t i;
+
+  /* remember protocol */
+  _protocol = p;
+
+  /* initialize mpr handler cache */
+  for (i=0; i<ARRAYSIZE(nhdp_mpr_handler); i++) {
+    nhdp_mpr_handler[i] = &_everyone_is_mpr;
   }
 }
 
-/**
- * Set a handler for routing MPR calculation
- * @param handler pointer to handler of NULL to reset to default
- */
 void
-nhdp_mpr_set_routing_handler(struct nhdp_mpr_handler *handler) {
-  if (handler == NULL) {
-    _routing_mpr_handler = &_handler;
+nhdp_mpr_cleanup(void) {
+  size_t i;
+
+  for (i=0; i<ARRAYSIZE(nhdp_mpr_handler); i++) {
+
   }
-  else {
-    _routing_mpr_handler = handler;
-  }
 }
 
-struct nhdp_mpr_handler *
-nhdp_mpr_get_flooding_handler(void) {
-  return _flooding_mpr_handler;
+int
+nhdp_mpr_add(struct nhdp_mpr_handler *h __attribute__((unused))) {
+  return 0;
 }
 
-struct nhdp_mpr_handler *
-nhdp_mpr_get_routing_handler(void) {
-  return _routing_mpr_handler;
+void
+nhdp_mpr_remove(struct nhdp_mpr_handler *h __attribute__((unused))) {
 }
 
-/**
- * Dummy function for updating MPR set (does nothing)
- * @param interf pointer to local nhdp interface
- */
-static void
-_update_mpr(struct nhdp_interface *interf __attribute((unused))) {
-  return;
+void nhdp_mpr_process_linktlv(struct nhdp_mpr_handler *h __attribute__((unused)),
+    struct nhdp_link *lnk __attribute__((unused)), uint16_t tlvvalue __attribute__((unused))) {
+
 }
 
-/**
- * Dummy function to store MPR selectors of a link (does nothing)
- * @param lnk pointer to nhdp link
- * @param selected true if neighbor selected us as a MPR
- */
-static void
-_set_mprs(struct nhdp_link *lnk __attribute((unused)),
-    bool selected __attribute((unused))) {
-  return;
+void
+nhdp_mpr_update(struct nhdp_interface * interf __attribute__((unused))) {
+
 }
 
-/**
- * Dummy function to get a links mpr TLV value.
- * @param lnk pointer to link
- * @return always true
- */
-static bool
-_is_mpr(struct nhdp_link *lnk __attribute((unused))) {
-  return true;
-}
-
-/**
- * Dummy function to decide if interface hello message should
- * contain willingness TLV
- * @param interf pointer to local nhdp interface
- * @return always false
- */
-static bool
-_use_willingness(struct nhdp_interface *interf __attribute((unused))) {
+bool
+nhdp_mpr_use_willingness(void) {
   return false;
+}
+
+static void
+_update_mpr(struct nhdp_interface *interf __attribute__((unused))) {
+
 }

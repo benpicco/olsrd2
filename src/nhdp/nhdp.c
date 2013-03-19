@@ -41,6 +41,7 @@
 
 #include "common/common_types.h"
 #include "rfc5444/rfc5444_writer.h"
+#include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_telnet.h"
@@ -109,7 +110,7 @@ nhdp_init(void) {
   nhdp_reader_init(_protocol);
   nhdp_interfaces_init(_protocol);
   nhdp_db_init();
-  nhdp_linkmetric_init(_protocol);
+  nhdp_metric_init(_protocol);
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
@@ -135,7 +136,7 @@ nhdp_cleanup(void) {
     olsr_telnet_remove(&_cmds[i]);
   }
 
-  nhdp_linkmetric_cleanup();
+  nhdp_metric_cleanup();
   nhdp_writer_cleanup();
   nhdp_reader_cleanup();
   nhdp_db_cleanup();
@@ -307,12 +308,12 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
   struct nhdp_l2hop *twohop;
   const char *status;
 
-  struct nhdp_linkmetric_handler *h;
+  struct nhdp_metric_handler *h;
 
   struct netaddr_str nbuf;
   struct fraction_str tbuf1, tbuf2, tbuf3;
   struct nhdp_hysteresis_str hbuf;
-  struct nhdp_linkmetric_str mbuf1, mbuf2;
+  struct nhdp_metric_str mbuf1, mbuf2;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 

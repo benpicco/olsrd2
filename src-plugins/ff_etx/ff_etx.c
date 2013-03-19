@@ -127,7 +127,7 @@ static enum rfc5444_result _cb_process_packet(
       struct rfc5444_reader_tlvblock_context *context);
 
 static const char *_to_string(
-    struct nhdp_linkmetric_str *buf, uint32_t metric);
+    struct nhdp_metric_str *buf, uint32_t metric);
 
 static int _cb_cfg_validate(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
@@ -211,7 +211,7 @@ struct olsr_timer_info _hello_lost_info = {
 };
 
 /* nhdp metric handler */
-struct nhdp_linkmetric_handler _etxff_handler = {
+struct nhdp_metric_handler _etxff_handler = {
   .name = "ETXFF metric handler",
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
@@ -254,7 +254,7 @@ _cb_plugin_enable(void) {
     return -1;
   }
 
-  if (nhdp_linkmetric_handler_add(&_etxff_handler)) {
+  if (nhdp_metric_handler_add(&_etxff_handler)) {
     olsr_class_listener_remove(&_link_listener);
     return -1;
   }
@@ -284,7 +284,7 @@ _cb_plugin_disable(void) {
   olsr_rfc5444_remove_protocol_pktseqno(_protocol);
   olsr_rfc5444_remove_protocol(_protocol);
 
-  nhdp_linkmetric_handler_remove(&_etxff_handler);
+  nhdp_metric_handler_remove(&_etxff_handler);
 
   olsr_class_listener_remove(&_link_listener);
 
@@ -438,7 +438,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
 
   /* update neighbor metrics */
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    nhdp_linkmetric_calculate_neighbor_metric(&_etxff_handler, neigh);
+    nhdp_metric_calculate_neighbor_metric(&_etxff_handler, neigh);
   }
 }
 
@@ -542,7 +542,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
  * @return pointer to output string
  */
 static const char *
-_to_string(struct nhdp_linkmetric_str *buf, uint32_t metric) {
+_to_string(struct nhdp_metric_str *buf, uint32_t metric) {
   uint32_t frac;
 
   frac = metric % ETXFF_LINKCOST_MINIMUM;

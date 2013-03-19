@@ -42,12 +42,8 @@
 #ifndef NHDP_H_
 #define NHDP_H_
 
-#include "common/avl.h"
-#include "core/olsr_timer.h"
-#include "rfc5444/rfc5444_reader.h"
-#include "tools/olsr_rfc5444.h"
-
-#include "nhdp/nhdp_db.h"
+#include "common/common_types.h"
+#include "common/netaddr.h"
 
 #define CFG_NHDP_SECTION "nhdp"
 

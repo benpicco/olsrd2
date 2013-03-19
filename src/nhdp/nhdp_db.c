@@ -231,7 +231,7 @@ nhdp_db_get_metriccount(void) {
 struct nhdp_neighbor *
 nhdp_db_neighbor_add(void) {
   struct nhdp_neighbor *neigh;
-  struct nhdp_linkmetric_handler *h;
+  struct nhdp_metric_handler *h;
 
   if (!_metric_initialized) {
     /* lazy memory size initialization */
@@ -284,7 +284,9 @@ nhdp_db_neighbor_add(void) {
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
     neigh->_metric[h->_index].m.incoming = h->metric_start;
     neigh->_metric[h->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
-    neigh->_metric[h->_index].routing_mpr = h->default_routing_mpr;
+
+    // TODO default werte für neighbor
+    // neigh->_metric[h->_index].local_is_mpr = h->default_routing_mpr;
   }
 
   /* trigger event */
@@ -491,7 +493,7 @@ nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *ori
  */
 struct nhdp_link *
 nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
-  struct nhdp_linkmetric_handler *h;
+  struct nhdp_metric_handler *h;
   struct nhdp_link *lnk;
 
   lnk = olsr_class_malloc(&_link_info);
@@ -660,7 +662,7 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
  */
 struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
-  struct nhdp_linkmetric_handler *h;
+  struct nhdp_metric_handler *h;
   struct nhdp_l2hop *l2hop;
 
   l2hop = olsr_class_malloc(&_l2hop_info);

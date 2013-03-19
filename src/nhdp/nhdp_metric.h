@@ -45,16 +45,17 @@
 struct nhdp_metric;
 
 #include "common/common_types.h"
+#include "common/list.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "tools/olsr_rfc5444.h"
 
 #include "nhdp/nhdp_db.h"
 
-struct nhdp_linkmetric_str {
+struct nhdp_metric_str {
   char buf[128];
 };
 
-struct nhdp_linkmetric_handler {
+struct nhdp_metric_handler {
   /* name of linkmetric */
   const char *name;
 
@@ -70,7 +71,7 @@ struct nhdp_linkmetric_handler {
   /* default value for neighbor routing_mpr field */
   bool default_routing_mpr;
 
-  const char *(*to_string)(struct nhdp_linkmetric_str *, uint32_t);
+  const char *(*to_string)(struct nhdp_metric_str *, uint32_t);
 
   /* storage for the up to four additional link metrics */
   struct rfc5444_writer_tlvtype _metric_addrtlvs[4];
@@ -82,24 +83,24 @@ struct nhdp_linkmetric_handler {
   struct list_entity _node;
 };
 
-EXPORT extern struct nhdp_linkmetric_handler *nhdp_metric_handler[256];
+EXPORT extern struct nhdp_metric_handler *nhdp_metric_handler[256];
 EXPORT extern struct list_entity nhdp_metric_handler_list;
 
-void nhdp_linkmetric_init(struct olsr_rfc5444_protocol *);
-void nhdp_linkmetric_cleanup(void);
+void nhdp_metric_init(struct olsr_rfc5444_protocol *);
+void nhdp_metric_cleanup(void);
 
-EXPORT int nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h);
-EXPORT void nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h);
+EXPORT int nhdp_metric_handler_add(struct nhdp_metric_handler *h);
+EXPORT void nhdp_metric_handler_remove(struct nhdp_metric_handler *h);
 
-EXPORT void nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
+EXPORT void nhdp_metric_process_linktlv(struct nhdp_metric_handler *h,
     struct nhdp_link *lnk, uint16_t tlvvalue);
-EXPORT void nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
+EXPORT void nhdp_metric_process_2hoptlv(struct nhdp_metric_handler *h,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue);
-EXPORT void nhdp_linkmetric_calculate_neighbor_metric(
-    struct nhdp_linkmetric_handler *, struct nhdp_neighbor *);
+EXPORT void nhdp_metric_calculate_neighbor_metric(
+    struct nhdp_metric_handler *, struct nhdp_neighbor *);
 
-static INLINE struct nhdp_linkmetric_handler *
-nhdp_linkmetric_handler_get_by_ext(uint8_t ext) {
+static INLINE struct nhdp_metric_handler *
+nhdp_metric_get_handler_by_ext(uint8_t ext) {
   return nhdp_metric_handler[ext];
 }
 

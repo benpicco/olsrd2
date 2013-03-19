@@ -79,12 +79,12 @@ struct nhdp_metric {
 
 struct nhdp_link_metric {
   struct nhdp_metric m;
-  bool mpr_selector;
 };
 
 struct nhdp_neighbor_metric {
   struct nhdp_metric m;
-  bool routing_mpr;
+  bool local_is_mpr;
+  bool neigh_is_mpr;
 };
 
 /**
@@ -115,6 +115,9 @@ struct nhdp_link {
 
   /* pointer to neighbor entry of the other side of the link */
   struct nhdp_neighbor *neigh;
+
+  /* true if link is used as a flooding MPR */
+  bool flooding_mpr;
 
   /* internal field for NHDP processing */
   int _process_count;

@@ -59,7 +59,6 @@ enum {
   IDX_ADDRTLV_LOCAL_IF,
   IDX_ADDRTLV_LINK_STATUS,
   IDX_ADDRTLV_OTHER_NEIGHB,
-  IDX_ADDRTLV_MPR,
 };
 
 /* prototypes */
@@ -83,7 +82,7 @@ static struct rfc5444_writer_address *_add_rfc5444_address(
 static void _write_metric_tlv(struct rfc5444_writer *writer,
     struct rfc5444_writer_address *addr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
-    struct nhdp_linkmetric_handler *handler);
+    struct nhdp_metric_handler *handler);
 
 /* definition of NHDP writer */
 static struct rfc5444_writer_message *_nhdp_message = NULL;
@@ -98,7 +97,6 @@ static struct rfc5444_writer_tlvtype _nhdp_addrtlvs[] = {
   [IDX_ADDRTLV_LOCAL_IF] =     { .type = RFC5444_ADDRTLV_LOCAL_IF },
   [IDX_ADDRTLV_LINK_STATUS] =  { .type = RFC5444_ADDRTLV_LINK_STATUS },
   [IDX_ADDRTLV_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB },
-  [IDX_ADDRTLV_MPR] =          { .type = RFC5444_ADDRTLV_MPR },
 };
 
 static struct olsr_rfc5444_protocol *_protocol;
@@ -238,7 +236,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
   rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
       &vtime_encoded, sizeof(vtime_encoded));
 
-  if (nhdp_mpr_use_willingness(nhdp_mpr_get_flooding_handler(), interf)) {
+  if (nhdp_mpr_use_willingness()) {
     will = nhdp_interface_get_mpr_willingness(interf);
     rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, 0,
         &will, sizeof(will));
@@ -336,7 +334,8 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
 static void
 _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_provider *prv,
     struct nhdp_interface *interf, struct nhdp_naddr *naddr) {
-  struct nhdp_linkmetric_handler *metric_handler;
+  struct nhdp_metric_handler *metric_handler;
+  struct nhdp_mpr_handler *mpr_handler;
   struct rfc5444_writer_address *address;
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
@@ -397,32 +396,37 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
         netaddr_to_string(&buf, &naddr->neigh_addr), otherneigh);
   }
 
+  /* add MPR tlvs */
   if (laddr != NULL) {
-    mpr_flooding = nhdp_mpr_is_mpr(nhdp_mpr_get_flooding_handler(), laddr->link);
-    mpr_routing = nhdp_mpr_is_mpr(nhdp_mpr_get_routing_handler(), laddr->link);
+    mpr_flooding = laddr->link->flooding_mpr;
 
-    if (mpr_flooding || mpr_routing) {
-      uint8_t value;
+    list_for_each_element(&nhdp_mpr_handler_list, mpr_handler, _node) {
+      mpr_routing = naddr->neigh->_metric[mpr_handler->_index].neigh_is_mpr;
 
-      if (mpr_flooding && mpr_routing) {
-        value = RFC5444_MPR_FLOOD_ROUTE;
+      if (mpr_flooding || mpr_routing) {
+        uint8_t value;
+
+        if (mpr_flooding && mpr_routing) {
+          value = RFC5444_MPR_FLOOD_ROUTE;
+        }
+        else if (mpr_flooding) {
+          value = RFC5444_MPR_FLOODING;
+        }
+        else {
+          value = RFC5444_MPR_ROUTING;
+        }
+
+        rfc5444_writer_add_addrtlv(writer, address,
+            &mpr_handler->_mpr_addrtlv,
+            &value, sizeof(value), false);
+
+        OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d, etx=%d) to NHDP hello",
+            netaddr_to_string(&buf, &naddr->neigh_addr), value, mpr_handler->ext);
       }
-      else if (mpr_flooding) {
-        value = RFC5444_MPR_FLOODING;
-      }
-      else {
-        value = RFC5444_MPR_ROUTING;
-      }
-
-      rfc5444_writer_add_addrtlv(writer, address,
-          &_nhdp_addrtlvs[IDX_ADDRTLV_MPR],
-          &value, sizeof(value), false);
-
-      OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d) to NHDP hello",
-          netaddr_to_string(&buf, &naddr->neigh_addr), value);
     }
   }
 
+  /* add linkcost TLVs */
   list_for_each_element(&nhdp_metric_handler_list, metric_handler, _node) {
     if (!metric_handler->no_tlvs) {
       struct nhdp_link *lnk = NULL;
@@ -454,7 +458,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
 static void
 _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *addr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
-    struct nhdp_linkmetric_handler *handler) {
+    struct nhdp_metric_handler *handler) {
   static const uint16_t flags[4] = {
       RFC5444_LINKMETRIC_INCOMING_LINK,
       RFC5444_LINKMETRIC_OUTGOING_LINK,
