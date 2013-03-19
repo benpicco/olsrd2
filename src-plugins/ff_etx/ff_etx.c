@@ -212,7 +212,7 @@ struct olsr_timer_info _hello_lost_info = {
 };
 
 /* nhdp metric handler */
-struct nhdp_metric_handler _etxff_handler = {
+struct nhdp_domain_metric _etxff_handler = {
   .name = "ETXFF metric handler",
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
@@ -257,7 +257,7 @@ _cb_plugin_enable(void) {
     return -1;
   }
 
-  _domain = nhdp_metric_handler_add(&_etxff_handler, 0);
+  _domain = nhdp_domain_metric_add(&_etxff_handler, 0);
   if (!_domain) {
     olsr_class_listener_remove(&_link_listener);
     return -1;
@@ -288,7 +288,7 @@ _cb_plugin_disable(void) {
   olsr_rfc5444_remove_protocol_pktseqno(_protocol);
   olsr_rfc5444_remove_protocol(_protocol);
 
-  nhdp_metric_handler_remove(_domain);
+  nhdp_domain_metric_remove(_domain);
 
   olsr_class_listener_remove(&_link_listener);
 
@@ -442,7 +442,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
 
   /* update neighbor metrics */
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    nhdp_metric_calculate_neighbor_metric(_domain, neigh);
+    nhdp_domain_calculate_neighbor_metric(_domain, neigh);
   }
 }
 

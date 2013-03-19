@@ -59,7 +59,7 @@ struct nhdp_metric_str {
   char buf[128];
 };
 
-struct nhdp_metric_handler {
+struct nhdp_domain_metric {
   /* name of linkmetric */
   const char *name;
 
@@ -76,7 +76,7 @@ struct nhdp_metric_handler {
 };
 
 /* handler for generating MPR information of a link */
-struct nhdp_mpr_handler {
+struct nhdp_domain_mpr {
   /* name of handler */
   const char *name;
 
@@ -95,8 +95,8 @@ struct nhdp_mpr_handler {
 };
 
 struct nhdp_domain {
-  struct nhdp_metric_handler *metric;
-  struct nhdp_mpr_handler *mpr;
+  struct nhdp_domain_metric *metric;
+  struct nhdp_domain_mpr *mpr;
 
   /* tlv extension */
   uint8_t ext;
@@ -115,21 +115,21 @@ void nhdp_domain_cleanup(void);
 
 EXPORT size_t nhdp_domain_get_count(void);
 
-EXPORT struct nhdp_domain *nhdp_metric_handler_add(
-    struct nhdp_metric_handler *h, uint8_t ext);
-EXPORT void nhdp_metric_handler_remove(struct nhdp_domain *d);
+EXPORT struct nhdp_domain *nhdp_domain_metric_add(
+    struct nhdp_domain_metric *h, uint8_t ext);
+EXPORT void nhdp_domain_metric_remove(struct nhdp_domain *d);
 
-EXPORT struct nhdp_domain *nhdp_mpr_handler_add(
-    struct nhdp_mpr_handler *h, uint8_t etx);
-EXPORT void nhdp_mpr_handler_remove(struct nhdp_domain *d);
+EXPORT struct nhdp_domain *nhdp_domain_mpr_add(
+    struct nhdp_domain_mpr *h, uint8_t etx);
+EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain *d);
 
 EXPORT struct nhdp_domain *nhdp_domain_get_by_ext(uint8_t);
 
-EXPORT void nhdp_metric_process_linktlv(struct nhdp_domain *,
+EXPORT void nhdp_domain_process_metric_linktlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint16_t tlvvalue);
-EXPORT void nhdp_metric_process_2hoptlv(struct nhdp_domain *d,
+EXPORT void nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue);
-EXPORT void nhdp_metric_calculate_neighbor_metric(
+EXPORT void nhdp_domain_calculate_neighbor_metric(
     struct nhdp_domain *, struct nhdp_neighbor *);
 
 EXPORT void nhdp_domain_process_mpr_tlv(struct nhdp_domain *,

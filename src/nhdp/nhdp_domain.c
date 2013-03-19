@@ -52,11 +52,11 @@
 
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
-static struct nhdp_metric_handler _no_metric = {
+static struct nhdp_domain_metric _no_metric = {
   .name = "No metric",
 };
 
-static struct nhdp_mpr_handler _everyone_mpr = {
+static struct nhdp_domain_mpr _everyone_mpr = {
   .name = "Everyone mpr",
   .willingness = RFC5444_WILLINGNESS_DEFAULT,
 };
@@ -85,8 +85,8 @@ nhdp_domain_cleanup(void) {
   struct nhdp_domain *domain, *d_it;
 
   list_for_each_element_safe(&nhdp_domain_list, domain, _node, d_it) {
-    nhdp_metric_handler_remove(domain);
-    nhdp_mpr_handler_remove(domain);
+    nhdp_domain_metric_remove(domain);
+    nhdp_domain_mpr_remove(domain);
   }
 }
 
@@ -101,7 +101,7 @@ nhdp_domain_get_count(void) {
  * @return 0 if successful, -1 if metric extension is already blocked
  */
 struct nhdp_domain *
-nhdp_metric_handler_add(struct nhdp_metric_handler *h, uint8_t ext) {
+nhdp_domain_metric_add(struct nhdp_domain_metric *h, uint8_t ext) {
   struct nhdp_domain *domain;
   int i;
 
@@ -146,7 +146,7 @@ nhdp_metric_handler_add(struct nhdp_metric_handler *h, uint8_t ext) {
  * @param h pointer to handler
  */
 void
-nhdp_metric_handler_remove(struct nhdp_domain *domain) {
+nhdp_domain_metric_remove(struct nhdp_domain *domain) {
   int i;
 
   /* unregister TLV handlers */
@@ -171,7 +171,7 @@ nhdp_metric_handler_remove(struct nhdp_domain *domain) {
  * @return 0 if successful, -1 if metric extension is already blocked
  */
 struct nhdp_domain *
-nhdp_mpr_handler_add(struct nhdp_mpr_handler *h, uint8_t ext) {
+nhdp_domain_mpr_add(struct nhdp_domain_mpr *h, uint8_t ext) {
   struct nhdp_domain *domain;
 
   domain = nhdp_domain_get_by_ext(ext);
@@ -208,7 +208,7 @@ nhdp_mpr_handler_add(struct nhdp_mpr_handler *h, uint8_t ext) {
  * @param h pointer to handler
  */
 void
-nhdp_mpr_handler_remove(struct nhdp_domain *domain) {
+nhdp_domain_mpr_remove(struct nhdp_domain *domain) {
   /* unregister TLV handler */
   rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
       &domain->mpr->_mpr_addrtlv);
@@ -242,7 +242,7 @@ nhdp_domain_get_by_ext(uint8_t ext) {
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_metric_process_linktlv(struct nhdp_domain *d,
+nhdp_domain_process_metric_linktlv(struct nhdp_domain *d,
     struct nhdp_link *lnk, uint16_t tlvvalue) {
   uint32_t metric;
 
@@ -263,7 +263,7 @@ nhdp_metric_process_linktlv(struct nhdp_domain *d,
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_metric_process_2hoptlv(struct nhdp_domain *d,
+nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue) {
   uint32_t metric;
 
@@ -283,7 +283,7 @@ nhdp_metric_process_2hoptlv(struct nhdp_domain *d,
  * @param neigh nhdp neighbor
  */
 void
-nhdp_metric_calculate_neighbor_metric(
+nhdp_domain_calculate_neighbor_metric(
     struct nhdp_domain *d,
     struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk;

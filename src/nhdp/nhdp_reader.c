@@ -739,7 +739,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
         /* get metric handler */
         domain = nhdp_domain_get_by_ext(tlv->type_ext);
         if (domain) {
-          nhdp_metric_process_linktlv(domain, _current.link, tlvvalue);
+          nhdp_domain_process_metric_linktlv(domain, _current.link, tlvvalue);
         }
 
         tlv = tlv->next_entry;
@@ -782,7 +782,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
         /* get metric handler */
         domain = nhdp_domain_get_by_ext(tlv->type_ext);
         if (domain) {
-          nhdp_metric_process_2hoptlv(domain, l2hop, tlvvalue);
+          nhdp_domain_process_metric_2hoptlv(domain, l2hop, tlvvalue);
         }
 
         tlv = tlv->next_entry;
@@ -906,7 +906,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
 
   /* update link metrics */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    nhdp_metric_calculate_neighbor_metric(domain, _current.neighbor);
+    nhdp_domain_calculate_neighbor_metric(domain, _current.neighbor);
   }
 
   /* update link status */
