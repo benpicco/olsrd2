@@ -51,7 +51,6 @@
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_metric.h"
-#include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_writer.h"
 
 /* constants */
@@ -209,7 +208,9 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
 static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
-  uint8_t vtime_encoded, itime_encoded, will;
+  uint8_t vtime_encoded, itime_encoded, will_encoded;
+  enum rfc5444_willingness_values will_flooding;
+  struct nhdp_mpr_handler *mpr;
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
 
@@ -236,10 +237,19 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
   rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
       &vtime_encoded, sizeof(vtime_encoded));
 
-  if (nhdp_mpr_use_willingness()) {
-    will = nhdp_interface_get_mpr_willingness(interf);
-    rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, 0,
-        &will, sizeof(will));
+  /* add willingness for all domains */
+  will_flooding = nhdp_domain_get_willingness();
+  if (will_flooding != RFC5444_WILLINGNESS_UNDEFINED) {
+    will_flooding <<= 4;
+
+    list_for_each_element(&nhdp_mpr_handler_list, mpr, _node) {
+      will_encoded = (uint8_t) will_flooding;
+
+      will_encoded |= (uint8_t)mpr->willingness;
+
+      rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, mpr->ext,
+          &will_encoded, sizeof(will_encoded));
+    }
   }
 }
 
@@ -428,22 +438,20 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
 
   /* add linkcost TLVs */
   list_for_each_element(&nhdp_metric_handler_list, metric_handler, _node) {
-    if (!metric_handler->no_tlvs) {
-      struct nhdp_link *lnk = NULL;
-      struct nhdp_neighbor *neigh = NULL;
+    struct nhdp_link *lnk = NULL;
+    struct nhdp_neighbor *neigh = NULL;
 
-      if (linkstatus == RFC5444_LINKSTATUS_HEARD
-          || linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
-        lnk = laddr->link;
-      }
-      if (naddr->neigh->symmetric > 0
-          && (linkstatus == RFC5444_LINKSTATUS_SYMMETRIC
-              || otherneigh == RFC5444_OTHERNEIGHB_SYMMETRIC)) {
-        neigh = naddr->neigh;
-      }
-
-      _write_metric_tlv(writer, address, neigh, lnk, metric_handler);
+    if (linkstatus == RFC5444_LINKSTATUS_HEARD
+        || linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
+      lnk = laddr->link;
     }
+    if (naddr->neigh->symmetric > 0
+        && (linkstatus == RFC5444_LINKSTATUS_SYMMETRIC
+            || otherneigh == RFC5444_OTHERNEIGHB_SYMMETRIC)) {
+      neigh = naddr->neigh;
+    }
+
+    _write_metric_tlv(writer, address, neigh, lnk, metric_handler);
   }
 }
 

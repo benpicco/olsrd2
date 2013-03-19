@@ -49,7 +49,6 @@
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_metric.h"
-#include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_reader.h"
 #include "nhdp/nhdp_writer.h"
 #include "nhdp/nhdp.h"
@@ -110,7 +109,7 @@ nhdp_init(void) {
   nhdp_reader_init(_protocol);
   nhdp_interfaces_init(_protocol);
   nhdp_db_init();
-  nhdp_metric_init(_protocol);
+  nhdp_domain_init(_protocol);
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
@@ -136,7 +135,7 @@ nhdp_cleanup(void) {
     olsr_telnet_remove(&_cmds[i]);
   }
 
-  nhdp_metric_cleanup();
+  nhdp_domain_cleanup();
   nhdp_writer_cleanup();
   nhdp_reader_cleanup();
   nhdp_db_cleanup();

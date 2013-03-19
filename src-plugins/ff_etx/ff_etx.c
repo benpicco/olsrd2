@@ -54,15 +54,16 @@
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_cfg.h"
 
+#include "nhdp/nhdp.h"
 #include "nhdp/nhdp_metric.h"
 #include "nhdp/nhdp_interfaces.h"
 
 /* definitions and constants */
-#define CFG_HYSTERESIS_OLSRV1_SECTION "ff_etx"
+#define CFG_ETXFF_SECTION "ff_etx"
 
 #define ETXFF_LINKCOST_MINIMUM 0x1000
-#define ETXFF_LINKCOST_START   0x10000
-#define ETXFF_LINKCOST_MAXIMUM 0x10000
+#define ETXFF_LINKCOST_START   NHDP_METRIC_DEFAULT
+#define ETXFF_LINKCOST_MAXIMUM NHDP_METRIC_DEFAULT
 
 /* Configuration settings of ETXFF Metric */
 struct _config {
@@ -149,7 +150,7 @@ OLSR_PLUGIN7 {
 
 /* configuration options */
 static struct cfg_schema_section _etxff_section = {
-  .type = CFG_HYSTERESIS_OLSRV1_SECTION,
+  .type = CFG_ETXFF_SECTION,
   .cb_validate = _cb_cfg_validate,
   .cb_delta_handler = _cb_cfg_changed,
 };

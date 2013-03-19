@@ -47,6 +47,11 @@
 
 #define CFG_NHDP_SECTION "nhdp"
 
+enum {
+  /* default metric value */
+  NHDP_METRIC_DEFAULT = 0x10000,
+};
+
 EXPORT extern enum log_source LOG_NHDP;
 
 int nhdp_init(void)  __attribute__((warn_unused_result));

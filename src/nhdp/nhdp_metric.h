@@ -62,9 +62,6 @@ struct nhdp_metric_handler {
   /* TLV extension value */
   int ext;
 
-  /* true if NHDP writer should NOT create metric TLVs */
-  bool no_tlvs;
-
   /* range of metric */
   uint32_t metric_minimum, metric_start, metric_maximum;
 
@@ -83,14 +80,44 @@ struct nhdp_metric_handler {
   struct list_entity _node;
 };
 
-EXPORT extern struct nhdp_metric_handler *nhdp_metric_handler[256];
-EXPORT extern struct list_entity nhdp_metric_handler_list;
+/* handler for generating MPR information of a link */
+struct nhdp_mpr_handler {
+  /* name of handler */
+  const char *name;
 
-void nhdp_metric_init(struct olsr_rfc5444_protocol *);
-void nhdp_metric_cleanup(void);
+  /* mpr extension, not used for flooding MPR */
+  uint8_t ext;
+
+  /* calculate MPR set */
+  void (*update_mpr)(void);
+
+  /* routing willingness */
+  enum rfc5444_willingness_values willingness;
+
+  /* storage for the additional mpr tlv */
+  struct rfc5444_writer_tlvtype _mpr_addrtlv;
+
+  /* index in the metric array */
+  int _index;
+
+  /* list of mpr handlers */
+  struct list_entity _node;
+};
+
+EXPORT extern struct list_entity nhdp_metric_handler_list;
+EXPORT extern struct list_entity nhdp_mpr_handler_list;
+
+void nhdp_domain_init(struct olsr_rfc5444_protocol *);
+void nhdp_domain_cleanup(void);
 
 EXPORT int nhdp_metric_handler_add(struct nhdp_metric_handler *h);
 EXPORT void nhdp_metric_handler_remove(struct nhdp_metric_handler *h);
+
+EXPORT int nhdp_mpr_handler_add(struct nhdp_mpr_handler *h);
+EXPORT void nhdp_mpr_handler_remove(struct nhdp_mpr_handler *h);
+
+EXPORT struct nhdp_metric_handler *nhdp_domain_get_metric_by_ext(uint8_t);
+EXPORT struct nhdp_mpr_handler *nhdp_domain_get_mpr_by_ext(uint8_t);
 
 EXPORT void nhdp_metric_process_linktlv(struct nhdp_metric_handler *h,
     struct nhdp_link *lnk, uint16_t tlvvalue);
@@ -99,9 +126,10 @@ EXPORT void nhdp_metric_process_2hoptlv(struct nhdp_metric_handler *h,
 EXPORT void nhdp_metric_calculate_neighbor_metric(
     struct nhdp_metric_handler *, struct nhdp_neighbor *);
 
-static INLINE struct nhdp_metric_handler *
-nhdp_metric_get_handler_by_ext(uint8_t ext) {
-  return nhdp_metric_handler[ext];
-}
+EXPORT void nhdp_domain_process_mpr_tlv(struct nhdp_mpr_handler *h,
+    struct nhdp_link *lnk, uint8_t tlvvalue);
+EXPORT void nhdp_domain_update_mprs(void);
+
+EXPORT enum rfc5444_willingness_values nhdp_domain_get_willingness(void);
 
 #endif /* NHDP_LINKCOST_H_ */

@@ -53,7 +53,6 @@
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_metric.h"
-#include "nhdp/nhdp_mpr.h"
 #include "nhdp/nhdp_reader.h"
 
 /* NHDP message TLV array index */
@@ -723,23 +722,18 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
             netaddr_to_string(&buf, &addr), tlv->type_ext, tlv->single_value[0]);
 
         /* get MPR handler */
-        mpr_handler = nhdp_mpr_get_handler_by_ext(tlv->type_ext);
-        nhdp_mpr_process_linktlv(mpr_handler, _current.link,
-            tlv->single_value[0]);
+        mpr_handler = nhdp_domain_get_mpr_by_ext(tlv->type_ext);
+        if (mpr_handler) {
+          nhdp_domain_process_mpr_tlv(mpr_handler, _current.link,
+              tlv->single_value[0]);
+        }
         tlv = tlv->next_entry;
       }
-#if 0
-      // TODO: what is with MPRs and multitopology routing?
-      nhdp_mpr_set_mprs(nhdp_mpr_get_flooding_handler(), _current.link,
-          mprs == RFC5444_MPR_FLOODING || mprs == RFC5444_MPR_FLOOD_ROUTE);
-      nhdp_mpr_set_mprs(nhdp_mpr_get_routing_handler(), _current.link,
-          mprs == RFC5444_MPR_ROUTING || mprs == RFC5444_MPR_FLOOD_ROUTE);
-#endif
 
       /* clear metric values that should be present in HELLO */
       list_for_each_element(&nhdp_metric_handler_list, lq_handler, _node) {
-        _current.link->_metric[lq_handler->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
-        _current.neighbor->_metric[lq_handler->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
+        _current.link->_metric[lq_handler->_index].m.outgoing = RFC5444_METRIC_INFINITE;
+        _current.neighbor->_metric[lq_handler->_index].m.outgoing = RFC5444_METRIC_INFINITE;
       }
 
       /* update outgoing metric with other sides incoming metric */
@@ -753,8 +747,10 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
             netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
 
         /* get metric handler */
-        lq_handler = nhdp_metric_get_handler_by_ext(tlv->type_ext);
-        nhdp_metric_process_linktlv(lq_handler, _current.link, tlvvalue);
+        lq_handler = nhdp_domain_get_metric_by_ext(tlv->type_ext);
+        if (lq_handler) {
+          nhdp_metric_process_linktlv(lq_handler, _current.link, tlvvalue);
+        }
 
         tlv = tlv->next_entry;
       }
@@ -779,8 +775,8 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
       /* clear metric values that should be present in HELLO */
       list_for_each_element(&nhdp_metric_handler_list, lq_handler, _node) {
-        l2hop->_metric[lq_handler->_index].incoming = RFC5444_METRIC_DEFAULT;
-        l2hop->_metric[lq_handler->_index].outgoing = RFC5444_METRIC_DEFAULT;
+        l2hop->_metric[lq_handler->_index].incoming = RFC5444_METRIC_INFINITE;
+        l2hop->_metric[lq_handler->_index].outgoing = RFC5444_METRIC_INFINITE;
       }
 
       /* update 2-hop metric (no direction reversal!) */
@@ -794,8 +790,10 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
             netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
 
         /* get metric handler */
-        lq_handler = nhdp_metric_get_handler_by_ext(tlv->type_ext);
-        nhdp_metric_process_2hoptlv(lq_handler, l2hop, tlvvalue);
+        lq_handler = nhdp_domain_get_metric_by_ext(tlv->type_ext);
+        if (lq_handler) {
+          nhdp_metric_process_2hoptlv(lq_handler, l2hop, tlvvalue);
+        }
 
         tlv = tlv->next_entry;
       }
@@ -914,7 +912,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
   nhdp_interfaces_update_neigh_addresstype(_current.localif);
 
   /* update MPR sets */
-  nhdp_mpr_update(_current.localif);
+  nhdp_domain_update_mprs();
 
   /* update link metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {

@@ -280,13 +280,13 @@ nhdp_db_neighbor_add(void) {
   /* initialize originator node */
   neigh->_originator_node.key = &neigh->originator;
 
-  /* initialize metrics */
+  /* initialize metrics and mprs */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
     neigh->_metric[h->_index].m.incoming = h->metric_start;
-    neigh->_metric[h->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
+    neigh->_metric[h->_index].m.outgoing = RFC5444_METRIC_INFINITE;
 
-    // TODO default werte für neighbor
-    // neigh->_metric[h->_index].local_is_mpr = h->default_routing_mpr;
+    neigh->_metric[h->_index].local_is_mpr = false;
+    neigh->_metric[h->_index].neigh_is_mpr = false;
   }
 
   /* trigger event */
@@ -526,7 +526,7 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
     lnk->_metric[h->_index].m.incoming = h->metric_start;
-    lnk->_metric[h->_index].m.outgoing = RFC5444_METRIC_DEFAULT;
+    lnk->_metric[h->_index].m.outgoing = RFC5444_METRIC_INFINITE;
   }
 
   /* trigger event */
@@ -686,8 +686,8 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
 
   /* initialize metrics */
   list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    l2hop->_metric[h->_index].incoming = RFC5444_METRIC_DEFAULT;
-    l2hop->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
+    l2hop->_metric[h->_index].incoming = RFC5444_METRIC_INFINITE;
+    l2hop->_metric[h->_index].outgoing = RFC5444_METRIC_INFINITE;
   }
 
   /* trigger event */
