@@ -49,10 +49,12 @@
 
 #include "nhdp/nhdp_db.h"
 
+/* Buffer for string representation of a linkmetric value */
 struct nhdp_metric_str {
   char buf[128];
 };
 
+/* Metric handler for a NHDP domain. */
 struct nhdp_domain_metric {
   /* name of linkmetric */
   const char *name;
@@ -74,7 +76,7 @@ struct nhdp_domain_metric {
   struct rfc5444_writer_tlvtype _metric_addrtlvs[4];
 };
 
-/* handler for generating MPR information of a link */
+/* MPR handler for a NHDP domain */
 struct nhdp_domain_mpr {
   /* name of handler */
   const char *name;
@@ -96,8 +98,18 @@ struct nhdp_domain_mpr {
 
   /* storage for the additional mpr tlv */
   struct rfc5444_writer_tlvtype _mpr_addrtlv;
+
+  /* temporary storage of willingness during message parsing */
+  uint8_t _tmp_willingness;
 };
 
+/*
+ * NHDP domain
+ *
+ * A domain is a topology on the mesh, including its own
+ * metric and routing MPR set. Both is transmitted over a
+ * specified TLV extension value on MPR and LQ TLVs.
+ */
 struct nhdp_domain {
   struct nhdp_domain_metric *metric;
   struct nhdp_domain_mpr *mpr;
@@ -129,6 +141,10 @@ EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain *d);
 
 EXPORT struct nhdp_domain *nhdp_domain_get_by_ext(uint8_t);
 
+EXPORT void nhdp_domain_init_link(struct nhdp_link *);
+EXPORT void nhdp_domain_init_l2hop(struct nhdp_l2hop *);
+EXPORT void nhdp_domain_init_neighbor(struct nhdp_neighbor *);
+
 EXPORT void nhdp_domain_process_metric_linktlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint16_t tlvvalue);
 EXPORT void nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
@@ -138,8 +154,50 @@ EXPORT void nhdp_domain_calculate_neighbor_metric(
 
 EXPORT void nhdp_domain_process_mpr_tlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint8_t tlvvalue);
+EXPORT void nhdp_domain_process_willingness_tlv(
+    struct nhdp_domain *, uint8_t tlvvalue);
+EXPORT uint8_t nhdp_domain_get_willingness_tlvvalue(
+    struct nhdp_domain *);
+EXPORT uint8_t nhdp_domain_get_mpr_tlvvalue(
+    struct nhdp_domain *, struct nhdp_link *);
 EXPORT void nhdp_domain_update_mprs(void);
 
-EXPORT enum rfc5444_willingness_values nhdp_domain_get_flooding_willingness(void);
+EXPORT void nhdp_domain_set_flooding_mpr(
+    struct nhdp_domain_mpr *, uint8_t ext);
+
+/**
+ *
+ * @param domain
+ * @param lnk
+ * @return
+ */
+static INLINE struct nhdp_link_domaindata *
+nhdp_domain_get_linkdata(struct nhdp_domain *domain, struct nhdp_link *lnk) {
+  return &lnk->_domaindata[domain->_index];
+}
+
+/**
+ *
+ * @param domain
+ * @param neigh
+ * @return
+ */
+static INLINE struct nhdp_neighbor_domaindata *
+nhdp_domain_get_neighbordata(
+    struct nhdp_domain *domain, struct nhdp_neighbor *neigh) {
+  return &neigh->_domaindata[domain->_index];
+}
+
+/**
+ *
+ * @param domain
+ * @param l2hop
+ * @return
+ */
+static INLINE struct nhdp_l2hop_domaindata *
+nhdp_domain_get_l2hopdata(
+    struct nhdp_domain *domain, struct nhdp_l2hop *l2hop) {
+  return &l2hop->_domaindata[domain->_index];
+}
 
 #endif /* NHDP_LINKCOST_H_ */

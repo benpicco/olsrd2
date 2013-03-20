@@ -209,7 +209,6 @@ static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
   uint8_t vtime_encoded, itime_encoded, will_encoded;
-  enum rfc5444_willingness_values will_flooding;
   struct nhdp_domain *domain;
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
@@ -238,21 +237,15 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
       &vtime_encoded, sizeof(vtime_encoded));
 
   /* add willingness for all domains */
-  will_flooding = nhdp_domain_get_flooding_willingness();
-  if (will_flooding != RFC5444_WILLINGNESS_UNDEFINED) {
-    will_flooding <<= 4;
-
-    list_for_each_element(&nhdp_domain_list, domain, _node) {
-      if (domain->mpr->no_default_handling) {
-        continue;
-      }
-      will_encoded = (uint8_t) will_flooding;
-
-      will_encoded |= (uint8_t)domain->mpr->willingness;
-
-      rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING,
-          domain->ext, &will_encoded, sizeof(will_encoded));
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->mpr->no_default_handling) {
+      continue;
     }
+
+    will_encoded = nhdp_domain_get_willingness_tlvvalue(domain);
+
+    rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING,
+        domain->ext, &will_encoded, sizeof(will_encoded));
   }
 }
 
@@ -301,12 +294,12 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
   bool this_if;
 
   if (netaddr_get_address_family(&addr->if_addr) == AF_INET
-      && interf->mode == NHDP_IPV6) {
+      && interf->mode == NHDP_IFMODE_IPV6) {
     /* ignore */
     return;
   }
   if (netaddr_get_address_family(&addr->if_addr) == AF_INET6
-      && interf->mode == NHDP_IPV4) {
+      && interf->mode == NHDP_IFMODE_IPV4) {
     /* ignore */
     return;
   }
@@ -351,15 +344,15 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   struct rfc5444_writer_address *address;
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
-  uint8_t linkstatus, otherneigh, mpr_flooding, mpr_routing;
+  uint8_t linkstatus, otherneigh, mpr;
 
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET
-      && interf->mode == NHDP_IPV6) {
+      && interf->mode == NHDP_IFMODE_IPV6) {
     /* ignore */
     return;
   }
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6
-      && interf->mode == NHDP_IPV4) {
+      && interf->mode == NHDP_IFMODE_IPV4) {
     /* ignore */
     return;
   }
@@ -410,33 +403,18 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
 
   /* add MPR tlvs */
   if (laddr != NULL) {
-    mpr_flooding = laddr->link->flooding_mpr;
-
     list_for_each_element(&nhdp_domain_list, domain, _node) {
       if (domain->mpr->no_default_handling) {
         continue;
       }
 
-      mpr_routing = naddr->neigh->_metric[domain->_index].neigh_is_mpr;
-
-      if (mpr_flooding || mpr_routing) {
-        uint8_t value;
-
-        if (mpr_flooding && mpr_routing) {
-          value = RFC5444_MPR_FLOOD_ROUTE;
-        }
-        else if (mpr_flooding) {
-          value = RFC5444_MPR_FLOODING;
-        }
-        else {
-          value = RFC5444_MPR_ROUTING;
-        }
-
+      mpr = nhdp_domain_get_mpr_tlvvalue(domain, laddr->link);
+      if (mpr != RFC5444_MPR_NOMPR) {
         rfc5444_writer_add_addrtlv(writer, address,
-            &domain->mpr->_mpr_addrtlv, &value, sizeof(value), false);
+            &domain->mpr->_mpr_addrtlv, &mpr, sizeof(mpr), false);
 
         OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d, etx=%d) to NHDP hello",
-            netaddr_to_string(&buf, &naddr->neigh_addr), value, domain->ext);
+            netaddr_to_string(&buf, &naddr->neigh_addr), mpr, domain->ext);
       }
     }
   }
@@ -482,6 +460,8 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       RFC5444_LINKMETRIC_INCOMING_NEIGH,
       RFC5444_LINKMETRIC_OUTGOING_NEIGH,
   };
+  struct nhdp_link_domaindata *linkdata;
+  struct nhdp_neighbor_domaindata *neighdata;
   bool unsent[4];
   uint32_t metrics[4];
   uint16_t tlv_value;
@@ -497,13 +477,15 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       (lnk != NULL && (lnk->status == NHDP_LINK_HEARD || lnk->status == NHDP_LINK_SYMMETRIC));
 
   if (unsent[0]) {
-    memcpy(&metrics[0], &lnk->_metric[domain->_index], sizeof(uint32_t)*2);
+    linkdata = nhdp_domain_get_linkdata(domain, lnk);
+    memcpy(&metrics[0], &linkdata->metric, sizeof(uint32_t)*2);
   }
 
   /* get neighbor metrics if available */
   unsent[2] = unsent[3] = (neigh != NULL && neigh->symmetric > 0);
   if (unsent[2]) {
-    memcpy(&metrics[2], &neigh->_metric[domain->_index], sizeof(uint32_t)*2);
+    neighdata = nhdp_domain_get_neighbordata(domain, neigh);
+    memcpy(&metrics[2], &neighdata->metric, sizeof(uint32_t)*2);
   }
 
   /* encode metrics */
@@ -564,12 +546,12 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   interf = nhdp_interface_get(target->interface->name);
 
   /* select which address family we will NOT transmit */
-  if (interf->mode == NHDP_IPV4
+  if (interf->mode == NHDP_IFMODE_IPV4
       || netaddr_get_address_family(&target->dst) == AF_INET) {
     /* do not transmit ipv6 on IPv4 message or in IPv4 only mode */
     block_af = AF_INET6;
   }
-  else if (interf->mode == NHDP_IPV6) {
+  else if (interf->mode == NHDP_IFMODE_IPV6) {
     /* do not transmit ipv4 in IPv6-only mode */
     block_af = AF_INET;
   }

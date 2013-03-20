@@ -61,9 +61,9 @@ struct nhdp_interface_addr;
 #define NHDP_INTERFACE_ADDRESS "nhdp_iaddr"
 
 enum nhdp_interface_mode {
-  NHDP_IPV4,
-  NHDP_IPV6,
-  NHDP_DUAL,
+  NHDP_IFMODE_IPV4,
+  NHDP_IFMODE_IPV6,
+  NHDP_IFMODE_DUAL,
 };
 
 extern const char *NHDP_INTERFACE_MODES[3];

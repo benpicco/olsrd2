@@ -194,7 +194,7 @@ struct olsr_class_listener _link_listener = {
   .cb_remove = _cb_link_removed,
 };
 
-/* timer for sampling incoming RFC5444 packets */
+/* timer for sampling in RFC5444 packets */
 struct olsr_timer_info _sampling_timer_info = {
   .name = "Sampling timer for ETXFF-metric",
   .callback = _cb_etx_sampling,
@@ -368,6 +368,7 @@ _cb_link_removed(void *ptr) {
 static void
 _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct link_etxff_data *ldata;
+  struct nhdp_link_domaindata *domaindata;
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
   uint32_t total, received;
@@ -415,7 +416,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
       metric = (ETXFF_LINKCOST_MINIMUM * total) / received;
     }
 
-    /* convert into incoming metric value */
+    /* convert into in metric value */
     if (metric > RFC5444_METRIC_MAX) {
       /* metric overflow */
       metric = RFC5444_METRIC_MAX;
@@ -425,7 +426,8 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    lnk->_metric[_domain->_index].m.incoming = (uint32_t)metric;
+    domaindata = nhdp_domain_get_linkdata(_domain, lnk);
+    domaindata->metric.in = (uint32_t)metric;
 
     OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
@@ -469,7 +471,7 @@ _cb_hello_lost(void *ptr) {
 }
 
 /**
- * Callback to process all incoming RFC5444 packets for metric calculation. The
+ * Callback to process all in RFC5444 packets for metric calculation. The
  * Callback ignores all unicast packets.
  * @param consumer
  * @param context

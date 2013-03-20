@@ -204,7 +204,6 @@ nhdp_db_cleanup(void) {
 struct nhdp_neighbor *
 nhdp_db_neighbor_add(void) {
   struct nhdp_neighbor *neigh;
-  struct nhdp_domain *domain;
 
   neigh = olsr_class_malloc(&_neigh_info);
   if (neigh == NULL) {
@@ -214,11 +213,11 @@ nhdp_db_neighbor_add(void) {
   OLSR_DEBUG(LOG_NHDP, "New Neighbor: 0x%0zx", (size_t)neigh);
 
   /* initialize timers */
-  neigh->vtime_v4.cb_context = neigh;
-  neigh->vtime_v4.info = &_neigh_vtimev4_info;
+  neigh->_vtime_v4.cb_context = neigh;
+  neigh->_vtime_v4.info = &_neigh_vtimev4_info;
 
-  neigh->vtime_v6.cb_context = neigh;
-  neigh->vtime_v6.info = &_neigh_vtimev6_info;
+  neigh->_vtime_v6.cb_context = neigh;
+  neigh->_vtime_v6.info = &_neigh_vtimev6_info;
 
   /* initialize trees and lists */
   avl_init(&neigh->_neigh_addresses, avl_comp_netaddr, false);
@@ -228,18 +227,11 @@ nhdp_db_neighbor_add(void) {
   /* hook into global neighbor list */
   list_add_tail(&nhdp_neigh_list, &neigh->_global_node);
 
-
   /* initialize originator node */
   neigh->_originator_node.key = &neigh->originator;
 
-  /* initialize metrics and mprs */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    neigh->_metric[domain->_index].m.incoming = domain->metric->incoming_link_start;
-    neigh->_metric[domain->_index].m.outgoing = domain->metric->outgoing_link_start;
-
-    neigh->_metric[domain->_index].local_is_mpr = domain->mpr->mprs_start;
-    neigh->_metric[domain->_index].neigh_is_mpr = domain->mpr->mpr_start;
-  }
+  /* initialize domain data */
+  nhdp_domain_init_neighbor(neigh);
 
   /* trigger event */
   olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_ADDED);
@@ -261,8 +253,8 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_REMOVED);
 
   /* stop timers */
-  olsr_timer_stop(&neigh->vtime_v4);
-  olsr_timer_stop(&neigh->vtime_v6);
+  olsr_timer_stop(&neigh->_vtime_v4);
+  olsr_timer_stop(&neigh->_vtime_v6);
 
   /* remove all links */
   list_for_each_element_safe(&neigh->_links, lnk, _neigh_node, l_it) {
@@ -445,7 +437,6 @@ nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *ori
  */
 struct nhdp_link *
 nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
-  struct nhdp_domain *domain;
   struct nhdp_link *lnk;
 
   lnk = olsr_class_malloc(&_link_info);
@@ -475,11 +466,8 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
 
-  /* initialize metrics */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    lnk->_metric[domain->_index].m.incoming = domain->metric->incoming_link_start;
-    lnk->_metric[domain->_index].m.outgoing = domain->metric->outgoing_link_start;
-  }
+  /* initialize link domain data */
+  nhdp_domain_init_link(lnk);
 
   /* trigger event */
   olsr_class_event(&_link_info, lnk, OLSR_OBJECT_ADDED);
@@ -614,7 +602,6 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
  */
 struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
-  struct nhdp_domain *domain;
   struct nhdp_l2hop *l2hop;
 
   l2hop = olsr_class_malloc(&_l2hop_info);
@@ -637,10 +624,7 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
   avl_insert(&lnk->_2hop, &l2hop->_link_node);
 
   /* initialize metrics */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    l2hop->_metric[domain->_index].incoming = domain->metric->incoming_2hop_start;
-    l2hop->_metric[domain->_index].outgoing = domain->metric->outgoing_2hop_start;
-  }
+  nhdp_domain_init_l2hop(l2hop);
 
   /* trigger event */
   olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_ADDED);
