@@ -59,6 +59,7 @@
 enum {
   IDX_TLV_ITIME,
   IDX_TLV_VTIME,
+  IDX_TLV_WILLINGNESS,
 };
 
 /* NHDP address TLV array index pass 1 */
@@ -110,6 +111,7 @@ static struct rfc5444_reader_tlvblock_consumer _nhdp_message_pass1_consumer = {
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
   [IDX_TLV_ITIME] = { .type = RFC5444_MSGTLV_INTERVAL_TIME, .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_VTIME] = { .type = RFC5444_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_WILLINGNESS] { .type = RFC5444_MSGTLV_MPR_WILLING, .min_length = 1, .match_length = true },
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass1_consumer = {
@@ -225,7 +227,7 @@ cleanup_error(void) {
 }
 
 /**
- * Parse an incoming address, do a IPv6 to IPv4 translation if necessary and
+ * Parse an in address, do a IPv6 to IPv4 translation if necessary and
  * check if the address should be processed.
  * @param dst pointer to destination netaddr object
  * @param ptr pointer to source of address
@@ -239,7 +241,7 @@ _parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
       && netaddr_binary_is_in_subnet(&NETADDR_IPV6_IPV4COMPATIBLE, ptr, len, AF_INET6)) {
     struct netaddr addr;
 
-    if (_current.localif->mode == NHDP_IPV6) {
+    if (_current.localif->mode == NHDP_IFMODE_IPV6) {
       /* ignore embedded v4 when not in dualstack mode */
       return 1;
     }
@@ -260,10 +262,10 @@ _parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
   }
 
   /* ignore wrong IP type if restricted to the other one */
-  if (_current.localif->mode == NHDP_IPV4 && netaddr_get_address_family(dst) == AF_INET6) {
+  if (_current.localif->mode == NHDP_IFMODE_IPV4 && netaddr_get_address_family(dst) == AF_INET6) {
     return 1;
   }
-  if (_current.localif->mode == NHDP_IPV6 && netaddr_get_address_family(dst) == AF_INET) {
+  if (_current.localif->mode == NHDP_IFMODE_IPV6 && netaddr_get_address_family(dst) == AF_INET) {
     return 1;
   }
 
@@ -344,19 +346,19 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
 
 
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET) {
-    /* update vtime_v6 timer */
-    olsr_timer_set(&_current.neighbor->vtime_v4, _current.vtime);
+    /* update _vtime_v6 timer */
+    olsr_timer_set(&_current.neighbor->_vtime_v4, _current.vtime);
   }
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6) {
-    /* update vtime_v6 timer */
-    olsr_timer_set(&_current.neighbor->vtime_v6, _current.vtime);
+    /* update _vtime_v6 timer */
+    olsr_timer_set(&_current.neighbor->_vtime_v6, _current.vtime);
   }
 
   return RFC5444_OKAY;
 }
 
 /**
- * Handle incoming originator address of NHDP Hello
+ * Handle in originator address of NHDP Hello
  */
 static void
 _handle_originator(void) {
@@ -388,7 +390,7 @@ _handle_originator(void) {
 }
 
 /**
- * Handle incoming HELLO messages and its TLVs
+ * Handle in HELLO messages and its TLVs
  * @param consumer tlvblock consumer
  * @param context message context
  * @return see rfc5444_result enum
@@ -396,8 +398,10 @@ _handle_originator(void) {
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+  struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
+  struct nhdp_domain *domain;
 
   struct netaddr_str buf;
 
@@ -415,8 +419,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
   /* remember local NHDP interface */
   _current.localif = nhdp_interface_get(_protocol->input_interface->name);
 
-  if ((context->addr_len == 4 && _current.localif->mode == NHDP_IPV6)
-      || (context->addr_len == 16 && _current.localif->mode == NHDP_IPV4)) {
+  if ((context->addr_len == 4 && _current.localif->mode == NHDP_IFMODE_IPV6)
+      || (context->addr_len == 16 && _current.localif->mode == NHDP_IFMODE_IPV4)) {
     return RFC5444_DROP_MESSAGE;
   }
 
@@ -444,6 +448,16 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
   if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv) {
     _current.itime = rfc5444_timetlv_decode(
         _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0]);
+  }
+
+  /* extract willingness */
+  tlv = _nhdp_message_tlvs[IDX_TLV_WILLINGNESS].tlv;
+  while (tlv) {
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain != NULL && !domain->mpr->no_default_handling) {
+      nhdp_domain_process_willingness_tlv(domain, tlv->single_value[0]);
+    }
+    tlv = tlv->next_entry;
   }
 
   /* clear flags in neighbors */
@@ -650,6 +664,116 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
 }
 
 /**
+ * Process MPR, Willingness and Linkmetric TLVs for local neighbor
+ * @param addr address the TLVs are attached to
+ */
+static void
+_process_domainspecific_linkdata(struct netaddr *addr) {
+  struct rfc5444_reader_tlvblock_entry *tlv;
+  struct nhdp_domain *domain;
+  uint16_t tlvvalue;
+
+  struct netaddr_str buf;
+
+  /*
+   * clear routing mpr, willingness and metric values
+   * that should be present in HELLO
+   */
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (!domain->mpr->no_default_handling) {
+      _current.neighbor->_metric[domain->_index].local_is_mpr = false;
+      _current.neighbor->_metric[domain->_index].willingness = 0;
+    }
+
+    if (!domain->metric->no_default_handling) {
+      _current.link->_metric[domain->_index].metric.out = RFC5444_METRIC_INFINITE;
+      _current.neighbor->_metric[domain->_index].metric.out = RFC5444_METRIC_INFINITE;
+    }
+  }
+
+  /* update MPR selector if this is "our" address on the local interface */
+  tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_MPR].tlv;
+  while (tlv) {
+    OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, MPR (ext %u): %d",
+        netaddr_to_string(&buf, addr), tlv->type_ext, tlv->single_value[0]);
+
+    /* get MPR handler */
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain != NULL && !domain->mpr->no_default_handling) {
+      nhdp_domain_process_mpr_tlv(domain, _current.link, tlv->single_value[0]);
+    }
+    tlv = tlv->next_entry;
+  }
+
+  /* update out metric with other sides in metric */
+  tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINKMETRIC].tlv;
+  while (tlv) {
+    /* extract tlv value */
+    memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
+    tlvvalue = ntohs(tlvvalue);
+
+    OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, LQ (ext %u): %04x",
+        netaddr_to_string(&buf, addr), tlv->type_ext, tlvvalue);
+
+    /* get metric handler */
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain != NULL && !domain->metric->no_default_handling) {
+      nhdp_domain_process_metric_linktlv(domain, _current.link, tlvvalue);
+    }
+
+    tlv = tlv->next_entry;
+  }
+
+  /* process willingness TLVs stored from message TLV processing */
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (!domain->mpr->no_default_handling) {
+      nhdp_domain_process_willingness_tlv(domain, domain->mpr->_tmp_willingness);
+    }
+  }
+}
+
+/**
+ * Process Linkmetric TLVs for twohop neighbor
+ * @param l2hop pointer to twohop neighbor
+ * @param addr address the TLVs are attached to
+ */
+static void
+_process_domainspecific_2hopdata(struct nhdp_l2hop *l2hop, struct netaddr *addr) {
+  struct rfc5444_reader_tlvblock_entry *tlv;
+  struct nhdp_domain *domain;
+  uint16_t tlvvalue;
+
+  struct netaddr_str buf;
+
+  /* clear metric values that should be present in HELLO */
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (!domain->metric->no_default_handling) {
+      l2hop->_metric[domain->_index].in = RFC5444_METRIC_INFINITE;
+      l2hop->_metric[domain->_index].out = RFC5444_METRIC_INFINITE;
+    }
+  }
+
+  /* update 2-hop metric (no direction reversal!) */
+  tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINKMETRIC].tlv;
+  while (tlv) {
+    /* extract tlv value */
+    memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
+    tlvvalue = ntohs(tlvvalue);
+
+    OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, LQ (ext %u): %04x",
+        netaddr_to_string(&buf, addr), tlv->type_ext, tlvvalue);
+
+    /* get metric handler */
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain != NULL && !domain->metric->no_default_handling) {
+      nhdp_domain_process_metric_2hoptlv(domain, l2hop, tlvvalue);
+    }
+
+    tlv = tlv->next_entry;
+  }
+}
+
+/**
  * Second pass for processing the addresses of the NHDP Hello. This one will update
  * the database
  * @param consumer
@@ -660,12 +784,10 @@ static enum rfc5444_result
 _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
       struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   uint8_t local_if, link_status, other_neigh;
-  struct rfc5444_reader_tlvblock_entry *tlv;
-  struct nhdp_domain *domain;
   struct nhdp_l2hop *l2hop;
   struct netaddr addr;
+
   struct netaddr_str buf;
-  uint16_t tlvvalue;
 
   switch(_parse_address(&addr, context->addr, context->addr_len)) {
     case -1:
@@ -705,50 +827,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
   /* handle 2hop-addresses */
   if (link_status != 255 || other_neigh != 255) {
     if (nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
-      /* clear routing mpr and metric values that should be present in HELLO */
-      list_for_each_element(&nhdp_domain_list, domain, _node) {
-        if (!domain->mpr->no_default_handling) {
-          _current.neighbor->_metric[domain->ext].local_is_mpr = false;
-        }
-
-        if (!domain->metric->no_default_handling) {
-          _current.link->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
-          _current.neighbor->_metric[domain->_index].m.outgoing = RFC5444_METRIC_INFINITE;
-        }
-      }
-
-      /* update MPR selector if this is "our" address on the local interface */
-      tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_MPR].tlv;
-      while (tlv) {
-        OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, MPR (ext %u): %d",
-            netaddr_to_string(&buf, &addr), tlv->type_ext, tlv->single_value[0]);
-
-        /* get MPR handler */
-        domain = nhdp_domain_get_by_ext(tlv->type_ext);
-        if (domain != NULL && !domain->mpr->no_default_handling) {
-          nhdp_domain_process_mpr_tlv(domain, _current.link, tlv->single_value[0]);
-        }
-        tlv = tlv->next_entry;
-      }
-
-      /* update outgoing metric with other sides incoming metric */
-      tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINKMETRIC].tlv;
-      while (tlv) {
-        /* extract tlv value */
-        memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
-        tlvvalue = ntohs(tlvvalue);
-
-        OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, LQ (ext %u): %04x",
-            netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
-
-        /* get metric handler */
-        domain = nhdp_domain_get_by_ext(tlv->type_ext);
-        if (domain != NULL && !domain->metric->no_default_handling) {
-          nhdp_domain_process_metric_linktlv(domain, _current.link, tlvvalue);
-        }
-
-        tlv = tlv->next_entry;
-      }
+      _process_domainspecific_linkdata(&addr);
     }
     else if (nhdp_interface_addr_global_get(&addr) != NULL) {
       OLSR_DEBUG(LOG_NHDP_R, "Link neighbor heard this node address: %s",
@@ -768,32 +847,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
       /* refresh validity time of 2hop address */
       nhdp_db_link_2hop_set_vtime(l2hop, _current.vtime);
 
-      /* clear metric values that should be present in HELLO */
-      list_for_each_element(&nhdp_domain_list, domain, _node) {
-        if (!domain->metric->no_default_handling) {
-          l2hop->_metric[domain->_index].incoming = RFC5444_METRIC_INFINITE;
-          l2hop->_metric[domain->_index].outgoing = RFC5444_METRIC_INFINITE;
-        }
-      }
-
-      /* update 2-hop metric (no direction reversal!) */
-      tlv = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_LINKMETRIC].tlv;
-      while (tlv) {
-        /* extract tlv value */
-        memcpy(&tlvvalue, tlv->single_value, sizeof(tlvvalue));
-        tlvvalue = ntohs(tlvvalue);
-
-        OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, LQ (ext %u): %04x",
-            netaddr_to_string(&buf, &addr), tlv->type_ext, tlvvalue);
-
-        /* get metric handler */
-        domain = nhdp_domain_get_by_ext(tlv->type_ext);
-        if (domain != NULL && !domain->metric->no_default_handling) {
-          nhdp_domain_process_metric_2hoptlv(domain, l2hop, tlvvalue);
-        }
-
-        tlv = tlv->next_entry;
-      }
+      _process_domainspecific_2hopdata(l2hop, &addr);
     }
     else {
       l2hop = ndhp_db_link_2hop_get(_current.link, &addr);
@@ -830,10 +884,10 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
 
   /* remember when we saw the last IPv4/IPv6 */
   if (_current.has_ipv4) {
-    olsr_timer_set(&_current.neighbor->vtime_v4, _current.vtime);
+    olsr_timer_set(&_current.neighbor->_vtime_v4, _current.vtime);
   }
   if (_current.has_ipv6) {
-    olsr_timer_set(&_current.neighbor->vtime_v6, _current.vtime);
+    olsr_timer_set(&_current.neighbor->_vtime_v6, _current.vtime);
   }
 
   /* remove leftover link addresses */

@@ -98,6 +98,9 @@ struct nhdp_domain_mpr {
 
   /* storage for the additional mpr tlv */
   struct rfc5444_writer_tlvtype _mpr_addrtlv;
+
+  /* temporary storage of willingness during message parsing */
+  uint8_t _tmp_willingness;
 };
 
 /*
@@ -138,6 +141,9 @@ EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain *d);
 
 EXPORT struct nhdp_domain *nhdp_domain_get_by_ext(uint8_t);
 
+EXPORT void nhdp_domain_init_link(struct nhdp_link *);
+EXPORT void nhdp_domain_init_neighbor(struct nhdp_neighbor *);
+
 EXPORT void nhdp_domain_process_metric_linktlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint16_t tlvvalue);
 EXPORT void nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
@@ -147,8 +153,15 @@ EXPORT void nhdp_domain_calculate_neighbor_metric(
 
 EXPORT void nhdp_domain_process_mpr_tlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint8_t tlvvalue);
+EXPORT void nhdp_domain_process_willingness_tlv(
+    struct nhdp_domain *, uint8_t tlvvalue);
+EXPORT uint8_t nhdp_domain_get_willingness_tlvvalue(
+    struct nhdp_domain *);
+EXPORT uint8_t nhdp_domain_get_mpr_tlvvalue(
+    struct nhdp_domain *, struct nhdp_link *);
 EXPORT void nhdp_domain_update_mprs(void);
 
-EXPORT enum rfc5444_willingness_values nhdp_domain_get_flooding_willingness(void);
+EXPORT void nhdp_domain_set_flooding_mpr(
+    struct nhdp_domain_mpr *, uint8_t ext);
 
 #endif /* NHDP_LINKCOST_H_ */

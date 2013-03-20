@@ -209,7 +209,6 @@ static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
   uint8_t vtime_encoded, itime_encoded, will_encoded;
-  enum rfc5444_willingness_values will_flooding;
   struct nhdp_domain *domain;
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
@@ -238,21 +237,15 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
       &vtime_encoded, sizeof(vtime_encoded));
 
   /* add willingness for all domains */
-  will_flooding = nhdp_domain_get_flooding_willingness();
-  if (will_flooding != RFC5444_WILLINGNESS_UNDEFINED) {
-    will_flooding <<= 4;
-
-    list_for_each_element(&nhdp_domain_list, domain, _node) {
-      if (domain->mpr->no_default_handling) {
-        continue;
-      }
-      will_encoded = (uint8_t) will_flooding;
-
-      will_encoded |= (uint8_t)domain->mpr->willingness;
-
-      rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING,
-          domain->ext, &will_encoded, sizeof(will_encoded));
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->mpr->no_default_handling) {
+      continue;
     }
+
+    will_encoded = nhdp_domain_get_willingness_tlvvalue(domain);
+
+    rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING,
+        domain->ext, &will_encoded, sizeof(will_encoded));
   }
 }
 
@@ -301,12 +294,12 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
   bool this_if;
 
   if (netaddr_get_address_family(&addr->if_addr) == AF_INET
-      && interf->mode == NHDP_IPV6) {
+      && interf->mode == NHDP_IFMODE_IPV6) {
     /* ignore */
     return;
   }
   if (netaddr_get_address_family(&addr->if_addr) == AF_INET6
-      && interf->mode == NHDP_IPV4) {
+      && interf->mode == NHDP_IFMODE_IPV4) {
     /* ignore */
     return;
   }
@@ -354,12 +347,12 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   uint8_t linkstatus, otherneigh, mpr_flooding, mpr_routing;
 
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET
-      && interf->mode == NHDP_IPV6) {
+      && interf->mode == NHDP_IFMODE_IPV6) {
     /* ignore */
     return;
   }
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6
-      && interf->mode == NHDP_IPV4) {
+      && interf->mode == NHDP_IFMODE_IPV4) {
     /* ignore */
     return;
   }
@@ -564,12 +557,12 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   interf = nhdp_interface_get(target->interface->name);
 
   /* select which address family we will NOT transmit */
-  if (interf->mode == NHDP_IPV4
+  if (interf->mode == NHDP_IFMODE_IPV4
       || netaddr_get_address_family(&target->dst) == AF_INET) {
     /* do not transmit ipv6 on IPv4 message or in IPv4 only mode */
     block_af = AF_INET6;
   }
-  else if (interf->mode == NHDP_IPV6) {
+  else if (interf->mode == NHDP_IFMODE_IPV6) {
     /* do not transmit ipv4 in IPv6-only mode */
     block_af = AF_INET;
   }

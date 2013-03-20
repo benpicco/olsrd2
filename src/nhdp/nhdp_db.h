@@ -69,18 +69,36 @@ enum nhdp_link_status {
  * Represents a NHDP link metric pair
  */
 struct nhdp_metric {
-  uint32_t incoming;
-  uint32_t outgoing;
+  /* incoming link metric cost */
+  uint32_t in;
+
+  /* outgoing link metric cost */
+  uint32_t out;
 };
 
-struct nhdp_link_metric {
-  struct nhdp_metric m;
+/**
+ * Data for one NHDP domain of a link
+ */
+struct nhdp_link_domaindata {
+  /* incoming and outgoing metric cost */
+  struct nhdp_metric metric;
 };
 
-struct nhdp_neighbor_metric {
-  struct nhdp_metric m;
+/**
+ * Data for one NHDP domain of a neighbor
+ */
+struct nhdp_neighbor_domaindata {
+  /* incoming and outgoing metric cost */
+  struct nhdp_metric metric;
+
+  /* true if the local router has been selected as a MPR by the neighbor */
   bool local_is_mpr;
+
+  /* true if the neighbor has been selected as a MPR by this router */
   bool neigh_is_mpr;
+
+  /* Routing willingness of neighbor */
+  uint8_t willingness;
 };
 
 /**
@@ -134,7 +152,7 @@ struct nhdp_link {
   struct list_entity _neigh_node;
 
   /* Array of link metrics */
-  struct nhdp_link_metric _metric[NHDP_MAXIMUM_DOMAINS];
+  struct nhdp_link_domaindata _metric[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -193,6 +211,15 @@ struct nhdp_neighbor {
   /* originator address of this node, might by type AF_UNSPEC */
   struct netaddr originator;
 
+  /* true if the local router has been selected as a MPR by the neighbor */
+  bool local_is_flooding_mpr;
+
+  /* true if the neighbor has been selected as a MPR by this router */
+  bool neigh_is_flooding_mpr;
+
+  /* Willingness of neighbor for flooding data */
+  uint8_t flooding_willingness;
+
   /* internal field for NHDP processing */
   int _process_count;
 
@@ -200,13 +227,13 @@ struct nhdp_neighbor {
    * timer that fires when the ipv6 addresses
    * of this neighbor have to be removed
    */
-  struct olsr_timer_entry vtime_v4;
+  struct olsr_timer_entry _vtime_v4;
 
   /*
    * timer that fires when the ipv6 addresses
    * of this neighbor have to be removed
    */
-  struct olsr_timer_entry vtime_v6;
+  struct olsr_timer_entry _vtime_v6;
 
   /* list of links for this neighbor */
   struct list_entity _links;
@@ -224,7 +251,7 @@ struct nhdp_neighbor {
   struct avl_node _originator_node;
 
   /* Array of link metrics */
-  struct nhdp_neighbor_metric _metric[NHDP_MAXIMUM_DOMAINS];
+  struct nhdp_neighbor_domaindata _metric[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**

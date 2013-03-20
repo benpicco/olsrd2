@@ -349,13 +349,14 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
 
       list_for_each_element(&nhdp_domain_list, domain, _node) {
         abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n"
-                               "\t    MPR %s: MRP %s, MPRS %s\n",
+                               "\t    MPR %s: MRP %s, MPRS %s, Willingness %d\n",
             domain->metric->name,
-            domain->metric->to_string(&mbuf1, lnk->_metric[domain->_index].m.incoming),
-            domain->metric->to_string(&mbuf2, lnk->_metric[domain->_index].m.outgoing),
+            domain->metric->to_string(&mbuf1, lnk->_metric[domain->_index].metric.in),
+            domain->metric->to_string(&mbuf2, lnk->_metric[domain->_index].metric.out),
             domain->mpr->name,
             lnk->neigh->_metric[domain->_index].neigh_is_mpr ? "yes" : "no",
-            lnk->neigh->_metric[domain->_index].local_is_mpr ? "yes" : "no"
+            lnk->neigh->_metric[domain->_index].local_is_mpr ? "yes" : "no",
+            lnk->neigh->_metric[domain->_index].willingness
             );
       }
 
@@ -373,8 +374,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
         list_for_each_element(&nhdp_domain_list, domain, _node) {
           abuf_appendf(con->out, "\t\tMetric '%s': in=%s out=%s\n",
               domain->metric->name,
-              domain->metric->to_string(&mbuf1, twohop->_metric[domain->_index].incoming),
-              domain->metric->to_string(&mbuf2, twohop->_metric[domain->_index].outgoing));
+              domain->metric->to_string(&mbuf1, twohop->_metric[domain->_index].in),
+              domain->metric->to_string(&mbuf2, twohop->_metric[domain->_index].out));
         }
       }
     }
