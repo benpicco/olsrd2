@@ -19,6 +19,7 @@
 #include "rfc5444/rfc5444.h"
 #include "tools/olsr_cfg.h"
 
+#include "nhdp/nhdp.h"
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_lan.h"
 
@@ -104,7 +105,7 @@ olsrv2_lan_add(struct netaddr *prefix) {
     avl_insert(&olsrv2_lan_tree, &entry->_node);
 
     /* initialize metric with default */
-    entry->outgoing_metric = RFC5444_METRIC_DEFAULT;
+    entry->outgoing_metric = NHDP_METRIC_DEFAULT;
   }
 
   return entry;
