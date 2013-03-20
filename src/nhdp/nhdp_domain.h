@@ -49,10 +49,12 @@
 
 #include "nhdp/nhdp_db.h"
 
+/* Buffer for string representation of a linkmetric value */
 struct nhdp_metric_str {
   char buf[128];
 };
 
+/* Metric handler for a NHDP domain. */
 struct nhdp_domain_metric {
   /* name of linkmetric */
   const char *name;
@@ -74,7 +76,7 @@ struct nhdp_domain_metric {
   struct rfc5444_writer_tlvtype _metric_addrtlvs[4];
 };
 
-/* handler for generating MPR information of a link */
+/* MPR handler for a NHDP domain */
 struct nhdp_domain_mpr {
   /* name of handler */
   const char *name;
@@ -98,6 +100,13 @@ struct nhdp_domain_mpr {
   struct rfc5444_writer_tlvtype _mpr_addrtlv;
 };
 
+/*
+ * NHDP domain
+ *
+ * A domain is a topology on the mesh, including its own
+ * metric and routing MPR set. Both is transmitted over a
+ * specified TLV extension value on MPR and LQ TLVs.
+ */
 struct nhdp_domain {
   struct nhdp_domain_metric *metric;
   struct nhdp_domain_mpr *mpr;

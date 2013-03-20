@@ -53,6 +53,7 @@
 static struct nhdp_domain *_get_new_domain(uint8_t ext);
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
+/* default metric handler (hopcount) */
 static struct nhdp_domain_metric _no_metric = {
   .name = "No metric",
 
@@ -64,6 +65,7 @@ static struct nhdp_domain_metric _no_metric = {
   .no_default_handling = true,
 };
 
+/* default MPR handler (no MPR handling) */
 static struct nhdp_domain_mpr _no_mprs = {
   .name = "No MPRs",
 
@@ -73,9 +75,11 @@ static struct nhdp_domain_mpr _no_mprs = {
   .no_default_handling = true,
 };
 
+/* non-default domains registered to NHDP */
 struct list_entity nhdp_domain_list;
-
 static size_t _domain_counter = 0;
+
+/* NHDP RFC5444 protocol */
 static struct olsr_rfc5444_protocol *_protocol;
 
 /**
@@ -103,6 +107,9 @@ nhdp_domain_cleanup(void) {
   }
 }
 
+/**
+ * @return number of registered nhdp domains
+ */
 size_t
 nhdp_domain_get_count(void) {
   return _domain_counter;
@@ -224,6 +231,10 @@ nhdp_domain_mpr_remove(struct nhdp_domain *domain) {
   domain->mpr = &_no_mprs;
 }
 
+/**
+ * @param ext TLV extension value of MPR/Linkmetrics
+ * @return NHDP domain registered to this extension, NULL if not found
+ */
 struct nhdp_domain *
 nhdp_domain_get_by_ext(uint8_t ext) {
   struct nhdp_domain *d;
@@ -280,34 +291,40 @@ nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
 
 /**
  * Calculate the minimal metric cost for a neighbor
- * @param h pointer to metric handler
+ * @param domain NHDP domain
  * @param neigh nhdp neighbor
  */
 void
 nhdp_domain_calculate_neighbor_metric(
-    struct nhdp_domain *d,
+    struct nhdp_domain *domain,
     struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk;
 
-  neigh->_metric[d->ext].m.incoming = RFC5444_METRIC_INFINITE;
-  neigh->_metric[d->ext].m.outgoing = RFC5444_METRIC_INFINITE;
+  neigh->_metric[domain->ext].m.incoming = RFC5444_METRIC_INFINITE;
+  neigh->_metric[domain->ext].m.outgoing = RFC5444_METRIC_INFINITE;
 
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
-    if (lnk->_metric[d->ext].m.outgoing < neigh->_metric[d->ext].m.outgoing) {
-      neigh->_metric[d->ext].m.outgoing = lnk->_metric[d->ext].m.outgoing;
+    if (lnk->_metric[domain->ext].m.outgoing < neigh->_metric[domain->ext].m.outgoing) {
+      neigh->_metric[domain->ext].m.outgoing = lnk->_metric[domain->ext].m.outgoing;
     }
-    if (lnk->_metric[d->ext].m.incoming < neigh->_metric[d->ext].m.incoming) {
-      neigh->_metric[d->ext].m.incoming = lnk->_metric[d->ext].m.incoming;
+    if (lnk->_metric[domain->ext].m.incoming < neigh->_metric[domain->ext].m.incoming) {
+      neigh->_metric[domain->ext].m.incoming = lnk->_metric[domain->ext].m.incoming;
     }
   }
 }
 
+/**
+ * Process an incoming MPR tlv for a NHDP link
+ * @param domain NHDP domain
+ * @param lnk NHDP link
+ * @param tlvvalue value of MPR tlv
+ */
 void
-nhdp_domain_process_mpr_tlv(struct nhdp_domain *d,
+nhdp_domain_process_mpr_tlv(struct nhdp_domain *domain,
     struct nhdp_link *lnk, uint8_t tlvvalue) {
   lnk->flooding_mpr = tlvvalue == RFC5444_MPR_FLOODING
       || tlvvalue == RFC5444_MPR_FLOOD_ROUTE;
-  lnk->neigh->_metric[d->_index].local_is_mpr =
+  lnk->neigh->_metric[domain->_index].local_is_mpr =
       tlvvalue == RFC5444_MPR_ROUTING
       || tlvvalue == RFC5444_MPR_FLOOD_ROUTE;
 }
@@ -317,14 +334,27 @@ nhdp_domain_process_mpr_tlv(struct nhdp_domain *d,
  */
 void
 nhdp_domain_update_mprs(void) {
+  struct nhdp_domain *domain;
 
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    domain->mpr->update_mpr();
+  }
 }
 
+/**
+ * @return configured flooding willingness
+ */
 enum rfc5444_willingness_values
 nhdp_domain_get_flooding_willingness(void) {
   return RFC5444_WILLINGNESS_DEFAULT;
 }
 
+/**
+ * @param ext domain TLV extension value
+ * @return NHDP domain for this extension value, create a new one
+ *   if necessary, NULL if out of memory or maximum domains number
+ *   is reached
+ */
 static struct nhdp_domain *
 _get_new_domain(uint8_t ext) {
   struct nhdp_domain *domain;
