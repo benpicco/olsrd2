@@ -139,6 +139,9 @@ EXPORT struct nhdp_domain *nhdp_domain_mpr_add(
     struct nhdp_domain_mpr *h, uint8_t etx);
 EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain *d);
 
+EXPORT void nhdp_domain_set_flooding_mpr(
+    struct nhdp_domain_mpr *, uint8_t ext);
+
 EXPORT struct nhdp_domain *nhdp_domain_get_by_ext(uint8_t);
 
 EXPORT void nhdp_domain_init_link(struct nhdp_link *);
@@ -161,9 +164,6 @@ EXPORT uint8_t nhdp_domain_get_willingness_tlvvalue(
 EXPORT uint8_t nhdp_domain_get_mpr_tlvvalue(
     struct nhdp_domain *, struct nhdp_link *);
 EXPORT void nhdp_domain_update_mprs(void);
-
-EXPORT void nhdp_domain_set_flooding_mpr(
-    struct nhdp_domain_mpr *, uint8_t ext);
 
 /**
  * @param domain NHDP domain
