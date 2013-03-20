@@ -258,11 +258,32 @@ nhdp_domain_get_by_ext(uint8_t ext) {
 void
 nhdp_domain_init_link(struct nhdp_link *lnk) {
   struct nhdp_domain *domain;
+  struct nhdp_link_domaindata *data;
 
   /* initialize metrics */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    lnk->_metric[domain->_index].metric.in = domain->metric->incoming_link_start;
-    lnk->_metric[domain->_index].metric.out = domain->metric->outgoing_link_start;
+    data = nhdp_domain_get_linkdata(domain, lnk);
+
+    data->metric.in = domain->metric->incoming_link_start;
+    data->metric.out = domain->metric->outgoing_link_start;
+  }
+}
+
+/**
+ * Initialize the domain data of a new NHDP twohop neighbor
+ * @param l2hop NHDP twohop neighbor
+ */
+void
+nhdp_domain_init_l2hop(struct nhdp_l2hop *l2hop) {
+  struct nhdp_domain *domain;
+  struct nhdp_l2hop_domaindata *data;
+
+  /* initialize metrics */
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    data = nhdp_domain_get_l2hopdata(domain, l2hop);
+
+    data->metric.in = domain->metric->incoming_2hop_start;
+    data->metric.out = domain->metric->outgoing_2hop_start;
   }
 }
 
@@ -273,21 +294,23 @@ nhdp_domain_init_link(struct nhdp_link *lnk) {
 void
 nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
   struct nhdp_domain *domain;
+  struct nhdp_neighbor_domaindata *data;
 
   /* initialize flooding MPR settings */
   neigh->flooding_willingness = _flooding_mpr->willingness;
 
   /* initialize metrics and mprs */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    neigh->_metric[domain->_index].metric.in = domain->metric->incoming_link_start;
-    neigh->_metric[domain->_index].metric.out = domain->metric->outgoing_link_start;
+    data = nhdp_domain_get_neighbordata(domain, neigh);
 
-    neigh->_metric[domain->_index].local_is_mpr = domain->mpr->mprs_start;
-    neigh->_metric[domain->_index].neigh_is_mpr = domain->mpr->mpr_start;
+    data->metric.in = domain->metric->incoming_link_start;
+    data->metric.out = domain->metric->outgoing_link_start;
 
-    neigh->_metric[domain->_index].willingness = domain->mpr->willingness;
+    data->local_is_mpr = domain->mpr->mprs_start;
+    data->neigh_is_mpr = domain->mpr->mpr_start;
+
+    data->willingness = domain->mpr->willingness;
   }
-
 }
 
 /**
@@ -297,17 +320,17 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_domain_process_metric_linktlv(struct nhdp_domain *d,
+nhdp_domain_process_metric_linktlv(struct nhdp_domain *domain,
     struct nhdp_link *lnk, uint16_t tlvvalue) {
   uint32_t metric;
 
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_LINK) {
-    lnk->_metric[d->_index].metric.out = metric;
+    nhdp_domain_get_linkdata(domain, lnk)->metric.out = metric;
   }
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
-    lnk->neigh->_metric[d->_index].metric.out = metric;
+    nhdp_domain_get_neighbordata(domain, lnk->neigh)->metric.out = metric;
   }
 }
 
@@ -318,17 +341,19 @@ nhdp_domain_process_metric_linktlv(struct nhdp_domain *d,
  * @param tlvvalue value of metric tlv
  */
 void
-nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
+nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *domain,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue) {
   uint32_t metric;
+  struct nhdp_l2hop_domaindata *data;
 
   metric = rfc5444_metric_decode(tlvvalue & RFC5444_LINKMETRIC_COST_MASK);
 
+  data = nhdp_domain_get_l2hopdata(domain, l2hop);
   if (tlvvalue & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
-    l2hop->_metric[d->_index].in = metric;
+    data->metric.in = metric;
   }
   if (tlvvalue & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
-    l2hop->_metric[d->_index].out = metric;
+    data->metric.out = metric;
   }
 }
 
@@ -342,16 +367,22 @@ nhdp_domain_calculate_neighbor_metric(
     struct nhdp_domain *domain,
     struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk;
+  struct nhdp_link_domaindata *linkdata;
+  struct nhdp_neighbor_domaindata *neighdata;
 
-  neigh->_metric[domain->ext].metric.in = RFC5444_METRIC_INFINITE;
-  neigh->_metric[domain->ext].metric.out = RFC5444_METRIC_INFINITE;
+  neighdata = nhdp_domain_get_neighbordata(domain, neigh);
+
+  neighdata->metric.in = RFC5444_METRIC_INFINITE;
+  neighdata->metric.out = RFC5444_METRIC_INFINITE;
 
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
-    if (lnk->_metric[domain->ext].metric.out < neigh->_metric[domain->ext].metric.out) {
-      neigh->_metric[domain->ext].metric.out = lnk->_metric[domain->ext].metric.out;
+    linkdata = nhdp_domain_get_linkdata(domain, lnk);
+
+    if (linkdata->metric.out < neighdata->metric.out) {
+      neighdata->metric.out = linkdata->metric.out;
     }
-    if (lnk->_metric[domain->ext].metric.in < neigh->_metric[domain->ext].metric.in) {
-      neigh->_metric[domain->ext].metric.in = lnk->_metric[domain->ext].metric.in;
+    if (linkdata->metric.in < neighdata->metric.in) {
+      neighdata->metric.in = linkdata->metric.in;
     }
   }
 }
@@ -365,9 +396,14 @@ nhdp_domain_calculate_neighbor_metric(
 void
 nhdp_domain_process_mpr_tlv(struct nhdp_domain *domain,
     struct nhdp_link *lnk, uint8_t tlvvalue) {
-  lnk->flooding_mpr = tlvvalue == RFC5444_MPR_FLOODING
-      || tlvvalue == RFC5444_MPR_FLOOD_ROUTE;
-  lnk->neigh->_metric[domain->_index].local_is_mpr =
+
+  if (domain->ext == _flooding_ext) {
+    lnk->neigh->local_is_flooding_mpr =
+        tlvvalue == RFC5444_MPR_FLOODING
+        || tlvvalue == RFC5444_MPR_FLOOD_ROUTE;
+  }
+
+  nhdp_domain_get_neighbordata(domain, lnk->neigh)->local_is_mpr =
       tlvvalue == RFC5444_MPR_ROUTING
       || tlvvalue == RFC5444_MPR_FLOOD_ROUTE;
 }
@@ -420,16 +456,25 @@ nhdp_domain_get_willingness_tlvvalue(struct nhdp_domain *domain) {
 uint8_t
 nhdp_domain_get_mpr_tlvvalue(
     struct nhdp_domain *domain, struct nhdp_link *lnk) {
-  bool flooding;
+  struct nhdp_neighbor_domaindata *data;
 
-  flooding =
-      domain->ext == _flooding_ext && lnk->neigh->neigh_is_flooding_mpr;
+  data = nhdp_domain_get_neighbordata(domain, lnk->neigh);
 
-  if (lnk->neigh->_metric[domain->_index].neigh_is_mpr) {
-    return flooding ? RFC5444_MPR_FLOOD_ROUTE : RFC5444_MPR_ROUTING;
+  if (domain->ext == _flooding_ext && lnk->neigh->neigh_is_flooding_mpr) {
+    if (data->neigh_is_mpr) {
+      return RFC5444_MPR_FLOOD_ROUTE;
+    }
+    else {
+      return RFC5444_MPR_FLOODING;
+    }
   }
   else {
-    return flooding ? RFC5444_MPR_FLOODING : RFC5444_MPR_NOMPR;
+    if (data->neigh_is_mpr) {
+      return RFC5444_MPR_ROUTING;
+    }
+    else {
+      return RFC5444_MPR_NOMPR;
+    }
   }
 }
 

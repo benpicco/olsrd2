@@ -671,6 +671,7 @@ static void
 _process_domainspecific_linkdata(struct netaddr *addr) {
   struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_domain *domain;
+  struct nhdp_neighbor_domaindata *neighdata;
   uint16_t tlvvalue;
 
   struct netaddr_str buf;
@@ -680,14 +681,17 @@ _process_domainspecific_linkdata(struct netaddr *addr) {
    * that should be present in HELLO
    */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
+    neighdata = nhdp_domain_get_neighbordata(domain, _current.neighbor);
+
     if (!domain->mpr->no_default_handling) {
-      _current.neighbor->_metric[domain->_index].local_is_mpr = false;
-      _current.neighbor->_metric[domain->_index].willingness = 0;
+      neighdata->local_is_mpr = false;
+      neighdata->willingness = 0;
     }
 
     if (!domain->metric->no_default_handling) {
-      _current.link->_metric[domain->_index].metric.out = RFC5444_METRIC_INFINITE;
-      _current.neighbor->_metric[domain->_index].metric.out = RFC5444_METRIC_INFINITE;
+      nhdp_domain_get_linkdata(domain, _current.link)->metric.out =
+          RFC5444_METRIC_INFINITE;
+      neighdata->metric.out = RFC5444_METRIC_INFINITE;
     }
   }
 
@@ -741,6 +745,7 @@ static void
 _process_domainspecific_2hopdata(struct nhdp_l2hop *l2hop, struct netaddr *addr) {
   struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_domain *domain;
+  struct nhdp_l2hop_domaindata *data;
   uint16_t tlvvalue;
 
   struct netaddr_str buf;
@@ -748,8 +753,9 @@ _process_domainspecific_2hopdata(struct nhdp_l2hop *l2hop, struct netaddr *addr)
   /* clear metric values that should be present in HELLO */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
     if (!domain->metric->no_default_handling) {
-      l2hop->_metric[domain->_index].in = RFC5444_METRIC_INFINITE;
-      l2hop->_metric[domain->_index].out = RFC5444_METRIC_INFINITE;
+      data = nhdp_domain_get_l2hopdata(domain, l2hop);
+      data->metric.in = RFC5444_METRIC_INFINITE;
+      data->metric.out = RFC5444_METRIC_INFINITE;
     }
   }
 

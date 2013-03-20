@@ -602,7 +602,6 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
  */
 struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
-  struct nhdp_domain *domain;
   struct nhdp_l2hop *l2hop;
 
   l2hop = olsr_class_malloc(&_l2hop_info);
@@ -625,10 +624,7 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
   avl_insert(&lnk->_2hop, &l2hop->_link_node);
 
   /* initialize metrics */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    l2hop->_metric[domain->_index].in = domain->metric->incoming_2hop_start;
-    l2hop->_metric[domain->_index].out = domain->metric->outgoing_2hop_start;
-  }
+  nhdp_domain_init_l2hop(l2hop);
 
   /* trigger event */
   olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_ADDED);

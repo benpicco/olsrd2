@@ -344,7 +344,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   struct rfc5444_writer_address *address;
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
-  uint8_t linkstatus, otherneigh, mpr_flooding, mpr_routing;
+  uint8_t linkstatus, otherneigh, mpr;
 
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET
       && interf->mode == NHDP_IFMODE_IPV6) {
@@ -403,33 +403,18 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
 
   /* add MPR tlvs */
   if (laddr != NULL) {
-    mpr_flooding = laddr->link->flooding_mpr;
-
     list_for_each_element(&nhdp_domain_list, domain, _node) {
       if (domain->mpr->no_default_handling) {
         continue;
       }
 
-      mpr_routing = naddr->neigh->_metric[domain->_index].neigh_is_mpr;
-
-      if (mpr_flooding || mpr_routing) {
-        uint8_t value;
-
-        if (mpr_flooding && mpr_routing) {
-          value = RFC5444_MPR_FLOOD_ROUTE;
-        }
-        else if (mpr_flooding) {
-          value = RFC5444_MPR_FLOODING;
-        }
-        else {
-          value = RFC5444_MPR_ROUTING;
-        }
-
+      mpr = nhdp_domain_get_mpr_tlvvalue(domain, laddr->link);
+      if (mpr != RFC5444_MPR_NOMPR) {
         rfc5444_writer_add_addrtlv(writer, address,
-            &domain->mpr->_mpr_addrtlv, &value, sizeof(value), false);
+            &domain->mpr->_mpr_addrtlv, &mpr, sizeof(mpr), false);
 
         OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d, etx=%d) to NHDP hello",
-            netaddr_to_string(&buf, &naddr->neigh_addr), value, domain->ext);
+            netaddr_to_string(&buf, &naddr->neigh_addr), mpr, domain->ext);
       }
     }
   }
@@ -475,6 +460,8 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       RFC5444_LINKMETRIC_INCOMING_NEIGH,
       RFC5444_LINKMETRIC_OUTGOING_NEIGH,
   };
+  struct nhdp_link_domaindata *linkdata;
+  struct nhdp_neighbor_domaindata *neighdata;
   bool unsent[4];
   uint32_t metrics[4];
   uint16_t tlv_value;
@@ -490,13 +477,15 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       (lnk != NULL && (lnk->status == NHDP_LINK_HEARD || lnk->status == NHDP_LINK_SYMMETRIC));
 
   if (unsent[0]) {
-    memcpy(&metrics[0], &lnk->_metric[domain->_index], sizeof(uint32_t)*2);
+    linkdata = nhdp_domain_get_linkdata(domain, lnk);
+    memcpy(&metrics[0], &linkdata->metric, sizeof(uint32_t)*2);
   }
 
   /* get neighbor metrics if available */
   unsent[2] = unsent[3] = (neigh != NULL && neigh->symmetric > 0);
   if (unsent[2]) {
-    memcpy(&metrics[2], &neigh->_metric[domain->_index], sizeof(uint32_t)*2);
+    neighdata = nhdp_domain_get_neighbordata(domain, neigh);
+    memcpy(&metrics[2], &neighdata->metric, sizeof(uint32_t)*2);
   }
 
   /* encode metrics */

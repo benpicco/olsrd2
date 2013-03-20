@@ -368,6 +368,7 @@ _cb_link_removed(void *ptr) {
 static void
 _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct link_etxff_data *ldata;
+  struct nhdp_link_domaindata *domaindata;
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
   uint32_t total, received;
@@ -425,7 +426,8 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    lnk->_metric[_domain->_index].metric.in = (uint32_t)metric;
+    domaindata = nhdp_domain_get_linkdata(_domain, lnk);
+    domaindata->metric.in = (uint32_t)metric;
 
     OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),

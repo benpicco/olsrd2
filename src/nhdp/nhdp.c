@@ -314,6 +314,10 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
   struct nhdp_hysteresis_str hbuf;
   struct nhdp_metric_str mbuf1, mbuf2;
 
+  struct nhdp_link_domaindata *lnk_dd;
+  struct nhdp_neighbor_domaindata *neigh_dd;
+  struct nhdp_l2hop_domaindata *l2hop_dd;
+
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
     abuf_appendf(con->out, "Interface '%s': mode=%s hello_interval=%s hello_vtime=%s\n",
@@ -348,15 +352,18 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
           nhdp_hysteresis_to_string(&hbuf, lnk));
 
       list_for_each_element(&nhdp_domain_list, domain, _node) {
+        lnk_dd = nhdp_domain_get_linkdata(domain, lnk);
+        neigh_dd = nhdp_domain_get_neighbordata(domain, lnk->neigh);
+
         abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n"
                                "\t    MPR %s: MRP %s, MPRS %s, Willingness %d\n",
             domain->metric->name,
-            domain->metric->to_string(&mbuf1, lnk->_metric[domain->_index].metric.in),
-            domain->metric->to_string(&mbuf2, lnk->_metric[domain->_index].metric.out),
+            domain->metric->to_string(&mbuf1, lnk_dd->metric.in),
+            domain->metric->to_string(&mbuf2, lnk_dd->metric.out),
             domain->mpr->name,
-            lnk->neigh->_metric[domain->_index].neigh_is_mpr ? "yes" : "no",
-            lnk->neigh->_metric[domain->_index].local_is_mpr ? "yes" : "no",
-            lnk->neigh->_metric[domain->_index].willingness
+            neigh_dd->neigh_is_mpr ? "yes" : "no",
+            neigh_dd->local_is_mpr ? "yes" : "no",
+            neigh_dd->willingness
             );
       }
 
@@ -372,10 +379,12 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
         abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->twohop_addr));
 
         list_for_each_element(&nhdp_domain_list, domain, _node) {
+          l2hop_dd = nhdp_domain_get_l2hopdata(domain, twohop);
+
           abuf_appendf(con->out, "\t\tMetric '%s': in=%s out=%s\n",
               domain->metric->name,
-              domain->metric->to_string(&mbuf1, twohop->_metric[domain->_index].in),
-              domain->metric->to_string(&mbuf2, twohop->_metric[domain->_index].out));
+              domain->metric->to_string(&mbuf1, l2hop_dd->metric.in),
+              domain->metric->to_string(&mbuf2, l2hop_dd->metric.out));
         }
       }
     }

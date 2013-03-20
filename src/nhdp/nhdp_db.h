@@ -101,6 +101,10 @@ struct nhdp_neighbor_domaindata {
   uint8_t willingness;
 };
 
+struct nhdp_l2hop_domaindata {
+  struct nhdp_metric metric;
+};
+
 /**
  * nhdl_link represents a link by a specific local interface to one interface
  * of a one-hop neighbor.
@@ -130,9 +134,6 @@ struct nhdp_link {
   /* pointer to neighbor entry of the other side of the link */
   struct nhdp_neighbor *neigh;
 
-  /* true if link is used as a flooding MPR */
-  bool flooding_mpr;
-
   /* internal field for NHDP processing */
   int _process_count;
 
@@ -152,7 +153,7 @@ struct nhdp_link {
   struct list_entity _neigh_node;
 
   /* Array of link metrics */
-  struct nhdp_link_domaindata _metric[NHDP_MAXIMUM_DOMAINS];
+  struct nhdp_link_domaindata _domaindata[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -198,7 +199,7 @@ struct nhdp_l2hop {
   struct avl_node _link_node;
 
   /* Array of link metrics */
-  struct nhdp_metric _metric[NHDP_MAXIMUM_DOMAINS];
+  struct nhdp_l2hop_domaindata _domaindata[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -251,7 +252,7 @@ struct nhdp_neighbor {
   struct avl_node _originator_node;
 
   /* Array of link metrics */
-  struct nhdp_neighbor_domaindata _metric[NHDP_MAXIMUM_DOMAINS];
+  struct nhdp_neighbor_domaindata _domaindata[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
