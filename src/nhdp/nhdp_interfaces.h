@@ -81,12 +81,6 @@ struct nhdp_interface {
   /* true if this interface has a neighbors that support only ipv4 */
   bool neigh_onlyv4;
 
-  /* Willingness for MPR */
-  enum rfc5444_willingness_values mpr_willingness;
-
-  /* Willingness as configured */
-  int mpr_willingness_default;
-
   /* interval between two hellos sent through this interface */
   uint64_t refresh_interval;
 
@@ -243,37 +237,6 @@ nhdp_interface_get_link_addr(struct nhdp_interface *interf, struct netaddr *addr
   struct nhdp_laddr *laddr;
 
   return avl_find_element(&interf->_link_addresses, addr, laddr, _if_node);
-}
-
-/**
- * Set custom MPR willingness for local nhdp interface
- * @param interf local nhdp interface
- * @param will new willingness
- */
-static INLINE void
-nhdp_interface_set_mpr_willingness(struct nhdp_interface *interf, enum rfc5444_willingness_values will) {
-  interf->mpr_willingness = will;
-}
-
-/**
- * Resets the MPR willingness for the local nhdp interface
- * @param interf local nhdp interface
- */
-static INLINE void
-nhdp_interface_reset_mpr_willingness(struct nhdp_interface *interf) {
-  interf->mpr_willingness = RFC5444_WILLINGNESS_UNDEFINED;
-}
-
-/**
- * @param interf local nhdp interface
- * @return current mpr willingness
- */
-static INLINE enum rfc5444_willingness_values
-nhdp_interface_get_mpr_willingness(struct nhdp_interface *interf) {
-  if (interf->mpr_willingness == RFC5444_WILLINGNESS_UNDEFINED) {
-    return interf->mpr_willingness_default;
-  }
-  return interf->mpr_willingness;
 }
 
 #endif /* NHDP_INTERFACES_H_ */

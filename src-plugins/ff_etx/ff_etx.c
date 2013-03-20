@@ -54,15 +54,16 @@
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_cfg.h"
 
-#include "nhdp/nhdp_metric.h"
+#include "nhdp/nhdp.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_interfaces.h"
 
 /* definitions and constants */
-#define CFG_HYSTERESIS_OLSRV1_SECTION "ff_etx"
+#define CFG_ETXFF_SECTION "ff_etx"
 
 #define ETXFF_LINKCOST_MINIMUM 0x1000
-#define ETXFF_LINKCOST_START   0x10000
-#define ETXFF_LINKCOST_MAXIMUM 0x10000
+#define ETXFF_LINKCOST_START   NHDP_METRIC_DEFAULT
+#define ETXFF_LINKCOST_MAXIMUM NHDP_METRIC_DEFAULT
 
 /* Configuration settings of ETXFF Metric */
 struct _config {
@@ -127,7 +128,7 @@ static enum rfc5444_result _cb_process_packet(
       struct rfc5444_reader_tlvblock_context *context);
 
 static const char *_to_string(
-    struct nhdp_linkmetric_str *buf, uint32_t metric);
+    struct nhdp_metric_str *buf, uint32_t metric);
 
 static int _cb_cfg_validate(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
@@ -149,7 +150,7 @@ OLSR_PLUGIN7 {
 
 /* configuration options */
 static struct cfg_schema_section _etxff_section = {
-  .type = CFG_HYSTERESIS_OLSRV1_SECTION,
+  .type = CFG_ETXFF_SECTION,
   .cb_validate = _cb_cfg_validate,
   .cb_delta_handler = _cb_cfg_changed,
 };
@@ -211,15 +212,18 @@ struct olsr_timer_info _hello_lost_info = {
 };
 
 /* nhdp metric handler */
-struct nhdp_linkmetric_handler _etxff_handler = {
+struct nhdp_domain_metric _etxff_handler = {
   .name = "ETXFF metric handler",
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
-  .metric_start = ETXFF_LINKCOST_START,
   .metric_maximum = ETXFF_LINKCOST_MAXIMUM,
+
+  .incoming_link_start = ETXFF_LINKCOST_START,
 
   .to_string = _to_string,
 };
+
+struct nhdp_domain *_domain;
 
 /**
  * Constructor of plugin
@@ -254,7 +258,8 @@ _cb_plugin_enable(void) {
     return -1;
   }
 
-  if (nhdp_linkmetric_handler_add(&_etxff_handler)) {
+  _domain = nhdp_domain_metric_add(&_etxff_handler, 0);
+  if (!_domain) {
     olsr_class_listener_remove(&_link_listener);
     return -1;
   }
@@ -284,7 +289,7 @@ _cb_plugin_disable(void) {
   olsr_rfc5444_remove_protocol_pktseqno(_protocol);
   olsr_rfc5444_remove_protocol(_protocol);
 
-  nhdp_linkmetric_handler_remove(&_etxff_handler);
+  nhdp_domain_metric_remove(_domain);
 
   olsr_class_listener_remove(&_link_listener);
 
@@ -420,7 +425,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    lnk->_metric[_etxff_handler._index].incoming = (uint32_t)metric;
+    lnk->_metric[_domain->_index].m.incoming = (uint32_t)metric;
 
     OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
@@ -438,7 +443,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
 
   /* update neighbor metrics */
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    nhdp_linkmetric_calculate_neighbor_metric(&_etxff_handler, neigh);
+    nhdp_domain_calculate_neighbor_metric(_domain, neigh);
   }
 }
 
@@ -542,7 +547,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
  * @return pointer to output string
  */
 static const char *
-_to_string(struct nhdp_linkmetric_str *buf, uint32_t metric) {
+_to_string(struct nhdp_metric_str *buf, uint32_t metric) {
   uint32_t frac;
 
   frac = metric % ETXFF_LINKCOST_MINIMUM;

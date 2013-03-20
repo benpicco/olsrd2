@@ -42,62 +42,104 @@
 #ifndef NHDP_LINKCOST_H_
 #define NHDP_LINKCOST_H_
 
-struct nhdp_metric;
-
 #include "common/common_types.h"
+#include "common/list.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "tools/olsr_rfc5444.h"
 
 #include "nhdp/nhdp_db.h"
 
-struct nhdp_linkmetric_str {
+struct nhdp_metric_str {
   char buf[128];
 };
 
-struct nhdp_linkmetric_handler {
+struct nhdp_domain_metric {
   /* name of linkmetric */
   const char *name;
 
-  /* TLV extension value */
-  int ext;
-
-  /* true if NHDP writer should NOT create metric TLVs */
-  bool no_tlvs;
-
   /* range of metric */
-  uint32_t metric_minimum, metric_start, metric_maximum;
+  uint32_t metric_minimum, metric_maximum;
 
-  const char *(*to_string)(struct nhdp_linkmetric_str *, uint32_t);
+  /* default values to initialize database */
+  uint32_t incoming_link_start, outgoing_link_start;
+  uint32_t incoming_2hop_start, outgoing_2hop_start;
+
+  /* true if metrics should not be handled by nhdp reader/writer */
+  bool no_default_handling;
+
+  /* conversion of metric value into string function */
+  const char *(*to_string)(struct nhdp_metric_str *, uint32_t);
 
   /* storage for the up to four additional link metrics */
   struct rfc5444_writer_tlvtype _metric_addrtlvs[4];
+};
+
+/* handler for generating MPR information of a link */
+struct nhdp_domain_mpr {
+  /* name of handler */
+  const char *name;
+
+  /* calculate MPR set */
+  void (*update_mpr)(void);
+
+  /* routing willingness */
+  enum rfc5444_willingness_values willingness;
+
+  /* default value for neighbor MPR setting */
+  bool mpr_start;
+
+  /* default value for local MPR (selector) setting */
+  bool mprs_start;
+
+  /* true if MPRs/Willingness should not be handled by nhdp reader/writer */
+  bool no_default_handling;
+
+  /* storage for the additional mpr tlv */
+  struct rfc5444_writer_tlvtype _mpr_addrtlv;
+};
+
+struct nhdp_domain {
+  struct nhdp_domain_metric *metric;
+  struct nhdp_domain_mpr *mpr;
+
+  /* tlv extension */
+  uint8_t ext;
 
   /* index in the metric array */
   int _index;
 
-  /* list of metric handlers */
+  /* list of nhdp domains */
   struct list_entity _node;
 };
 
-EXPORT extern struct nhdp_linkmetric_handler *nhdp_metric_handler[256];
-EXPORT extern struct list_entity nhdp_metric_handler_list;
+EXPORT extern struct list_entity nhdp_domain_list;
 
-void nhdp_linkmetric_init(struct olsr_rfc5444_protocol *);
-void nhdp_linkmetric_cleanup(void);
+void nhdp_domain_init(struct olsr_rfc5444_protocol *);
+void nhdp_domain_cleanup(void);
 
-EXPORT int nhdp_linkmetric_handler_add(struct nhdp_linkmetric_handler *h);
-EXPORT void nhdp_linkmetric_handler_remove(struct nhdp_linkmetric_handler *h);
+EXPORT size_t nhdp_domain_get_count(void);
 
-EXPORT void nhdp_linkmetric_process_linktlv(struct nhdp_linkmetric_handler *h,
+EXPORT struct nhdp_domain *nhdp_domain_metric_add(
+    struct nhdp_domain_metric *h, uint8_t ext);
+EXPORT void nhdp_domain_metric_remove(struct nhdp_domain *d);
+
+EXPORT struct nhdp_domain *nhdp_domain_mpr_add(
+    struct nhdp_domain_mpr *h, uint8_t etx);
+EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain *d);
+
+EXPORT struct nhdp_domain *nhdp_domain_get_by_ext(uint8_t);
+
+EXPORT void nhdp_domain_process_metric_linktlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint16_t tlvvalue);
-EXPORT void nhdp_linkmetric_process_2hoptlv(struct nhdp_linkmetric_handler *h,
+EXPORT void nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue);
-EXPORT void nhdp_linkmetric_calculate_neighbor_metric(
-    struct nhdp_linkmetric_handler *, struct nhdp_neighbor *);
+EXPORT void nhdp_domain_calculate_neighbor_metric(
+    struct nhdp_domain *, struct nhdp_neighbor *);
 
-static INLINE struct nhdp_linkmetric_handler *
-nhdp_linkmetric_handler_get_by_ext(uint8_t ext) {
-  return nhdp_metric_handler[ext];
-}
+EXPORT void nhdp_domain_process_mpr_tlv(struct nhdp_domain *,
+    struct nhdp_link *lnk, uint8_t tlvvalue);
+EXPORT void nhdp_domain_update_mprs(void);
+
+EXPORT enum rfc5444_willingness_values nhdp_domain_get_flooding_willingness(void);
 
 #endif /* NHDP_LINKCOST_H_ */
