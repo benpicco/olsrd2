@@ -39,8 +39,8 @@
  *
  */
 
-#ifndef NHDP_LINKCOST_H_
-#define NHDP_LINKCOST_H_
+#ifndef NHDP_DOMAIN_H_
+#define NHDP_DOMAIN_H_
 
 #include "common/common_types.h"
 #include "common/list.h"
@@ -166,10 +166,9 @@ EXPORT void nhdp_domain_set_flooding_mpr(
     struct nhdp_domain_mpr *, uint8_t ext);
 
 /**
- *
- * @param domain
- * @param lnk
- * @return
+ * @param domain NHDP domain
+ * @param lnk NHDP link
+ * @return domain data of specified link
  */
 static INLINE struct nhdp_link_domaindata *
 nhdp_domain_get_linkdata(struct nhdp_domain *domain, struct nhdp_link *lnk) {
@@ -177,10 +176,9 @@ nhdp_domain_get_linkdata(struct nhdp_domain *domain, struct nhdp_link *lnk) {
 }
 
 /**
- *
- * @param domain
- * @param neigh
- * @return
+ * @param domain NHDP domain
+ * @param neigh NHDP neighbor
+ * @return domain data of specified neighbor
  */
 static INLINE struct nhdp_neighbor_domaindata *
 nhdp_domain_get_neighbordata(
@@ -189,10 +187,9 @@ nhdp_domain_get_neighbordata(
 }
 
 /**
- *
- * @param domain
- * @param l2hop
- * @return
+ * @param domain NHDP domain
+ * @param l2hop NHDP twohop neighbor
+ * @return domain data of specified twohop neighbor
  */
 static INLINE struct nhdp_l2hop_domaindata *
 nhdp_domain_get_l2hopdata(
@@ -200,4 +197,4 @@ nhdp_domain_get_l2hopdata(
   return &l2hop->_domaindata[domain->_index];
 }
 
-#endif /* NHDP_LINKCOST_H_ */
+#endif /* NHDP_DOMAIN_H_ */
