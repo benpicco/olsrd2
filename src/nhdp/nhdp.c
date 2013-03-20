@@ -356,7 +356,7 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
         neigh_dd = nhdp_domain_get_neighbordata(domain, lnk->neigh);
 
         abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n"
-                               "\t    MPR %s: MRP %s, MPRS %s, Willingness %d\n",
+                               "\t    MPR '%s': MRP %s, MPRS %s, Willingness %d\n",
             domain->metric->name,
             domain->metric->to_string(&mbuf1, lnk_dd->metric.in),
             domain->metric->to_string(&mbuf2, lnk_dd->metric.out),

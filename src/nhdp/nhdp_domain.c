@@ -71,6 +71,7 @@ static struct nhdp_domain_mpr _no_mprs = {
 
   .mpr_start = true,
   .mprs_start = true,
+  .willingness = RFC5444_WILLINGNESS_DEFAULT,
 
   .no_default_handling = true,
 };
@@ -486,7 +487,9 @@ nhdp_domain_update_mprs(void) {
   struct nhdp_domain *domain;
 
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    domain->mpr->update_mpr();
+    if (domain->mpr->update_mpr) {
+      domain->mpr->update_mpr();
+    }
   }
 }
 
