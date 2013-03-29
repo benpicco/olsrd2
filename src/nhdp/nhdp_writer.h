@@ -42,7 +42,6 @@
 #ifndef NHDP_WRITER_H_
 #define NHDP_WRITER_H_
 
-#include "core/olsr_logging.h"
 #include "tools/olsr_rfc5444.h"
 
 int nhdp_writer_init(struct olsr_rfc5444_protocol *)

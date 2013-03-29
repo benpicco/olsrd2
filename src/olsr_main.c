@@ -296,11 +296,6 @@ main(int argc, char **argv) {
   olsr_telnet_init();
   olsr_http_init();
 
-  /* activate NHDP */
-  if (nhdp_init()) {
-    goto olsrd_cleanup;
-  }
-
   /* activate custom additions to framework */
   if (olsr_setup_init()) {
     goto olsrd_cleanup;
@@ -341,9 +336,6 @@ olsrd_cleanup:
 
   /* free custom framework additions */
   olsr_setup_cleanup();
-
-  /* free NHDP */
-  nhdp_cleanup();
 
   /* free framework resources */
   olsr_http_cleanup();

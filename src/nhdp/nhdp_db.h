@@ -42,12 +42,6 @@
 #ifndef NHDP_DB_H_
 #define NHDP_DB_H_
 
-struct nhdp_link;
-struct nhdp_laddr;
-struct nhdp_l2hop;
-struct nhdp_neighbor;
-struct nhdp_naddr;
-
 #include "common/common_types.h"
 #include "common/avl.h"
 #include "common/list.h"
@@ -55,6 +49,8 @@ struct nhdp_naddr;
 
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
+
+#include "nhdp/nhdp.h"
 
 #define NHDP_CLASS_LINK             "nhdp_link"
 #define NHDP_CLASS_LINK_ADDRESS     "nhdp_laddr"
@@ -73,8 +69,40 @@ enum nhdp_link_status {
  * Represents a NHDP link metric pair
  */
 struct nhdp_metric {
-  uint32_t incoming;
-  uint32_t outgoing;
+  /* incoming link metric cost */
+  uint32_t in;
+
+  /* outgoing link metric cost */
+  uint32_t out;
+};
+
+/**
+ * Data for one NHDP domain of a link
+ */
+struct nhdp_link_domaindata {
+  /* incoming and outgoing metric cost */
+  struct nhdp_metric metric;
+};
+
+/**
+ * Data for one NHDP domain of a neighbor
+ */
+struct nhdp_neighbor_domaindata {
+  /* incoming and outgoing metric cost */
+  struct nhdp_metric metric;
+
+  /* true if the local router has been selected as a MPR by the neighbor */
+  bool local_is_mpr;
+
+  /* true if the neighbor has been selected as a MPR by this router */
+  bool neigh_is_mpr;
+
+  /* Routing willingness of neighbor */
+  uint8_t willingness;
+};
+
+struct nhdp_l2hop_domaindata {
+  struct nhdp_metric metric;
 };
 
 /**
@@ -125,7 +153,7 @@ struct nhdp_link {
   struct list_entity _neigh_node;
 
   /* Array of link metrics */
-  struct nhdp_metric _metric[0];
+  struct nhdp_link_domaindata _domaindata[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -171,7 +199,7 @@ struct nhdp_l2hop {
   struct avl_node _link_node;
 
   /* Array of link metrics */
-  struct nhdp_metric _metric[0];
+  struct nhdp_l2hop_domaindata _domaindata[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -181,6 +209,18 @@ struct nhdp_neighbor {
   /* number of links to this neighbor which are symmetric */
   int symmetric;
 
+  /* originator address of this node, might by type AF_UNSPEC */
+  struct netaddr originator;
+
+  /* true if the local router has been selected as a MPR by the neighbor */
+  bool local_is_flooding_mpr;
+
+  /* true if the neighbor has been selected as a MPR by this router */
+  bool neigh_is_flooding_mpr;
+
+  /* Willingness of neighbor for flooding data */
+  uint8_t flooding_willingness;
+
   /* internal field for NHDP processing */
   int _process_count;
 
@@ -188,13 +228,13 @@ struct nhdp_neighbor {
    * timer that fires when the ipv6 addresses
    * of this neighbor have to be removed
    */
-  struct olsr_timer_entry vtime_v4;
+  struct olsr_timer_entry _vtime_v4;
 
   /*
    * timer that fires when the ipv6 addresses
    * of this neighbor have to be removed
    */
-  struct olsr_timer_entry vtime_v6;
+  struct olsr_timer_entry _vtime_v6;
 
   /* list of links for this neighbor */
   struct list_entity _links;
@@ -206,10 +246,13 @@ struct nhdp_neighbor {
   struct avl_tree _link_addresses;
 
   /* member entry for global list of neighbors */
-  struct list_entity _node;
+  struct list_entity _global_node;
+
+  /* optional tree node if originator is set */
+  struct avl_node _originator_node;
 
   /* Array of link metrics */
-  struct nhdp_metric _metric[0];
+  struct nhdp_neighbor_domaindata _domaindata[NHDP_MAXIMUM_DOMAINS];
 };
 
 /**
@@ -242,12 +285,10 @@ struct nhdp_naddr {
 EXPORT extern struct list_entity nhdp_neigh_list;
 EXPORT extern struct list_entity nhdp_link_list;
 EXPORT extern struct avl_tree nhdp_naddr_tree;
+EXPORT extern struct avl_tree nhdp_neigh_originator_tree;
 
 void nhdp_db_init(void);
 void nhdp_db_cleanup(void);
-
-int nhdp_db_add_metric(void);
-EXPORT int nhdp_db_get_metriccount(void);
 
 EXPORT struct nhdp_neighbor *nhdp_db_neighbor_add(void);
 EXPORT void nhdp_db_neighbor_remove(struct nhdp_neighbor *);
@@ -255,6 +296,7 @@ EXPORT void nhdp_db_neighbor_join(struct nhdp_neighbor *, struct nhdp_neighbor *
 EXPORT struct nhdp_naddr *nhdp_db_neighbor_addr_add(struct nhdp_neighbor *, struct netaddr *);
 EXPORT void nhdp_db_neighbor_addr_remove(struct nhdp_naddr *);
 EXPORT void nhdp_db_neighbor_addr_move(struct nhdp_neighbor *, struct nhdp_naddr *);
+EXPORT void nhdp_db_neighbor_set_originator(struct nhdp_neighbor *, struct netaddr *);
 
 EXPORT struct nhdp_link *nhdp_db_link_add(struct nhdp_neighbor *, struct nhdp_interface *);
 EXPORT void nhdp_db_link_remove(struct nhdp_link *);
@@ -276,6 +318,16 @@ static INLINE struct nhdp_naddr *
 nhdp_db_neighbor_addr_get(struct netaddr *addr) {
   struct nhdp_naddr *naddr;
   return avl_find_element(&nhdp_naddr_tree, addr, naddr, _global_node);
+}
+
+/**
+ * @param originator originator address
+ * @return corresponding nhdp neighbor, NULL if not found
+ */
+static INLINE struct nhdp_neighbor *
+nhdp_db_neighbor_get_by_originator(struct netaddr *originator) {
+  struct nhdp_neighbor *neigh;
+  return avl_find_element(&nhdp_neigh_originator_tree, originator, neigh, _originator_node);
 }
 
 /**

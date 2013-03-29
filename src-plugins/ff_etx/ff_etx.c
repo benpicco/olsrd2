@@ -49,20 +49,21 @@
 #include "core/olsr_plugins.h"
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
-#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_cfg.h"
 
-#include "nhdp/nhdp_metric.h"
+#include "nhdp/nhdp.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_interfaces.h"
 
 /* definitions and constants */
-#define CFG_HYSTERESIS_OLSRV1_SECTION "ff_etx"
+#define CFG_ETXFF_SECTION "ff_etx"
 
 #define ETXFF_LINKCOST_MINIMUM 0x1000
-#define ETXFF_LINKCOST_START   0x10000
-#define ETXFF_LINKCOST_MAXIMUM 0x10000
+#define ETXFF_LINKCOST_START   NHDP_METRIC_DEFAULT
+#define ETXFF_LINKCOST_MAXIMUM NHDP_METRIC_DEFAULT
 
 /* Configuration settings of ETXFF Metric */
 struct _config {
@@ -127,7 +128,7 @@ static enum rfc5444_result _cb_process_packet(
       struct rfc5444_reader_tlvblock_context *context);
 
 static const char *_to_string(
-    struct nhdp_linkmetric_str *buf, uint32_t metric);
+    struct nhdp_metric_str *buf, uint32_t metric);
 
 static int _cb_cfg_validate(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
@@ -149,7 +150,7 @@ OLSR_PLUGIN7 {
 
 /* configuration options */
 static struct cfg_schema_section _etxff_section = {
-  .type = CFG_HYSTERESIS_OLSRV1_SECTION,
+  .type = CFG_ETXFF_SECTION,
   .cb_validate = _cb_cfg_validate,
   .cb_delta_handler = _cb_cfg_changed,
 };
@@ -193,7 +194,7 @@ struct olsr_class_listener _link_listener = {
   .cb_remove = _cb_link_removed,
 };
 
-/* timer for sampling incoming RFC5444 packets */
+/* timer for sampling in RFC5444 packets */
 struct olsr_timer_info _sampling_timer_info = {
   .name = "Sampling timer for ETXFF-metric",
   .callback = _cb_etx_sampling,
@@ -211,15 +212,18 @@ struct olsr_timer_info _hello_lost_info = {
 };
 
 /* nhdp metric handler */
-struct nhdp_linkmetric_handler _etxff_handler = {
+struct nhdp_domain_metric _etxff_handler = {
   .name = "ETXFF metric handler",
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
-  .metric_start = ETXFF_LINKCOST_START,
   .metric_maximum = ETXFF_LINKCOST_MAXIMUM,
+
+  .incoming_link_start = ETXFF_LINKCOST_START,
 
   .to_string = _to_string,
 };
+
+struct nhdp_domain *_domain;
 
 /**
  * Constructor of plugin
@@ -254,7 +258,8 @@ _cb_plugin_enable(void) {
     return -1;
   }
 
-  if (nhdp_linkmetric_handler_add(&_etxff_handler)) {
+  _domain = nhdp_domain_metric_add(&_etxff_handler, 0);
+  if (!_domain) {
     olsr_class_listener_remove(&_link_listener);
     return -1;
   }
@@ -284,7 +289,7 @@ _cb_plugin_disable(void) {
   olsr_rfc5444_remove_protocol_pktseqno(_protocol);
   olsr_rfc5444_remove_protocol(_protocol);
 
-  nhdp_linkmetric_handler_remove(&_etxff_handler);
+  nhdp_domain_metric_remove(_domain);
 
   olsr_class_listener_remove(&_link_listener);
 
@@ -363,11 +368,17 @@ _cb_link_removed(void *ptr) {
 static void
 _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct link_etxff_data *ldata;
+  struct nhdp_link_domaindata *domaindata;
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
   int i;
+  struct nhdp_laddr *laddr;
+
+  struct netaddr_str buf;
+
+  OLSR_DEBUG(LOG_PLUGINS, "Calculate ETX from sampled data");
 
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     ldata = olsr_class_get_extension(&_link_extenstion, lnk);
@@ -405,7 +416,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
       metric = (ETXFF_LINKCOST_MINIMUM * total) / received;
     }
 
-    /* convert into incoming metric value */
+    /* convert into in metric value */
     if (metric > RFC5444_METRIC_MAX) {
       /* metric overflow */
       metric = RFC5444_METRIC_MAX;
@@ -415,11 +426,13 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    lnk->_metric[_etxff_handler._index].incoming = (uint32_t)metric;
+    domaindata = nhdp_domain_get_linkdata(_domain, lnk);
+    domaindata->metric.in = (uint32_t)metric;
 
-    OLSR_DEBUG(LOG_PLUGINS, "New sampling rate: %d/%d = %" PRIu64 " (w=%d)\n",
+    OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
+        netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
+        nhdp_interface_get_name(lnk->local_if),
         received, total, metric, ldata->window_size);
-
 
     /* update rolling buffer */
     ldata->activePtr++;
@@ -431,8 +444,8 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   }
 
   /* update neighbor metrics */
-  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
-    nhdp_linkmetric_calculate_neighbor_metric(&_etxff_handler, neigh);
+  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
+    nhdp_domain_calculate_neighbor_metric(_domain, neigh);
   }
 }
 
@@ -458,7 +471,7 @@ _cb_hello_lost(void *ptr) {
 }
 
 /**
- * Callback to process all incoming RFC5444 packets for metric calculation. The
+ * Callback to process all in RFC5444 packets for metric calculation. The
  * Callback ignores all unicast packets.
  * @param consumer
  * @param context
@@ -481,9 +494,9 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
   if (!context->has_pktseqno) {
     struct netaddr_str buf;
 
-    OLSR_WARN(LOG_PLUGINS, "Error, neighbor %s does not send packet sequence numbers!",
+    OLSR_WARN(LOG_PLUGINS, "Neighbor %s does not send packet sequence numbers, cannot collect etxff data!",
         netaddr_socket_to_string(&buf, _protocol->input_socket));
-    return RFC5444_DROP_PACKET;
+    return RFC5444_OKAY;
   }
 
   /* get interface and link */
@@ -536,7 +549,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute
  * @return pointer to output string
  */
 static const char *
-_to_string(struct nhdp_linkmetric_str *buf, uint32_t metric) {
+_to_string(struct nhdp_metric_str *buf, uint32_t metric) {
   uint32_t frac;
 
   frac = metric % ETXFF_LINKCOST_MINIMUM;

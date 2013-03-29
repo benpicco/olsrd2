@@ -45,7 +45,7 @@
 #include "common/list.h"
 #include "common/netaddr.h"
 
-#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444.h"
 
 #include "core/olsr_logging.h"
 #include "core/olsr_class.h"
@@ -54,7 +54,7 @@
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
-#include "nhdp/nhdp_metric.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_db.h"
 
 /* Prototypes of local functions */
@@ -137,12 +137,11 @@ struct avl_tree nhdp_naddr_tree;
 /* list of neighbors */
 struct list_entity nhdp_neigh_list;
 
+/* tree of neighbors with originator addresses */
+struct avl_tree nhdp_neigh_originator_tree;
+
 /* list of links (to neighbors) */
 struct list_entity nhdp_link_list;
-
-/* handling of link metrics */
-int _metric_count = 0;
-bool _metric_initialized = false;
 
 /**
  * Initialize NHDP databases
@@ -151,6 +150,7 @@ void
 nhdp_db_init(void) {
   avl_init(&nhdp_naddr_tree, avl_comp_netaddr, false);
   list_init_head(&nhdp_neigh_list);
+  avl_init(&nhdp_neigh_originator_tree, avl_comp_netaddr, false);
   list_init_head(&nhdp_link_list);
 
   olsr_class_add(&_neigh_info);
@@ -176,7 +176,7 @@ nhdp_db_cleanup(void) {
   struct nhdp_neighbor *neigh, *n_it;
 
   /* remove all neighbors */
-  list_for_each_element_safe(&nhdp_neigh_list, neigh, _node, n_it) {
+  list_for_each_element_safe(&nhdp_neigh_list, neigh, _global_node, n_it) {
     nhdp_db_neighbor_remove(neigh);
   }
 
@@ -198,57 +198,12 @@ nhdp_db_cleanup(void) {
 }
 
 /**
- * Sets the total number of metrics for NHDP. Can only be used as long as the NHDP
- * databases are empty.
- * @return 0 if successfully set, -1 if NHDP database has already been used.
- */
-int
-nhdp_db_add_metric(void) {
-  if (_metric_initialized) {
-    return -1;
-  }
-
-  _metric_count++;;
-  return 0;
-}
-
-/**
- * @return total number of link metrics used by NHDP
- */
-int
-nhdp_db_get_metriccount(void) {
-  return _metric_count;
-}
-
-/**
  * @return new NHDP neighbor without links and addresses,
  *  NULL if out of memory
  */
 struct nhdp_neighbor *
 nhdp_db_neighbor_add(void) {
   struct nhdp_neighbor *neigh;
-  struct nhdp_linkmetric_handler *h;
-
-  if (!_metric_initialized) {
-    /* lazy memory size initialization */
-    if (_metric_count > 0) {
-      _neigh_info.size += sizeof(struct nhdp_metric) * _metric_count;
-      _link_info.size += sizeof(struct nhdp_metric) * _metric_count;
-      _l2hop_info.size += sizeof(struct nhdp_metric) * _metric_count;
-
-      if (olsr_class_resize(&_neigh_info)) {
-        return NULL;
-      }
-      if (olsr_class_resize(&_link_info)) {
-        return NULL;
-      }
-      if (olsr_class_resize(&_l2hop_info)) {
-        return NULL;
-      }
-    }
-
-    _metric_initialized = true;
-  }
 
   neigh = olsr_class_malloc(&_neigh_info);
   if (neigh == NULL) {
@@ -258,11 +213,11 @@ nhdp_db_neighbor_add(void) {
   OLSR_DEBUG(LOG_NHDP, "New Neighbor: 0x%0zx", (size_t)neigh);
 
   /* initialize timers */
-  neigh->vtime_v4.cb_context = neigh;
-  neigh->vtime_v4.info = &_neigh_vtimev4_info;
+  neigh->_vtime_v4.cb_context = neigh;
+  neigh->_vtime_v4.info = &_neigh_vtimev4_info;
 
-  neigh->vtime_v6.cb_context = neigh;
-  neigh->vtime_v6.info = &_neigh_vtimev6_info;
+  neigh->_vtime_v6.cb_context = neigh;
+  neigh->_vtime_v6.info = &_neigh_vtimev6_info;
 
   /* initialize trees and lists */
   avl_init(&neigh->_neigh_addresses, avl_comp_netaddr, false);
@@ -270,13 +225,13 @@ nhdp_db_neighbor_add(void) {
   list_init_head(&neigh->_links);
 
   /* hook into global neighbor list */
-  list_add_tail(&nhdp_neigh_list, &neigh->_node);
+  list_add_tail(&nhdp_neigh_list, &neigh->_global_node);
 
-  /* initialize metrics */
-  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    neigh->_metric[h->_index].incoming = h->metric_start;
-    neigh->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
-  }
+  /* initialize originator node */
+  neigh->_originator_node.key = &neigh->originator;
+
+  /* initialize domain data */
+  nhdp_domain_init_neighbor(neigh);
 
   /* trigger event */
   olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_ADDED);
@@ -298,8 +253,8 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_REMOVED);
 
   /* stop timers */
-  olsr_timer_stop(&neigh->vtime_v4);
-  olsr_timer_stop(&neigh->vtime_v6);
+  olsr_timer_stop(&neigh->_vtime_v4);
+  olsr_timer_stop(&neigh->_vtime_v6);
 
   /* remove all links */
   list_for_each_element_safe(&neigh->_links, lnk, _neigh_node, l_it) {
@@ -311,7 +266,13 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
     nhdp_db_neighbor_addr_remove(naddr);
   }
 
-  list_remove(&neigh->_node);
+  /* remove from originator tree if necessary */
+  if (netaddr_get_address_family(&neigh->originator) != AF_UNSPEC) {
+    avl_remove(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+  }
+
+  /* remove from global list and free memory */
+  list_remove(&neigh->_global_node);
   olsr_class_free(&_neigh_info, neigh);
 }
 
@@ -434,6 +395,41 @@ nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr
 }
 
 /**
+ * Sets a new originator address for an NHDP neighbor
+ * @param nhdp neighbor
+ * @param originator originator address, might be type AF_UNSPEC
+ */
+void
+nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *originator) {
+  struct nhdp_neighbor *neigh2;
+
+  if (memcmp(&neigh->originator, originator, sizeof(*originator)) == 0) {
+    /* same originator, nothing to do */
+    return;
+  }
+
+  if (netaddr_get_address_family(&neigh->originator) != AF_UNSPEC) {
+    /* different originator, remove from tree */
+    avl_remove(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+  }
+
+  neigh2 = nhdp_db_neighbor_get_by_originator(originator);
+  if (neigh2) {
+    /* different neighbor has this originator, invalidate it */
+    avl_remove(&nhdp_neigh_originator_tree, &neigh2->_originator_node);
+    netaddr_invalidate(&neigh2->originator);
+  }
+
+  /* copy originator address into neighbor */
+  memcpy(&neigh->originator, originator, sizeof(*originator));
+
+  if (netaddr_get_address_family(originator) != AF_UNSPEC) {
+    /* add to tree if new originator is valid */
+    avl_insert(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+  }
+}
+
+/**
  * Insert a new link into a nhdp neighbors database
  * @param neigh neighbor which will get the new link
  * @param local_if local interface through which the link was heard
@@ -441,7 +437,6 @@ nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr
  */
 struct nhdp_link *
 nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
-  struct nhdp_linkmetric_handler *h;
   struct nhdp_link *lnk;
 
   lnk = olsr_class_malloc(&_link_info);
@@ -471,11 +466,8 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
 
-  /* initialize metrics */
-  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    lnk->_metric[h->_index].incoming = h->metric_start;
-    lnk->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
-  }
+  /* initialize link domain data */
+  nhdp_domain_init_link(lnk);
 
   /* trigger event */
   olsr_class_event(&_link_info, lnk, OLSR_OBJECT_ADDED);
@@ -610,7 +602,6 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
  */
 struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
-  struct nhdp_linkmetric_handler *h;
   struct nhdp_l2hop *l2hop;
 
   l2hop = olsr_class_malloc(&_l2hop_info);
@@ -633,10 +624,7 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
   avl_insert(&lnk->_2hop, &l2hop->_link_node);
 
   /* initialize metrics */
-  list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-    l2hop->_metric[h->_index].incoming = RFC5444_METRIC_DEFAULT;
-    l2hop->_metric[h->_index].outgoing = RFC5444_METRIC_DEFAULT;
-  }
+  nhdp_domain_init_l2hop(l2hop);
 
   /* trigger event */
   olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_ADDED);

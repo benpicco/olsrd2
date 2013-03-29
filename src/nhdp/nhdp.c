@@ -41,14 +41,14 @@
 
 #include "common/common_types.h"
 #include "rfc5444/rfc5444_writer.h"
+#include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_telnet.h"
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
-#include "nhdp/nhdp_metric.h"
-#include "nhdp/nhdp_mpr.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_reader.h"
 #include "nhdp/nhdp_writer.h"
 #include "nhdp/nhdp.h"
@@ -79,6 +79,9 @@ OLSR_SUBSYSTEM_STATE(_nhdp_state);
 enum log_source LOG_NHDP = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
 
+/* NHDP originator address, might be undefined */
+static struct netaddr _originator;
+
 /**
  * Initialize NHDP subsystem
  * @return 0 if initialized, -1 if an error happened
@@ -103,14 +106,16 @@ nhdp_init(void) {
     return -1;
   }
 
+  nhdp_db_init();
   nhdp_reader_init(_protocol);
   nhdp_interfaces_init(_protocol);
-  nhdp_db_init();
-  nhdp_linkmetric_init(_protocol);
+  nhdp_domain_init(_protocol);
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
   }
+
+  netaddr_invalidate(&_originator);
 
   olsr_subsystem_init(&_nhdp_state);
   return 0;
@@ -130,13 +135,31 @@ nhdp_cleanup(void) {
     olsr_telnet_remove(&_cmds[i]);
   }
 
-  nhdp_linkmetric_cleanup();
+  nhdp_domain_cleanup();
   nhdp_writer_cleanup();
   nhdp_reader_cleanup();
-  nhdp_db_cleanup();
   nhdp_interfaces_cleanup();
+  nhdp_db_cleanup();
 }
 
+/**
+ * Sets the originator address used by NHDP to a new value.
+ * Originator address must be IPv4 to be used in dualstack mode.
+ *
+ * @param NHDP originator, might be type AF_UNSPEC.
+ */
+void
+nhdp_set_originator(const struct netaddr *addr) {
+  memcpy(&_originator, addr, sizeof(_originator));
+}
+
+/**
+ * @return current NHDP originator
+ */
+const struct netaddr *
+nhdp_get_originator(void) {
+  return &_originator;
+}
 
 /**
  * Callback triggered when the nhdp telnet command is called
@@ -179,7 +202,7 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
   struct netaddr_str nbuf;
   struct fraction_str tbuf;
 
-  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
+  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
 
     avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
@@ -221,7 +244,7 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
   struct fraction_str tbuf1, tbuf2, tbuf3;
   struct nhdp_hysteresis_str hbuf;
 
-  list_for_each_element(&nhdp_neigh_list, neigh, _node) {
+  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
     abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
 
     list_for_each_element(&neigh->_links, lnk, _neigh_node) {
@@ -284,12 +307,16 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
   struct nhdp_l2hop *twohop;
   const char *status;
 
-  struct nhdp_linkmetric_handler *h;
+  struct nhdp_domain *domain;
 
   struct netaddr_str nbuf;
   struct fraction_str tbuf1, tbuf2, tbuf3;
   struct nhdp_hysteresis_str hbuf;
-  struct nhdp_linkmetric_str mbuf1, mbuf2;
+  struct nhdp_metric_str mbuf1, mbuf2;
+
+  struct nhdp_link_domaindata *lnk_dd;
+  struct nhdp_neighbor_domaindata *neigh_dd;
+  struct nhdp_l2hop_domaindata *l2hop_dd;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
@@ -324,11 +351,20 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
           olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
           nhdp_hysteresis_to_string(&hbuf, lnk));
 
-      list_for_each_element(&nhdp_metric_handler_list, h, _node) {
-        abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n",
-            h->name,
-            h->to_string(&mbuf1, lnk->_metric[h->_index].incoming),
-            h->to_string(&mbuf2, lnk->_metric[h->_index].outgoing));
+      list_for_each_element(&nhdp_domain_list, domain, _node) {
+        lnk_dd = nhdp_domain_get_linkdata(domain, lnk);
+        neigh_dd = nhdp_domain_get_neighbordata(domain, lnk->neigh);
+
+        abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n"
+                               "\t    MPR '%s': MRP %s, MPRS %s, Willingness %d\n",
+            domain->metric->name,
+            domain->metric->to_string(&mbuf1, lnk_dd->metric.in),
+            domain->metric->to_string(&mbuf2, lnk_dd->metric.out),
+            domain->mpr->name,
+            neigh_dd->neigh_is_mpr ? "yes" : "no",
+            neigh_dd->local_is_mpr ? "yes" : "no",
+            neigh_dd->willingness
+            );
       }
 
       avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
@@ -342,11 +378,13 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
       avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
         abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->twohop_addr));
 
-        list_for_each_element(&nhdp_metric_handler_list, h, _node) {
+        list_for_each_element(&nhdp_domain_list, domain, _node) {
+          l2hop_dd = nhdp_domain_get_l2hopdata(domain, twohop);
+
           abuf_appendf(con->out, "\t\tMetric '%s': in=%s out=%s\n",
-              h->name,
-              h->to_string(&mbuf1, twohop->_metric[h->_index].incoming),
-              h->to_string(&mbuf2, twohop->_metric[h->_index].outgoing));
+              domain->metric->name,
+              domain->metric->to_string(&mbuf1, l2hop_dd->metric.in),
+              domain->metric->to_string(&mbuf2, l2hop_dd->metric.out));
         }
       }
     }

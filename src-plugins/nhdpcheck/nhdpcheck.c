@@ -45,7 +45,7 @@
 #include "core/olsr_logging.h"
 #include "core/olsr_plugins.h"
 #include "rfc5444/rfc5444_iana.h"
-#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
 #include "tools/olsr_rfc5444.h"
 #include "tools/olsr_cfg.h"
@@ -195,8 +195,8 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __a
   assert(interf);
 
   /* check address length */
-  if ((context->addr_len == 16 && interf->mode == NHDP_IPV4)
-      || (context->addr_len == 4 && interf->mode == NHDP_IPV6)
+  if ((context->addr_len == 16 && interf->mode == NHDP_IFMODE_IPV4)
+      || (context->addr_len == 4 && interf->mode == NHDP_IFMODE_IPV6)
       || (context->addr_len != 4 && context->addr_len != 16)) {
     OLSR_INFO(LOG_NHDP_CHECK,
         "Dropped NHDP message with addrlen %d on interface %s (%s)",

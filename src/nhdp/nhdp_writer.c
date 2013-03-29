@@ -43,15 +43,14 @@
 #include "common/avl.h"
 #include "common/avl_comp.h"
 #include "rfc5444/rfc5444_iana.h"
-#include "rfc5444/rfc5444_conversion.h"
+#include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "tools/olsr_rfc5444.h"
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_interfaces.h"
-#include "nhdp/nhdp_metric.h"
-#include "nhdp/nhdp_mpr.h"
+#include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_writer.h"
 
 #ifdef RIOT
@@ -63,7 +62,6 @@ enum {
   IDX_ADDRTLV_LOCAL_IF,
   IDX_ADDRTLV_LINK_STATUS,
   IDX_ADDRTLV_OTHER_NEIGHB,
-  IDX_ADDRTLV_MPR,
 };
 
 /* prototypes */
@@ -87,7 +85,7 @@ static struct rfc5444_writer_address *_add_rfc5444_address(
 static void _write_metric_tlv(struct rfc5444_writer *writer,
     struct rfc5444_writer_address *addr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
-    struct nhdp_linkmetric_handler *handler);
+    struct nhdp_domain *domain);
 
 /* definition of NHDP writer */
 static struct rfc5444_writer_message *_nhdp_message = NULL;
@@ -102,7 +100,6 @@ static struct rfc5444_writer_tlvtype _nhdp_addrtlvs[] = {
   [IDX_ADDRTLV_LOCAL_IF] =     { .type = RFC5444_ADDRTLV_LOCAL_IF },
   [IDX_ADDRTLV_LINK_STATUS] =  { .type = RFC5444_ADDRTLV_LINK_STATUS },
   [IDX_ADDRTLV_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB },
-  [IDX_ADDRTLV_MPR] =          { .type = RFC5444_ADDRTLV_MPR },
 };
 
 static struct olsr_rfc5444_protocol *_protocol;
@@ -159,6 +156,8 @@ static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
   struct olsr_rfc5444_target *target;
+  const struct netaddr *orig_ptr;
+  struct netaddr tmp_originator;
   struct netaddr_str buf;
 
   if (!message->target_specific) {
@@ -174,19 +173,35 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     return;
   }
 
+  /* get orig_ptr */
+  orig_ptr = nhdp_get_originator();
   if (netaddr_get_address_family(&target->dst) == AF_INET) {
     rfc5444_writer_set_msg_addrlen(writer, message, 4);
+
+    if (netaddr_get_address_family(orig_ptr) != AF_INET) {
+      netaddr_invalidate(&tmp_originator);
+      orig_ptr = &tmp_originator;
+    }
   }
   else {
     rfc5444_writer_set_msg_addrlen(writer, message, 16);
+
+    if (netaddr_get_address_family(orig_ptr) == AF_INET) {
+      netaddr_embed_ipv4_compatible(&tmp_originator, orig_ptr);
+      orig_ptr = &tmp_originator;
+    }
   }
 
-  rfc5444_writer_set_msg_header(writer, message, false, false, true, true);
-  rfc5444_writer_set_msg_hoplimit(writer, message, 1);
-  rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_get_next_message_seqno(_protocol));
+  rfc5444_writer_set_msg_header(writer, message,
+      netaddr_get_address_family(orig_ptr) != AF_UNSPEC, false, false, false);
+  /* rfc5444_writer_set_msg_seqno(writer, message, olsr_rfc5444_get_next_message_seqno(_protocol)); */
 
-  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s (%s)",
-      target->interface->name, message->addr_len == 16 ? "ipv6" : "ipv4");
+  if (netaddr_get_address_family(orig_ptr) != AF_UNSPEC) {
+    rfc5444_writer_set_msg_originator(writer, message, netaddr_get_binptr(orig_ptr));
+  }
+
+  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s with destination %s",
+      target->interface->name, netaddr_to_string(&buf, &target->dst));
 }
 
 /**
@@ -197,7 +212,8 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
 static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv) {
-  uint8_t vtime_encoded, itime_encoded, will;
+  uint8_t vtime_encoded, itime_encoded, will_encoded;
+  struct nhdp_domain *domain;
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
 
@@ -224,10 +240,16 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
   rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
       &vtime_encoded, sizeof(vtime_encoded));
 
-  if (nhdp_mpr_use_willingness(nhdp_mpr_get_flooding_handler(), interf)) {
-    will = nhdp_interface_get_mpr_willingness(interf);
-    rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING, 0,
-        &will, sizeof(will));
+  /* add willingness for all domains */
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->mpr->no_default_handling) {
+      continue;
+    }
+
+    will_encoded = nhdp_domain_get_willingness_tlvvalue(domain);
+
+    rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_MPR_WILLING,
+        domain->ext, &will_encoded, sizeof(will_encoded));
   }
 }
 
@@ -276,12 +298,12 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
   bool this_if;
 
   if (netaddr_get_address_family(&addr->if_addr) == AF_INET
-      && interf->mode == NHDP_IPV6) {
+      && interf->mode == NHDP_IFMODE_IPV6) {
     /* ignore */
     return;
   }
   if (netaddr_get_address_family(&addr->if_addr) == AF_INET6
-      && interf->mode == NHDP_IPV4) {
+      && interf->mode == NHDP_IFMODE_IPV4) {
     /* ignore */
     return;
   }
@@ -322,19 +344,19 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
 static void
 _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_provider *prv,
     struct nhdp_interface *interf, struct nhdp_naddr *naddr) {
-  struct nhdp_linkmetric_handler *metric_handler;
+  struct nhdp_domain *domain;
   struct rfc5444_writer_address *address;
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
-  uint8_t linkstatus, otherneigh, mpr_flooding, mpr_routing;
+  uint8_t linkstatus, otherneigh, mpr;
 
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET
-      && interf->mode == NHDP_IPV6) {
+      && interf->mode == NHDP_IFMODE_IPV6) {
     /* ignore */
     return;
   }
   if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6
-      && interf->mode == NHDP_IPV4) {
+      && interf->mode == NHDP_IFMODE_IPV4) {
     /* ignore */
     return;
   }
@@ -383,49 +405,44 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
         netaddr_to_string(&buf, &naddr->neigh_addr), otherneigh);
   }
 
+  /* add MPR tlvs */
   if (laddr != NULL) {
-    mpr_flooding = nhdp_mpr_is_mpr(nhdp_mpr_get_flooding_handler(), laddr->link);
-    mpr_routing = nhdp_mpr_is_mpr(nhdp_mpr_get_routing_handler(), laddr->link);
-
-    if (mpr_flooding || mpr_routing) {
-      uint8_t value;
-
-      if (mpr_flooding && mpr_routing) {
-        value = RFC5444_MPR_FLOOD_ROUTE;
-      }
-      else if (mpr_flooding) {
-        value = RFC5444_MPR_FLOODING;
-      }
-      else {
-        value = RFC5444_MPR_ROUTING;
+    list_for_each_element(&nhdp_domain_list, domain, _node) {
+      if (domain->mpr->no_default_handling) {
+        continue;
       }
 
-      rfc5444_writer_add_addrtlv(writer, address,
-          &_nhdp_addrtlvs[IDX_ADDRTLV_MPR],
-          &value, sizeof(value), false);
+      mpr = nhdp_domain_get_mpr_tlvvalue(domain, laddr->link);
+      if (mpr != RFC5444_MPR_NOMPR) {
+        rfc5444_writer_add_addrtlv(writer, address,
+            &domain->mpr->_mpr_addrtlv, &mpr, sizeof(mpr), false);
 
-      OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d) to NHDP hello",
-          netaddr_to_string(&buf, &naddr->neigh_addr), value);
+        OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d, etx=%d) to NHDP hello",
+            netaddr_to_string(&buf, &naddr->neigh_addr), mpr, domain->ext);
+      }
     }
   }
 
-  list_for_each_element(&nhdp_metric_handler_list, metric_handler, _node) {
-    if (!metric_handler->no_tlvs) {
-      struct nhdp_link *lnk = NULL;
-      struct nhdp_neighbor *neigh = NULL;
+  /* add linkcost TLVs */
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    struct nhdp_link *lnk = NULL;
+    struct nhdp_neighbor *neigh = NULL;
 
-      if (linkstatus == RFC5444_LINKSTATUS_HEARD
-          || linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
-        lnk = laddr->link;
-      }
-      if (naddr->neigh->symmetric > 0
-          && (linkstatus == RFC5444_LINKSTATUS_SYMMETRIC
-              || otherneigh == RFC5444_OTHERNEIGHB_SYMMETRIC)) {
-        neigh = naddr->neigh;
-      }
-
-      _write_metric_tlv(writer, address, neigh, lnk, metric_handler);
+    if (domain->metric->no_default_handling) {
+      continue;
     }
+
+    if (linkstatus == RFC5444_LINKSTATUS_HEARD
+        || linkstatus == RFC5444_LINKSTATUS_SYMMETRIC) {
+      lnk = laddr->link;
+    }
+    if (naddr->neigh->symmetric > 0
+        && (linkstatus == RFC5444_LINKSTATUS_SYMMETRIC
+            || otherneigh == RFC5444_OTHERNEIGHB_SYMMETRIC)) {
+      neigh = naddr->neigh;
+    }
+
+    _write_metric_tlv(writer, address, neigh, lnk, domain);
   }
 }
 
@@ -440,13 +457,15 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
 static void
 _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *addr,
     struct nhdp_neighbor *neigh, struct nhdp_link *lnk,
-    struct nhdp_linkmetric_handler *handler) {
+    struct nhdp_domain *domain) {
   static const uint16_t flags[4] = {
       RFC5444_LINKMETRIC_INCOMING_LINK,
       RFC5444_LINKMETRIC_OUTGOING_LINK,
       RFC5444_LINKMETRIC_INCOMING_NEIGH,
       RFC5444_LINKMETRIC_OUTGOING_NEIGH,
   };
+  struct nhdp_link_domaindata *linkdata;
+  struct nhdp_neighbor_domaindata *neighdata;
   bool unsent[4];
   uint32_t metrics[4];
   uint16_t tlv_value;
@@ -462,13 +481,15 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       (lnk != NULL && (lnk->status == NHDP_LINK_HEARD || lnk->status == NHDP_LINK_SYMMETRIC));
 
   if (unsent[0]) {
-    memcpy(&metrics[0], &lnk->_metric[handler->_index], sizeof(uint32_t)*2);
+    linkdata = nhdp_domain_get_linkdata(domain, lnk);
+    memcpy(&metrics[0], &linkdata->metric, sizeof(uint32_t)*2);
   }
 
   /* get neighbor metrics if available */
   unsent[2] = unsent[3] = (neigh != NULL && neigh->symmetric > 0);
   if (unsent[2]) {
-    memcpy(&metrics[2], &neigh->_metric[handler->_index], sizeof(uint32_t)*2);
+    neighdata = nhdp_domain_get_neighbordata(domain, neigh);
+    memcpy(&metrics[2], &neighdata->metric, sizeof(uint32_t)*2);
   }
 
   /* encode metrics */
@@ -497,14 +518,14 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
       }
     }
 
-    OLSR_DEBUG(LOG_NHDP_W, "Add Metric (ext %u): 0x%04x", handler->ext, tlv_value);
+    OLSR_DEBUG(LOG_NHDP_W, "Add Metric (ext %u): 0x%04x", domain->ext, tlv_value);
 
     /* conversion into network byte order */
     tlv_value = htons(tlv_value);
 
     /* add to rfc5444 address */
     rfc5444_writer_add_addrtlv(writer, addr,
-        &handler->_metric_addrtlvs[k++],
+        &domain->metric->_metric_addrtlvs[k++],
         &tlv_value, sizeof(tlv_value), true);
   }
 }
@@ -522,40 +543,38 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   struct nhdp_interface_addr *addr;
   struct nhdp_naddr *naddr;
 
+  uint8_t block_af;
+
   /* have already be checked for message TLVs, so they cannot be NULL */
   target = olsr_rfc5444_get_target_from_message(prv->creator);
   interf = nhdp_interface_get(target->interface->name);
 
-  addr = avl_first_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
-  naddr = avl_first_element_safe(&nhdp_naddr_tree, naddr, _global_node);
+  /* select which address family we will NOT transmit */
+  if (interf->mode == NHDP_IFMODE_IPV4
+      || netaddr_get_address_family(&target->dst) == AF_INET) {
+    /* do not transmit ipv6 on IPv4 message or in IPv4 only mode */
+    block_af = AF_INET6;
+  }
+  else if (interf->mode == NHDP_IFMODE_IPV6) {
+    /* do not transmit ipv4 in IPv6-only mode */
+    block_af = AF_INET;
+  }
+  else {
+    /* transmit everything otherwise */
+    block_af = AF_UNSPEC;
+  }
 
-  /* produce a sorted list of addr/naddr objects */
-  while (addr != NULL || naddr != NULL) {
-    /* if there is no naddr anymore or naddr>addr then... */
-    if (naddr == NULL || (addr != NULL &&
-        avl_comp_netaddr_socket(&naddr->neigh_addr, &addr->if_addr) > 0)) {
-      /* add another addr with TLV to the steam */
-      if (!addr->_global_node.follower && !addr->removed) {
-        /* each address only once and only active ones */
-        if (netaddr_get_address_family(&addr->if_addr) != AF_INET6
-          || netaddr_get_address_family(&target->dst) != AF_INET) {
-          /* do not send IPv6 addresses over IPv4 */
-          _add_localif_address(writer, prv, interf, addr);
-        }
-      }
-
-      /* move to next addr, NULL if end reached */
-      addr = avl_next_element_safe(&nhdp_ifaddr_tree, addr, _global_node);
+  /* transmit interface addresses first */
+  avl_for_each_element(&nhdp_ifaddr_tree, addr, _global_node) {
+    if (!addr->removed && netaddr_get_address_family(&addr->if_addr) != block_af) {
+      _add_localif_address(writer, prv, interf, addr);
     }
-    else {
-      /* otherwise add another naddr with TLVs to the stream */
-      if (netaddr_get_address_family(&naddr->neigh_addr) != AF_INET6
-          || netaddr_get_address_family(&target->dst) != AF_INET) {
-        _add_link_address(writer, prv, interf, naddr);
-      }
+  }
 
-      /* move to next naddr, NULL if end reached */
-      naddr = avl_next_element_safe(&nhdp_naddr_tree, naddr, _global_node);
+  /* then transmit neighbor addresses */
+  avl_for_each_element(&nhdp_naddr_tree, naddr, _global_node) {
+    if (netaddr_get_address_family(&naddr->neigh_addr) != block_af) {
+      _add_link_address(writer, prv, interf, naddr);
     }
   }
 }
