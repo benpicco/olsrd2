@@ -12,6 +12,7 @@
 # this has to be the absolute path of the feuerware-base dir
 export RIOTBASE =/home/benpicco/µkleos/riot/RIOT
 export RIOTBOARD =$(RIOTBASE)/../boards
+export RIOTCPU  =$(RIOTBASE)/cpu
 export OONFBASE =/home/benpicco/µkleos/oonf_api
 export OLSRBASE =/home/benpicco/µkleos/olsrd2
 
@@ -66,11 +67,22 @@ endif
 #USEMODULE += net_kernel
 #USEMODULE += net_mm
 USEMODULE += oonf_common
+USEMODULE += oonf_config
 USEMODULE += oonf_rfc5444
 USEMODULE += oonf_tools
 USEMODULE += oonf_core
 USEMODULE += cunit
 USEMODULE += olsr_nhdp
+USEMODULE += net_help
+USEMODULE += destiny
+USEMODULE += sixlowpan
+USEMODULE += transceiver
+USEMODULE += cc110x_ng
+USEMODULE += uart0
+USEMODULE += vtimer
+USEMODULE += rtc
+USEMODULE += posix
+USEMODULE += regex
 
 # mandatory include! 
 include $(RIOTBASE)/Makefile.modules 
