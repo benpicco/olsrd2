@@ -71,6 +71,8 @@ USEMODULE += oonf_config
 USEMODULE += oonf_rfc5444
 USEMODULE += oonf_tools
 USEMODULE += oonf_core
+USEMODULE += oonf_os_riot
+USEMODULE += oonf_os_generic
 USEMODULE += cunit
 USEMODULE += olsr_nhdp
 USEMODULE += net_help
@@ -78,11 +80,14 @@ USEMODULE += destiny
 USEMODULE += sixlowpan
 USEMODULE += transceiver
 USEMODULE += cc110x_ng
+USEMODULE += cc110x_spi
+USEMODULE += gpioint
 USEMODULE += uart0
 USEMODULE += vtimer
 USEMODULE += rtc
 USEMODULE += posix
 USEMODULE += regex
+USEMODULE += compat_misc
 
 # mandatory include! 
 include $(RIOTBASE)/Makefile.modules 

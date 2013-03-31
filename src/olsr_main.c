@@ -179,7 +179,7 @@ main(int argc, char **argv) {
   _debug_early = false;
   _ignore_unknown = false;
 
-  srand(times(NULL));
+//  srand(times(NULL));
 
   /* setup signal handler */
   _end_olsr_signal = false;
@@ -239,16 +239,6 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 #endif
-
-  /* see if we need to fork */
-  if (config_global.fork) {
-    /* fork into background */
-    fork_pipe = daemonize_prepare();
-    if (fork_pipe == -1) {
-      OLSR_WARN(LOG_MAIN, "Cannot fork into background");
-      goto olsrd_cleanup;
-    }
-  }
 
   /* configure logger */
   if (olsr_logcfg_apply(olsr_cfg_get_rawdb())) {
@@ -321,12 +311,6 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  if (fork_pipe != -1) {
-    /* tell main process that we are finished with initialization */
-    daemonize_finish(fork_pipe, 0);
-    fork_pipe = -1;
-  }
-
   /* activate mainloop */
   return_code = mainloop(argc, argv);
 
@@ -362,11 +346,6 @@ olsrd_cleanup:
 
   /* free logger resources */
   olsr_log_cleanup();
-
-  if (fork_pipe != -1) {
-    /* tell main process that we had a problem */
-    daemonize_finish(fork_pipe, return_code);
-  }
 
   return return_code;
 }
