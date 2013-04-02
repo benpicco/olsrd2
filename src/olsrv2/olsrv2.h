@@ -54,5 +54,6 @@ void olsrv2_cleanup(void);
 
 EXPORT const struct netaddr *olsrv2_get_originator(void);
 EXPORT void olsrv2_set_originator(const struct netaddr *);
+EXPORT void olsrv2_reset_originator(void);
 
 #endif /* OLSRV2_H_ */

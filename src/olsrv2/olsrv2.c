@@ -61,6 +61,7 @@ struct _config {
 };
 
 /* prototypes */
+static void _set_originator(const struct netaddr *originator);
 static void _cb_cfg_changed(void);
 
 /* olsrv2 configuration */
@@ -77,7 +78,8 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
 };
 
 static struct _config _olsrv2_config;
-static struct netaddr *_originator, _dynamic_originator;
+static struct netaddr *_originator;
+static bool _custom_originator;
 
 enum log_source LOG_OLSRV2 = LOG_MAIN;
 
@@ -102,9 +104,7 @@ olsrv2_init(void) {
   olsrv2_lan_init();
 
   memset(&_olsrv2_config, 0, sizeof(_olsrv2_config));
-  memset(&_dynamic_originator, 0, sizeof(_dynamic_originator));
-
-  _originator = &_olsrv2_config.originator;
+  memset(&_originator, 0, sizeof(_originator));
 }
 
 /**
@@ -131,23 +131,36 @@ olsrv2_get_originator(void) {
 }
 
 /**
- * Sets a new originator address
- * @param originator originator address, NULL to return to configured one
+ * Sets a new custom originator address
+ * @param originator originator address
  */
 void
 olsrv2_set_originator(const struct netaddr *originator) {
+  _custom_originator = true;
+  _set_originator(originator);
+}
+
+/**
+ * Resets the originator to the configured value
+ */
+void
+olsrv2_reset_originator(void) {
+  _custom_originator = false;
+  _set_originator(&_olsrv2_config.originator);
+}
+
+/**
+ * Sets the originator address to a new value
+ * @param originator new originator
+ */
+static
+void _set_originator(const struct netaddr *originator) {
   if (netaddr_get_address_family(_originator) != AF_UNSPEC) {
     /* add old originator to originator set */
     olsrv2_originatorset_add(_originator, _olsrv2_config.o_hold_time);
   }
 
-  if (originator == NULL) {
-    _originator = &_olsrv2_config.originator;
-  }
-  else {
-    memcpy(&_dynamic_originator, originator, sizeof(_originator));
-    _originator = &_dynamic_originator;
-  }
+  memcpy(&_originator, originator, sizeof(_originator));
 
   /* remove new originator from set */
   olsrv2_originatorset_remove(_originator);
@@ -167,7 +180,8 @@ _cb_cfg_changed(void) {
     return;
   }
 
-  if (_originator == &_olsrv2_config.originator) {
-    olsrv2_set_originator(NULL);
+  if (!_custom_originator) {
+    /* apply new originator */
+    olsrv2_reset_originator();
   }
 }
