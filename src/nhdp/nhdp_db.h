@@ -101,6 +101,9 @@ struct nhdp_neighbor_domaindata {
   uint8_t willingness;
 };
 
+/**
+ * Data for one NHDP domain of a 2-hop neighbor
+ */
 struct nhdp_l2hop_domaindata {
   struct nhdp_metric metric;
 };
