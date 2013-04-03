@@ -163,7 +163,7 @@ nhdp_domain_metric_add(struct nhdp_domain_metric *metric, uint8_t ext) {
     metric->_metric_addrtlvs[i].exttype = ext;
 
     rfc5444_writer_register_addrtlvtype(&_protocol->writer,
-        &metric->_metric_addrtlvs[i], RFC5444_MSGTYPE_HELLO);
+        &metric->_metric_addrtlvs[i], -1);
   }
 
   /* initialize to_string method if empty */
