@@ -47,6 +47,8 @@
 #include "tools/olsr_rfc5444.h"
 
 #include "olsrv2/olsrv2.h"
+#include "olsrv2/olsrv2_lan.h"
+#include "olsrv2/olsrv2_originator.h"
 #include "olsrv2/olsrv2_writer.h"
 
 /* constants */
@@ -121,7 +123,7 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
   const struct netaddr *orig;
 
-  orig = olsrv2_get_originator();
+  orig = olsrv2_originator_get();
   if (netaddr_get_address_family(orig) == AF_INET) {
     rfc5444_writer_set_msg_addrlen(writer, message, 4);
   }

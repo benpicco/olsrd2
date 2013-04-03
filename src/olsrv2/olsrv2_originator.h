@@ -59,16 +59,16 @@ EXPORT extern struct avl_tree olsrv2_originator_set_tree;
 void olsrv2_originator_init(void);
 void olsrv2_originator_cleanup(void);
 
-EXPORT struct olsrv2_originator_set_entry *olsrv2_originator_set_add(
-    struct netaddr *, uint64_t vtime);
-EXPORT void olsrv2_originator_set_remove(struct netaddr *);
+EXPORT const struct netaddr *olsrv2_originator_get(void);
+EXPORT void olsrv2_originator_set(const struct netaddr *);
+EXPORT void olsrv2_originator_reset(void);
 
 /**
  * @param addr originator address
  * @return pointer to originator set entry, NULL if not found
  */
 static INLINE struct olsrv2_originator_set_entry *
-olsrv2_originator_set_get(struct netaddr *addr) {
+olsrv2_originator_get_entry(const struct netaddr *addr) {
   struct olsrv2_originator_set_entry *entry;
   return avl_find_element(&olsrv2_originator_set_tree, addr, entry, _node);
 }

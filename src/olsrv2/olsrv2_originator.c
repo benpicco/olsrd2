@@ -27,8 +27,10 @@ struct _config {
 };
 
 /* prototypes */
+static struct olsrv2_originator_set_entry *_remember_removed_originator(
+    struct netaddr *originator, uint64_t vtime);
 static void _set_originator(const struct netaddr *originator);
-static void _cb_vtime(void *);
+static void _cb_originator_entry_vtime(void *);
 static void _cb_cfg_changed(void);
 
 /* olsrv2 configuration */
@@ -45,14 +47,14 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
 };
 
 /* originator set class and timer */
-static struct olsr_class _originator_class = {
+static struct olsr_class _originator_entry_class = {
   .name = "OLSRv2 originator set",
   .size = sizeof(struct olsrv2_originator_set_entry),
 };
 
-static struct olsr_timer_info _originator_timer = {
+static struct olsr_timer_info _originator_entry_timer = {
   .name = "OLSRv2 originator set vtime",
-  .callback = _cb_vtime,
+  .callback = _cb_originator_entry_vtime,
 };
 
 /* global tree of originator set entries */
@@ -73,8 +75,8 @@ olsrv2_originator_init(void) {
       _olsrv2_entries, ARRAYSIZE(_olsrv2_entries));
 
   /* initialize class and timer */
-  olsr_class_add(&_originator_class);
-  olsr_timer_add(&_originator_timer);
+  olsr_class_add(&_originator_entry_class);
+  olsr_timer_add(&_originator_entry_timer);
 
   /* initialize global originator tree */
   avl_init(&olsrv2_originator_set_tree, avl_comp_netaddr, false);
@@ -89,12 +91,12 @@ olsrv2_originator_cleanup(void) {
 
   /* remove all originator entries */
   avl_for_each_element_safe(&olsrv2_originator_set_tree, entry, _node, e_it) {
-    _cb_vtime(entry);
+    _cb_originator_entry_vtime(entry);
   }
 
   /* remove timer and class */
-  olsr_timer_remove(&_originator_timer);
-  olsr_class_remove(&_originator_class);
+  olsr_timer_remove(&_originator_entry_timer);
+  olsr_class_remove(&_originator_entry_class);
 
   /* cleanup configuration */
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
@@ -104,7 +106,7 @@ olsrv2_originator_cleanup(void) {
  * @return current originator address
  */
 const struct netaddr *
-olsrv2_get_originator(void) {
+olsrv2_originator_get(void) {
   return _originator;
 }
 
@@ -113,7 +115,7 @@ olsrv2_get_originator(void) {
  * @param originator originator address
  */
 void
-olsrv2_set_originator(const struct netaddr *originator) {
+olsrv2_originator_set(const struct netaddr *originator) {
   _custom_originator = true;
   _set_originator(originator);
 }
@@ -122,7 +124,7 @@ olsrv2_set_originator(const struct netaddr *originator) {
  * Resets the originator to the configured value
  */
 void
-olsrv2_reset_originator(void) {
+olsrv2_originator_reset(void) {
   _custom_originator = false;
   _set_originator(&_olsrv2_config.originator);
 }
@@ -133,13 +135,13 @@ olsrv2_reset_originator(void) {
  * @param vtime validity time of entry
  * @return pointer to originator set entry, NULL if out of memory
  */
-struct olsrv2_originator_set_entry *
-olsrv2_originator_set_add(struct netaddr *originator, uint64_t vtime) {
+static struct olsrv2_originator_set_entry *
+_remember_removed_originator(struct netaddr *originator, uint64_t vtime) {
   struct olsrv2_originator_set_entry *entry;
 
-  entry = olsrv2_originator_set_get(originator);
+  entry = olsrv2_originator_get_entry(originator);
   if (entry == NULL) {
-    entry = olsr_class_malloc(&_originator_class);
+    entry = olsr_class_malloc(&_originator_entry_class);
     if (entry == NULL) {
       /* out of memory */
       return NULL;
@@ -151,7 +153,7 @@ olsrv2_originator_set_add(struct netaddr *originator, uint64_t vtime) {
     avl_insert(&olsrv2_originator_set_tree, &entry->_node);
 
     /* initialize timer */
-    entry->_vtime.info = &_originator_timer;
+    entry->_vtime.info = &_originator_entry_timer;
     entry->_vtime.cb_context = entry;
   }
 
@@ -162,35 +164,25 @@ olsrv2_originator_set_add(struct netaddr *originator, uint64_t vtime) {
 }
 
 /**
- * Remove an originator set entry
- * @param originator originator address
- */
-void
-olsrv2_originator_set_remove(struct netaddr *originator) {
-  struct olsrv2_originator_set_entry *entry;
-
-  entry = olsrv2_originator_set_get(originator);
-  if (entry) {
-    /* trigger validity timer callback to remove entry */
-    _cb_vtime(entry);
-  }
-}
-
-/**
  * Sets the originator address to a new value
  * @param originator new originator
  */
 static
 void _set_originator(const struct netaddr *originator) {
+  struct olsrv2_originator_set_entry *entry;
+
   if (netaddr_get_address_family(_originator) != AF_UNSPEC) {
     /* add old originator to originator set */
-    olsrv2_originator_set_add(_originator, _olsrv2_config.o_hold_time);
+    _remember_removed_originator(_originator, _olsrv2_config.o_hold_time);
   }
 
   memcpy(&_originator, originator, sizeof(_originator));
 
   /* remove new originator from set */
-  olsrv2_originator_set_remove(_originator);
+  entry = olsrv2_originator_get_entry(originator);
+  if (entry) {
+    _cb_originator_entry_vtime(entry);
+  }
 
   /* update NHDP originator */
   nhdp_set_originator(_originator);
@@ -198,16 +190,16 @@ void _set_originator(const struct netaddr *originator) {
 
 /**
  * Callback fired when originator set entry must be removed
- * @param ptr
+ * @param ptr pointer to originator set
  */
 static void
-_cb_vtime(void *ptr) {
+_cb_originator_entry_vtime(void *ptr) {
   struct olsrv2_originator_set_entry *entry = ptr;
 
   olsr_timer_stop(&entry->_vtime);
   avl_remove(&olsrv2_originator_set_tree, &entry->_node);
 
-  olsr_class_free(&_originator_class, entry);
+  olsr_class_free(&_originator_entry_class, entry);
 }
 
 /**
@@ -223,6 +215,6 @@ _cb_cfg_changed(void) {
 
   if (!_custom_originator) {
     /* apply new originator */
-    olsrv2_reset_originator();
+    olsrv2_originator_reset();
   }
 }
