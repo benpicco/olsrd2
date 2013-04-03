@@ -49,7 +49,7 @@
 
 EXPORT extern enum log_source LOG_OLSRV2;
 
-void olsrv2_init(void);
+int olsrv2_init(void) __attribute__((warn_unused_result));;
 void olsrv2_cleanup(void);
 
 EXPORT const struct netaddr *olsrv2_get_originator(void);

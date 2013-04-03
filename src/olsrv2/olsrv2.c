@@ -45,12 +45,14 @@
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_cfg.h"
+#include "tools/olsr_rfc5444.h"
 
 #include "nhdp/nhdp.h"
 
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_lan.h"
 #include "olsrv2/olsrv2_originator_set.h"
+#include "olsrv2/olsrv2_writer.h"
 
 /* definitions */
 #define _LOG_OLSRV2_NAME "olsrv2"
@@ -82,19 +84,30 @@ static struct netaddr *_originator;
 static bool _custom_originator;
 
 enum log_source LOG_OLSRV2 = LOG_MAIN;
+static struct olsr_rfc5444_protocol *_protocol;
 
 OLSR_SUBSYSTEM_STATE(_olsrv2_state);
 
 /**
  * Initialize OLSRv2 subsystem
  */
-void
+int
 olsrv2_init(void) {
   if (olsr_subsystem_init(&_olsrv2_state)) {
-    return;
+    return 0;
   }
 
   LOG_OLSRV2 = olsr_log_register_source(_LOG_OLSRV2_NAME);
+
+  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
+  if (_protocol == NULL) {
+    return -1;
+  }
+
+  if (olsrv2_writer_init(_protocol)) {
+    olsr_rfc5444_remove_protocol(_protocol);
+    return -1;
+  }
 
   /* add configuration for olsrv2 section */
   cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
@@ -105,6 +118,7 @@ olsrv2_init(void) {
 
   memset(&_olsrv2_config, 0, sizeof(_olsrv2_config));
   memset(&_originator, 0, sizeof(_originator));
+  return 0;
 }
 
 /**
