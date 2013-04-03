@@ -47,30 +47,30 @@
 #include "common/netaddr.h"
 #include "core/olsr_timer.h"
 
-struct olsrv2_originator_entry {
+struct olsrv2_originator_set_entry {
   struct netaddr originator;
 
   struct avl_node _node;
   struct olsr_timer_entry _vtime;
 };
 
-EXPORT extern struct avl_tree olsrv2_originator_tree;
+EXPORT extern struct avl_tree olsrv2_originator_set_tree;
 
-void olsrv2_originatorset_init(void);
-void olsrv2_originatorset_cleanup(void);
+void olsrv2_originator_init(void);
+void olsrv2_originator_cleanup(void);
 
-EXPORT struct olsrv2_originator_entry *olsrv2_originatorset_add(
+EXPORT struct olsrv2_originator_set_entry *olsrv2_originator_set_add(
     struct netaddr *, uint64_t vtime);
-EXPORT void olsrv2_originatorset_remove(struct netaddr *);
+EXPORT void olsrv2_originator_set_remove(struct netaddr *);
 
 /**
  * @param addr originator address
  * @return pointer to originator set entry, NULL if not found
  */
-static INLINE struct olsrv2_originator_entry *
-olsrv2_originatorset_get(struct netaddr *addr) {
-  struct olsrv2_originator_entry *entry;
-  return avl_find_element(&olsrv2_originator_tree, addr, entry, _node);
+static INLINE struct olsrv2_originator_set_entry *
+olsrv2_originator_set_get(struct netaddr *addr) {
+  struct olsrv2_originator_set_entry *entry;
+  return avl_find_element(&olsrv2_originator_set_tree, addr, entry, _node);
 }
 
 #endif /* OLSRV2_ORIGINATOR_SET_H_ */

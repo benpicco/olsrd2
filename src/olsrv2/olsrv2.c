@@ -80,7 +80,7 @@ olsrv2_init(void) {
     return -1;
   }
 
-  olsrv2_originatorset_init();
+  olsrv2_originator_init();
   olsrv2_lan_init();
 
   return 0;
@@ -95,6 +95,6 @@ olsrv2_cleanup(void) {
     return;
   }
 
-  olsrv2_originatorset_cleanup();
+  olsrv2_originator_cleanup();
   olsrv2_lan_cleanup();
 }
