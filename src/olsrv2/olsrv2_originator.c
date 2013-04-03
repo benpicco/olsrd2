@@ -17,7 +17,7 @@
 
 #include "nhdp/nhdp.h"
 
-#include "olsrv2/olsrv2_originator_set.h"
+#include "olsrv2/olsrv2_originator.h"
 #include "olsrv2/olsrv2.h"
 
 /* definitions */
