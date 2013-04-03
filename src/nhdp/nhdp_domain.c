@@ -370,12 +370,18 @@ nhdp_domain_calculate_neighbor_metric(
   struct nhdp_link *lnk;
   struct nhdp_link_domaindata *linkdata;
   struct nhdp_neighbor_domaindata *neighdata;
+  struct nhdp_metric oldmetric;
 
   neighdata = nhdp_domain_get_neighbordata(domain, neigh);
 
+  /* copy old metric value */
+  memcpy(&oldmetric, &neighdata->metric, sizeof(oldmetric));
+
+  /* reset metric */
   neighdata->metric.in = RFC5444_METRIC_INFINITE;
   neighdata->metric.out = RFC5444_METRIC_INFINITE;
 
+  /* get best metric */
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
     linkdata = nhdp_domain_get_linkdata(domain, lnk);
 
@@ -385,6 +391,11 @@ nhdp_domain_calculate_neighbor_metric(
     if (linkdata->metric.in < neighdata->metric.in) {
       neighdata->metric.in = linkdata->metric.in;
     }
+  }
+
+  if (memcmp(&oldmetric, &neighdata->metric, sizeof(oldmetric)) != 0) {
+    /* mark metric as updated */
+    domain->metric_changed = true;
   }
 }
 
