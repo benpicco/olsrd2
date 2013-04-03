@@ -41,13 +41,9 @@
 
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "config/cfg_schema.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
-#include "tools/olsr_cfg.h"
 #include "tools/olsr_rfc5444.h"
-
-#include "nhdp/nhdp.h"
 
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_lan.h"
@@ -57,32 +53,7 @@
 /* definitions */
 #define _LOG_OLSRV2_NAME "olsrv2"
 
-struct _config {
-  struct netaddr originator;
-  uint64_t o_hold_time;
-};
-
-/* prototypes */
-static void _set_originator(const struct netaddr *originator);
-static void _cb_cfg_changed(void);
-
-/* olsrv2 configuration */
-static struct cfg_schema_section _olsrv2_section = {
-  .type = CFG_OLSRV2_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
-};
-
-static struct cfg_schema_entry _olsrv2_entries[] = {
-  CFG_MAP_NETADDR(_config, originator, "originator", "-",
-      "Originator address for Routing", false, true),
-  CFG_MAP_CLOCK_MIN(_config, o_hold_time, "originator_hold_time", "30.0",
-    "Validity time for former Originator addresses", 100),
-};
-
-static struct _config _olsrv2_config;
-static struct netaddr *_originator;
-static bool _custom_originator;
-
+/* global variables */
 enum log_source LOG_OLSRV2 = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
 
@@ -109,15 +80,9 @@ olsrv2_init(void) {
     return -1;
   }
 
-  /* add configuration for olsrv2 section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
-      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries));
-
   olsrv2_originatorset_init();
   olsrv2_lan_init();
 
-  memset(&_olsrv2_config, 0, sizeof(_olsrv2_config));
-  memset(&_originator, 0, sizeof(_originator));
   return 0;
 }
 
@@ -132,70 +97,4 @@ olsrv2_cleanup(void) {
 
   olsrv2_originatorset_cleanup();
   olsrv2_lan_cleanup();
-
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
-}
-
-/**
- * @return current originator address
- */
-const struct netaddr *
-olsrv2_get_originator(void) {
-  return _originator;
-}
-
-/**
- * Sets a new custom originator address
- * @param originator originator address
- */
-void
-olsrv2_set_originator(const struct netaddr *originator) {
-  _custom_originator = true;
-  _set_originator(originator);
-}
-
-/**
- * Resets the originator to the configured value
- */
-void
-olsrv2_reset_originator(void) {
-  _custom_originator = false;
-  _set_originator(&_olsrv2_config.originator);
-}
-
-/**
- * Sets the originator address to a new value
- * @param originator new originator
- */
-static
-void _set_originator(const struct netaddr *originator) {
-  if (netaddr_get_address_family(_originator) != AF_UNSPEC) {
-    /* add old originator to originator set */
-    olsrv2_originatorset_add(_originator, _olsrv2_config.o_hold_time);
-  }
-
-  memcpy(&_originator, originator, sizeof(_originator));
-
-  /* remove new originator from set */
-  olsrv2_originatorset_remove(_originator);
-
-  /* update NHDP originator */
-  nhdp_set_originator(_originator);
-}
-
-/**
- * Callback fired when configuration changed
- */
-static void
-_cb_cfg_changed(void) {
-  if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
-      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
-    OLSR_WARN(LOG_OLSRV2, "Cannot convert OLSRv2 configuration.");
-    return;
-  }
-
-  if (!_custom_originator) {
-    /* apply new originator */
-    olsrv2_reset_originator();
-  }
 }
