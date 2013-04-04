@@ -99,14 +99,6 @@ static struct olsr_timer_info _removed_address_hold_timer = {
   .callback = _cb_remove_addr,
 };
 
-
-/* additional configuration options for interface section */
-const char *NHDP_INTERFACE_MODES[] = {
-  [NHDP_IFMODE_IPV4] = "ipv4",
-  [NHDP_IFMODE_IPV6] = "ipv6",
-  [NHDP_IFMODE_DUAL] = "dual",
-};
-
 static struct cfg_schema_section _interface_section = {
   .type = CFG_INTERFACE_SECTION,
   .mode = CFG_SSMODE_NAMED_MANDATORY,
@@ -114,8 +106,6 @@ static struct cfg_schema_section _interface_section = {
 };
 
 static struct cfg_schema_entry _interface_entries[] = {
-  CFG_MAP_CHOICE(nhdp_interface, mode, "mode",
-      "ipv4", "Mode of interface (ipv4/6/dual)", NHDP_INTERFACE_MODES),
   CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
       "Filter for ip interface addresses that should be included in HELLO messages"),
   CFG_MAP_CLOCK_MIN(nhdp_interface, h_hold_time, "hello-validity", "6.0",
@@ -391,25 +381,21 @@ _cb_generate_hello(void *ptr) {
 
   interf = ptr;
 
-  OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s (mode=%d)",
-      nhdp_interface_get_name(interf), interf->mode);
+  OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s",
+      nhdp_interface_get_name(interf));
 
-  /* send IPv4 if this interface is IPv4-only or if this interface has such neighbors */
-  if (interf->mode != NHDP_IFMODE_IPV6) {
-    result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
-    if (result < 0) {
-      OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-          netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
-    }
+  /* send IPv4 (if socket is active) */
+  result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
+  if (result < 0) {
+    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
   }
 
-  /* send IPV6 unless this interface is in IPv4-only mode */
-  if (interf->mode != NHDP_IFMODE_IPV4) {
-    result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
-    if (result < 0) {
-      OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-          netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
-    }
+  /* send IPV6 (if socket is active) */
+  result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
+  if (result < 0) {
+    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
   }
 }
 
@@ -477,6 +463,7 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl,
   struct nhdp_interface_addr *addr, *addr_it;
   struct olsr_interface *olsr_interf;
   struct netaddr ip;
+  bool ipv4, ipv6;
   size_t i;
 
   OLSR_DEBUG(LOG_NHDP, "NHDP Interface change event: %s", ifl->interface->name);
@@ -489,14 +476,18 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl,
   }
 
   olsr_interf = olsr_rfc5444_get_core_interface(ifl->interface);
+
+  ipv4 = olsr_rfc5444_is_target_active(interf->rfc5444_if.interface->multicast4);
+  ipv6 = olsr_rfc5444_is_target_active(interf->rfc5444_if.interface->multicast6);
+
   if (olsr_interf->data.up) {
     /* handle local socket main addresses */
-    if (interf->mode != NHDP_IFMODE_IPV6) {
+    if (ipv4) {
       OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv4", ifl->interface->name);
-      netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
+        netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
       _addr_add(interf, &ip);
     }
-    if (interf->mode != NHDP_IFMODE_IPV4) {
+    if (ipv6) {
       OLSR_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv6", ifl->interface->name);
       netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v6.local_socket);
       _addr_add(interf, &ip);
@@ -506,12 +497,12 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl,
     for (i = 0; i<olsr_interf->data.addrcount; i++) {
       struct netaddr *ifaddr = &olsr_interf->data.addresses[i];
 
-      if (netaddr_get_address_family(ifaddr) == AF_INET && interf->mode ==  NHDP_IFMODE_IPV6) {
-        /* ignore IPv6 addresses in IPv4 mode */
+      if (netaddr_get_address_family(ifaddr) == AF_INET && !ipv4) {
+        /* ignore IPv4 addresses if ipv4 socket is not up*/
         continue;
       }
-      if (netaddr_get_address_family(ifaddr) == AF_INET6 && interf->mode == NHDP_IFMODE_IPV4) {
-        /* ignore IPv4 addresses in IPv6 mode */
+      if (netaddr_get_address_family(ifaddr) == AF_INET6 && !ipv6) {
+        /* ignore IPv6 addresses if ipv6 socket is not up*/
         continue;
       }
 

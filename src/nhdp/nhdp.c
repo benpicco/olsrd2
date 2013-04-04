@@ -327,8 +327,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
-    abuf_appendf(con->out, "Interface '%s': mode=%s hello_interval=%s hello_vtime=%s\n",
-        nhdp_interface_get_name(interf), NHDP_INTERFACE_MODES[interf->mode],
+    abuf_appendf(con->out, "Interface '%s': hello_interval=%s hello_vtime=%s\n",
+        nhdp_interface_get_name(interf),
         olsr_clock_toIntervalString(&tbuf1, interf->refresh_interval),
         olsr_clock_toIntervalString(&tbuf2, interf->h_hold_time));
 
@@ -413,8 +413,8 @@ _telnet_nhdp_interface(struct olsr_telnet_data *con) {
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
-    abuf_appendf(con->out, "Interface '%s': mode=%s hello_interval=%s hello_vtime=%s\n",
-        nhdp_interface_get_name(interf), NHDP_INTERFACE_MODES[interf->mode],
+    abuf_appendf(con->out, "Interface '%s': hello_interval=%s hello_vtime=%s\n",
+        nhdp_interface_get_name(interf),
         olsr_clock_toIntervalString(&tbuf1, interf->refresh_interval),
         olsr_clock_toIntervalString(&tbuf2, interf->h_hold_time));
 

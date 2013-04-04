@@ -195,13 +195,10 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __a
   assert(interf);
 
   /* check address length */
-  if ((context->addr_len == 16 && interf->mode == NHDP_IFMODE_IPV4)
-      || (context->addr_len == 4 && interf->mode == NHDP_IFMODE_IPV6)
-      || (context->addr_len != 4 && context->addr_len != 16)) {
+  if (context->addr_len != 4 && context->addr_len != 16) {
     OLSR_INFO(LOG_NHDP_CHECK,
-        "Dropped NHDP message with addrlen %d on interface %s (%s)",
-        context->addr_len,
-        nhdp_interface_get_name(interf), NHDP_INTERFACE_MODES[interf->mode]);
+        "Dropped NHDP message with addrlen %d on interface %s",
+        context->addr_len, nhdp_interface_get_name(interf));
     return RFC5444_DROP_MESSAGE;
   }
 

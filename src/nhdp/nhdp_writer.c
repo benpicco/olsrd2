@@ -237,16 +237,14 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
         domain->ext, &will_encoded, sizeof(will_encoded));
   }
 
-  /* add V6 originator to V4 message if available and interface is dualstack */
-  if (interf->mode == NHDP_IFMODE_DUAL
-    && prv->creator->addr_len == 4) {
-    /* get v6 originator (might be unspecified) */
-    v6_originator = nhdp_get_originator(AF_INET6);
+  /* get v6 originator (might be unspecified) */
+  v6_originator = nhdp_get_originator(AF_INET6);
 
-    if (netaddr_get_address_family(v6_originator) == AF_INET6) {
-      rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV6ORIGINATOR, 0,
-          netaddr_get_binptr(v6_originator), netaddr_get_binlength(v6_originator));
-    }
+  /* add V6 originator to V4 message if available and interface is dualstack */
+  if (prv->creator->addr_len == 4 && v6_originator != NULL
+      && netaddr_get_address_family(v6_originator) == AF_INET6) {
+    rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV6ORIGINATOR, 0,
+        netaddr_get_binptr(v6_originator), netaddr_get_binlength(v6_originator));
   }
 }
 
@@ -264,17 +262,6 @@ _add_localif_address(struct rfc5444_writer *writer, struct rfc5444_writer_conten
   struct netaddr_str buf;
   uint8_t value;
   bool this_if;
-
-  if (netaddr_get_address_family(&addr->if_addr) == AF_INET
-      && interf->mode == NHDP_IFMODE_IPV6) {
-    /* ignore */
-    return;
-  }
-  if (netaddr_get_address_family(&addr->if_addr) == AF_INET6
-      && interf->mode == NHDP_IFMODE_IPV4) {
-    /* ignore */
-    return;
-  }
 
   /* check if address of local interface */
   this_if = NULL != avl_find_element(
@@ -318,18 +305,6 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
   uint8_t linkstatus, otherneigh, mpr;
-
-  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET
-      && interf->mode == NHDP_IFMODE_IPV6) {
-    /* ignore */
-    return;
-  }
-  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6
-      && interf->mode == NHDP_IFMODE_IPV4) {
-    /* ignore */
-    return;
-  }
-
 
   /* initialize flags for default (lost address) address */
   linkstatus = 255;
