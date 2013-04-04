@@ -23,7 +23,7 @@ export CPU = lpc2387
 export PREFIX = @arm-elf-
 export CC = @$(PREFIX)gcc
 export AR = @$(PREFIX)ar
-export CFLAGS = -std=gnu99 -O2 -Wall -Wstrict-prototypes -mcpu=arm7tdmi-s -gdwarf-2 -DRIOT
+export CFLAGS = -std=gnu99 -Os -Wall -Wstrict-prototypes -mcpu=arm7tdmi-s -DRIOT
 export ASFLAGS = -gdwarf-2 -mcpu=arm7tdmi-s
 export AS = $(PREFIX)as
 export LINK = $(PREFIX)gcc
