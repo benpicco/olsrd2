@@ -109,7 +109,7 @@ const char *NHDP_INTERFACE_MODES[] = {
 
 static struct cfg_schema_section _interface_section = {
   .type = CFG_INTERFACE_SECTION,
-  .mode = CFG_SSMODE_NAMED,
+  .mode = CFG_SSMODE_NAMED_MANDATORY,
   .cb_delta_handler = _cb_cfg_interface_changed,
 };
 
@@ -395,7 +395,7 @@ _cb_generate_hello(void *ptr) {
       nhdp_interface_get_name(interf), interf->mode);
 
   /* send IPv4 if this interface is IPv4-only or if this interface has such neighbors */
-  if (interf->mode == NHDP_IFMODE_IPV4 || interf->neigh_onlyv4) {
+  if (interf->mode != NHDP_IFMODE_IPV6) {
     result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
     if (result < 0) {
       OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",

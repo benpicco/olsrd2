@@ -80,7 +80,7 @@ enum log_source LOG_NHDP = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
 
 /* NHDP originator address, might be undefined */
-static struct netaddr _originator;
+static struct netaddr _originator_v4, _originator_v6;
 
 /**
  * Initialize NHDP subsystem
@@ -115,8 +115,6 @@ nhdp_init(void) {
     olsr_telnet_add(&_cmds[i]);
   }
 
-  netaddr_invalidate(&_originator);
-
   olsr_subsystem_init(&_nhdp_state);
   return 0;
 }
@@ -144,21 +142,30 @@ nhdp_cleanup(void) {
 
 /**
  * Sets the originator address used by NHDP to a new value.
- * Originator address must be IPv4 to be used in dualstack mode.
- *
- * @param NHDP originator, might be type AF_UNSPEC.
+ * @param NHDP originator.
  */
 void
 nhdp_set_originator(const struct netaddr *addr) {
-  memcpy(&_originator, addr, sizeof(_originator));
+  if (netaddr_get_address_family(addr) == AF_INET) {
+    memcpy(&_originator_v4, addr, sizeof(*addr));
+  }
+  else if (netaddr_get_address_family(addr) == AF_INET6) {
+    memcpy(&_originator_v6, addr, sizeof(*addr));
+  }
 }
 
 /**
  * @return current NHDP originator
  */
 const struct netaddr *
-nhdp_get_originator(void) {
-  return &_originator;
+nhdp_get_originator(int af_type) {
+  if (af_type == AF_INET) {
+    return &_originator_v4;
+  }
+  else if (af_type == AF_INET6) {
+    return &_originator_v6;
+  }
+  return NULL;
 }
 
 /**

@@ -318,7 +318,7 @@ EXPORT void nhdp_db_link_update_status(struct nhdp_link *);
  * @return corresponding neighbor address object, NULL if not found
  */
 static INLINE struct nhdp_naddr *
-nhdp_db_neighbor_addr_get(struct netaddr *addr) {
+nhdp_db_neighbor_addr_get(const struct netaddr *addr) {
   struct nhdp_naddr *naddr;
   return avl_find_element(&nhdp_naddr_tree, addr, naddr, _global_node);
 }
@@ -328,7 +328,7 @@ nhdp_db_neighbor_addr_get(struct netaddr *addr) {
  * @return corresponding nhdp neighbor, NULL if not found
  */
 static INLINE struct nhdp_neighbor *
-nhdp_db_neighbor_get_by_originator(struct netaddr *originator) {
+nhdp_db_neighbor_get_by_originator(const struct netaddr *originator) {
   struct nhdp_neighbor *neigh;
   return avl_find_element(&nhdp_neigh_originator_tree, originator, neigh, _originator_node);
 }
@@ -339,7 +339,7 @@ nhdp_db_neighbor_get_by_originator(struct netaddr *originator) {
  * @return corresponding link address object, NULL if not found
  */
 static INLINE struct nhdp_laddr *
-nhdp_db_link_addr_get(struct nhdp_link *lnk, struct netaddr *addr) {
+nhdp_db_link_addr_get(const struct nhdp_link *lnk, const struct netaddr *addr) {
   struct nhdp_laddr *laddr;
   return avl_find_element(&lnk->_addresses, addr, laddr, _link_node);
 }
@@ -350,7 +350,7 @@ nhdp_db_link_addr_get(struct nhdp_link *lnk, struct netaddr *addr) {
  * @return corresponding link two-hop neighbor address, NULL If not found
  */
 static INLINE struct nhdp_l2hop *
-ndhp_db_link_2hop_get(struct nhdp_link *lnk, struct netaddr *addr) {
+ndhp_db_link_2hop_get(const struct nhdp_link *lnk, const struct netaddr *addr) {
   struct nhdp_l2hop *l2hop;
   return avl_find_element(&lnk->_2hop, addr, l2hop, _link_node);
 }
@@ -424,7 +424,7 @@ nhdp_db_neighbor_addr_not_lost(struct nhdp_naddr *naddr) {
  * @return true if address is lost, false otherwise
  */
 static INLINE bool
-nhdp_db_neighbor_addr_is_lost(struct nhdp_naddr *naddr) {
+nhdp_db_neighbor_addr_is_lost(const struct nhdp_naddr *naddr) {
   return olsr_timer_is_active(&naddr->_lost_vtime);
 }
 #endif /* NHDP_DB_H_ */
