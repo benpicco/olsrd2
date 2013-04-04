@@ -12,6 +12,7 @@
 #include "config/cfg_schema.h"
 #include "core/olsr_class.h"
 #include "core/olsr_logging.h"
+#include "core/olsr_netaddr_acl.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
 
@@ -22,26 +23,34 @@
 
 /* definitions */
 struct _config {
-  struct netaddr originator;
   uint64_t o_hold_time;
+  struct netaddr v4, v6;
+};
+
+struct _originator {
+  struct netaddr addr;
+  bool custom;
 };
 
 /* prototypes */
 static struct olsrv2_originator_set_entry *_remember_removed_originator(
     struct netaddr *originator, uint64_t vtime);
-static void _set_originator(const struct netaddr *originator);
+static void _set_originator(
+    struct _originator *, const struct netaddr *addr, bool custom);
 static void _cb_originator_entry_vtime(void *);
 static void _cb_cfg_changed(void);
 
 /* olsrv2 configuration */
-static struct cfg_schema_section _olsrv2_section = {
+static struct cfg_schema_section _originator_section = {
   .type = CFG_OLSRV2_SECTION,
   .cb_delta_handler = _cb_cfg_changed,
 };
 
-static struct cfg_schema_entry _olsrv2_entries[] = {
-  CFG_MAP_NETADDR(_config, originator, "originator", NULL,
-      "Originator address for Routing", false, false),
+static struct cfg_schema_entry _originator_entries[] = {
+  CFG_MAP_NETADDR_V4(_config, v4, "originator_v4", "0.0.0.0/0",
+      "Filter for router IPv4 originator address", true, false),
+  CFG_MAP_NETADDR_V6(_config, v6, "originator_v6", "::/0",
+      "Filter for router IPv6 originator address", true, false),
   CFG_MAP_CLOCK_MIN(_config, o_hold_time, "originator_hold_time", "30.0",
     "Validity time for former Originator addresses", 100),
 };
@@ -62,8 +71,7 @@ struct avl_tree olsrv2_originator_set_tree;
 
 /* originator configuration */
 static struct _config _olsrv2_config;
-static struct netaddr *_originator;
-static bool _custom_originator;
+static struct _originator _originator_v4, _originator_v6;
 
 /**
  * Initialize olsrv2 originator set
@@ -71,8 +79,8 @@ static bool _custom_originator;
 void
 olsrv2_originator_init(void) {
   /* add configuration for olsrv2 section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
-      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_originator_section,
+      _originator_entries, ARRAYSIZE(_originator_entries));
 
   /* initialize class and timer */
   olsr_class_add(&_originator_entry_class);
@@ -99,15 +107,18 @@ olsrv2_originator_cleanup(void) {
   olsr_class_remove(&_originator_entry_class);
 
   /* cleanup configuration */
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
+  cfg_schema_remove_section(olsr_cfg_get_schema(), &_originator_section);
 }
 
 /**
  * @return current originator address
  */
 const struct netaddr *
-olsrv2_originator_get(void) {
-  return _originator;
+olsrv2_originator_get(int af_type) {
+  if (af_type == AF_INET) {
+    return &_originator_v4.addr;
+  }
+  return &_originator_v6.addr;
 }
 
 /**
@@ -115,18 +126,26 @@ olsrv2_originator_get(void) {
  * @param originator originator address
  */
 void
-olsrv2_originator_set(const struct netaddr *originator) {
-  _custom_originator = true;
-  _set_originator(originator);
+olsrv2_originator_set(const struct netaddr *addr) {
+  if (netaddr_get_address_family(addr) == AF_INET) {
+    _set_originator(&_originator_v4, addr, true);
+  }
+  else if (netaddr_get_address_family(addr) == AF_INET6) {
+    _set_originator(&_originator_v6, addr, true);
+  }
 }
 
 /**
  * Resets the originator to the configured value
  */
 void
-olsrv2_originator_reset(void) {
-  _custom_originator = false;
-  _set_originator(&_olsrv2_config.originator);
+olsrv2_originator_reset(int af_type) {
+  if (af_type == AF_INET) {
+    _set_originator(&_originator_v4, &_olsrv2_config.v4, false);
+  }
+  else if (af_type == AF_INET6) {
+    _set_originator(&_originator_v6, &_olsrv2_config.v6, false);
+  }
 }
 
 /**
@@ -168,24 +187,27 @@ _remember_removed_originator(struct netaddr *originator, uint64_t vtime) {
  * @param originator new originator
  */
 static
-void _set_originator(const struct netaddr *originator) {
+void _set_originator(struct _originator *orig, const struct netaddr *addr, bool custom) {
   struct olsrv2_originator_set_entry *entry;
 
-  if (netaddr_get_address_family(_originator) != AF_UNSPEC) {
+  if (netaddr_get_address_family(&orig->addr) != AF_UNSPEC) {
     /* add old originator to originator set */
-    _remember_removed_originator(_originator, _olsrv2_config.o_hold_time);
+    _remember_removed_originator(&orig->addr, _olsrv2_config.o_hold_time);
   }
 
-  memcpy(&_originator, originator, sizeof(_originator));
+  memcpy(&orig->addr, addr, sizeof(*addr));
 
   /* remove new originator from set */
-  entry = olsrv2_originator_get_entry(originator);
+  entry = olsrv2_originator_get_entry(addr);
   if (entry) {
     _cb_originator_entry_vtime(entry);
   }
 
+  /* remember if this is a custom originator */
+  orig->custom = custom;
+
   /* update NHDP originator */
-  nhdp_set_originator(_originator);
+  nhdp_set_originator(addr);
 }
 
 /**
@@ -207,14 +229,18 @@ _cb_originator_entry_vtime(void *ptr) {
  */
 static void
 _cb_cfg_changed(void) {
-  if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
-      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
+  if (cfg_schema_tobin(&_olsrv2_config, _originator_section.post,
+      _originator_entries, ARRAYSIZE(_originator_entries))) {
     OLSR_WARN(LOG_OLSRV2, "Cannot convert OLSRv2 configuration.");
     return;
   }
 
-  if (!_custom_originator) {
+  if (!_originator_v4.custom) {
     /* apply new originator */
-    olsrv2_originator_reset();
+    olsrv2_originator_reset(AF_INET);
+  }
+  if (!_originator_v6.custom) {
+    /* apply new originator */
+    olsrv2_originator_reset(AF_INET6);
   }
 }

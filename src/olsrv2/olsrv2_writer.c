@@ -90,7 +90,7 @@ olsrv2_writer_init(struct olsr_rfc5444_protocol *protocol) {
   LOG_OLSRV2_W = olsr_log_register_source("olsrv2_w");
 
   _olsrv2_message = rfc5444_writer_register_message(
-      &_protocol->writer, RFC5444_MSGTYPE_HELLO, true, 4);
+      &_protocol->writer, RFC5444_MSGTYPE_TC, true, 4);
   if (_olsrv2_message == NULL) {
     OLSR_WARN(LOG_OLSRV2, "Could not register OLSRv2 TC message");
     return -1;
@@ -119,8 +119,9 @@ olsrv2_writer_cleanup(void) {
 }
 
 static void
-_cb_addMessageHeader(struct rfc5444_writer *writer,
-    struct rfc5444_writer_message *message) {
+_cb_addMessageHeader(struct rfc5444_writer *writer __attribute__((unused)),
+    struct rfc5444_writer_message *message __attribute__((unused))) {
+/*
   const struct netaddr *orig;
 
   orig = olsrv2_originator_get();
@@ -131,20 +132,19 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     rfc5444_writer_set_msg_addrlen(writer, message, 6);
   }
   rfc5444_writer_set_msg_header(writer, message, true, true, true, true);
-
+*/
   OLSR_DEBUG(LOG_OLSRV2_W, "Generate TC");
 }
 
 static void
-_cb_addMessageTLVs(struct rfc5444_writer *writer,
-    struct rfc5444_writer_content_provider *prv) {
-  uint8_t vtime_encoded, itime_encoded;
+_cb_addMessageTLVs(struct rfc5444_writer *writer __attribute__((unused)),
+    struct rfc5444_writer_content_provider *prv __attribute__((unused))) {
 
 
 }
 
 static void
-_cb_addAddresses(struct rfc5444_writer *writer,
-    struct rfc5444_writer_content_provider *prv) {
+_cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused)),
+    struct rfc5444_writer_content_provider *prv __attribute__((unused))) {
 
 }

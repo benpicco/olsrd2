@@ -209,27 +209,31 @@ _cb_cfg_changed(void) {
   }
 
   /* run through all new entries */
-  entry = cfg_db_get_entry(_olsrv2_section.post, LOCAL_ATTACHED_NETWORK_KEY);
+  if (_olsrv2_section.post) {
+    entry = cfg_db_get_entry(_olsrv2_section.post, LOCAL_ATTACHED_NETWORK_KEY);
 
-  FOR_ALL_STRINGS(&entry->val, value) {
-    /* extract data */
-    cost_ptr = str_cpynextword(buf.buf, value, sizeof(buf));
-    if (netaddr_from_string(&prefix, buf.buf)) {
-      continue;
-    }
+    if (entry) {
+      FOR_ALL_STRINGS(&entry->val, value) {
+        /* extract data */
+        cost_ptr = str_cpynextword(buf.buf, value, sizeof(buf));
+        if (netaddr_from_string(&prefix, buf.buf)) {
+          continue;
+        }
 
-    if (cost_ptr) {
-      cost = strtol(cost_ptr, NULL, 0);
-    }
-    else {
-      /* default cost (similar to HNAs in OLSRv1) */
-      cost = 0;
-    }
+        if (cost_ptr) {
+          cost = strtol(cost_ptr, NULL, 0);
+        }
+        else {
+          /* default cost (similar to HNAs in OLSRv1) */
+          cost = 0;
+        }
 
-    /* add new entries if necessary */
-    lan = olsrv2_lan_add(&prefix);
-    if (!lan) {
-      return;
+        /* add new entries if necessary */
+        lan = olsrv2_lan_add(&prefix);
+        if (!lan) {
+          return;
+        }
+      }
     }
 
     lan->outgoing_metric = cost;
@@ -237,19 +241,23 @@ _cb_cfg_changed(void) {
   }
 
   /* run through all old entries */
-  entry = cfg_db_get_entry(_olsrv2_section.pre, LOCAL_ATTACHED_NETWORK_KEY);
+  if (_olsrv2_section.pre) {
+    entry = cfg_db_get_entry(_olsrv2_section.pre, LOCAL_ATTACHED_NETWORK_KEY);
 
-  FOR_ALL_STRINGS(&entry->val, value) {
-    /* extract data */
-    cost_ptr = str_cpynextword(buf.buf, value, sizeof(buf));
-    if (netaddr_from_string(&prefix, buf.buf)) {
-      continue;
-    }
+    if (entry) {
+      FOR_ALL_STRINGS(&entry->val, value) {
+        /* extract data */
+        cost_ptr = str_cpynextword(buf.buf, value, sizeof(buf));
+        if (netaddr_from_string(&prefix, buf.buf)) {
+          continue;
+        }
 
-    lan = olsrv2_lan_get(&prefix);
-    if (lan != NULL && !lan->_new) {
-      /* remove old entries that are not also in new entries */
-      _remove(lan);
+        lan = olsrv2_lan_get(&prefix);
+        if (lan != NULL && !lan->_new) {
+          /* remove old entries that are not also in new entries */
+          _remove(lan);
+        }
+      }
     }
   }
 }

@@ -59,9 +59,9 @@ EXPORT extern struct avl_tree olsrv2_originator_set_tree;
 void olsrv2_originator_init(void);
 void olsrv2_originator_cleanup(void);
 
-EXPORT const struct netaddr *olsrv2_originator_get(void);
+EXPORT const struct netaddr *olsrv2_originator_get(int af_type);
 EXPORT void olsrv2_originator_set(const struct netaddr *);
-EXPORT void olsrv2_originator_reset(void);
+EXPORT void olsrv2_originator_reset(int af_type);
 
 /**
  * @param addr originator address
