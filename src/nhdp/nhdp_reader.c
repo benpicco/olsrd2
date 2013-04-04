@@ -60,6 +60,7 @@ enum {
   IDX_TLV_ITIME,
   IDX_TLV_VTIME,
   IDX_TLV_WILLINGNESS,
+  IDX_TLV_IPV6ORIG,
 };
 
 /* NHDP address TLV array index pass 1 */
@@ -79,9 +80,8 @@ enum {
 
 /* prototypes */
 static void cleanup_error(void);
-static int _parse_address(struct netaddr *dst, const void *ptr, uint8_t len);
 static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t local_if);
-static void _handle_originator(void);
+static void _handle_originator(const struct netaddr *addr);
 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
@@ -109,9 +109,14 @@ static struct rfc5444_reader_tlvblock_consumer _nhdp_message_pass1_consumer = {
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
-  [IDX_TLV_ITIME] = { .type = RFC5444_MSGTLV_INTERVAL_TIME, .mandatory = true, .min_length = 1, .match_length = true },
-  [IDX_TLV_VTIME] = { .type = RFC5444_MSGTLV_VALIDITY_TIME, .mandatory = true, .min_length = 1, .match_length = true },
-  [IDX_TLV_WILLINGNESS] { .type = RFC5444_MSGTLV_MPR_WILLING, .min_length = 1, .match_length = true },
+  [IDX_TLV_ITIME] = { .type = RFC5444_MSGTLV_INTERVAL_TIME, .type_ext = 0, .match_type_ext = true,
+      .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_VTIME] = { .type = RFC5444_MSGTLV_VALIDITY_TIME, .type_ext = 0, .match_type_ext = true,
+      .mandatory = true, .min_length = 1, .match_length = true },
+  [IDX_TLV_WILLINGNESS] = { .type = RFC5444_MSGTLV_MPR_WILLING, .type_ext = 0, .match_type_ext = true,
+    .min_length = 1, .match_length = true },
+  [IDX_TLV_IPV6ORIG] = { .type = NHDP_MSGTLV_IPV6ORIGINATOR, .type_ext = 0, .match_type_ext = true,
+      .min_length = 16, .match_length = true },
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass1_consumer = {
@@ -122,8 +127,10 @@ static struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass1_consumer = {
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass1_tlvs[] = {
-  [IDX_ADDRTLV1_LOCAL_IF] = { .type = RFC5444_ADDRTLV_LOCAL_IF, .min_length = 1, .match_length = true },
-  [IDX_ADDRTLV1_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS, .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV1_LOCAL_IF] = { .type = RFC5444_ADDRTLV_LOCAL_IF, .type_ext = 0, .match_type_ext = true,
+      .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV1_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS, .type_ext = 0, .match_type_ext = true,
+      .min_length = 1, .match_length = true },
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_message_pass2_consumer = {
@@ -140,10 +147,14 @@ static struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass2_consumer= {
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass2_tlvs[] = {
-  [IDX_ADDRTLV2_LOCAL_IF] = { .type = RFC5444_ADDRTLV_LOCAL_IF, .min_length = 1, .match_length = true },
-  [IDX_ADDRTLV2_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS, .min_length = 1, .match_length = true },
-  [IDX_ADDRTLV2_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB, .min_length = 1, .match_length = true },
-  [IDX_ADDRTLV2_MPR] = { .type = RFC5444_ADDRTLV_MPR, .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV2_LOCAL_IF] = { .type = RFC5444_ADDRTLV_LOCAL_IF, .type_ext = 0, .match_type_ext = true,
+      .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV2_LINK_STATUS] = { .type = RFC5444_ADDRTLV_LINK_STATUS, .type_ext = 0, .match_type_ext = true,
+      .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV2_OTHER_NEIGHB] = { .type = RFC5444_ADDRTLV_OTHER_NEIGHB, .type_ext = 0, .match_type_ext = true,
+      .min_length = 1, .match_length = true },
+  [IDX_ADDRTLV2_MPR] = { .type = RFC5444_ADDRTLV_MPR,
+      .min_length = 1, .match_length = true },
   [IDX_ADDRTLV2_LINKMETRIC] = { .type = RFC5444_ADDRTLV_LINK_METRIC, .min_length = 2, .match_length = true },
 };
 
@@ -160,12 +171,11 @@ static struct {
   struct nhdp_link *link;
 
   struct netaddr originator;
+  struct netaddr originator_v6;
 
   bool naddr_conflict, laddr_conflict;
   bool link_heard, link_lost;
   bool has_thisif;
-
-  bool has_ipv4, has_ipv6;
 
   uint64_t vtime, itime;
 } _current;
@@ -224,52 +234,6 @@ cleanup_error(void) {
     nhdp_db_neighbor_remove(_current.neighbor);
     _current.neighbor = NULL;
   }
-}
-
-/**
- * Parse an in address, do a IPv6 to IPv4 translation if necessary and
- * check if the address should be processed.
- * @param dst pointer to destination netaddr object
- * @param ptr pointer to source of address
- * @param len length of address in bytes
- * @return -1 if an error happened, 0 if address should be processed,
- *   1 if address should not be processed.
- */
-static int
-_parse_address(struct netaddr *dst, const void *ptr, uint8_t len) {
-  if (len == 16
-      && netaddr_binary_is_in_subnet(&NETADDR_IPV6_IPV4COMPATIBLE, ptr, len, AF_INET6)) {
-    struct netaddr addr;
-
-    if (_current.localif->mode == NHDP_IFMODE_IPV6) {
-      /* ignore embedded v4 when not in dualstack mode */
-      return 1;
-    }
-
-    if (netaddr_from_binary(&addr, ptr, len, AF_INET6)) {
-      OLSR_WARN(LOG_NHDP_R, "Could not read incoming ipv6 address");
-      return -1;
-    }
-
-    netaddr_extract_ipv4_compatible(dst, &addr);
-    return 0;
-  }
-
-  /* convert binary address to netaddr object */
-  if (netaddr_from_binary(dst, ptr, len, 0)) {
-    OLSR_WARN(LOG_NHDP_R, "Could not read incoming address of length %u", len);
-    return -1;
-  }
-
-  /* ignore wrong IP type if restricted to the other one */
-  if (_current.localif->mode == NHDP_IFMODE_IPV4 && netaddr_get_address_family(dst) == AF_INET6) {
-    return 1;
-  }
-  if (_current.localif->mode == NHDP_IFMODE_IPV6 && netaddr_get_address_family(dst) == AF_INET) {
-    return 1;
-  }
-
-  return 0;
 }
 
 /**
@@ -361,10 +325,10 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
  * Handle in originator address of NHDP Hello
  */
 static void
-_handle_originator(void) {
+_handle_originator(const struct netaddr *addr) {
   struct nhdp_neighbor *neigh;
 
-  neigh = nhdp_db_neighbor_get_by_originator(&_current.originator);
+  neigh = nhdp_db_neighbor_get_by_originator(addr);
   if (!neigh) {
     return;
   }
@@ -397,7 +361,7 @@ _handle_originator(void) {
  */
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+      struct rfc5444_reader_tlvblock_context *context) {
   struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
@@ -405,40 +369,34 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
 
   struct netaddr_str buf;
 
-  OLSR_DEBUG(LOG_NHDP_R, "Incoming message type %d from %s through %s, got message tlvs",
+  OLSR_DEBUG(LOG_NHDP_R,
+      "Incoming message type %d from %s through %s (addrlen = %u), got message tlvs",
       context->msg_type, netaddr_socket_to_string(&buf, _protocol->input_socket),
-      _protocol->input_interface->name);
+      _protocol->input_interface->name, context->addr_len);
 
   if (!_protocol->input_is_multicast) {
     /* NHDP doesn't care about unicast messages */
     return RFC5444_DROP_MESSAGE;
   }
 
+  if (context->addr_len != 4 && context->addr_len != 16) {
+    /* strange address length */
+    return RFC5444_DROP_MESSAGE;
+  }
   memset(&_current, 0, sizeof(_current));
 
   /* remember local NHDP interface */
   _current.localif = nhdp_interface_get(_protocol->input_interface->name);
 
-  if ((context->addr_len == 4 && _current.localif->mode == NHDP_IFMODE_IPV6)
-      || (context->addr_len == 16 && _current.localif->mode == NHDP_IFMODE_IPV4)) {
-    return RFC5444_DROP_MESSAGE;
-  }
-
   /* extract originator address */
   if (context->has_origaddr) {
-    switch(_parse_address(&_current.originator, context->orig_addr, context->addr_len)) {
-      case -1:
-        /* error, could not parse address */
-        return RFC5444_DROP_MESSAGE;
-
-      case 1:
-        /* invalidate originator */
-        netaddr_invalidate(&_current.originator);
-        break;
-
-      default:
-        break;
+    if (netaddr_from_binary(&_current.originator, context->orig_addr, context->addr_len, 0)) {
+      /* error, could not parse address */
+      return RFC5444_DROP_MESSAGE;
     }
+
+    OLSR_DEBUG(LOG_NHDP_R, "Got originator: %s",
+        netaddr_to_string(&buf, &_current.originator));
   }
 
   /* extract validity time and interval time */
@@ -460,6 +418,18 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
     tlv = tlv->next_entry;
   }
 
+  /* extract v6 originator in dualstack messages */
+  if (_nhdp_message_tlvs[IDX_TLV_IPV6ORIG].tlv) {
+    if (netaddr_from_binary(&_current.originator_v6,
+        _nhdp_message_tlvs[IDX_TLV_IPV6ORIG].tlv->single_value, 16, 0)) {
+      /* error, could not parse address */
+      return RFC5444_DROP_MESSAGE;
+    }
+
+    OLSR_DEBUG(LOG_NHDP_R, "Got originator: %s",
+        netaddr_to_string(&buf, &_current.originator_v6));
+  }
+
   /* clear flags in neighbors */
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
     neigh->_process_count = 0;
@@ -468,6 +438,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
   list_for_each_element(&_current.localif->_links, lnk, _if_node) {
     lnk->_process_count = 0;
   }
+
   return RFC5444_OKAY;
 }
 
@@ -489,21 +460,10 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
   local_if = 255;
   link_status = 255;
 
-  switch(_parse_address(&addr, context->addr, context->addr_len)) {
-    case -1:
-      /* error, could not parse address */
-      return RFC5444_DROP_ADDRESS;
-
-    case 1:
-      /* silent ignore */
-      return RFC5444_OKAY;
-
-    default:
-      break;
+  if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
+    /* error, could not parse address */
+    return RFC5444_DROP_ADDRESS;
   }
-
-  _current.has_ipv4 |= netaddr_get_address_family(&addr) == AF_INET;
-  _current.has_ipv6 |= netaddr_get_address_family(&addr) == AF_INET6;
 
   if (_nhdp_address_pass1_tlvs[IDX_ADDRTLV1_LOCAL_IF].tlv) {
     local_if = _nhdp_address_pass1_tlvs[IDX_ADDRTLV1_LOCAL_IF].tlv->single_value[0];
@@ -602,7 +562,10 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
 
   /* handle originator address */
   if (netaddr_get_address_family(&_current.originator) != AF_UNSPEC) {
-    _handle_originator();
+    _handle_originator(&_current.originator);
+  }
+  if (netaddr_get_address_family(&_current.originator_v6) != AF_UNSPEC) {
+    _handle_originator(&_current.originator_v6);
   }
 
   /* allocate neighbor and link if necessary */
@@ -616,8 +579,7 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   else {
     /* mark existing neighbor addresses */
     avl_for_each_element(&_current.neighbor->_neigh_addresses, naddr, _neigh_node) {
-      if ((netaddr_get_address_family(&naddr->neigh_addr) == AF_INET && _current.has_ipv4)
-        || (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6 && _current.has_ipv6)) {
+      if (netaddr_get_binlength(&naddr->neigh_addr) == context->addr_len) {
         naddr->_might_be_removed = true;
       }
     }
@@ -642,8 +604,8 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
     struct netaddr addr;
 
     /* translate like a RFC5444 address */
-    if(_parse_address(&addr, netaddr_get_binptr(_protocol->input_address),
-        netaddr_get_binlength(_protocol->input_address)) != 0) {
+    if(netaddr_from_binary(&addr, netaddr_get_binptr(_protocol->input_address),
+        netaddr_get_binlength(_protocol->input_address), 0)) {
       return RFC5444_DROP_MESSAGE;
     }
 
@@ -795,17 +757,9 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
 
   struct netaddr_str buf;
 
-  switch(_parse_address(&addr, context->addr, context->addr_len)) {
-    case -1:
-      /* error, could not parse address */
-      return RFC5444_DROP_ADDRESS;
-
-    case 1:
-      /* silent ignore */
-      return RFC5444_OKAY;
-
-    default:
-      break;
+  if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
+    /* error, could not parse address */
+    return RFC5444_DROP_ADDRESS;
   }
 
   local_if = 255;
@@ -876,7 +830,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
  */
 static enum rfc5444_result
 _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context __attribute__((unused)), bool dropped) {
+    struct rfc5444_reader_tlvblock_context *context, bool dropped) {
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr, *la_it;
   struct nhdp_l2hop *twohop, *twohop_it;
@@ -889,10 +843,10 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
   }
 
   /* remember when we saw the last IPv4/IPv6 */
-  if (_current.has_ipv4) {
+  if (context->addr_len == 4) {
     olsr_timer_set(&_current.neighbor->_vtime_v4, _current.vtime);
   }
-  if (_current.has_ipv6) {
+  else {
     olsr_timer_set(&_current.neighbor->_vtime_v6, _current.vtime);
   }
 

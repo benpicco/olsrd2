@@ -53,6 +53,9 @@ enum {
 
   /* maximum number of metric domains */
   NHDP_MAXIMUM_DOMAINS = 4,
+
+  /* message tlv for transporting IPv6 originator in ipv4 messages */
+  NHDP_MSGTLV_IPV6ORIGINATOR = 226,
 };
 
 EXPORT extern enum log_source LOG_NHDP;
@@ -61,6 +64,6 @@ int nhdp_init(void)  __attribute__((warn_unused_result));
 void nhdp_cleanup(void);
 
 EXPORT void nhdp_set_originator(const struct netaddr *);
-EXPORT const struct netaddr *nhdp_get_originator(void);
+EXPORT const struct netaddr *nhdp_get_originator(int af_type);
 
 #endif /* NHDP_H_ */
