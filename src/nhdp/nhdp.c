@@ -146,6 +146,9 @@ nhdp_cleanup(void) {
  */
 void
 nhdp_set_originator(const struct netaddr *addr) {
+  struct netaddr_str buf;
+
+  OLSR_DEBUG(LOG_NHDP, "Set originator to %s", netaddr_to_string(&buf, addr));
   if (netaddr_get_address_family(addr) == AF_INET) {
     memcpy(&_originator_v4, addr, sizeof(*addr));
   }
@@ -155,6 +158,23 @@ nhdp_set_originator(const struct netaddr *addr) {
 }
 
 /**
+ * Remove the originator currently set
+ * @param af_type address family type of the originator
+ *   (AF_INET or AF_INET6)
+ */
+void
+nhdp_reset_originator(int af_type) {
+  if (af_type == AF_INET) {
+    netaddr_invalidate(&_originator_v4);
+  }
+  else if (af_type == AF_INET6) {
+    netaddr_invalidate(&_originator_v6);
+  }
+}
+
+/**
+ * @param af_type address family type of the originator
+ *   (AF_INET or AF_INET6)
  * @return current NHDP originator
  */
 const struct netaddr *

@@ -64,6 +64,7 @@ int nhdp_init(void)  __attribute__((warn_unused_result));
 void nhdp_cleanup(void);
 
 EXPORT void nhdp_set_originator(const struct netaddr *);
+EXPORT void nhdp_reset_originator(int af_type);
 EXPORT const struct netaddr *nhdp_get_originator(int af_type);
 
 #endif /* NHDP_H_ */

@@ -175,17 +175,18 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     originator = nhdp_get_originator(AF_INET6);
   }
 
+  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s with destination %s",
+      target->interface->name, netaddr_to_string(&buf, &target->dst));
 
   if (originator != NULL && netaddr_get_address_family(originator) != AF_UNSPEC) {
+    OLSR_DEBUG(LOG_NHDP_W, "Add originator %s", netaddr_to_string(&buf, originator));
+
     rfc5444_writer_set_msg_header(writer, message, true , false, false, false);
     rfc5444_writer_set_msg_originator(writer, message, netaddr_get_binptr(originator));
   }
   else {
     rfc5444_writer_set_msg_header(writer, message, false , false, false, false);
   }
-
-  OLSR_DEBUG(LOG_NHDP_W, "Generate Hello on interface %s with destination %s",
-      target->interface->name, netaddr_to_string(&buf, &target->dst));
 }
 
 /**
