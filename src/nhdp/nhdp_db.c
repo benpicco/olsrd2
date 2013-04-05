@@ -402,6 +402,7 @@ nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr
 void
 nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *originator) {
   struct nhdp_neighbor *neigh2;
+  struct nhdp_link *lnk;
 
   if (memcmp(&neigh->originator, originator, sizeof(*originator)) == 0) {
     /* same originator, nothing to do */
@@ -411,12 +412,23 @@ nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *ori
   if (netaddr_get_address_family(&neigh->originator) != AF_UNSPEC) {
     /* different originator, remove from tree */
     avl_remove(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+
+    list_for_each_element(&neigh->_links, lnk, _neigh_node) {
+      /* remove links from interface specific tree */
+      avl_remove(&lnk->local_if->_link_originators, &lnk->_originator_node);
+    }
   }
 
   neigh2 = nhdp_db_neighbor_get_by_originator(originator);
   if (neigh2) {
     /* different neighbor has this originator, invalidate it */
     avl_remove(&nhdp_neigh_originator_tree, &neigh2->_originator_node);
+
+    list_for_each_element(&neigh2->_links, lnk, _neigh_node) {
+      /* remove links from interface specific tree */
+      avl_remove(&lnk->local_if->_link_originators, &lnk->_originator_node);
+    }
+
     netaddr_invalidate(&neigh2->originator);
   }
 
@@ -426,6 +438,45 @@ nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *ori
   if (netaddr_get_address_family(originator) != AF_UNSPEC) {
     /* add to tree if new originator is valid */
     avl_insert(&nhdp_neigh_originator_tree, &neigh->_originator_node);
+
+    list_for_each_element(&neigh->_links, lnk, _neigh_node) {
+      /* remove links from interface specific tree */
+      avl_insert(&lnk->local_if->_link_originators, &lnk->_originator_node);
+    }
+  }
+}
+
+/**
+ * Connect two neighbors as representations of the same node,
+ * @param n_ipv4 ipv4 neighbor
+ * @param n_ipv6 ipv6 neighbor
+ */
+void
+nhdp_db_neighbor_connect_dualstack(
+    struct nhdp_neighbor *n_ipv4, struct nhdp_neighbor *n_ipv6) {
+
+  if (n_ipv4->dualstack_partner != n_ipv6) {
+    nhdp_db_neigbor_disconnect_dualstack(n_ipv4);
+    n_ipv4->dualstack_partner = n_ipv6;
+  }
+  n_ipv4->dualstack_is_ipv4 = true;
+
+  if (n_ipv6->dualstack_partner != n_ipv4) {
+    nhdp_db_neigbor_disconnect_dualstack(n_ipv6);
+    n_ipv6->dualstack_partner = n_ipv4;
+  }
+  n_ipv6->dualstack_is_ipv4 = false;
+}
+
+/**
+ * Disconnects the pointers of a dualstack pair of neighbors
+ * @param neigh one of the connected neighbors
+ */
+void
+nhdp_db_neigbor_disconnect_dualstack(struct nhdp_neighbor *neigh) {
+  if (neigh->dualstack_partner) {
+    neigh->dualstack_partner->dualstack_partner = NULL;
+    neigh->dualstack_partner = NULL;
   }
 }
 
@@ -466,6 +517,12 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   lnk->vtime.info = &_link_vtime_info;
   lnk->vtime.cb_context = lnk;
 
+  /* add to originator tree if set */
+  lnk->_originator_node.key = &neigh->originator;
+  if (netaddr_get_address_family(&neigh->originator) != AF_UNSPEC) {
+    avl_insert(&local_if->_link_originators, &lnk->_originator_node);
+  }
+
   /* initialize link domain data */
   nhdp_domain_init_link(lnk);
 
@@ -495,6 +552,10 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   olsr_timer_stop(&lnk->sym_time);
   olsr_timer_stop(&lnk->heard_time);
   olsr_timer_stop(&lnk->vtime);
+
+  if (netaddr_get_address_family(&lnk->neigh->originator) != AF_UNSPEC) {
+    avl_remove(&lnk->local_if->_link_originators, &lnk->_originator_node);
+  }
 
   /* detach all addresses */
   avl_for_each_element_safe(&lnk->_addresses, laddr, _link_node, la_it) {
@@ -649,6 +710,40 @@ nhdp_db_link_2hop_remove(struct nhdp_l2hop *l2hop) {
 
   /* free memory */
   olsr_class_free(&_l2hop_info, l2hop);
+}
+
+/**
+ * Connect two links as representations of the same node,
+ * @param l_ipv4 ipv4 link
+ * @param l_ipv6 ipv6 link
+ */
+void
+nhdp_db_link_connect_dualstack(
+    struct nhdp_link *l_ipv4, struct nhdp_link *l_ipv6) {
+
+  if (l_ipv4->dualstack_partner != l_ipv6) {
+    nhdp_db_link_disconnect_dualstack(l_ipv4);
+    l_ipv4->dualstack_partner = l_ipv6;
+  }
+  l_ipv4->dualstack_is_ipv4 = true;
+
+  if (l_ipv6->dualstack_partner != l_ipv4) {
+    nhdp_db_link_disconnect_dualstack(l_ipv6);
+    l_ipv6->dualstack_partner = l_ipv4;
+  }
+  l_ipv6->dualstack_is_ipv4 = false;
+}
+
+/**
+ * Disconnects the pointers of a dualstack pair of neighbors
+ * @param neigh one of the connected neighbors
+ */
+void
+nhdp_db_link_disconnect_dualstack(struct nhdp_link *lnk) {
+  if (lnk->dualstack_partner) {
+    lnk->dualstack_partner->dualstack_partner = NULL;
+    lnk->dualstack_partner = NULL;
+  }
 }
 
 /**
