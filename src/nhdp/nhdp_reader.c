@@ -327,6 +327,9 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
 static void
 _handle_originator(const struct netaddr *addr) {
   struct nhdp_neighbor *neigh;
+  struct netaddr_str buf;
+
+  OLSR_DEBUG(LOG_NHDP_R, "Handle originator %s", netaddr_to_string(&buf, addr));
 
   neigh = nhdp_db_neighbor_get_by_originator(addr);
   if (!neigh) {
@@ -349,7 +352,6 @@ _handle_originator(const struct netaddr *addr) {
     return;
   }
 
-  /* remove neighbor selected by originator */
   nhdp_db_neighbor_remove(neigh);
 }
 
@@ -421,7 +423,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
   /* extract v6 originator in dualstack messages */
   if (_nhdp_message_tlvs[IDX_TLV_IPV6ORIG].tlv) {
     if (netaddr_from_binary(&_current.originator_v6,
-        _nhdp_message_tlvs[IDX_TLV_IPV6ORIG].tlv->single_value, 16, 0)) {
+        _nhdp_message_tlvs[IDX_TLV_IPV6ORIG].tlv->single_value, 16, AF_INET6)) {
       /* error, could not parse address */
       return RFC5444_DROP_MESSAGE;
     }
@@ -564,9 +566,6 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
   if (netaddr_get_address_family(&_current.originator) != AF_UNSPEC) {
     _handle_originator(&_current.originator);
   }
-  if (netaddr_get_address_family(&_current.originator_v6) != AF_UNSPEC) {
-    _handle_originator(&_current.originator_v6);
-  }
 
   /* allocate neighbor and link if necessary */
   if (_current.neighbor == NULL) {
@@ -619,6 +618,27 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
 
   /* update hysteresis */
   nhdp_hysteresis_update(_current.link, context);
+
+  /* handle dualstack information */
+  if (netaddr_get_address_family(&_current.originator_v6) != AF_UNSPEC) {
+    struct nhdp_neighbor *neigh2;
+    struct nhdp_link *lnk2;
+
+    neigh2 = nhdp_db_neighbor_get_by_originator(&_current.originator_v6);
+    if (neigh2) {
+      nhdp_db_neighbor_connect_dualstack(_current.neighbor, neigh2);
+    }
+
+    lnk2 = nhdp_interface_link_get_by_originator(_current.localif, &_current.originator_v6);
+    if (lnk2) {
+      nhdp_db_link_connect_dualstack(_current.link, lnk2);
+    }
+  }
+  else if (netaddr_get_address_family(&_current.originator) == AF_INET
+      && netaddr_get_address_family(&_current.originator_v6) == AF_UNSPEC) {
+    nhdp_db_neigbor_disconnect_dualstack(_current.neighbor);
+    nhdp_db_link_disconnect_dualstack(_current.link);
+  }
 
   OLSR_DEBUG(LOG_NHDP_R, "pass1 finished");
 

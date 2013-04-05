@@ -118,7 +118,6 @@ struct nhdp_link {
 
   /* last received interval time */
   uint64_t itime_value;
-
   /* timer that fires if this link is not symmetric anymore */
   struct olsr_timer_entry sym_time;
 
@@ -133,6 +132,12 @@ struct nhdp_link {
 
   /* pointer to local interface for this link */
   struct nhdp_interface *local_if;
+
+  /* pointer to other (dualstack) representation of this link */
+  struct nhdp_link *dualstack_partner;
+
+  /* true if this part of the dualstack pair if the IPv4 part */
+  bool dualstack_is_ipv4;
 
   /* pointer to neighbor entry of the other side of the link */
   struct nhdp_neighbor *neigh;
@@ -154,6 +159,9 @@ struct nhdp_link {
 
   /* member entry for nhdp links of neighbor node */
   struct list_entity _neigh_node;
+
+  /* optional member node for interface tree of originators */
+  struct avl_node _originator_node;
 
   /* Array of link metrics */
   struct nhdp_link_domaindata _domaindata[NHDP_MAXIMUM_DOMAINS];
@@ -209,11 +217,16 @@ struct nhdp_l2hop {
  * nhdp_neighbor represents a neighbor node (with one or multiple interfaces
  */
 struct nhdp_neighbor {
-  /* number of links to this neighbor which are symmetric */
-  int symmetric;
-
   /* originator address of this node, might by type AF_UNSPEC */
   struct netaddr originator;
+
+  /* number of links to this neighbor which are symmetric */
+  int symmetric;
+  /* pointer to other (dualstack) representation of this neighbor */
+  struct nhdp_neighbor *dualstack_partner;
+
+  /* true if this part of the dualstack pair if the IPv4 part */
+  bool dualstack_is_ipv4;
 
   /* true if the local router has been selected as a MPR by the neighbor */
   bool local_is_flooding_mpr;
@@ -251,7 +264,7 @@ struct nhdp_neighbor {
   /* member entry for global list of neighbors */
   struct list_entity _global_node;
 
-  /* optional tree node if originator is set */
+  /* optional member node for global tree of originators */
   struct avl_node _originator_node;
 
   /* Array of link metrics */
@@ -300,8 +313,10 @@ EXPORT struct nhdp_naddr *nhdp_db_neighbor_addr_add(struct nhdp_neighbor *, stru
 EXPORT void nhdp_db_neighbor_addr_remove(struct nhdp_naddr *);
 EXPORT void nhdp_db_neighbor_addr_move(struct nhdp_neighbor *, struct nhdp_naddr *);
 EXPORT void nhdp_db_neighbor_set_originator(struct nhdp_neighbor *, struct netaddr *);
+EXPORT void nhdp_db_neighbor_connect_dualstack(struct nhdp_neighbor *, struct nhdp_neighbor *);
+EXPORT void nhdp_db_neigbor_disconnect_dualstack(struct nhdp_neighbor *neigh);
 
-EXPORT struct nhdp_link *nhdp_db_link_add(struct nhdp_neighbor *, struct nhdp_interface *);
+EXPORT struct nhdp_link *nhdp_db_link_add(struct nhdp_neighbor *ipv4, struct nhdp_interface *ipv6);
 EXPORT void nhdp_db_link_remove(struct nhdp_link *);
 EXPORT struct nhdp_laddr *nhdp_db_link_addr_add(struct nhdp_link *, struct netaddr*);
 EXPORT void nhdp_db_link_addr_remove(struct nhdp_laddr *);
@@ -309,6 +324,8 @@ EXPORT void nhdp_db_link_addr_move(struct nhdp_link *, struct nhdp_laddr *);
 EXPORT struct nhdp_l2hop *nhdp_db_link_2hop_add(
     struct nhdp_link *, struct netaddr *);
 EXPORT void nhdp_db_link_2hop_remove(struct nhdp_l2hop *);
+EXPORT void nhdp_db_link_connect_dualstack(struct nhdp_link *ipv4, struct nhdp_link *ipv6);
+EXPORT void nhdp_db_link_disconnect_dualstack(struct nhdp_link *lnk);
 
 EXPORT int _nhdp_db_link_calculate_status(struct nhdp_link *lnk);
 EXPORT void nhdp_db_link_update_status(struct nhdp_link *);

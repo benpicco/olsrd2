@@ -249,6 +249,93 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
   return TELNET_RESULT_ACTIVE;
 }
 
+static void
+_print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
+    const char *prefix, bool other_addr) {
+  static const char *PENDING = "pending";
+  static const char *HEARD = "heard";
+  static const char *SYMMETRIC = "symmetric";
+  static const char *LOST = "lost";
+
+  struct nhdp_laddr *laddr;
+  struct nhdp_l2hop *twohop;
+  struct nhdp_naddr *naddr;
+
+  const char *status;
+
+  struct fraction_str tbuf1, tbuf2, tbuf3;
+  struct nhdp_hysteresis_str hbuf;
+  struct netaddr_str nbuf;
+
+  if (lnk->status == NHDP_LINK_PENDING) {
+      status = PENDING;
+  }
+  else if (lnk->status == NHDP_LINK_HEARD) {
+      status = HEARD;
+  }
+  else if (lnk->status == NHDP_LINK_SYMMETRIC) {
+      status = SYMMETRIC;
+  }
+  else {
+    status = LOST;
+  }
+  abuf_appendf(con->out, "%s%s status=%s localif=%s"
+      " vtime=%s heard=%s symmetric=%s %s%s\n",
+      prefix,
+      lnk->dualstack_partner != NULL && !lnk->dualstack_is_ipv4 ? "     " : "Link:",
+      status,
+      nhdp_interface_get_name(lnk->local_if),
+      olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
+      olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
+      olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
+      lnk->dualstack_partner != NULL ? "dualstack " : "",
+      nhdp_hysteresis_to_string(&hbuf, lnk));
+
+  avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
+    abuf_appendf(con->out, "%s\tLink addresses: %s\n",
+        prefix, netaddr_to_string(&nbuf, &laddr->link_addr));
+  }
+  if (other_addr) {
+    avl_for_each_element(&lnk->neigh->_neigh_addresses, naddr, _neigh_node) {
+      if (!nhdp_db_neighbor_addr_is_lost(naddr) && avl_find(&lnk->_addresses, &naddr->neigh_addr) == NULL) {
+        abuf_appendf(con->out, "%s\tOther addresses: %s\n",
+            prefix, netaddr_to_string(&nbuf, &naddr->neigh_addr));
+      }
+    }
+  }
+  avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
+    abuf_appendf(con->out, "%s\t2-Hop addresses: %s\n",
+        prefix, netaddr_to_string(&nbuf, &twohop->twohop_addr));
+  }
+}
+
+static void
+_print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
+  struct nhdp_naddr *naddr;
+  struct nhdp_link *lnk;
+  struct netaddr_str nbuf;
+
+  abuf_appendf(con->out, "%s %s%s\n",
+      neigh->dualstack_partner != NULL && !neigh->dualstack_is_ipv4 ? "         " : "Neighbor:",
+      neigh->symmetric > 0 ? "symmetric" : "",
+      neigh->dualstack_partner != NULL ? "dualstack" : "");
+
+  list_for_each_element(&neigh->_links, lnk, _neigh_node) {
+    if (lnk->dualstack_partner == NULL || lnk->dualstack_is_ipv4) {
+      _print_link(con, lnk, "\t",  false);
+    }
+    if (lnk->dualstack_partner != NULL && lnk->dualstack_is_ipv4) {
+      _print_link(con, lnk->dualstack_partner, "\t", false);
+    }
+  }
+
+  avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
+    if (avl_find(&neigh->_link_addresses, &naddr->neigh_addr) == NULL) {
+      abuf_appendf(con->out, "\tAddress on other interface: %s",
+          netaddr_to_string(&nbuf, &naddr->neigh_addr));
+    }
+  }
+}
 /**
  * Handle the "nhdp neighlink" command
  * @param con
@@ -256,63 +343,19 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
  */
 static enum olsr_telnet_result
 _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
-  static const char *PENDING = "pending";
-  static const char *HEARD = "heard";
-  static const char *SYMMETRIC = "symmetric";
-  static const char *LOST = "lost";
-
   struct nhdp_neighbor *neigh;
-  struct nhdp_naddr *naddr;
-  struct nhdp_link *lnk;
-  struct nhdp_laddr *laddr;
-  struct nhdp_l2hop *twohop;
-  const char *status;
-  struct netaddr_str nbuf;
-  struct fraction_str tbuf1, tbuf2, tbuf3;
-  struct nhdp_hysteresis_str hbuf;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    abuf_appendf(con->out, "Neighbor: %s\n", neigh->symmetric > 0 ? "symmetric" : "");
-
-    list_for_each_element(&neigh->_links, lnk, _neigh_node) {
-      if (lnk->status == NHDP_LINK_PENDING) {
-          status = PENDING;
-      }
-      else if (lnk->status == NHDP_LINK_HEARD) {
-          status = HEARD;
-      }
-      else if (lnk->status == NHDP_LINK_SYMMETRIC) {
-          status = SYMMETRIC;
-      }
-      else {
-        status = LOST;
-      }
-      abuf_appendf(con->out, "\tLink: status=%s localif=%s"
-          " vtime=%s heard=%s symmetric=%s %s\n",
-          status,
-          nhdp_interface_get_name(lnk->local_if),
-          olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
-          olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
-          olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          nhdp_hysteresis_to_string(&hbuf, lnk));
-
-      avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
-        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
-      }
-      avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
-        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->twohop_addr));
-      }
+    if (neigh->dualstack_partner == NULL || neigh->dualstack_is_ipv4) {
+      _print_neigh(con, neigh);
     }
-
-    avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
-      if (avl_find(&neigh->_link_addresses, &naddr->neigh_addr) == NULL) {
-        abuf_appendf(con->out, "\tAddress on other interface: %s",
-            netaddr_to_string(&nbuf, &naddr->neigh_addr));
-      }
+    if (neigh->dualstack_partner != NULL && neigh->dualstack_is_ipv4) {
+      _print_neigh(con, neigh->dualstack_partner);
     }
   }
   return TELNET_RESULT_ACTIVE;
 }
+
 /**
  * Handle the "nhdp iflink" command
  * @param con
@@ -320,30 +363,13 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
  */
 static enum olsr_telnet_result
 _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
-  static const char *PENDING = "pending";
-  static const char *HEARD = "heard";
-  static const char *SYMMETRIC = "symmetric";
-  static const char *LOST = "lost";
-
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
 
-  struct nhdp_naddr *naddr;
   struct nhdp_link *lnk;
-  struct nhdp_laddr *laddr;
-  struct nhdp_l2hop *twohop;
-  const char *status;
-
-  struct nhdp_domain *domain;
 
   struct netaddr_str nbuf;
-  struct fraction_str tbuf1, tbuf2, tbuf3;
-  struct nhdp_hysteresis_str hbuf;
-  struct nhdp_metric_str mbuf1, mbuf2;
-
-  struct nhdp_link_domaindata *lnk_dd;
-  struct nhdp_neighbor_domaindata *neigh_dd;
-  struct nhdp_l2hop_domaindata *l2hop_dd;
+  struct fraction_str tbuf1, tbuf2;
 
   avl_for_each_element(&nhdp_interface_tree, interf, _node) {
 
@@ -359,61 +385,7 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
     }
 
     list_for_each_element(&interf->_links, lnk, _if_node) {
-      if (lnk->status == NHDP_LINK_PENDING) {
-          status = PENDING;
-      }
-      else if (lnk->status == NHDP_LINK_HEARD) {
-          status = HEARD;
-      }
-      else if (lnk->status == NHDP_LINK_SYMMETRIC) {
-          status = SYMMETRIC;
-      }
-      else {
-        status = LOST;
-      }
-      abuf_appendf(con->out, "\tLink: status=%s vtime=%s heard=%s symmetric=%s %s\n",
-          status,
-          olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
-          olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
-          olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
-          nhdp_hysteresis_to_string(&hbuf, lnk));
-
-      list_for_each_element(&nhdp_domain_list, domain, _node) {
-        lnk_dd = nhdp_domain_get_linkdata(domain, lnk);
-        neigh_dd = nhdp_domain_get_neighbordata(domain, lnk->neigh);
-
-        abuf_appendf(con->out, "\t    Metric '%s': in=%s out=%s\n"
-                               "\t    MPR '%s': MRP %s, MPRS %s, Willingness %d\n",
-            domain->metric->name,
-            domain->metric->to_string(&mbuf1, lnk_dd->metric.in),
-            domain->metric->to_string(&mbuf2, lnk_dd->metric.out),
-            domain->mpr->name,
-            neigh_dd->neigh_is_mpr ? "yes" : "no",
-            neigh_dd->local_is_mpr ? "yes" : "no",
-            neigh_dd->willingness
-            );
-      }
-
-      avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
-        abuf_appendf(con->out, "\t    Link addresses: %s\n", netaddr_to_string(&nbuf, &laddr->link_addr));
-      }
-      avl_for_each_element(&lnk->neigh->_neigh_addresses, naddr, _neigh_node) {
-        if (!nhdp_db_neighbor_addr_is_lost(naddr) && avl_find(&lnk->_addresses, &naddr->neigh_addr) == NULL) {
-          abuf_appendf(con->out, "\t    Other addresses: %s\n", netaddr_to_string(&nbuf, &naddr->neigh_addr));
-        }
-      }
-      avl_for_each_element(&lnk->_2hop, twohop, _link_node) {
-        abuf_appendf(con->out, "\t    2-Hop addresses: %s\n", netaddr_to_string(&nbuf, &twohop->twohop_addr));
-
-        list_for_each_element(&nhdp_domain_list, domain, _node) {
-          l2hop_dd = nhdp_domain_get_l2hopdata(domain, twohop);
-
-          abuf_appendf(con->out, "\t\tMetric '%s': in=%s out=%s\n",
-              domain->metric->name,
-              domain->metric->to_string(&mbuf1, l2hop_dd->metric.in),
-              domain->metric->to_string(&mbuf2, l2hop_dd->metric.out));
-        }
-      }
+      _print_link(con, lnk, "\t", true);
     }
   }
   return TELNET_RESULT_ACTIVE;
