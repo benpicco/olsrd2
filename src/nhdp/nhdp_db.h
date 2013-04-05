@@ -309,20 +309,20 @@ void nhdp_db_cleanup(void);
 EXPORT struct nhdp_neighbor *nhdp_db_neighbor_add(void);
 EXPORT void nhdp_db_neighbor_remove(struct nhdp_neighbor *);
 EXPORT void nhdp_db_neighbor_join(struct nhdp_neighbor *, struct nhdp_neighbor *);
-EXPORT struct nhdp_naddr *nhdp_db_neighbor_addr_add(struct nhdp_neighbor *, struct netaddr *);
+EXPORT struct nhdp_naddr *nhdp_db_neighbor_addr_add(struct nhdp_neighbor *, const struct netaddr *);
 EXPORT void nhdp_db_neighbor_addr_remove(struct nhdp_naddr *);
 EXPORT void nhdp_db_neighbor_addr_move(struct nhdp_neighbor *, struct nhdp_naddr *);
-EXPORT void nhdp_db_neighbor_set_originator(struct nhdp_neighbor *, struct netaddr *);
+EXPORT void nhdp_db_neighbor_set_originator(struct nhdp_neighbor *, const struct netaddr *);
 EXPORT void nhdp_db_neighbor_connect_dualstack(struct nhdp_neighbor *, struct nhdp_neighbor *);
 EXPORT void nhdp_db_neigbor_disconnect_dualstack(struct nhdp_neighbor *neigh);
 
 EXPORT struct nhdp_link *nhdp_db_link_add(struct nhdp_neighbor *ipv4, struct nhdp_interface *ipv6);
 EXPORT void nhdp_db_link_remove(struct nhdp_link *);
-EXPORT struct nhdp_laddr *nhdp_db_link_addr_add(struct nhdp_link *, struct netaddr*);
+EXPORT struct nhdp_laddr *nhdp_db_link_addr_add(struct nhdp_link *, const struct netaddr*);
 EXPORT void nhdp_db_link_addr_remove(struct nhdp_laddr *);
 EXPORT void nhdp_db_link_addr_move(struct nhdp_link *, struct nhdp_laddr *);
 EXPORT struct nhdp_l2hop *nhdp_db_link_2hop_add(
-    struct nhdp_link *, struct netaddr *);
+    struct nhdp_link *, const struct netaddr *);
 EXPORT void nhdp_db_link_2hop_remove(struct nhdp_l2hop *);
 EXPORT void nhdp_db_link_connect_dualstack(struct nhdp_link *ipv4, struct nhdp_link *ipv6);
 EXPORT void nhdp_db_link_disconnect_dualstack(struct nhdp_link *lnk);

@@ -327,7 +327,8 @@ nhdp_db_neighbor_join(struct nhdp_neighbor *dst, struct nhdp_neighbor *src) {
  * @return pointer to neighbor address, NULL if out of memory
  */
 struct nhdp_naddr *
-nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh, struct netaddr *addr) {
+nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh,
+    const struct netaddr *addr) {
   struct nhdp_naddr *naddr;
 
   naddr = olsr_class_malloc(&_naddr_info);
@@ -400,7 +401,7 @@ nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr
  * @param originator originator address, might be type AF_UNSPEC
  */
 void
-nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, struct netaddr *originator) {
+nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, const struct netaddr *originator) {
   struct nhdp_neighbor *neigh2;
   struct nhdp_link *lnk;
 
@@ -585,7 +586,7 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
  * @return nhdp link address, NULL if out of memory
  */
 struct nhdp_laddr *
-nhdp_db_link_addr_add(struct nhdp_link *lnk, struct netaddr *addr) {
+nhdp_db_link_addr_add(struct nhdp_link *lnk, const struct netaddr *addr) {
   struct nhdp_laddr *laddr;
 
   laddr = olsr_class_malloc(&_laddr_info);
@@ -662,7 +663,7 @@ nhdp_db_link_addr_move(struct nhdp_link *lnk, struct nhdp_laddr *laddr) {
  * @return nhdp link two-hop neighbor
  */
 struct nhdp_l2hop *
-nhdp_db_link_2hop_add(struct nhdp_link *lnk, struct netaddr *addr) {
+nhdp_db_link_2hop_add(struct nhdp_link *lnk, const struct netaddr *addr) {
   struct nhdp_l2hop *l2hop;
 
   l2hop = olsr_class_malloc(&_l2hop_info);

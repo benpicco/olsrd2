@@ -81,7 +81,7 @@ enum {
 /* prototypes */
 static void cleanup_error(void);
 static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t local_if);
-static void _handle_originator(const struct netaddr *addr);
+static void _handle_originator(void);
 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
@@ -325,13 +325,14 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
  * Handle in originator address of NHDP Hello
  */
 static void
-_handle_originator(const struct netaddr *addr) {
+_handle_originator(void) {
   struct nhdp_neighbor *neigh;
   struct netaddr_str buf;
 
-  OLSR_DEBUG(LOG_NHDP_R, "Handle originator %s", netaddr_to_string(&buf, addr));
+  OLSR_DEBUG(LOG_NHDP_R, "Handle originator %s",
+      netaddr_to_string(&buf, &_current.originator));
 
-  neigh = nhdp_db_neighbor_get_by_originator(addr);
+  neigh = nhdp_db_neighbor_get_by_originator(&_current.originator);
   if (!neigh) {
     return;
   }
@@ -352,7 +353,7 @@ _handle_originator(const struct netaddr *addr) {
     return;
   }
 
-  nhdp_db_neighbor_remove(neigh);
+  nhdp_db_neighbor_set_originator(neigh, &NETADDR_UNSPEC);
 }
 
 /**
@@ -564,7 +565,7 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __at
 
   /* handle originator address */
   if (netaddr_get_address_family(&_current.originator) != AF_UNSPEC) {
-    _handle_originator(&_current.originator);
+    _handle_originator();
   }
 
   /* allocate neighbor and link if necessary */
