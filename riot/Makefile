@@ -109,7 +109,7 @@ export CFLAGS
 BASELIBS += $(RIOTBOARD)/$(BOARD)/bin/$(BOARD)_base.a
 BASELIBS += bin/project.a
 
-INCLUDES = -I../build -I. -I$(RIOTBOARD)/$(BOARD)/include -I$(RIOTBASE)/core/include -I$(RIOTBASE)/cpu/$(CPU)/include -I$(RIOTBASE)/cpu/arm_common/include -I$(RIOTBASE) -I$(RIOTBASE)/sys -I$(RIOTBASE)/sys/include -I$(OONFBASE)/src-api -I../src
+INCLUDES = -I. -I$(RIOTBOARD)/$(BOARD)/include -I$(RIOTBASE)/core/include -I$(RIOTBASE)/cpu/$(CPU)/include -I$(RIOTBASE)/cpu/arm_common/include -I$(RIOTBASE) -I$(RIOTBASE)/sys -I$(RIOTBASE)/sys/include -I$(OONFBASE)/src-api -I../src
 
 export INCLUDES
 
