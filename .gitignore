@@ -11,7 +11,3 @@
 /.cproject
 /.project
 /.settings/
-
-# RIOT tinkering
-*.o
-*.a
