@@ -140,6 +140,31 @@ nhdp_writer_cleanup(void) {
   rfc5444_writer_unregister_message(&_protocol->writer, _nhdp_message);
 }
 
+void
+nhdp_writer_send_hello(struct nhdp_interface *interf) {
+  enum rfc5444_result result;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_WARN
+  struct netaddr_str buf;
+#endif
+
+  OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s",
+      nhdp_interface_get_name(interf));
+
+  /* send IPv4 (if socket is active) */
+  result = olsr_rfc5444_send_if(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
+  if (result < 0) {
+    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
+  }
+
+  /* send IPV6 (if socket is active) */
+  result = olsr_rfc5444_send_if(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
+  if (result < 0) {
+    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
+  }
+}
+
 /**
  * Callback to initialize the message header for a HELLO message
  * @param writer
