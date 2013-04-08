@@ -542,7 +542,7 @@ _get_new_domain(uint8_t ext) {
     /* initialize new domain */
     domain = calloc(1, sizeof(struct nhdp_domain));
     domain->ext = ext;
-    domain->_index = _domain_counter++;
+    domain->index = _domain_counter++;
     domain->metric = &_no_metric;
     domain->mpr = &_no_mprs;
 

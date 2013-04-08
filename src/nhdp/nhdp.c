@@ -282,7 +282,7 @@ _print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
   abuf_appendf(con->out, "%s%s status=%s localif=%s"
       " vtime=%s heard=%s symmetric=%s %s%s\n",
       prefix,
-      lnk->dualstack_partner != NULL && !lnk->dualstack_is_ipv4 ? "     " : "Link:",
+      nhdp_db_link_is_ipv6_dualstack(lnk)  ? "     " : "Link:",
       status,
       nhdp_interface_get_name(lnk->local_if),
       olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
@@ -316,15 +316,15 @@ _print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
   struct netaddr_str nbuf;
 
   abuf_appendf(con->out, "%s %s%s\n",
-      neigh->dualstack_partner != NULL && !neigh->dualstack_is_ipv4 ? "         " : "Neighbor:",
+      nhdp_db_neighbor_is_ipv6_dualstack(neigh) ? "         " : "Neighbor:",
       neigh->symmetric > 0 ? "symmetric" : "",
       neigh->dualstack_partner != NULL ? "dualstack" : "");
 
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
-    if (lnk->dualstack_partner == NULL || lnk->dualstack_is_ipv4) {
+    if (!nhdp_db_link_is_ipv6_dualstack(lnk)) {
       _print_link(con, lnk, "\t",  false);
     }
-    if (lnk->dualstack_partner != NULL && lnk->dualstack_is_ipv4) {
+    if (nhdp_db_link_is_ipv4_dualstack(lnk)) {
       _print_link(con, lnk->dualstack_partner, "\t", false);
     }
   }
@@ -346,10 +346,10 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
   struct nhdp_neighbor *neigh;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    if (neigh->dualstack_partner == NULL || neigh->dualstack_is_ipv4) {
+    if (!nhdp_db_neighbor_is_ipv6_dualstack(neigh)) {
       _print_neigh(con, neigh);
     }
-    if (neigh->dualstack_partner != NULL && neigh->dualstack_is_ipv4) {
+    if (nhdp_db_neighbor_is_ipv4_dualstack(neigh)) {
       _print_neigh(con, neigh->dualstack_partner);
     }
   }

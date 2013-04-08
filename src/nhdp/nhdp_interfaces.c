@@ -160,34 +160,6 @@ nhdp_interfaces_cleanup(void) {
 }
 
 /**
- * Updates the neigh_v4/6only variables of an interface
- * @param interf nhdp interface
- */
-void
-nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf) {
-  struct nhdp_link *lnk;
-
-  interf->neigh_onlyv4 = false;
-  interf->neigh_onlyv6 = false;
-
-  list_for_each_element(&interf->_links, lnk, _if_node) {
-    if (lnk->neigh->dualstack_partner != NULL) {
-     /* dualstack node */
-      continue;
-    }
-
-    if (netaddr_get_address_family(&lnk->neigh->originator) == AF_INET) {
-      /* IPv4 only neighbor */
-      interf->neigh_onlyv4 = true;
-    }
-    else if (netaddr_get_address_family(&lnk->neigh->originator) == AF_INET6) {
-      /* IPv6 only neighbor */
-      interf->neigh_onlyv6 = true;
-    }
-  }
-}
-
-/**
  * Add a nhdp interface
  * @param name name of interface
  * @return pointer to nhdp interface, NULL if out of memory

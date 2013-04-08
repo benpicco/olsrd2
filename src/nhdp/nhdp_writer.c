@@ -63,10 +63,8 @@ enum {
 /* prototypes */
 static void _cb_addMessageHeader(
     struct rfc5444_writer *, struct rfc5444_writer_message *);
-static void _cb_addMessageTLVs(
-    struct rfc5444_writer *, struct rfc5444_writer_content_provider *);
-static void _cb_addAddresses(
-    struct rfc5444_writer *, struct rfc5444_writer_content_provider *);
+static void _cb_addMessageTLVs(struct rfc5444_writer *);
+static void _cb_addAddresses(struct rfc5444_writer *);
 
 static void _add_link_address(struct rfc5444_writer *writer,
     struct rfc5444_writer_content_provider *prv,
@@ -220,15 +218,14 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
  * @param prv
  */
 static void
-_cb_addMessageTLVs(struct rfc5444_writer *writer,
-    struct rfc5444_writer_content_provider *prv) {
+_cb_addMessageTLVs(struct rfc5444_writer *writer) {
   uint8_t vtime_encoded, itime_encoded, will_encoded;
   struct nhdp_domain *domain;
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
   const struct netaddr *v6_originator;
 
-  target = olsr_rfc5444_get_target_from_message(prv->creator);
+  target = olsr_rfc5444_get_target_from_message(_nhdp_message);
 
   if (target != target->interface->multicast4
       && target != target->interface->multicast6) {
@@ -267,7 +264,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer,
   v6_originator = nhdp_get_originator(AF_INET6);
 
   /* add V6 originator to V4 message if available and interface is dualstack */
-  if (prv->creator->addr_len == 4 && v6_originator != NULL
+  if (_nhdp_message->addr_len == 4 && v6_originator != NULL
       && netaddr_get_address_family(v6_originator) == AF_INET6) {
     rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV6ORIGINATOR, 0,
         netaddr_get_binptr(v6_originator), netaddr_get_binlength(v6_originator));
@@ -503,11 +500,9 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
 /**
  * Callback to add the addresses and address TLVs to a HELLO message
  * @param writer
- * @param prv
  */
 void
-_cb_addAddresses(struct rfc5444_writer *writer,
-    struct rfc5444_writer_content_provider *prv) {
+_cb_addAddresses(struct rfc5444_writer *writer) {
   struct olsr_rfc5444_target *target;
 
   struct nhdp_interface *interf;
@@ -515,7 +510,7 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   struct nhdp_naddr *naddr;
 
   /* have already be checked for message TLVs, so they cannot be NULL */
-  target = olsr_rfc5444_get_target_from_message(prv->creator);
+  target = olsr_rfc5444_get_target_from_message(_nhdp_message);
   interf = nhdp_interface_get(target->interface->name);
 
   /* transmit interface addresses first */
@@ -525,7 +520,7 @@ _cb_addAddresses(struct rfc5444_writer *writer,
     }
     if (netaddr_get_address_family(&addr->if_addr)
         == netaddr_get_address_family(&target->dst)) {
-      _add_localif_address(writer, prv, interf, addr);
+      _add_localif_address(writer, &_nhdp_msgcontent_provider, interf, addr);
     }
   }
 
@@ -533,7 +528,7 @@ _cb_addAddresses(struct rfc5444_writer *writer,
   avl_for_each_element(&nhdp_naddr_tree, naddr, _global_node) {
     if (netaddr_get_address_family(&naddr->neigh_addr)
         == netaddr_get_address_family(&target->dst)) {
-      _add_link_address(writer, prv, interf, naddr);
+      _add_link_address(writer, &_nhdp_msgcontent_provider, interf, naddr);
     }
   }
 }

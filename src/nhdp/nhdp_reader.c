@@ -940,9 +940,6 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
   /* overwrite originator of neighbor entry */
   nhdp_db_neighbor_set_originator(_current.neighbor, &_current.originator);
 
-  /* update v4/v6-only status of interface */
-  nhdp_interfaces_update_neigh_addresstype(_current.localif);
-
   /* update MPR sets */
   nhdp_domain_update_mprs();
 
