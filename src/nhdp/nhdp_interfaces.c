@@ -58,6 +58,7 @@
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_interfaces.h"
+#include "nhdp/nhdp_writer.h"
 
 /* Prototypes of local functions */
 static struct nhdp_interface *_interface_add(const char *name);
@@ -378,30 +379,7 @@ avl_comp_ifaddr(const void *k1, const void *k2) {
  */
 static void
 _cb_generate_hello(void *ptr) {
-  struct nhdp_interface *interf;
-  enum rfc5444_result result;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_WARN
-  struct netaddr_str buf;
-#endif
-
-  interf = ptr;
-
-  OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s",
-      nhdp_interface_get_name(interf));
-
-  /* send IPv4 (if socket is active) */
-  result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
-  if (result < 0) {
-    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
-  }
-
-  /* send IPV6 (if socket is active) */
-  result = olsr_rfc5444_send(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
-  if (result < 0) {
-    OLSR_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
-  }
+  nhdp_writer_send_hello(ptr);
 }
 
 /**
