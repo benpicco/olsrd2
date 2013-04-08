@@ -46,12 +46,14 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
+#include "nhdp/nhdp.h"
+
 #define CFG_VALIDATE_LAN(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsrv2_lan_validate, ##args )
 
 struct olsrv2_lan_entry {
   struct netaddr prefix;
 
-  uint32_t outgoing_metric;
+  uint32_t outgoing_metric[NHDP_MAXIMUM_DOMAINS];
 
   struct avl_node _node;
   bool _new;

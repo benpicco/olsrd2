@@ -91,6 +91,7 @@ olsrv2_lan_cleanup(void) {
 struct olsrv2_lan_entry *
 olsrv2_lan_add(struct netaddr *prefix) {
   struct olsrv2_lan_entry *entry;
+  int i;
 
   entry = olsrv2_lan_get(prefix);
   if (entry == NULL) {
@@ -105,7 +106,9 @@ olsrv2_lan_add(struct netaddr *prefix) {
     avl_insert(&olsrv2_lan_tree, &entry->_node);
 
     /* initialize metric with default */
-    entry->outgoing_metric = NHDP_METRIC_DEFAULT;
+    for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
+      entry->outgoing_metric[i] = NHDP_METRIC_DEFAULT;
+    }
   }
 
   return entry;
@@ -202,6 +205,7 @@ _cb_cfg_changed(void) {
   char *value;
   const char *cost_ptr;
   uint32_t cost;
+  int i;
 
   /* mark existing entries as 'old' */
   avl_for_each_element(&olsrv2_lan_tree, lan, _node) {
@@ -236,7 +240,9 @@ _cb_cfg_changed(void) {
       }
     }
 
-    lan->outgoing_metric = cost;
+    for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
+      lan->outgoing_metric[i] = cost;
+    }
     lan->_new = true;
   }
 
