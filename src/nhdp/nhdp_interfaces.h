@@ -67,18 +67,6 @@ struct nhdp_interface {
   /* listener for interface events */
   struct olsr_rfc5444_interface_listener rfc5444_if;
 
-  /*
-   * true if this interface has a neighbors that support only ipv4.
-   * this variable only tracks neighbors with originator addresses.
-   */
-  bool neigh_onlyv4;
-
-  /*
-   * true if this interface has a neighbors that support only ipv6.
-   * this variable only tracks neighbors with originator addresses.
-   */
-  bool neigh_onlyv6;
-
   /* interval between two hellos sent through this interface */
   uint64_t refresh_interval;
 
@@ -141,8 +129,6 @@ EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 
 void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
-
-void nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf);
 
 /**
  * @param interface name

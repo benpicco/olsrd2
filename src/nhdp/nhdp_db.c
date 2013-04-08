@@ -460,13 +460,11 @@ nhdp_db_neighbor_connect_dualstack(
     nhdp_db_neigbor_disconnect_dualstack(n_ipv4);
     n_ipv4->dualstack_partner = n_ipv6;
   }
-  n_ipv4->dualstack_is_ipv4 = true;
 
   if (n_ipv6->dualstack_partner != n_ipv4) {
     nhdp_db_neigbor_disconnect_dualstack(n_ipv6);
     n_ipv6->dualstack_partner = n_ipv4;
   }
-  n_ipv6->dualstack_is_ipv4 = false;
 }
 
 /**
@@ -726,13 +724,11 @@ nhdp_db_link_connect_dualstack(
     nhdp_db_link_disconnect_dualstack(l_ipv4);
     l_ipv4->dualstack_partner = l_ipv6;
   }
-  l_ipv4->dualstack_is_ipv4 = true;
 
   if (l_ipv6->dualstack_partner != l_ipv4) {
     nhdp_db_link_disconnect_dualstack(l_ipv6);
     l_ipv6->dualstack_partner = l_ipv4;
   }
-  l_ipv6->dualstack_is_ipv4 = false;
 }
 
 /**

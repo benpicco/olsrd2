@@ -127,7 +127,7 @@ struct nhdp_domain {
   uint8_t ext;
 
   /* index in the metric array */
-  int _index;
+  int index;
 
   /* list of nhdp domains */
   struct list_entity _node;
@@ -181,7 +181,7 @@ EXPORT void nhdp_domain_update_mprs(void);
  */
 static INLINE struct nhdp_link_domaindata *
 nhdp_domain_get_linkdata(struct nhdp_domain *domain, struct nhdp_link *lnk) {
-  return &lnk->_domaindata[domain->_index];
+  return &lnk->_domaindata[domain->index];
 }
 
 /**
@@ -192,7 +192,7 @@ nhdp_domain_get_linkdata(struct nhdp_domain *domain, struct nhdp_link *lnk) {
 static INLINE struct nhdp_neighbor_domaindata *
 nhdp_domain_get_neighbordata(
     struct nhdp_domain *domain, struct nhdp_neighbor *neigh) {
-  return &neigh->_domaindata[domain->_index];
+  return &neigh->_domaindata[domain->index];
 }
 
 /**
@@ -203,7 +203,7 @@ nhdp_domain_get_neighbordata(
 static INLINE struct nhdp_l2hop_domaindata *
 nhdp_domain_get_l2hopdata(
     struct nhdp_domain *domain, struct nhdp_l2hop *l2hop) {
-  return &l2hop->_domaindata[domain->_index];
+  return &l2hop->_domaindata[domain->index];
 }
 
 /**
