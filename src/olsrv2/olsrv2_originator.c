@@ -45,10 +45,10 @@ static struct cfg_schema_section _originator_section = {
 
 static struct cfg_schema_entry _originator_entries[] = {
   CFG_MAP_ACL_V4(_config, v4_acl, "originator_v4",
-      "-169.254.0.0/16\0-127.0.0.1\0" ACL_DEFAULT_ACCEPT,
+      OLSRV2_ROUTABLE_IPV4 ACL_DEFAULT_ACCEPT,
       "Filter for router IPv4 originator address"),
   CFG_MAP_ACL_V6(_config, v6_acl, "originator_v6",
-      "-fe80::/10\0-::1\0-ff00::/8\0" ACL_DEFAULT_ACCEPT,
+      OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
       "Filter for router IPv6 originator address"),
   CFG_MAP_CLOCK_MIN(_config, o_hold_time, "originator_hold_time", "30.0",
     "Validity time for former Originator addresses", 100),

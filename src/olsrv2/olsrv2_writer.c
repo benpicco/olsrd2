@@ -161,31 +161,6 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
   OLSR_DEBUG(LOG_OLSRV2_W, "Generate TC");
 }
 
-static void
-_cb_addMessageTLVs(struct rfc5444_writer *writer) {
-  uint8_t vtime_encoded, itime_encoded;
-  struct nhdp_domain *domain;
-
-  /* generate validity time and interval time */
-  itime_encoded = rfc5444_timetlv_encode(olsrv2_get_tc_interval());
-  vtime_encoded = rfc5444_timetlv_encode(olsrv2_get_tc_validity());
-
-  /* update metric version numbers */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    nhdp_domain_update_metric_version(domain);
-  }
-
-  /* allocate space for ANSN tlv */
-  rfc5444_writer_allocate_messagetlv(writer, true,
-      sizeof(uint16_t) * nhdp_domain_get_count());
-
-  /* add validity and interval time TLV */
-  rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
-      &vtime_encoded, sizeof(vtime_encoded));
-  rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_INTERVAL_TIME, 0,
-      &itime_encoded, sizeof(itime_encoded));
-}
-
 /**
  * Selector for outgoing target
  * @param writer rfc5444 writer
@@ -255,8 +230,153 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
 }
 
 static void
-_cb_addAddresses(struct rfc5444_writer *writer __attribute__((unused))) {
+_cb_addMessageTLVs(struct rfc5444_writer *writer) {
+  uint8_t vtime_encoded, itime_encoded;
+  struct nhdp_domain *domain;
 
+  /* generate validity time and interval time */
+  itime_encoded = rfc5444_timetlv_encode(olsrv2_get_tc_interval());
+  vtime_encoded = rfc5444_timetlv_encode(olsrv2_get_tc_validity());
+
+  /* update metric version numbers */
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    nhdp_domain_update_metric_version(domain);
+  }
+
+  /* allocate space for ANSN tlv */
+  rfc5444_writer_allocate_messagetlv(writer, true,
+      sizeof(uint16_t) * nhdp_domain_get_count());
+
+  /* add validity and interval time TLV */
+  rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
+      &vtime_encoded, sizeof(vtime_encoded));
+  rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_INTERVAL_TIME, 0,
+      &itime_encoded, sizeof(itime_encoded));
+}
+
+static void
+_cb_addAddresses(struct rfc5444_writer *writer) {
+  const struct olsr_netaddr_acl *routable_acl;
+  struct rfc5444_writer_address *addr;
+  struct nhdp_neighbor *neigh;
+  struct nhdp_naddr *naddr;
+
+  struct nhdp_neighbor_domaindata *neigh_domain;
+  struct nhdp_domain *domain;
+
+  struct olsrv2_lan_entry *lan;
+  bool advertised[NHDP_MAXIMUM_DOMAINS];
+  bool any_advertised;
+  uint8_t nbr_addrtype_value;
+
+  uint16_t metric_in, metric_out;
+
+  routable_acl = olsrv2_get_routable();
+
+  /* iterate over neighbors */
+  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
+    any_advertised = false;
+    /* calculate advertised array */
+    list_for_each_element(&nhdp_domain_list, domain, _node) {
+      advertised[domain->index] =
+          nhdp_domain_get_neighbordata(domain, neigh)->neigh_is_mpr;
+
+      any_advertised |= advertised[domain->index];
+    }
+
+    if (!any_advertised) {
+      /* neighbor is not advertised */
+      continue;
+    }
+
+    /* iterate over neighbors addresses */
+    avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
+      nbr_addrtype_value = 0;
+
+      if (olsr_acl_check_accept(routable_acl, &naddr->neigh_addr)) {
+        nbr_addrtype_value += RFC5444_NBR_ADDR_TYPE_ROUTABLE;
+      }
+      if (netaddr_cmp(&neigh->originator, &naddr->neigh_addr) == 0) {
+        nbr_addrtype_value += RFC5444_NBR_ADDR_TYPE_ORIGINATOR;
+      }
+
+      if (nbr_addrtype_value == 0) {
+        /* skip this address */
+        continue;
+      }
+
+      addr = rfc5444_writer_add_address(writer, _olsrv2_msgcontent_provider.creator,
+          netaddr_get_binptr(&naddr->neigh_addr),
+          netaddr_get_prefix_length(&naddr->neigh_addr), false);
+      if (addr == NULL) {
+        OLSR_WARN(LOG_OLSRV2_W, "Out of memory error for olsrv2 address");
+        return;
+      }
+
+      /* add neighbor type TLV */
+      rfc5444_writer_add_addrtlv(writer, addr, &_olsrv2_addrtlvs[IDX_ADDRTLV_NBR_ADDR_TYPE],
+          &nbr_addrtype_value, sizeof(nbr_addrtype_value), false);
+
+      /* add linkmetric TLVs */
+      list_for_each_element(&nhdp_domain_list, domain, _node) {
+        neigh_domain = nhdp_domain_get_neighbordata(domain, neigh);
+
+        metric_in = rfc5444_metric_encode(neigh_domain->metric.in);
+        metric_out = rfc5444_metric_encode(neigh_domain->metric.out);
+
+        if (!advertised[domain->index]) {
+          /* just put in an empty metric so we don't need to start a second TLV */
+          metric_in = 0;
+
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+              &metric_in, sizeof(metric_in), false);
+        }
+        else if (metric_in == metric_out) {
+          /* incoming and outgoing metric are the same */
+          metric_in |= RFC5444_LINKMETRIC_INCOMING_NEIGH;
+          metric_in |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
+
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+              &metric_in, sizeof(metric_in), false);
+        }
+        else {
+          /* different metrics for incoming and outgoing link */
+          metric_in |= RFC5444_LINKMETRIC_INCOMING_NEIGH;
+          metric_out |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
+
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+              &metric_in, sizeof(metric_in), false);
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[1],
+              &metric_out, sizeof(metric_out), false);
+        }
+      }
+    }
+  }
+
+  /* Iterate over locally attached networks */
+  avl_for_each_element(&olsrv2_lan_tree, lan, _node) {
+    addr = rfc5444_writer_add_address(writer, _olsrv2_msgcontent_provider.creator,
+        netaddr_get_binptr(&lan->prefix),
+        netaddr_get_prefix_length(&lan->prefix), false);
+    if (addr == NULL) {
+      OLSR_WARN(LOG_OLSRV2_W, "Out of memory error for olsrv2 address");
+      return;
+    }
+
+    /* add Gateway TLV and Metric TLV */
+    list_for_each_element(&nhdp_domain_list, domain, _node) {
+      metric_out = rfc5444_metric_encode(lan->outgoing_metric[domain->index]);
+      metric_out |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
+
+      /* add Metric TLV */
+      rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+          &metric_out, sizeof(metric_out), false);
+
+      /* add Gateway TLV */
+      rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[2],
+          &lan->distance[domain->index], 1, false);
+    }
+  }
 }
 
 static void

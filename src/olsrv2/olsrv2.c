@@ -43,6 +43,7 @@
 #include "common/netaddr.h"
 #include "config/cfg_schema.h"
 #include "core/olsr_logging.h"
+#include "core/olsr_netaddr_acl.h"
 #include "core/olsr_subsystem.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
@@ -59,6 +60,8 @@
 struct _config {
   uint64_t tc_interval;
   uint64_t tc_validity;
+
+  struct olsr_netaddr_acl routable;
 };
 
 /* prototypes */
@@ -76,6 +79,9 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
     "Time between two TC messages", 100),
   CFG_MAP_CLOCK_MIN(_config, tc_validity, "tc_validity", "15.0",
     "Validity time of a TC messages", 100),
+  CFG_MAP_ACL_V46(_config, routable, "routable",
+      OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
+    "Filter to decide which addresses are considered routable"),
 };
 
 static struct _config _olsrv2_config;
@@ -157,6 +163,11 @@ olsrv2_get_tc_validity(void) {
   return _olsrv2_config.tc_validity;
 }
 
+const struct olsr_netaddr_acl *
+olsrv2_get_routable(void) {
+    return &_olsrv2_config.routable;
+}
+
 /**
  * Callback fired when configuration changed
  */
@@ -173,5 +184,5 @@ _cb_cfg_changed(void) {
 
 static void
 _cb_generate_tc(void *ptr __attribute__((unused))) {
-
+  olsrv2_writer_send_tc();
 }

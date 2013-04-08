@@ -25,7 +25,14 @@
 
 #define LOCAL_ATTACHED_NETWORK_KEY "lan"
 
+struct _lan_data {
+  uint32_t metric;
+  uint32_t dist;
+  uint32_t domain;
+};
+
 static void _remove(struct olsrv2_lan_entry *entry);
+static const char *_parse_lan_parameters(struct _lan_data *dst, const char *src);
 static void _cb_cfg_changed(void);
 
 /* olsrv2 LAN configuration */
@@ -37,8 +44,10 @@ static struct cfg_schema_section _olsrv2_section = {
 static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_VALIDATE_LAN(LOCAL_ATTACHED_NETWORK_KEY, "",
       "locally attached network, a combination of an"
-      " ip address or prefix followed by an absolute link cost value"
-      " (in decimal or hex).", .list = true),
+      " ip address or prefix followed by an up to three optional parameters"
+      " which define link metric cost, hopcount distance and domain of the prefix"
+      " ( <metric=...> <dist=...> <domain=...> ).",
+      .list = true),
 };
 
 /* originator set class and timer */
@@ -105,9 +114,10 @@ olsrv2_lan_add(struct netaddr *prefix) {
     entry->_node.key = &entry->prefix;
     avl_insert(&olsrv2_lan_tree, &entry->_node);
 
-    /* initialize metric with default */
+    /* initialize linkcost and distance */
     for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
-      entry->outgoing_metric[i] = NHDP_METRIC_DEFAULT;
+      entry->outgoing_metric[i] = 0;
+      entry->distance[i] = 2;
     }
   }
 
@@ -141,45 +151,55 @@ int
 olsrv2_lan_validate(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out) {
   struct netaddr_str buf;
-  const char *cost_ptr;
-  uint32_t cost;
+  struct _lan_data data;
+  const char *ptr, *result;
 
   if (value == NULL) {
     cfg_schema_validate_netaddr(entry, section_name, value, out);
-    cfg_append_printable_line(out, "    This value is followed by an absolute link cost"
-        "between %u and %u in decimal or hexadecimal",
-        RFC5444_METRIC_MIN, RFC5444_METRIC_MAX);
+    cfg_append_printable_line(out,
+        "    This value is followed by a list of three optional parameters.");
+    cfg_append_printable_line(out,
+        "    - 'metric=<m>' the link metric of the LAN (between %u and %u)."
+        " The default is 0.", RFC5444_METRIC_MIN, RFC5444_METRIC_MAX);
+    cfg_append_printable_line(out,
+        "    - 'domain=<d>' the domain of the LAN (between 0 and 255)."
+        " The default is 0.");
+    cfg_append_printable_line(out,
+        "    - 'dist=<d>' the hopcount distance of the LAN (between 0 and 255)."
+        " The default is 2.");
     return 0;
   }
 
-  cost_ptr = str_cpynextword(buf.buf, value, sizeof(buf));
-
+  ptr = str_cpynextword(buf.buf, value, sizeof(buf));
   if (cfg_schema_validate_netaddr(entry, section_name, value, out)) {
     /* check prefix first */
     return -1;
   }
 
-  if (cost_ptr) {
-    errno = 0;
-    cost = strtol(cost_ptr, NULL, 0);
-
-    if (errno) {
-      cfg_append_printable_line(out, "Illegal linkcost argument for prefix %s: %s",
-          buf.buf, cost_ptr);
-      return -1;
-    }
-
-    if (cost < RFC5444_METRIC_MIN) {
-      cfg_append_printable_line(out, "Linkcost for prefix %s must not be smaller than %u/%x",
-          buf.buf, RFC5444_METRIC_MIN, RFC5444_METRIC_MIN);
-      return -1;
-    }
-    if (cost > RFC5444_METRIC_MAX) {
-      cfg_append_printable_line(out, "Linkcost for prefix %s must not be larger than %u/%x",
-          buf.buf, RFC5444_METRIC_MAX, RFC5444_METRIC_MAX);
-      return -1;
-    }
+  result = _parse_lan_parameters(&data, ptr);
+  if (result) {
+    cfg_append_printable_line(out, "Value '%s' for entry '%s'"
+        " in section %s has %s",
+        value, entry->key.entry, section_name, result);
+    return -1;
   }
+
+  if (data.metric < RFC5444_METRIC_MIN || data.metric > RFC5444_METRIC_MAX) {
+    cfg_append_printable_line(out, "Metric %u for prefix %s must be between %u and %u",
+        data.metric, buf.buf, RFC5444_METRIC_MIN, RFC5444_METRIC_MAX);
+    return -1;
+  }
+  if (data.domain > 255) {
+    cfg_append_printable_line(out,
+        "Domain %u for prefix %s must be between 0 and 255", data.domain, buf.buf);
+    return -1;
+  }
+  if (data.dist > 255) {
+    cfg_append_printable_line(out,
+        "Distance %u for prefix %s must be between 0 and 255", data.dist, buf.buf);
+    return -1;
+  }
+
   return 0;
 }
 
@@ -193,43 +213,81 @@ _remove(struct olsrv2_lan_entry *entry) {
   olsr_class_free(&_lan_class, entry);
 }
 
+
+/**
+ * Parse parameters of lan prefix string
+ * @param dst pointer to data structure to store results.
+ * @param src source string
+ * @return NULL if parser worked without an error, a pointer
+ *   to the suffix of the error message otherwise.
+ */
+static const char *
+_parse_lan_parameters(struct _lan_data *dst, const char *src) {
+  char buffer[64];
+  const char *ptr, *next;
+
+  ptr = src;
+  while (ptr != NULL) {
+    next = str_cpynextword(buffer, ptr, sizeof(buffer));
+
+    if (strncasecmp(buffer, "metric=", 7) == 0) {
+      dst->metric = strtoul(&buffer[7], NULL, 0);
+      if (dst->metric == 0 && errno != 0) {
+        return "an illegal metric parameter";
+      }
+    }
+    else if (strncasecmp(buffer, "domain=", 7) == 0) {
+      dst->domain = strtoul(&buffer[7], NULL, 10);
+      if (dst->domain == 0 && errno != 0) {
+        return "an illegal domain parameter";
+      }
+    }
+    else if (strncasecmp(buffer, "dist=", 5) == 0) {
+      dst->dist = strtoul(&buffer[5], NULL, 10);
+      if (dst->dist == 0 && errno != 0) {
+        return "an illegal distance parameter";
+      }
+    }
+    else {
+      return "an unknown parameter";
+    }
+    ptr = next;
+  }
+  return NULL;
+}
+
 /**
  * Callback handling LAN configuration changes
  */
 static void
 _cb_cfg_changed(void) {
-  struct olsrv2_lan_entry *lan;
+  struct netaddr_str addr_buf;
+  struct olsrv2_lan_entry *lan, *lan_it;
   struct cfg_entry *entry;
-  struct netaddr_str buf;
   struct netaddr prefix;
+  const char *ptr;
   char *value;
-  const char *cost_ptr;
-  uint32_t cost;
-  int i;
 
-  /* mark existing entries as 'old' */
-  avl_for_each_element(&olsrv2_lan_tree, lan, _node) {
-    lan->_new = false;
+  struct _lan_data data;
+
+  /* remove all old entries */
+  avl_for_each_element_safe(&olsrv2_lan_tree, lan, _node, lan_it) {
+    _remove(lan);
   }
 
-  /* run through all new entries */
+  /* run through all post-update entries */
   if (_olsrv2_section.post) {
     entry = cfg_db_get_entry(_olsrv2_section.post, LOCAL_ATTACHED_NETWORK_KEY);
 
     if (entry) {
       FOR_ALL_STRINGS(&entry->val, value) {
         /* extract data */
-        cost_ptr = str_cpynextword(buf.buf, value, sizeof(buf));
-        if (netaddr_from_string(&prefix, buf.buf)) {
+        ptr = str_cpynextword(addr_buf.buf, value, sizeof(addr_buf));
+        if (netaddr_from_string(&prefix, addr_buf.buf)) {
           continue;
         }
-
-        if (cost_ptr) {
-          cost = strtol(cost_ptr, NULL, 0);
-        }
-        else {
-          /* default cost (similar to HNAs in OLSRv1) */
-          cost = 0;
+        if (_parse_lan_parameters(&data, ptr)) {
+          continue;
         }
 
         /* add new entries if necessary */
@@ -237,32 +295,9 @@ _cb_cfg_changed(void) {
         if (!lan) {
           return;
         }
-      }
-    }
 
-    for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
-      lan->outgoing_metric[i] = cost;
-    }
-    lan->_new = true;
-  }
-
-  /* run through all old entries */
-  if (_olsrv2_section.pre) {
-    entry = cfg_db_get_entry(_olsrv2_section.pre, LOCAL_ATTACHED_NETWORK_KEY);
-
-    if (entry) {
-      FOR_ALL_STRINGS(&entry->val, value) {
-        /* extract data */
-        cost_ptr = str_cpynextword(buf.buf, value, sizeof(buf));
-        if (netaddr_from_string(&prefix, buf.buf)) {
-          continue;
-        }
-
-        lan = olsrv2_lan_get(&prefix);
-        if (lan != NULL && !lan->_new) {
-          /* remove old entries that are not also in new entries */
-          _remove(lan);
-        }
+        lan->distance[data.domain] = data.dist;
+        lan->outgoing_metric[data.domain] = data.metric;
       }
     }
   }

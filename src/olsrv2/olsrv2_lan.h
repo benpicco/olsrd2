@@ -54,9 +54,9 @@ struct olsrv2_lan_entry {
   struct netaddr prefix;
 
   uint32_t outgoing_metric[NHDP_MAXIMUM_DOMAINS];
+  uint8_t distance[NHDP_MAXIMUM_DOMAINS];
 
   struct avl_node _node;
-  bool _new;
 };
 
 EXPORT extern struct avl_tree olsrv2_lan_tree;
@@ -79,6 +79,5 @@ olsrv2_lan_get(struct netaddr *addr) {
   struct olsrv2_lan_entry *entry;
   return avl_find_element(&olsrv2_lan_tree, addr, entry, _node);
 }
-
 
 #endif /* OLSRV2_LAN_H_ */

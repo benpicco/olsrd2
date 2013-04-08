@@ -45,10 +45,14 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
+#include "core/olsr_netaddr_acl.h"
+
 #include "nhdp/nhdp_domain.h"
 
 #define CFG_OLSRV2_SECTION "olsrv2"
 
+#define OLSRV2_ROUTABLE_IPV4 "-169.254.0.0/16\0-127.0.0.1\0-224.0.0.0/12\0"
+#define OLSRV2_ROUTABLE_IPV6 "-fe80::/10\0-::1\0-ff00::/8\0"
 EXPORT extern enum log_source LOG_OLSRV2;
 
 int olsrv2_init(void) __attribute__((warn_unused_result));;
@@ -56,5 +60,6 @@ void olsrv2_cleanup(void);
 
 EXPORT uint64_t olsrv2_get_tc_interval(void);
 EXPORT uint64_t olsrv2_get_tc_validity(void);
+EXPORT const struct olsr_netaddr_acl *olsrv2_get_routable(void);
 
 #endif /* OLSRV2_H_ */
