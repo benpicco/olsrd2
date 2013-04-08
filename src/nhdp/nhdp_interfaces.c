@@ -165,22 +165,24 @@ nhdp_interfaces_cleanup(void) {
 void
 nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf) {
   struct nhdp_link *lnk;
-  struct nhdp_laddr *addr;
-  bool v4only;
 
   interf->neigh_onlyv4 = false;
+  interf->neigh_onlyv6 = false;
 
   list_for_each_element(&interf->_links, lnk, _if_node) {
-    v4only = true;
-
-    avl_for_each_element(&lnk->_addresses, addr, _link_node) {
-      if (netaddr_get_address_family(&addr->link_addr) == AF_INET6) {
-        v4only = false;
-        break;
-      }
+    if (lnk->neigh->dualstack_partner != NULL) {
+     /* dualstack node */
+      continue;
     }
 
-    interf->neigh_onlyv4 |= v4only;
+    if (netaddr_get_address_family(&lnk->neigh->originator) == AF_INET) {
+      /* IPv4 only neighbor */
+      interf->neigh_onlyv4 = true;
+    }
+    else if (netaddr_get_address_family(&lnk->neigh->originator) == AF_INET6) {
+      /* IPv6 only neighbor */
+      interf->neigh_onlyv6 = true;
+    }
   }
 }
 
