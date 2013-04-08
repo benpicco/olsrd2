@@ -147,6 +147,16 @@ olsrv2_cleanup(void) {
   olsrv2_lan_cleanup();
 }
 
+uint64_t
+olsrv2_get_tc_interval(void) {
+  return _olsrv2_config.tc_interval;
+}
+
+uint64_t
+olsrv2_get_tc_validity(void) {
+  return _olsrv2_config.tc_validity;
+}
+
 /**
  * Callback fired when configuration changed
  */

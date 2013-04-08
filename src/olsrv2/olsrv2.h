@@ -45,11 +45,16 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
+#include "nhdp/nhdp_domain.h"
+
 #define CFG_OLSRV2_SECTION "olsrv2"
 
 EXPORT extern enum log_source LOG_OLSRV2;
 
 int olsrv2_init(void) __attribute__((warn_unused_result));;
 void olsrv2_cleanup(void);
+
+EXPORT uint64_t olsrv2_get_tc_interval(void);
+EXPORT uint64_t olsrv2_get_tc_validity(void);
 
 #endif /* OLSRV2_H_ */

@@ -48,4 +48,6 @@ int olsrv2_writer_init(struct olsr_rfc5444_protocol *)
   __attribute__((warn_unused_result));
 void olsrv2_writer_cleanup(void);
 
+EXPORT void olsrv2_writer_send_tc(void);
+
 #endif /* OLSRV2_WRITER_H_ */
