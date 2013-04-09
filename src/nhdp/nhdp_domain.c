@@ -299,6 +299,8 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
 
   /* initialize flooding MPR settings */
   neigh->flooding_willingness = _flooding_mpr->willingness;
+  neigh->local_is_flooding_mpr = _flooding_mpr->mprs_start;
+  neigh->neigh_is_flooding_mpr = _flooding_mpr->mpr_start;
 
   /* initialize metrics and mprs */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
@@ -307,10 +309,9 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
     data->metric.in = domain->metric->incoming_link_start;
     data->metric.out = domain->metric->outgoing_link_start;
 
+    data->willingness = domain->mpr->willingness;
     data->local_is_mpr = domain->mpr->mprs_start;
     data->neigh_is_mpr = domain->mpr->mpr_start;
-
-    data->willingness = domain->mpr->willingness;
   }
 }
 
@@ -408,7 +409,6 @@ nhdp_domain_calculate_neighbor_metric(
 void
 nhdp_domain_process_mpr_tlv(struct nhdp_domain *domain,
     struct nhdp_link *lnk, uint8_t tlvvalue) {
-
   if (domain->ext == _flooding_ext) {
     lnk->neigh->local_is_flooding_mpr =
         tlvvalue == RFC5444_MPR_FLOODING

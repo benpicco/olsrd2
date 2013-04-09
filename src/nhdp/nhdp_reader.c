@@ -215,8 +215,6 @@ nhdp_reader_cleanup(void) {
       &_protocol->reader, &_nhdp_address_pass1_consumer);
   rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_message_pass1_consumer);
-
-  olsr_rfc5444_remove_protocol(_protocol);
 }
 
 /**

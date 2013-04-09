@@ -54,6 +54,7 @@
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_lan.h"
 #include "olsrv2/olsrv2_originator.h"
+#include "olsrv2/olsrv2_reader.h"
 #include "olsrv2/olsrv2_writer.h"
 
 /* definitions */
@@ -129,8 +130,9 @@ olsrv2_init(void) {
     return -1;
   }
 
-  olsrv2_originator_init();
   olsrv2_lan_init();
+  olsrv2_originator_init();
+  olsrv2_reader_init(_protocol);
 
   /* add configuration for olsrv2 section */
   cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
@@ -154,6 +156,7 @@ olsrv2_cleanup(void) {
   /* cleanup configuration */
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
 
+  olsrv2_reader_cleanup();
   olsrv2_originator_cleanup();
   olsrv2_lan_cleanup();
 }
@@ -179,13 +182,17 @@ olsrv2_mpr_forwarding_callback(struct rfc5444_reader_tlvblock_context *context) 
   struct netaddr originator;
   enum olsr_duplicate_result dup_result;
 
+  OLSR_DEBUG(LOG_OLSRV2, "forwarding callback");
+
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
+    OLSR_DEBUG(LOG_OLSRV2, "Originator/Sequence number is missing!");
     return false;
   }
 
   /* convert originator into binary */
   if (netaddr_from_binary(&originator, context->orig_addr, context->addr_len, 0)) {
+    OLSR_DEBUG(LOG_OLSRV2, "cannot convert originator");
     return false;
   }
 
@@ -193,16 +200,20 @@ olsrv2_mpr_forwarding_callback(struct rfc5444_reader_tlvblock_context *context) 
   dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
       context->msg_type, &originator, context->seqno, _olsrv2_config.f_hold_time);
   if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
+    OLSR_DEBUG(LOG_OLSRV2, "Dupset retuned %d", dup_result);
     return false;
   }
 
   /* get NHDP neighbor */
   neigh = nhdp_db_neighbor_get_by_originator(&originator);
   if (neigh == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Cannot find neighbor for originator");
     return false;
   }
 
   /* forward if this neighbor has selected us as a flooding MPR */
+  OLSR_DEBUG(LOG_OLSRV2, "Local flodding is '%s'",
+      neigh->local_is_flooding_mpr ? "on" : "off");
   return neigh->local_is_flooding_mpr;
 }
 
@@ -210,25 +221,41 @@ bool
 olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
-  bool is_ipv4;
+  bool is_ipv4, flood;
+  struct netaddr_str buf;
+
   target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
+
+  OLSR_DEBUG(LOG_OLSRV2, "forwarding selector %s", target->interface->name);
 
   /* test if this is the ipv4 multicast target */
   is_ipv4 = target == target->interface->multicast4;
 
   /* only forward to multicast targets */
   if (!is_ipv4 && target != target->interface->multicast6) {
+    OLSR_DEBUG(LOG_OLSRV2, "Target is unicast");
     return false;
   }
 
   /* get NHDP interface for target */
   interf = nhdp_interface_get(target->interface->name);
   if (interf == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Cannot find interface %s", target->interface->name);
     return NULL;
   }
 
   /* lookup flooding cache in NHDP interface */
-  return is_ipv4 ? interf->use_ipv4_for_flooding : interf->use_ipv6_for_flooding;
+  if (is_ipv4) {
+    flood = interf->use_ipv4_for_flooding;
+  }
+  else {
+    flood =  interf->use_ipv6_for_flooding;
+  }
+
+  OLSR_DEBUG(LOG_OLSRV2, "Flooding to target %s: %s",
+      netaddr_to_string(&buf, &target->dst), flood ? "yes" : "no");
+
+  return flood;
 }
 
 /**
