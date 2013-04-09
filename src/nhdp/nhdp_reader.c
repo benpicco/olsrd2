@@ -948,6 +948,9 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute_
     nhdp_domain_calculate_neighbor_metric(domain, _current.neighbor);
   }
 
+  /* update ip flooding settings */
+  nhdp_interface_update_status(_current.localif);
+
   /* update link status */
   nhdp_db_link_update_status(_current.link);
 

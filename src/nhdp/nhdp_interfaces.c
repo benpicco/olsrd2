@@ -160,6 +160,38 @@ nhdp_interfaces_cleanup(void) {
 }
 
 /**
+ * Recalculates if IPv4 or IPv6 should be used on an interface
+ * for flooding messages.
+ * @param interf pointer to nhdp interface
+ */
+void
+nhdp_interface_update_status(struct nhdp_interface *interf) {
+  struct nhdp_link *lnk;
+
+  interf->use_ipv4_for_flooding = false;
+  interf->use_ipv6_for_flooding = false;
+
+  list_for_each_element(&interf->_links, lnk, _if_node) {
+    if (lnk->status != NHDP_LINK_SYMMETRIC) {
+      /* link is not symmetric */
+      continue;
+    }
+
+    /* originator can be AF_UNSPEC, so we cannot use "else" */
+    if (netaddr_get_address_family(&lnk->neigh->originator) == AF_INET
+        && lnk->dualstack_partner == NULL) {
+      /* ipv4 neighbor without dualstack */
+      interf->use_ipv4_for_flooding = true;
+    }
+    if (netaddr_get_address_family(&lnk->neigh->originator) == AF_INET6
+        || lnk->dualstack_partner != NULL) {
+      /* ipv6 neighbor or dualstack neighbor */
+      interf->use_ipv6_for_flooding = true;
+    }
+  }
+}
+
+/**
  * Add a nhdp interface
  * @param name name of interface
  * @return pointer to nhdp interface, NULL if out of memory

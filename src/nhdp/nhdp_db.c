@@ -765,6 +765,12 @@ nhdp_db_link_update_status(struct nhdp_link *lnk) {
     _link_status_now_symmetric(lnk);
   }
 
+  /* trigger ip flooding interface settings recalculation */
+  if (was_symmetric != (lnk->status == NHDP_LINK_SYMMETRIC)) {
+    nhdp_interface_update_status(lnk->local_if);
+  }
+
+  /* trigger change event */
   olsr_class_event(&_link_info, lnk, OLSR_OBJECT_CHANGED);
 }
 

@@ -49,6 +49,8 @@
 #include "tools/olsr_cfg.h"
 #include "tools/olsr_rfc5444.h"
 
+#include "nhdp/nhdp_interfaces.h"
+
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_lan.h"
 #include "olsrv2/olsrv2_originator.h"
@@ -61,6 +63,7 @@ struct _config {
   uint64_t tc_interval;
   uint64_t tc_validity;
 
+  uint64_t f_hold_time;
   struct olsr_netaddr_acl routable;
 };
 
@@ -79,6 +82,8 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
     "Time between two TC messages", 100),
   CFG_MAP_CLOCK_MIN(_config, tc_validity, "tc_validity", "15.0",
     "Validity time of a TC messages", 100),
+  CFG_MAP_CLOCK_MIN(_config, f_hold_time, "forward_hold_time", "30.0",
+    "Holdtime for forwarding set information", 100),
   CFG_MAP_ACL_V46(_config, routable, "routable",
       OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter to decide which addresses are considered routable"),
@@ -166,6 +171,64 @@ olsrv2_get_tc_validity(void) {
 const struct olsr_netaddr_acl *
 olsrv2_get_routable(void) {
     return &_olsrv2_config.routable;
+}
+
+bool
+olsrv2_mpr_forwarding_callback(struct rfc5444_reader_tlvblock_context *context) {
+  struct nhdp_neighbor *neigh;
+  struct netaddr originator;
+  enum olsr_duplicate_result dup_result;
+
+  /* check if message has originator and sequence number */
+  if (!context->has_origaddr || !context->has_seqno) {
+    return false;
+  }
+
+  /* convert originator into binary */
+  if (netaddr_from_binary(&originator, context->orig_addr, context->addr_len, 0)) {
+    return false;
+  }
+
+  /* check forwarding set */
+  dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
+      context->msg_type, &originator, context->seqno, _olsrv2_config.f_hold_time);
+  if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
+    return false;
+  }
+
+  /* get NHDP neighbor */
+  neigh = nhdp_db_neighbor_get_by_originator(&originator);
+  if (neigh == NULL) {
+    return false;
+  }
+
+  /* forward if this neighbor has selected us as a flooding MPR */
+  return neigh->local_is_flooding_mpr;
+}
+
+bool
+olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
+  struct olsr_rfc5444_target *target;
+  struct nhdp_interface *interf;
+  bool is_ipv4;
+  target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
+
+  /* test if this is the ipv4 multicast target */
+  is_ipv4 = target == target->interface->multicast4;
+
+  /* only forward to multicast targets */
+  if (!is_ipv4 && target != target->interface->multicast6) {
+    return false;
+  }
+
+  /* get NHDP interface for target */
+  interf = nhdp_interface_get(target->interface->name);
+  if (interf == NULL) {
+    return NULL;
+  }
+
+  /* lookup flooding cache in NHDP interface */
+  return is_ipv4 ? interf->use_ipv4_for_flooding : interf->use_ipv6_for_flooding;
 }
 
 /**

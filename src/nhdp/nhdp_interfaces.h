@@ -79,6 +79,13 @@ struct nhdp_interface {
   /* ACL for incoming HELLO messages through this interface */
   struct olsr_netaddr_acl ifaddr_filter;
 
+  /*
+   * true if this interface has a neighbor that should be reached through
+   * IPv4/IPv6 for flooding.
+   */
+  bool use_ipv4_for_flooding;
+  bool use_ipv6_for_flooding;
+
   /* timer for hello generation */
   struct olsr_timer_entry _hello_timer;
 
@@ -129,6 +136,8 @@ EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 
 void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
+
+EXPORT void nhdp_interface_update_status(struct nhdp_interface *);
 
 /**
  * @param interface name
