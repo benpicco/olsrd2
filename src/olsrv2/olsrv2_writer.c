@@ -131,12 +131,15 @@ olsrv2_writer_cleanup(void) {
 
 void
 olsrv2_writer_send_tc(void) {
+
   /* send IPv4 */
+  OLSR_INFO(LOG_OLSRV2_W, "Emit IPv4 TC message.");
   _send_msg_type = AF_INET;
   olsr_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
 
   /* send IPv6 */
-  _send_msg_type = AF_INET;
+  OLSR_INFO(LOG_OLSRV2_W, "Emit IPv6 TC message.");
+  _send_msg_type = AF_INET6;
   olsr_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
 
   _send_msg_type = AF_UNSPEC;
@@ -176,7 +179,12 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
   struct nhdp_link *lnk;
   int target_af_type;
 
+  struct netaddr_str buf;
+
   target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
+
+  OLSR_DEBUG(LOG_OLSRV2_W, "Test if TC should be sent to %s on %s",
+      netaddr_to_string(&buf, &target->dst), target->interface->name);
 
   if (target == target->interface->multicast4) {
     target_af_type = AF_INET;
@@ -186,17 +194,20 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
   }
   else {
     /* do not use unicast targets with this selector */
+    OLSR_DEBUG(LOG_OLSRV2_W, "Target is no multicast target");
     return false;
   }
 
   interf = nhdp_interface_get(target->interface->name);
   if (interf == NULL) {
     /* unknown interface */
+    OLSR_DEBUG(LOG_OLSRV2_W, "Cannot find nhdp interface");
     return false;
   }
 
   if (list_is_empty(&interf->_links)) {
     /* no neighbor */
+    OLSR_DEBUG(LOG_OLSRV2_W, "NHDP interface has no links");
     return false;
   }
 
@@ -217,15 +228,20 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
     if (netaddr_get_address_family(&lnk->neigh->originator) == _send_msg_type
         && lnk->dualstack_partner == NULL) {
       /* link type is right and node is not dualstack */
+      OLSR_DEBUG(LOG_OLSRV2_W, "Found link with AF %s which is not dualstack",
+          _send_msg_type == AF_INET ? "ipv4" : "ipv6");
       return true;
     }
     if (nhdp_db_link_is_ipv6_dualstack(lnk)) {
       /* prefer IPv6 for dualstack neighbors */
+      OLSR_DEBUG(LOG_OLSRV2_W, "Found link with AF ipv6 which is dualstack");
+
       return true;
     }
   }
 
   /* nothing to do with this interface */
+  OLSR_DEBUG(LOG_OLSRV2_W, "No fitting link found, ignore interface");
   return false;
 }
 
@@ -271,6 +287,8 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
   uint16_t metric_in, metric_out;
 
+  struct netaddr_str buf;
+
   routable_acl = olsrv2_get_routable();
 
   /* iterate over neighbors */
@@ -291,6 +309,11 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
     /* iterate over neighbors addresses */
     avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
+      if (netaddr_get_address_family(&naddr->neigh_addr) != _send_msg_type) {
+        /* wrong address family */
+        continue;
+      }
+
       nbr_addrtype_value = 0;
 
       if (olsr_acl_check_accept(routable_acl, &naddr->neigh_addr)) {
@@ -305,6 +328,8 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
         continue;
       }
 
+      OLSR_DEBUG(LOG_OLSRV2_W, "Add address %s to TC",
+          netaddr_to_string(&buf, &naddr->neigh_addr));
       addr = rfc5444_writer_add_address(writer, _olsrv2_msgcontent_provider.creator,
           netaddr_get_binptr(&naddr->neigh_addr),
           netaddr_get_prefix_length(&naddr->neigh_addr), false);
@@ -314,6 +339,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
       }
 
       /* add neighbor type TLV */
+      OLSR_DEBUG(LOG_OLSRV2_W, "Add NBRAddrType TLV with value %u", nbr_addrtype_value);
       rfc5444_writer_add_addrtlv(writer, addr, &_olsrv2_addrtlvs[IDX_ADDRTLV_NBR_ADDR_TYPE],
           &nbr_addrtype_value, sizeof(nbr_addrtype_value), false);
 
@@ -328,6 +354,8 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           /* just put in an empty metric so we don't need to start a second TLV */
           metric_in = 0;
 
+          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+              domain->ext, metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), false);
         }
@@ -336,6 +364,8 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           metric_in |= RFC5444_LINKMETRIC_INCOMING_NEIGH;
           metric_in |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
 
+          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+              domain->ext, metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), false);
         }
@@ -344,8 +374,13 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           metric_in |= RFC5444_LINKMETRIC_INCOMING_NEIGH;
           metric_out |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
 
+          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+              domain->ext, metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), false);
+
+          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+              domain->ext, metric_out);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[1],
               &metric_out, sizeof(metric_out), false);
         }
@@ -355,6 +390,13 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
   /* Iterate over locally attached networks */
   avl_for_each_element(&olsrv2_lan_tree, lan, _node) {
+    if (netaddr_get_address_family(&lan->prefix) != _send_msg_type) {
+      /* wrong address family */
+      continue;
+    }
+
+    OLSR_DEBUG(LOG_OLSRV2_W, "Add address %s to TC",
+        netaddr_to_string(&buf, &lan->prefix));
     addr = rfc5444_writer_add_address(writer, _olsrv2_msgcontent_provider.creator,
         netaddr_get_binptr(&lan->prefix),
         netaddr_get_prefix_length(&lan->prefix), false);
@@ -369,12 +411,16 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
       metric_out |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
 
       /* add Metric TLV */
+      OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+          domain->ext, metric_out);
       rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
           &metric_out, sizeof(metric_out), false);
 
       /* add Gateway TLV */
-      rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[2],
-          &lan->distance[domain->index], 1, false);
+      //OLSR_DEBUG(LOG_OLSRV2_W, "Add Gateway (ext %u) TLV with value 0x%04x",
+      //    domain->ext, metric_in);
+      // rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[2],
+      //    &lan->distance[domain->index], 1, false);
     }
   }
 }
@@ -392,7 +438,7 @@ _cb_finishMessageTLVs(struct rfc5444_writer *writer,
     ansn[domain->index] = htons(domain->version);
   }
 
-  rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_CONT_SEQ_NUM,
+  rfc5444_writer_set_messagetlv(writer, RFC5444_MSGTLV_CONT_SEQ_NUM,
       complete ? RFC5444_CONT_SEQ_NUM_COMPLETE : RFC5444_CONT_SEQ_NUM_INCOMPLETE,
       ansn, sizeof(uint16_t) * nhdp_domain_get_count());
 }
