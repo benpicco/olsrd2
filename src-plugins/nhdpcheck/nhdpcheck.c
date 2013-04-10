@@ -86,11 +86,11 @@ enum {
 };
 
 /* prototypes */
-static enum rfc5444_result _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *,
+static enum rfc5444_result _cb_message_start_callback(
     struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
+static enum rfc5444_result _cb_messagetlvs(
       struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
+static enum rfc5444_result _cb_addresstlvs(
       struct rfc5444_reader_tlvblock_context *context);
 
 /* definition of the RFC5444 reader components */
@@ -187,8 +187,7 @@ _cb_plugin_disable(void) {
  * @return
  */
 static enum rfc5444_result
-_cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context) {
+_cb_message_start_callback(struct rfc5444_reader_tlvblock_context *context) {
   struct nhdp_interface *interf;
 
   interf = nhdp_interface_get(_protocol->input_interface->name);
@@ -226,8 +225,7 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __a
  * @return
  */
 static enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   /* drop message if it has no VTIME TLV or has more than one */
   if (_nhdp_message_tlvs[IDX_TLV_VTIME].tlv == NULL
       || _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->next_entry != NULL) {
@@ -279,8 +277,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
  */
 
 static enum rfc5444_result
-_cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context) {
   struct netaddr_str buf;
   struct netaddr addr;
   uint8_t value;

@@ -65,13 +65,11 @@ enum {
 };
 
 static enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
-      struct rfc5444_reader_tlvblock_context *context);
+_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context);
 
 static enum rfc5444_result
-_cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
-      struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_addresstlvs_end(struct rfc5444_reader_tlvblock_consumer *,
+_cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context);
+static enum rfc5444_result _cb_addresstlvs_end(
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
 
 /* definition of the RFC5444 reader components */
@@ -141,19 +139,16 @@ olsrv2_reader_cleanup(void) {
 }
 
 static enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   return RFC5444_OKAY;
 }
 
 static enum rfc5444_result
-_cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   return RFC5444_OKAY;
 }
 
 static enum rfc5444_result
-_cb_addresstlvs_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context __attribute__((unused)), bool dropped __attribute__((unused))) {
+_cb_addresstlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute__((unused)), bool dropped __attribute__((unused))) {
   return RFC5444_OKAY;
 }

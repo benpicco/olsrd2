@@ -84,20 +84,16 @@ static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t 
 static void _handle_originator(void);
 
 static enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
-      struct rfc5444_reader_tlvblock_context *context);
+_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context);
 
 static enum rfc5444_result
-_cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer,
-      struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *,
+_cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context);
+static enum rfc5444_result _cb_addresstlvs_pass1_end(
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
 
 static enum rfc5444_result _cb_addr_pass2_block(
-    struct rfc5444_reader_tlvblock_consumer *consumer,
       struct rfc5444_reader_tlvblock_context *context);
 static enum rfc5444_result _cb_msg_pass2_end(
-    struct rfc5444_reader_tlvblock_consumer *,
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
 
 /* definition of the RFC5444 reader components */
@@ -361,8 +357,7 @@ _handle_originator(void) {
  * @return see rfc5444_result enum
  */
 static enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context) {
+_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
@@ -450,8 +445,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
  * @return
  */
 static enum rfc5444_result
-_cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context) {
   uint8_t local_if, link_status;
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr;
@@ -551,8 +545,7 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_consumer *consumer __attrib
  * @return
  */
 static enum rfc5444_result
-_cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context, bool dropped) {
+_cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool dropped) {
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr;
 
@@ -768,8 +761,7 @@ _process_domainspecific_2hopdata(struct nhdp_l2hop *l2hop, struct netaddr *addr)
  * @return
  */
 static enum rfc5444_result
-_cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_addr_pass2_block(struct rfc5444_reader_tlvblock_context *context) {
   uint8_t local_if, link_status, other_neigh;
   struct nhdp_l2hop *l2hop;
   struct netaddr addr;
@@ -848,8 +840,7 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_consumer *consumer __attribu
  * @return
  */
 static enum rfc5444_result
-_cb_msg_pass2_end(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context, bool dropped) {
+_cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped) {
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr, *la_it;
   struct nhdp_l2hop *twohop, *twohop_it;

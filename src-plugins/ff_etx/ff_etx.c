@@ -124,7 +124,6 @@ static void _cb_etx_sampling(void *);
 static void _cb_hello_lost(void *);
 
 static enum rfc5444_result _cb_process_packet(
-    struct rfc5444_reader_tlvblock_consumer *,
       struct rfc5444_reader_tlvblock_context *context);
 
 static const char *_to_string(
@@ -478,8 +477,7 @@ _cb_hello_lost(void *ptr) {
  * @return
  */
 static enum rfc5444_result
-_cb_process_packet(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context) {
+_cb_process_packet(struct rfc5444_reader_tlvblock_context *context) {
   struct link_etxff_data *ldata;
   struct nhdp_interface *interf;
   struct nhdp_laddr *laddr;
