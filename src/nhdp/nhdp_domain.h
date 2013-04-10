@@ -49,6 +49,8 @@
 
 #include "nhdp/nhdp_db.h"
 
+#define NHDP_CLASS_DOMAIN             "nhdp_domain"
+
 /* Buffer for string representation of a linkmetric value */
 struct nhdp_metric_str {
   char buf[128];

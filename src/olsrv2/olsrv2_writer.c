@@ -43,6 +43,7 @@
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_writer.h"
+#include "core/olsr_class.h"
 #include "core/olsr_logging.h"
 #include "tools/olsr_rfc5444.h"
 
@@ -65,6 +66,8 @@ enum {
 static bool _cb_tc_interface_selector(struct rfc5444_writer *,
     struct rfc5444_writer_target *rfc5444_target, void *ptr);
 
+static void _cb_initialize_gatewaytlv(void *);
+
 static void _cb_addMessageHeader(
     struct rfc5444_writer *, struct rfc5444_writer_message *);
 static void _cb_addMessageTLVs(struct rfc5444_writer *);
@@ -86,6 +89,16 @@ static struct rfc5444_writer_content_provider _olsrv2_msgcontent_provider = {
 static struct rfc5444_writer_tlvtype _olsrv2_addrtlvs[] = {
   [IDX_ADDRTLV_NBR_ADDR_TYPE] =  { .type = RFC5444_ADDRTLV_NBR_ADDR_TYPE },
   [IDX_ADDRTLV_GATEWAY]       =  { .type = RFC5444_ADDRTLV_GATEWAY },
+};
+
+/* handling of gateway TLVs (they are domain specific) */
+static struct rfc5444_writer_tlvtype _gateway_addrtlvs[NHDP_MAXIMUM_DOMAINS];
+
+static struct olsr_class_listener _domain_listener = {
+  .name = "olsrv2 writer",
+  .class_name = NHDP_CLASS_DOMAIN,
+
+  .cb_add = _cb_initialize_gatewaytlv,
 };
 
 static int _send_msg_type;
@@ -119,11 +132,24 @@ olsrv2_writer_init(struct olsr_rfc5444_protocol *protocol) {
     rfc5444_writer_unregister_message(&_protocol->writer, _olsrv2_message);
     return -1;
   }
+
+  olsr_class_listener_add(&_domain_listener);
   return 0;
 }
 
 void
 olsrv2_writer_cleanup(void) {
+  int i;
+
+  olsr_class_listener_remove(&_domain_listener);
+
+  /* unregister address tlvs */
+  for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
+    if (_gateway_addrtlvs[i].type) {
+      rfc5444_writer_unregister_addrtlvtype(&_protocol->writer, &_gateway_addrtlvs[i]);
+    }
+  }
+
   /* remove pbb writer */
   rfc5444_writer_unregister_content_provider(
       &_protocol->writer, &_olsrv2_msgcontent_provider,
@@ -145,6 +171,17 @@ olsrv2_writer_send_tc(void) {
   olsr_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
 
   _send_msg_type = AF_UNSPEC;
+}
+
+static void
+_cb_initialize_gatewaytlv(void *ptr) {
+  struct nhdp_domain *domain = ptr;
+
+  _gateway_addrtlvs[domain->index].type = RFC5444_ADDRTLV_GATEWAY;
+  _gateway_addrtlvs[domain->index].exttype = domain->ext;
+
+  rfc5444_writer_register_addrtlvtype(&_protocol->writer,
+      &_gateway_addrtlvs[domain->index], RFC5444_MSGTYPE_TC);
 }
 
 static void
@@ -419,10 +456,10 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           &metric_out, sizeof(metric_out), false);
 
       /* add Gateway TLV */
-      // TODO !!! OLSR_DEBUG(LOG_OLSRV2_W, "Add Gateway (ext %u) TLV with value 0x%04x",
-      //    domain->ext, metric_in);
-      // rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[2],
-      //    &lan->distance[domain->index], 1, false);
+      OLSR_DEBUG(LOG_OLSRV2_W, "Add Gateway (ext %u) TLV with value 0x%04x",
+          domain->ext, metric_in);
+      rfc5444_writer_add_addrtlv(writer, addr, &_gateway_addrtlvs[domain->index],
+          &lan->distance[domain->index], 1, false);
     }
   }
 }

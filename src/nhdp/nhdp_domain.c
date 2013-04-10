@@ -44,6 +44,7 @@
 #include "common/common_types.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
+#include "core/olsr_class.h"
 #include "core/olsr_logging.h"
 
 #include "nhdp/nhdp_db.h"
@@ -52,6 +53,12 @@
 
 static struct nhdp_domain *_get_new_domain(uint8_t ext);
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
+
+/* domain class */
+struct olsr_class _domain_class = {
+  .name = "NHDP domains",
+  .size = sizeof(struct nhdp_domain),
+};
 
 /* default metric handler (hopcount) */
 static struct nhdp_domain_metric _no_metric = {
@@ -95,6 +102,7 @@ void
 nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
   _protocol = p;
 
+  olsr_class_add(&_domain_class);
   list_init_head(&nhdp_domain_list);
 }
 
@@ -108,8 +116,10 @@ nhdp_domain_cleanup(void) {
   list_for_each_element_safe(&nhdp_domain_list, domain, _node, d_it) {
     /* remove metric */
     list_remove(&domain->_node);
-    free(domain);
+    olsr_class_free(&_domain_class, domain);
   }
+
+  olsr_class_remove(&_domain_class);
 }
 
 /**
@@ -170,6 +180,8 @@ nhdp_domain_metric_add(struct nhdp_domain_metric *metric, uint8_t ext) {
   if (metric->to_string == NULL) {
     metric->to_string = _to_string;
   }
+
+  olsr_class_event(&_domain_class, domain, OLSR_OBJECT_CHANGED);
 
   return domain;
 }
@@ -547,6 +559,8 @@ _get_new_domain(uint8_t ext) {
     domain->mpr = &_no_mprs;
 
     list_add_tail(&nhdp_domain_list, &domain->_node);
+
+    olsr_class_event(&_domain_class, domain, OLSR_OBJECT_ADDED);
   }
   return domain;
 }
