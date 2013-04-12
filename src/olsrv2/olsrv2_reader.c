@@ -46,6 +46,7 @@
 #include "rfc5444/rfc5444_reader.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
+#include "tools/olsr_duplicate_set.h"
 #include "tools/olsr_rfc5444.h"
 
 #include "olsrv2/olsrv2_reader.h"
@@ -139,7 +140,22 @@ olsrv2_reader_cleanup(void) {
 }
 
 static enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
+  //enum olsr_duplicate_result result;
+  struct netaddr originator;
+
+  if (!context->has_origaddr || !context->has_hopcount
+      || !context->has_hoplimit || !context->has_seqno) {
+    return RFC5444_DROP_MESSAGE;
+  }
+
+  if (netaddr_from_binary(&originator,
+      context->orig_addr, context->addr_len, 0)) {
+    return RFC5444_DROP_MESSAGE;
+  }
+
+//  result = olsr_duplicate_entry_add(&_protocol->processed_set,
+//      context->msg_type, &originator, context->seqno,
   return RFC5444_OKAY;
 }
 

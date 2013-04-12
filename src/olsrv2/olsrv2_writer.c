@@ -121,7 +121,6 @@ olsrv2_writer_init(struct olsr_rfc5444_protocol *protocol) {
   }
 
   _olsrv2_message->addMessageHeader = _cb_addMessageHeader;
-  _olsrv2_message->shall_forward = olsrv2_mpr_forwarding_callback;
   _olsrv2_message->forward_target_selector = olsrv2_mpr_forwarding_selector;
 
   if (rfc5444_writer_register_msgcontentprovider(

@@ -65,6 +65,7 @@ struct _config {
   uint64_t tc_validity;
 
   uint64_t f_hold_time;
+  uint64_t p_hold_time;
   struct olsr_netaddr_acl routable;
 };
 
@@ -83,8 +84,10 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
     "Time between two TC messages", 100),
   CFG_MAP_CLOCK_MIN(_config, tc_validity, "tc_validity", "15.0",
     "Validity time of a TC messages", 100),
-  CFG_MAP_CLOCK_MIN(_config, f_hold_time, "forward_hold_time", "30.0",
+  CFG_MAP_CLOCK_MIN(_config, f_hold_time, "forward_hold_time", "300.0",
     "Holdtime for forwarding set information", 100),
+    CFG_MAP_CLOCK_MIN(_config, p_hold_time, "processing_hold_time", "300.0",
+      "Holdtime for processing set information", 100),
   CFG_MAP_ACL_V46(_config, routable, "routable",
       OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter to decide which addresses are considered routable"),
@@ -177,12 +180,12 @@ olsrv2_get_routable(void) {
 }
 
 bool
-olsrv2_mpr_forwarding_callback(struct rfc5444_reader_tlvblock_context *context) {
-  struct nhdp_neighbor *neigh;
+olsrv2_mpr_shall_process(
+    struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   struct netaddr originator;
   enum olsr_duplicate_result dup_result;
 
-  OLSR_DEBUG(LOG_OLSRV2, "forwarding callback");
+  OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be processed");
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
@@ -198,9 +201,41 @@ olsrv2_mpr_forwarding_callback(struct rfc5444_reader_tlvblock_context *context) 
 
   /* check forwarding set */
   dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
-      context->msg_type, &originator, context->seqno, _olsrv2_config.f_hold_time);
+      context->msg_type, &originator, context->seqno, vtime + _olsrv2_config.f_hold_time);
   if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
-    OLSR_DEBUG(LOG_OLSRV2, "Dupset retuned %d", dup_result);
+    OLSR_DEBUG(LOG_OLSRV2, "Dupset returned %d", dup_result);
+    return false;
+  }
+
+  return true;
+}
+
+bool
+olsrv2_mpr_shall_forwarding(
+    struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
+  struct nhdp_neighbor *neigh;
+  struct netaddr originator;
+  enum olsr_duplicate_result dup_result;
+
+  OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be forwarded");
+
+  /* check if message has originator and sequence number */
+  if (!context->has_origaddr || !context->has_seqno) {
+    OLSR_DEBUG(LOG_OLSRV2, "Originator/Sequence number is missing!");
+    return false;
+  }
+
+  /* convert originator into binary */
+  if (netaddr_from_binary(&originator, context->orig_addr, context->addr_len, 0)) {
+    OLSR_DEBUG(LOG_OLSRV2, "cannot convert originator");
+    return false;
+  }
+
+  /* check forwarding set */
+  dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
+      context->msg_type, &originator, context->seqno, vtime + _olsrv2_config.f_hold_time);
+  if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
+    OLSR_DEBUG(LOG_OLSRV2, "Dupset returned %d", dup_result);
     return false;
   }
 
