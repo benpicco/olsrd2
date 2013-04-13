@@ -77,48 +77,64 @@ static int mainloop() {
 void main() {
 
   /* initialize basic framework */
+puts("os_syslog_init");
   os_syslog_init();
+puts("olsr_class_init");
   olsr_class_init();
+puts("os_clock_init");
   if (os_clock_init()) {
     goto olsrd_cleanup;
   }
+puts("olsr_clock_init");
   if (olsr_clock_init()) {
     goto olsrd_cleanup;
   }
+puts("olsr_timer_init");
   olsr_timer_init();
+puts("olsr_socket_init");
   olsr_socket_init();
+puts("olsr_packet_init");
   olsr_packet_init();
+puts("olsr_stream_init");
   olsr_stream_init();
 
   /* activate os-specific code */
+puts("os_system_init");
   if (os_system_init()) {
     goto olsrd_cleanup;
   }
 
+puts("os_routing_init");
   if (os_routing_init()) {
     goto olsrd_cleanup;
   }
 
+puts("os_net_init");
   if (os_net_init()) {
     goto olsrd_cleanup;
   }
 
   /* activate interface listening system */
+puts("olsr_interface_init");
   olsr_interface_init();
 
   /* activate rfc5444 scheduler */
+puts("olsr_rfc5444_init");
   if (olsr_rfc5444_init()) {
     goto olsrd_cleanup;
   }
 
+puts("nhdp_init");
   if (nhdp_init()) {
     goto olsrd_cleanup;
   }
 
   /* activate mainloop */
+puts("starting mainloop");
   mainloop();
 
 olsrd_cleanup:
+puts("ERROR - olsrd_cleanup called");
   /* free framework resources */
   olsr_rfc5444_cleanup();
   olsr_interface_cleanup();
