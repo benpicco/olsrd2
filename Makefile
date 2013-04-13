@@ -1,6 +1,9 @@
 ifneq (,$(findstring olsr_nhdp,$(USEMODULE)))
 	DIRS += src/nhdp
 endif
+ifneq (,$(findstring olsr_olsrv2,$(USEMODULE)))
+	DIRS += src/olsrv2
+endif
 ifneq (,$(findstring olsr_ff_ext,$(USEMODULE)))
 	DIRS += src-plugins/ff_ext
 endif
