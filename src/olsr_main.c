@@ -284,6 +284,9 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
+  /* activate duplicate handling code */
+  olsr_duplicate_set_init();
+
   /* activate telnet and http */
   olsr_telnet_init();
   olsr_http_init();
@@ -332,6 +335,7 @@ olsrd_cleanup:
   /* free framework resources */
   olsr_http_cleanup();
   olsr_telnet_cleanup();
+  olsr_duplicate_set_cleanup();
   olsr_rfc5444_cleanup();
   olsr_interface_cleanup();
   os_net_cleanup();

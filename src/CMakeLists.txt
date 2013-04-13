@@ -13,6 +13,12 @@ set(OONF_SRCS olsr_main.c
               nhdp/nhdp_interfaces.c
               nhdp/nhdp_reader.c
               nhdp/nhdp_writer.c
+              
+              olsrv2/olsrv2.c
+              olsrv2/olsrv2_lan.c
+              olsrv2/olsrv2_originator.c
+              olsrv2/olsrv2_reader.c
+              olsrv2/olsrv2_writer.c
               )
 
 # create executable

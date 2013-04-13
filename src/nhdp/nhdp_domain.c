@@ -44,6 +44,7 @@
 #include "common/common_types.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
+#include "core/olsr_class.h"
 #include "core/olsr_logging.h"
 
 #include "nhdp/nhdp_db.h"
@@ -52,6 +53,12 @@
 
 static struct nhdp_domain *_get_new_domain(uint8_t ext);
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
+
+/* domain class */
+struct olsr_class _domain_class = {
+  .name = "NHDP domains",
+  .size = sizeof(struct nhdp_domain),
+};
 
 /* default metric handler (hopcount) */
 static struct nhdp_domain_metric _no_metric = {
@@ -95,6 +102,7 @@ void
 nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
   _protocol = p;
 
+  olsr_class_add(&_domain_class);
   list_init_head(&nhdp_domain_list);
 }
 
@@ -108,8 +116,10 @@ nhdp_domain_cleanup(void) {
   list_for_each_element_safe(&nhdp_domain_list, domain, _node, d_it) {
     /* remove metric */
     list_remove(&domain->_node);
-    free(domain);
+    olsr_class_free(&_domain_class, domain);
   }
+
+  olsr_class_remove(&_domain_class);
 }
 
 /**
@@ -170,6 +180,8 @@ nhdp_domain_metric_add(struct nhdp_domain_metric *metric, uint8_t ext) {
   if (metric->to_string == NULL) {
     metric->to_string = _to_string;
   }
+
+  olsr_class_event(&_domain_class, domain, OLSR_OBJECT_CHANGED);
 
   return domain;
 }
@@ -299,6 +311,8 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
 
   /* initialize flooding MPR settings */
   neigh->flooding_willingness = _flooding_mpr->willingness;
+  neigh->local_is_flooding_mpr = _flooding_mpr->mprs_start;
+  neigh->neigh_is_flooding_mpr = _flooding_mpr->mpr_start;
 
   /* initialize metrics and mprs */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
@@ -307,10 +321,9 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
     data->metric.in = domain->metric->incoming_link_start;
     data->metric.out = domain->metric->outgoing_link_start;
 
+    data->willingness = domain->mpr->willingness;
     data->local_is_mpr = domain->mpr->mprs_start;
     data->neigh_is_mpr = domain->mpr->mpr_start;
-
-    data->willingness = domain->mpr->willingness;
   }
 }
 
@@ -408,7 +421,6 @@ nhdp_domain_calculate_neighbor_metric(
 void
 nhdp_domain_process_mpr_tlv(struct nhdp_domain *domain,
     struct nhdp_link *lnk, uint8_t tlvvalue) {
-
   if (domain->ext == _flooding_ext) {
     lnk->neigh->local_is_flooding_mpr =
         tlvvalue == RFC5444_MPR_FLOODING
@@ -542,11 +554,13 @@ _get_new_domain(uint8_t ext) {
     /* initialize new domain */
     domain = calloc(1, sizeof(struct nhdp_domain));
     domain->ext = ext;
-    domain->_index = _domain_counter++;
+    domain->index = _domain_counter++;
     domain->metric = &_no_metric;
     domain->mpr = &_no_mprs;
 
     list_add_tail(&nhdp_domain_list, &domain->_node);
+
+    olsr_class_event(&_domain_class, domain, OLSR_OBJECT_ADDED);
   }
   return domain;
 }

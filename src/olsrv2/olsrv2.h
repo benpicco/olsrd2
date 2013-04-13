@@ -39,73 +39,32 @@
  *
  */
 
+#ifndef OLSRV2_H_
+#define OLSRV2_H_
+
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
+#include "common/netaddr.h"
 
-#include "nhdp/nhdp.h"
-#include "olsrv2/olsrv2.h"
+#include "core/olsr_netaddr_acl.h"
 
-#include "olsr_setup.h"
+#include "nhdp/nhdp_domain.h"
 
+#define CFG_OLSRV2_SECTION "olsrv2"
 
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
-};
+#define OLSRV2_ROUTABLE_IPV4 "-169.254.0.0/16\0-127.0.0.1\0-224.0.0.0/12\0"
+#define OLSRV2_ROUTABLE_IPV6 "-fe80::/10\0-::1\0-ff00::/8\0"
+EXPORT extern enum log_source LOG_OLSRV2;
 
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
+int olsrv2_init(void) __attribute__((warn_unused_result));;
+void olsrv2_cleanup(void);
 
-/**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
- */
-int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
+EXPORT uint64_t olsrv2_get_tc_interval(void);
+EXPORT uint64_t olsrv2_get_tc_validity(void);
+EXPORT const struct olsr_netaddr_acl *olsrv2_get_routable(void);
+EXPORT bool olsrv2_mpr_shall_process(
+    struct rfc5444_reader_tlvblock_context *, uint64_t vtime);
+EXPORT bool olsrv2_mpr_shall_forwarding(
+    struct rfc5444_reader_tlvblock_context *, uint64_t vtime);
+EXPORT bool olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *);
 
-  /* add custom service setup here */
-  if (nhdp_init()) {
-    return -1;
-  }
-
-  if (olsrv2_init()) {
-    return -1;
-  }
-
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
-  return 0;
-}
-
-/**
- * Cleanup all resources allocated by setup initialization
- */
-void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
-    return;
-
-  /* add cleanup for custom services here */
-  olsrv2_cleanup();
-  nhdp_cleanup();
-}
-
-/**
- * @return number of logging sources for debug level 1
- */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
-}
-
-/**
- * @return array of logging sources for debug level 1
- */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
-}
+#endif /* OLSRV2_H_ */

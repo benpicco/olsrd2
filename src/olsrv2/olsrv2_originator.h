@@ -39,73 +39,36 @@
  *
  */
 
+#ifndef OLSRV2_ORIGINATOR_SET_H_
+#define OLSRV2_ORIGINATOR_SET_H_
+
+#include "common/avl.h"
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
+#include "common/netaddr.h"
+#include "core/olsr_timer.h"
 
-#include "nhdp/nhdp.h"
-#include "olsrv2/olsrv2.h"
+struct olsrv2_originator_set_entry {
+  struct netaddr originator;
 
-#include "olsr_setup.h"
-
-
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
+  struct avl_node _node;
+  struct olsr_timer_entry _vtime;
 };
 
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
+EXPORT extern struct avl_tree olsrv2_originator_set_tree;
+
+void olsrv2_originator_init(void);
+void olsrv2_originator_cleanup(void);
+
+EXPORT const struct netaddr *olsrv2_originator_get(int af_type);
 
 /**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
+ * @param addr originator address
+ * @return pointer to originator set entry, NULL if not found
  */
-int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
-
-  /* add custom service setup here */
-  if (nhdp_init()) {
-    return -1;
-  }
-
-  if (olsrv2_init()) {
-    return -1;
-  }
-
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
-  return 0;
+static INLINE struct olsrv2_originator_set_entry *
+olsrv2_originator_get_entry(const struct netaddr *addr) {
+  struct olsrv2_originator_set_entry *entry;
+  return avl_find_element(&olsrv2_originator_set_tree, addr, entry, _node);
 }
 
-/**
- * Cleanup all resources allocated by setup initialization
- */
-void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
-    return;
-
-  /* add cleanup for custom services here */
-  olsrv2_cleanup();
-  nhdp_cleanup();
-}
-
-/**
- * @return number of logging sources for debug level 1
- */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
-}
-
-/**
- * @return array of logging sources for debug level 1
- */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
-}
+#endif /* OLSRV2_ORIGINATOR_SET_H_ */

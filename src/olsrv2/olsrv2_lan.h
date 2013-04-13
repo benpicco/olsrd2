@@ -39,73 +39,45 @@
  *
  */
 
+#ifndef OLSRV2_LAN_H_
+#define OLSRV2_LAN_H_
+
+#include "common/avl.h"
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
+#include "common/netaddr.h"
 
 #include "nhdp/nhdp.h"
-#include "olsrv2/olsrv2.h"
 
-#include "olsr_setup.h"
+#define CFG_VALIDATE_LAN(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsrv2_lan_validate, ##args )
 
+struct olsrv2_lan_entry {
+  struct netaddr prefix;
 
-/* define the logging sources that are part of debug level 1 */
-static enum log_source _level_1_sources[] = {
-  LOG_MAIN,
+  uint32_t outgoing_metric[NHDP_MAXIMUM_DOMAINS];
+  uint8_t distance[NHDP_MAXIMUM_DOMAINS];
+
+  struct avl_node _node;
 };
 
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
+EXPORT extern struct avl_tree olsrv2_lan_tree;
+
+void olsrv2_lan_init(void);
+void olsrv2_lan_cleanup(void);
+
+EXPORT struct olsrv2_lan_entry *olsrv2_lan_add(struct netaddr *);
+EXPORT void olsrv2_lan_remove(struct netaddr *);
+
+EXPORT int olsrv2_lan_validate(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
 
 /**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
+ * @param addr originator address
+ * @return pointer to originator set entry, NULL if not found
  */
-int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
-
-  /* add custom service setup here */
-  if (nhdp_init()) {
-    return -1;
-  }
-
-  if (olsrv2_init()) {
-    return -1;
-  }
-
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
-  return 0;
+static INLINE struct olsrv2_lan_entry *
+olsrv2_lan_get(struct netaddr *addr) {
+  struct olsrv2_lan_entry *entry;
+  return avl_find_element(&olsrv2_lan_tree, addr, entry, _node);
 }
 
-/**
- * Cleanup all resources allocated by setup initialization
- */
-void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
-    return;
-
-  /* add cleanup for custom services here */
-  olsrv2_cleanup();
-  nhdp_cleanup();
-}
-
-/**
- * @return number of logging sources for debug level 1
- */
-size_t
-olsr_setup_get_level1count(void) {
-  return ARRAYSIZE(_level_1_sources);
-}
-
-/**
- * @return array of logging sources for debug level 1
- */
-enum log_source *
-olsr_setup_get_level1_logs(void) {
-  return _level_1_sources;
-}
+#endif /* OLSRV2_LAN_H_ */

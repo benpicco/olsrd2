@@ -86,11 +86,11 @@ enum {
 };
 
 /* prototypes */
-static enum rfc5444_result _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *,
+static enum rfc5444_result _cb_message_start_callback(
     struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
+static enum rfc5444_result _cb_messagetlvs(
       struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer,
+static enum rfc5444_result _cb_addresstlvs(
       struct rfc5444_reader_tlvblock_context *context);
 
 /* definition of the RFC5444 reader components */
@@ -187,21 +187,17 @@ _cb_plugin_disable(void) {
  * @return
  */
 static enum rfc5444_result
-_cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context) {
+_cb_message_start_callback(struct rfc5444_reader_tlvblock_context *context) {
   struct nhdp_interface *interf;
 
   interf = nhdp_interface_get(_protocol->input_interface->name);
   assert(interf);
 
   /* check address length */
-  if ((context->addr_len == 16 && interf->mode == NHDP_IFMODE_IPV4)
-      || (context->addr_len == 4 && interf->mode == NHDP_IFMODE_IPV6)
-      || (context->addr_len != 4 && context->addr_len != 16)) {
+  if (context->addr_len != 4 && context->addr_len != 16) {
     OLSR_INFO(LOG_NHDP_CHECK,
-        "Dropped NHDP message with addrlen %d on interface %s (%s)",
-        context->addr_len,
-        nhdp_interface_get_name(interf), NHDP_INTERFACE_MODES[interf->mode]);
+        "Dropped NHDP message with addrlen %d on interface %s",
+        context->addr_len, nhdp_interface_get_name(interf));
     return RFC5444_DROP_MESSAGE;
   }
 
@@ -229,8 +225,7 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_consumer *consumer __a
  * @return
  */
 static enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-      struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   /* drop message if it has no VTIME TLV or has more than one */
   if (_nhdp_message_tlvs[IDX_TLV_VTIME].tlv == NULL
       || _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->next_entry != NULL) {
@@ -282,8 +277,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__(
  */
 
 static enum rfc5444_result
-_cb_addresstlvs(struct rfc5444_reader_tlvblock_consumer *consumer __attribute__((unused)),
-    struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+_cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context) {
   struct netaddr_str buf;
   struct netaddr addr;
   uint8_t value;

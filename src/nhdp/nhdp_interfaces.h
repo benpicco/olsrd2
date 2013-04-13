@@ -60,26 +60,12 @@ struct nhdp_interface_addr;
 #define NHDP_INTERFACE         "nhdp_interf"
 #define NHDP_INTERFACE_ADDRESS "nhdp_iaddr"
 
-enum nhdp_interface_mode {
-  NHDP_IFMODE_IPV4,
-  NHDP_IFMODE_IPV6,
-  NHDP_IFMODE_DUAL,
-};
-
-extern const char *NHDP_INTERFACE_MODES[3];
-
 /**
  * nhdp_interface represents a local interface participating in the mesh network
  */
 struct nhdp_interface {
   /* listener for interface events */
   struct olsr_rfc5444_interface_listener rfc5444_if;
-
-  /* does this interface only work with IPv4/IPv6 or does it dualstack? */
-  enum nhdp_interface_mode mode;
-
-  /* true if this interface has a neighbors that support only ipv4 */
-  bool neigh_onlyv4;
 
   /* interval between two hellos sent through this interface */
   uint64_t refresh_interval;
@@ -92,6 +78,13 @@ struct nhdp_interface {
 
   /* ACL for incoming HELLO messages through this interface */
   struct olsr_netaddr_acl ifaddr_filter;
+
+  /*
+   * true if this interface has a neighbor that should be reached through
+   * IPv4/IPv6 for flooding.
+   */
+  bool use_ipv4_for_flooding;
+  bool use_ipv6_for_flooding;
 
   /* timer for hello generation */
   struct olsr_timer_entry _hello_timer;
@@ -107,6 +100,9 @@ struct nhdp_interface {
 
   /* tree of addresses of links (nhdp_laddr objects) */
   struct avl_tree _link_addresses;
+
+  /* tree of originator addresses of links (nhdp_link objects */
+  struct avl_tree _link_originators;
 };
 
 /**
@@ -141,7 +137,7 @@ EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
 
-void nhdp_interfaces_update_neigh_addresstype(struct nhdp_interface *interf);
+EXPORT void nhdp_interface_update_status(struct nhdp_interface *);
 
 /**
  * @param interface name
@@ -159,7 +155,7 @@ nhdp_interface_get(const char *name) {
  * @return name of interface (e.g. wlan0)
  */
 static INLINE const char *
-nhdp_interface_get_name(struct nhdp_interface *interf) {
+nhdp_interface_get_name(const struct nhdp_interface *interf) {
   return interf->_node.key;
 }
 
@@ -169,7 +165,7 @@ nhdp_interface_get_name(struct nhdp_interface *interf) {
  * @return nhdp interface address
  */
 static INLINE struct nhdp_interface_addr *
-nhdp_interface_addr_if_get(struct nhdp_interface *interf, struct netaddr *addr) {
+nhdp_interface_addr_if_get(const struct nhdp_interface *interf, const struct netaddr *addr) {
   struct nhdp_interface_addr *iaddr;
 
   return avl_find_element(&interf->_if_addresses, addr, iaddr, _if_node);
@@ -180,7 +176,7 @@ nhdp_interface_addr_if_get(struct nhdp_interface *interf, struct netaddr *addr) 
  * @return nhdp interface address
  */
 static INLINE struct nhdp_interface_addr *
-nhdp_interface_addr_global_get(struct netaddr *addr) {
+nhdp_interface_addr_global_get(const struct netaddr *addr) {
   struct nhdp_interface_addr *iaddr;
 
   return avl_find_element(&nhdp_ifaddr_tree, addr, iaddr, _global_node);
@@ -233,10 +229,22 @@ nhdp_interface_remove_laddr(struct nhdp_laddr *laddr) {
  * @return link address object fitting the network address, NULL if not found
  */
 static INLINE struct nhdp_laddr *
-nhdp_interface_get_link_addr(struct nhdp_interface *interf, struct netaddr *addr) {
+nhdp_interface_get_link_addr(const struct nhdp_interface *interf, const struct netaddr *addr) {
   struct nhdp_laddr *laddr;
 
   return avl_find_element(&interf->_link_addresses, addr, laddr, _if_node);
+}
+
+/**
+ * @param interf local nhdp interface
+ * @param originator originator address
+ * @return corresponding nhdp link, NULL if not found
+ */
+static INLINE struct nhdp_link *
+nhdp_interface_link_get_by_originator(
+    const struct nhdp_interface *interf, const struct netaddr *originator) {
+  struct nhdp_link *lnk;
+  return avl_find_element(&interf->_link_originators, originator, lnk, _originator_node);
 }
 
 #endif /* NHDP_INTERFACES_H_ */
