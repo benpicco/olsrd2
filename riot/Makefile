@@ -12,7 +12,6 @@
 # this has to be the absolute path of the feuerware-base dir
 export RIOTBASE =/home/benpicco/µkleos/riot/RIOT
 export RIOTBOARD =$(RIOTBASE)/../boards
-export RIOTCPU  =$(RIOTBASE)/cpu
 export OONFBASE =/home/benpicco/µkleos/oonf_api
 export OLSRBASE =/home/benpicco/µkleos/olsrd2
 
