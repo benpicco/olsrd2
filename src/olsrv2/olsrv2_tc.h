@@ -98,6 +98,9 @@ struct olsrv2_tc_edge {
   /* link cost of edge */
   uint32_t cost[NHDP_MAXIMUM_DOMAINS];
 
+  /* answer set number which set this edge */
+  uint16_t ansn;
+
   /*
    * true if this link is only virtual
    * (it only exists because the inverse edge was received).
@@ -120,6 +123,9 @@ struct olsrv2_tc_attached_endpoint {
 
   /* distance to attached network */
   uint8_t distance[NHDP_MAXIMUM_DOMAINS];
+
+  /* answer set number which set this edge */
+  uint16_t ansn;
 
   /* node for tree of source node */
   struct avl_node _src_node;

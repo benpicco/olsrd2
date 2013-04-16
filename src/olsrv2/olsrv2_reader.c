@@ -70,11 +70,10 @@ enum {
 struct _olsrv2_data {
   struct olsrv2_tc_node *node;
 
-  uint32_t vtime;
-  uint32_t itime;
+  uint64_t vtime;
+  uint64_t itime;
 
   bool complete_tc;
-  uint16_t ansn;
 };
 
 static enum rfc5444_result
@@ -155,6 +154,7 @@ olsrv2_reader_cleanup(void) {
 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
+  uint16_t ansn;
   uint8_t tmp;
 
   if (!context->has_origaddr || !context->has_hopcount
@@ -174,9 +174,9 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   _current.complete_tc = tmp == RFC5444_CONT_SEQ_NUM_COMPLETE;
 
   /* get ANSN */
-  memcpy(&_current.ansn,
+  memcpy(&ansn,
       _olsrv2_message_tlvs[IDX_TLV_CONT_SEQ_NUM].tlv->single_value, 2);
-  _current.ansn = ntohs(_current.ansn);
+  ansn = ntohs(ansn);
 
   /* get VTime/ITime */
   tmp = rfc5444_timetlv_get_from_vector(
@@ -206,15 +206,18 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* get tc node */
   _current.node = olsrv2_tc_node_add(
-      &context->orig_addr, _current.vtime, _current.ansn);
+      &context->orig_addr, _current.vtime, ansn);
   if (_current.node == NULL) {
     return RFC5444_DROP_MESSAGE;
   }
 
   /* check if the topology information is recent enough */
-  if (rfc5444_seqno_is_smaller(_current.ansn, _current.node->ansn)) {
+  if (rfc5444_seqno_is_smaller(ansn, _current.node->ansn)) {
     return RFC5444_DROP_MESSAGE;
   }
+
+  /* overwrite old ansn */
+  _current.node->ansn = ansn;
 
   /* continue parsing the message */
   return RFC5444_OKAY;
@@ -222,48 +225,89 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
-  struct rfc5444_reader_tlvblock_entry *nbrtype, *gateway;
+  struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_domain *domain;
+  struct olsrv2_tc_edge *edge;
+  struct olsrv2_tc_attached_endpoint *end;
+  uint16_t cost[NHDP_MAXIMUM_DOMAINS];
 
-  nbrtype = _olsrv2_address_tlvs[IDX_ADDRTLV_NBR_ADDR_TYPE].tlv;
-  gateway = _olsrv2_address_tlvs[IDX_ADDRTLV_GATEWAY].tlv;
+  memset(cost, 0, sizeof(cost));
+  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_LINK_METRIC].tlv;
+  while (tlv) {
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain == NULL) {
+      continue;
+    }
 
-  while (nbrtype) {
+    memcpy(&cost[domain->index], tlv->single_value, 2);
+    cost[domain->index] = ntohs(domain->index);
+  }
+
+  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_NBR_ADDR_TYPE].tlv;
+  while (tlv) {
     /* find routing domain */
-    domain = nhdp_domain_get_by_ext(nbrtype->type_ext);
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
     if (domain == NULL) {
       continue;
     }
 
     /* parse originator neighbor */
-    if (nbrtype->single_value[0] == RFC5444_NBR_ADDR_TYPE_ORIGINATOR
-        || nbrtype->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE_ORIG) {
-
+    if (tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ORIGINATOR
+        || tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE_ORIG) {
+      edge = olsrv2_tc_edge_add(_current.node, &context->addr);
+      if (edge) {
+        edge->ansn = _current.node->ansn;
+        edge->cost[domain->index] = cost[domain->index];
+      }
     }
 
     /* parse routable neighbor (which is not an originator) */
-    if (nbrtype->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE) {
-
+    if (tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE) {
+      end = olsrv2_tc_endpoint_add(_current.node, &context->addr, true);
+      if (end) {
+        end->ansn = _current.node->ansn;
+        end->cost[domain->index] = cost[domain->index];
+      }
     }
 
-
-    nbrtype = nbrtype->next_entry;
+    tlv = tlv->next_entry;
   }
 
-  while (gateway) {
+  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_GATEWAY].tlv;
+  while (tlv) {
     /* find routing domain */
-    domain = nhdp_domain_get_by_ext(nbrtype->type_ext);
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
     if (domain == NULL) {
       continue;
     }
 
     /* parse attached network */
-
+    end = olsrv2_tc_endpoint_add(_current.node, &context->addr, false);
+    if (end) {
+      end->ansn = _current.node->ansn;
+      end->cost[domain->index] = cost[domain->index];
+      end->distance[domain->index] = tlv->single_value[0];
+    }
   }
   return RFC5444_OKAY;
 }
 
 static enum rfc5444_result
 _cb_addresstlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute__((unused)), bool dropped __attribute__((unused))) {
+  /* cleanup everything that is not the current ANSN */
+  struct olsrv2_tc_edge *edge, *edge_it;
+  struct olsrv2_tc_attached_endpoint *end, *end_it;
+
+  avl_for_each_element_safe(&_current.node->_edges, edge, _node, edge_it) {
+    if (edge->ansn != _current.node->ansn) {
+      olsrv2_tc_edge_remove(edge);
+    }
+  }
+
+  avl_for_each_element_safe(&_current.node->_endpoints, end, _src_node, end_it) {
+    if (end->ansn != _current.node->ansn) {
+      olsrv2_tc_endpoint_remove(end);
+    }
+  }
   return RFC5444_OKAY;
 }
