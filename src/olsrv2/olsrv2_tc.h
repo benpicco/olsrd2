@@ -51,15 +51,18 @@
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
 
+enum olsrv2_target_type {
+  OLSRV2_NODE_TARGET,
+  OLSRV2_ADDRESS_TARGET,
+  OLSRV2_NETWORK_TARGET,
+};
+
 struct olsrv2_tc_target {
   /* address or prefix of this node of the topology graph */
   struct netaddr addr;
 
-  /*
-   * true if this node contains an originator,
-   * false if it contains an attached network prefix.
-   */
-  bool attached_network;
+  /* type of target */
+  enum olsrv2_target_type type;
 };
 
 struct olsrv2_tc_node {
@@ -105,15 +108,18 @@ struct olsrv2_tc_edge {
   struct avl_node _node;
 };
 
-struct olsrv2_tc_attached_network {
+struct olsrv2_tc_attached_endpoint {
   /* pointer to source of edge */
   struct olsrv2_tc_node *src;
 
   /* pointer to destination of edge */
-  struct olsrv2_tc_attached_endpoint *dst;
+  struct olsrv2_tc_endpoint *dst;
 
   /* link cost of edge */
   uint32_t cost[NHDP_MAXIMUM_DOMAINS];
+
+  /* distance to attached network */
+  uint8_t distance[NHDP_MAXIMUM_DOMAINS];
 
   /* node for tree of source node */
   struct avl_node _src_node;
@@ -122,7 +128,7 @@ struct olsrv2_tc_attached_network {
   struct avl_node _endpoint_node;
 };
 
-struct olsrv2_tc_attached_endpoint {
+struct olsrv2_tc_endpoint {
   /* substructure to define target for Dijkstra Algorithm */
   struct olsrv2_tc_target target;
 
@@ -146,9 +152,9 @@ EXPORT struct olsrv2_tc_edge *olsrv2_tc_edge_add(
     struct olsrv2_tc_node *, struct netaddr *);
 EXPORT bool olsrv2_tc_edge_remove(struct olsrv2_tc_edge *);
 
-EXPORT struct olsrv2_tc_attached_network *olsrv2_tc_attached_network_add(
-    struct olsrv2_tc_node *, struct netaddr *);
-EXPORT void olsrv2_tc_attached_network_remove(
-    struct olsrv2_tc_attached_network *);
+EXPORT struct olsrv2_tc_attached_endpoint *olsrv2_tc_endpoint_add(
+    struct olsrv2_tc_node *, struct netaddr *, bool mesh);
+EXPORT void olsrv2_tc_endpoint_remove(
+    struct olsrv2_tc_attached_endpoint *);
 
 #endif /* OLSRV2_TC_H_ */

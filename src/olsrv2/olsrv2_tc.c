@@ -67,12 +67,12 @@ static struct olsr_class _tc_edge_class = {
 
 static struct olsr_class _tc_attached_class = {
   .name = "olsrv2 tc attached network",
-  .size = sizeof(struct olsrv2_tc_attached_network),
+  .size = sizeof(struct olsrv2_tc_attached_endpoint),
 };
 
 static struct olsr_class _tc_endpoint_class = {
   .name = "olsrv2 tc attached network endpoint",
-  .size = sizeof(struct olsrv2_tc_attached_endpoint),
+  .size = sizeof(struct olsrv2_tc_endpoint),
 };
 
 /* validity timer for tc nodes */
@@ -145,7 +145,7 @@ olsrv2_tc_node_add(struct netaddr *originator,
 void
 olsrv2_tc_node_remove(struct olsrv2_tc_node *node) {
   struct olsrv2_tc_edge *edge, *edge_it;
-  struct olsrv2_tc_attached_network *net, *net_it;
+  struct olsrv2_tc_attached_endpoint *net, *net_it;
 
   /* remove tc_edges */
   avl_for_each_element_safe(&node->_edges, edge, _node, edge_it) {
@@ -156,7 +156,7 @@ olsrv2_tc_node_remove(struct olsrv2_tc_node *node) {
   /* remove attached networks */
   avl_for_each_element_safe(
       &node->_attached_networks, net, _src_node, net_it) {
-    olsrv2_tc_attached_network_remove(net);
+    olsrv2_tc_endpoint_remove(net);
   }
 
   /* stop validity timer */
@@ -270,11 +270,11 @@ olsrv2_tc_edge_remove(struct olsrv2_tc_edge *edge) {
   return removed_node;
 }
 
-struct olsrv2_tc_attached_network *
-olsrv2_tc_attached_network_add(
-    struct olsrv2_tc_node *node, struct netaddr *prefix) {
-  struct olsrv2_tc_attached_network *net;
-  struct olsrv2_tc_attached_endpoint *end;
+struct olsrv2_tc_attached_endpoint *
+olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
+    struct netaddr *prefix, bool mesh) {
+  struct olsrv2_tc_attached_endpoint *net;
+  struct olsrv2_tc_endpoint *end;
   int i;
 
   net = avl_find_element(&node->_attached_networks, prefix, net, _src_node);
@@ -297,7 +297,7 @@ olsrv2_tc_attached_network_add(
     }
 
     /* initialize endpoint */
-    end->target.attached_network = true;
+    end->target.type = mesh ? OLSRV2_ADDRESS_TARGET : OLSRV2_NETWORK_TARGET;
     avl_init(&end->_attached_networks, avl_comp_netaddr, false);
 
     /* attach to global tree */
@@ -324,8 +324,8 @@ olsrv2_tc_attached_network_add(
 }
 
 void
-olsrv2_tc_attached_network_remove(
-    struct olsrv2_tc_attached_network *net) {
+olsrv2_tc_endpoint_remove(
+    struct olsrv2_tc_attached_endpoint *net) {
   /* remove from node */
   avl_remove(&net->src->_attached_networks, &net->_src_node);
 
