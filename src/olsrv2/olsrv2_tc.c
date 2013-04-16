@@ -109,7 +109,8 @@ olsrv2_tc_cleanup(void) {
 }
 
 struct olsrv2_tc_node *
-olsrv2_tc_node_add(struct netaddr *originator, uint64_t vtime) {
+olsrv2_tc_node_add(struct netaddr *originator,
+    uint64_t vtime, uint16_t ansn) {
   struct olsrv2_tc_node *node;
 
   node = avl_find_element(
@@ -130,6 +131,8 @@ olsrv2_tc_node_add(struct netaddr *originator, uint64_t vtime) {
 
     node->_validity_time.info = &_validity_info;
     node->_validity_time.cb_context = node;
+
+    node->ansn = ansn;
 
     /* hook into global tree */
     avl_insert(&olsrv2_tc_tree, node->_originator_node);

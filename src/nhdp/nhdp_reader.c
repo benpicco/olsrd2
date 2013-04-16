@@ -81,7 +81,7 @@ enum {
 /* prototypes */
 static void cleanup_error(void);
 static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t local_if);
-static void _handle_originator(void);
+static void _handle_originator(struct rfc5444_reader_tlvblock_context *context);
 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context);
@@ -166,7 +166,6 @@ static struct {
 
   struct nhdp_link *link;
 
-  struct netaddr originator;
   struct netaddr originator_v6;
 
   bool naddr_conflict, laddr_conflict;
@@ -319,14 +318,14 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
  * Handle in originator address of NHDP Hello
  */
 static void
-_handle_originator(void) {
+_handle_originator(struct rfc5444_reader_tlvblock_context *context) {
   struct nhdp_neighbor *neigh;
   struct netaddr_str buf;
 
   OLSR_DEBUG(LOG_NHDP_R, "Handle originator %s",
-      netaddr_to_string(&buf, &_current.originator));
+      netaddr_to_string(&buf, &context->orig_addr));
 
-  neigh = nhdp_db_neighbor_get_by_originator(&_current.originator);
+  neigh = nhdp_db_neighbor_get_by_originator(&context->orig_addr);
   if (!neigh) {
     return;
   }
@@ -386,13 +385,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* extract originator address */
   if (context->has_origaddr) {
-    if (netaddr_from_binary(&_current.originator, context->orig_addr, context->addr_len, 0)) {
-      /* error, could not parse address */
-      return RFC5444_DROP_MESSAGE;
-    }
-
     OLSR_DEBUG(LOG_NHDP_R, "Got originator: %s",
-        netaddr_to_string(&buf, &_current.originator));
+        netaddr_to_string(&buf, &context->orig_addr));
   }
 
   /* extract validity time and interval time */
@@ -555,8 +549,8 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
   }
 
   /* handle originator address */
-  if (netaddr_get_address_family(&_current.originator) != AF_UNSPEC) {
-    _handle_originator();
+  if (netaddr_get_address_family(&context->orig_addr) != AF_UNSPEC) {
+    _handle_originator(context);
   }
 
   /* allocate neighbor and link if necessary */
@@ -626,7 +620,7 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
       nhdp_db_link_connect_dualstack(_current.link, lnk2);
     }
   }
-  else if (netaddr_get_address_family(&_current.originator) == AF_INET
+  else if (netaddr_get_address_family(&context->orig_addr) == AF_INET
       && netaddr_get_address_family(&_current.originator_v6) == AF_UNSPEC) {
     nhdp_db_neigbor_disconnect_dualstack(_current.neighbor);
     nhdp_db_link_disconnect_dualstack(_current.link);
@@ -927,7 +921,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped)
   }
 
   /* overwrite originator of neighbor entry */
-  nhdp_db_neighbor_set_originator(_current.neighbor, &_current.originator);
+  nhdp_db_neighbor_set_originator(_current.neighbor, &context->orig_addr);
 
   /* update MPR sets */
   nhdp_domain_update_mprs();

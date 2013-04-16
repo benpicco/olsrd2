@@ -66,6 +66,9 @@ struct olsrv2_tc_node {
   /* substructure to define target for Dijkstra Algorithm */
   struct olsrv2_tc_target target;
 
+  /* answer set number */
+  uint16_t ansn;
+
   /* time until this node has to be removed */
   struct olsr_timer_entry _validity_time;
 
@@ -136,7 +139,7 @@ void olsrv2_tc_init(void);
 void olsrv2_tc_cleanup(void);
 
 EXPORT struct olsrv2_tc_node *olsrv2_tc_node_add(
-    struct netaddr *, uint64_t vtime);
+    struct netaddr *, uint64_t vtime, uint16_t ansn);
 EXPORT void olsrv2_tc_node_remove(struct olsrv2_tc_node *);
 
 EXPORT struct olsrv2_tc_edge *olsrv2_tc_edge_add(
