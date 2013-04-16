@@ -72,6 +72,9 @@ struct olsrv2_tc_node {
   /* answer set number */
   uint16_t ansn;
 
+  /* reported interval time */
+  uint64_t interval_time;
+
   /* time until this node has to be removed */
   struct olsr_timer_entry _validity_time;
 

@@ -71,7 +71,6 @@ struct _olsrv2_data {
   struct olsrv2_tc_node *node;
 
   uint64_t vtime;
-  uint64_t itime;
 
   bool complete_tc;
 };
@@ -154,6 +153,7 @@ olsrv2_reader_cleanup(void) {
 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
+  uint64_t itime;
   uint16_t ansn;
   uint8_t tmp;
 
@@ -190,7 +190,10 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
         _olsrv2_message_tlvs[IDX_TLV_ITIME].tlv->single_value,
         _olsrv2_message_tlvs[IDX_TLV_ITIME].tlv->length,
         context->hopcount);
-    _current.itime = rfc5444_timetlv_decode(tmp);
+    itime = rfc5444_timetlv_decode(tmp);
+  }
+  else {
+    itime = 0;
   }
 
   /* test if we already forwarded the message */
@@ -218,6 +221,10 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* overwrite old ansn */
   _current.node->ansn = ansn;
+
+  /* reset validity time and interval time */
+  olsr_timer_set(&_current.node->_validity_time, _current.vtime);
+  _current.node->interval_time = itime;
 
   /* continue parsing the message */
   return RFC5444_OKAY;
