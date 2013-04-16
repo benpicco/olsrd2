@@ -43,9 +43,9 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
-
 #include "core/olsr_class.h"
 #include "core/olsr_timer.h"
+#include "rfc5444/rfc5444.h"
 
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
@@ -135,7 +135,7 @@ olsrv2_tc_node_add(struct netaddr *originator,
     node->ansn = ansn;
 
     /* hook into global tree */
-    avl_insert(&olsrv2_tc_tree, node->_originator_node);
+    avl_insert(&olsrv2_tc_tree, &node->_originator_node);
   }
 
   olsr_timer_set(&node->_validity_time, vtime);
@@ -198,7 +198,7 @@ olsrv2_tc_edge_add(struct olsrv2_tc_node *src, struct netaddr *addr) {
   dst = avl_find_element(&olsrv2_tc_tree, addr, dst, _originator_node);
   if (dst == NULL) {
     /* create virtual node */
-    dst = olsrv2_tc_node_add(addr, 0);
+    dst = olsrv2_tc_node_add(addr, 0, 0);
     if (dst == NULL) {
       olsr_class_free(&_tc_edge_class, edge);
       olsr_class_free(&_tc_edge_class, inverse);
@@ -254,7 +254,7 @@ olsrv2_tc_edge_remove(struct olsrv2_tc_edge *edge) {
   avl_remove(&edge->dst->_edges, &edge->inverse->_node);
 
   if (edge->dst->_edges.count == 0
-      && olsr_timer_is_active(!edge->dst->_validity_time)) {
+      && !olsr_timer_is_active(&edge->dst->_validity_time)) {
     /*
      * node is already virtual and has no
      * incoming links anymore.
@@ -313,7 +313,7 @@ olsrv2_tc_attached_network_add(
   }
 
   /* hook into src node */
-  net->_src_node.key = end->target;
+  net->_src_node.key = &end->target;
   avl_insert(&node->_attached_networks, &net->_src_node);
 
   /* hook into endpoint */
