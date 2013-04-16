@@ -53,6 +53,7 @@
 #include "olsrv2/olsrv2_tc.h"
 
 static void _cb_tc_node_timeout(void *);
+static bool _remove_edge(struct olsrv2_tc_edge *edge, bool cleanup);
 
 /* classes for topology data */
 static struct olsr_class _tc_node_class = {
@@ -97,6 +98,19 @@ olsrv2_tc_init(void) {
 void
 olsrv2_tc_cleanup(void) {
   struct olsrv2_tc_node *node, *n_it;
+  struct olsrv2_tc_edge *edge, *e_it;
+  struct olsrv2_tc_attached_endpoint *a_end, *ae_it;
+
+  avl_for_each_element(&olsrv2_tc_tree, node, _originator_node) {
+    avl_for_each_element_safe(&node->_edges, edge, _node, e_it) {
+      /* remove edge without cleaning up the node */
+      _remove_edge(edge, false);
+    }
+
+    avl_for_each_element_safe(&node->_endpoints, a_end, _src_node, ae_it) {
+      olsrv2_tc_endpoint_remove(a_end);
+    }
+  }
 
   avl_for_each_element_safe(&olsrv2_tc_tree, node, _originator_node, n_it) {
     olsrv2_tc_node_remove(node);
@@ -127,7 +141,7 @@ olsrv2_tc_node_add(struct netaddr *originator,
 
     /* initialize node */
     avl_init(&node->_edges, avl_comp_netaddr, false);
-    avl_init(&node->_attached_networks, avl_comp_netaddr, false);
+    avl_init(&node->_endpoints, avl_comp_netaddr, false);
 
     node->_validity_time.info = &_validity_info;
     node->_validity_time.cb_context = node;
@@ -155,7 +169,7 @@ olsrv2_tc_node_remove(struct olsrv2_tc_node *node) {
 
   /* remove attached networks */
   avl_for_each_element_safe(
-      &node->_attached_networks, net, _src_node, net_it) {
+      &node->_endpoints, net, _src_node, net_it) {
     olsrv2_tc_endpoint_remove(net);
   }
 
@@ -236,38 +250,7 @@ olsrv2_tc_edge_add(struct olsrv2_tc_node *src, struct netaddr *addr) {
 
 bool
 olsrv2_tc_edge_remove(struct olsrv2_tc_edge *edge) {
-  bool removed_node = false;
-
-  if (edge->virtual) {
-    /* nothing to do */
-    return false;
-  }
-
-  if (!edge->inverse->virtual) {
-    /* make this edge virtual */
-    edge->virtual = true;
-    return false;
-  }
-
-  /* unhook edge from both sides */
-  avl_remove(&edge->src->_edges, &edge->_node);
-  avl_remove(&edge->dst->_edges, &edge->inverse->_node);
-
-  if (edge->dst->_edges.count == 0
-      && !olsr_timer_is_active(&edge->dst->_validity_time)) {
-    /*
-     * node is already virtual and has no
-     * incoming links anymore.
-     */
-
-    olsrv2_tc_node_remove(edge->dst);
-    removed_node = true;
-  }
-
-  olsr_class_free(&_tc_edge_class, edge->inverse);
-  olsr_class_free(&_tc_edge_class, edge);
-
-  return removed_node;
+  return _remove_edge(edge, true);
 }
 
 struct olsrv2_tc_attached_endpoint *
@@ -277,7 +260,7 @@ olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
   struct olsrv2_tc_endpoint *end;
   int i;
 
-  net = avl_find_element(&node->_attached_networks, prefix, net, _src_node);
+  net = avl_find_element(&node->_endpoints, prefix, net, _src_node);
   if (net != NULL) {
     return net;
   }
@@ -314,7 +297,7 @@ olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
 
   /* hook into src node */
   net->_src_node.key = &end->target;
-  avl_insert(&node->_attached_networks, &net->_src_node);
+  avl_insert(&node->_endpoints, &net->_src_node);
 
   /* hook into endpoint */
   net->_endpoint_node.key = &node->target.addr;
@@ -327,7 +310,7 @@ void
 olsrv2_tc_endpoint_remove(
     struct olsrv2_tc_attached_endpoint *net) {
   /* remove from node */
-  avl_remove(&net->src->_attached_networks, &net->_src_node);
+  avl_remove(&net->src->_endpoints, &net->_src_node);
 
   /* remove from endpoint */
   avl_remove(&net->dst->_attached_networks, &net->_endpoint_node);
@@ -347,4 +330,40 @@ _cb_tc_node_timeout(void *ptr) {
   struct olsrv2_tc_node *node = ptr;
 
   olsrv2_tc_node_remove(node);
+}
+
+static bool
+_remove_edge(struct olsrv2_tc_edge *edge, bool cleanup) {
+  bool removed_node = false;
+
+  if (edge->virtual) {
+    /* nothing to do */
+    return false;
+  }
+
+  if (!edge->inverse->virtual) {
+    /* make this edge virtual */
+    edge->virtual = true;
+    return false;
+  }
+
+  /* unhook edge from both sides */
+  avl_remove(&edge->src->_edges, &edge->_node);
+  avl_remove(&edge->dst->_edges, &edge->inverse->_node);
+
+  if (edge->dst->_edges.count == 0 && cleanup
+      && !olsr_timer_is_active(&edge->dst->_validity_time)) {
+    /*
+     * node is already virtual and has no
+     * incoming links anymore.
+     */
+
+    olsrv2_tc_node_remove(edge->dst);
+    removed_node = true;
+  }
+
+  olsr_class_free(&_tc_edge_class, edge->inverse);
+  olsr_class_free(&_tc_edge_class, edge);
+
+  return removed_node;
 }
