@@ -277,16 +277,9 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
  */
 
 static enum rfc5444_result
-_cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context) {
+_cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   struct netaddr_str buf;
-  struct netaddr addr;
   uint8_t value;
-
-  if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0) != 0
-      || netaddr_to_string(&buf, &addr) != 0) {
-    OLSR_WARN(LOG_NHDP_CHECK, "Error converting address into netaddr");
-    return RFC5444_DROP_MESSAGE;
-  }
 
   if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv != NULL) {
     /* check for duplicate LOCAL_IF TLV */

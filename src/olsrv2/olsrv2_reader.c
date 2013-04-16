@@ -223,20 +223,43 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   struct rfc5444_reader_tlvblock_entry *nbrtype, *gateway;
+  struct nhdp_domain *domain;
 
   nbrtype = _olsrv2_address_tlvs[IDX_ADDRTLV_NBR_ADDR_TYPE].tlv;
   gateway = _olsrv2_address_tlvs[IDX_ADDRTLV_GATEWAY].tlv;
 
-  if (nbrtype != NULL && gateway == NULL) {
+  while (nbrtype) {
+    /* find routing domain */
+    domain = nhdp_domain_get_by_ext(nbrtype->type_ext);
+    if (domain == NULL) {
+      continue;
+    }
+
+    /* parse originator neighbor */
+    if (nbrtype->single_value[0] == RFC5444_NBR_ADDR_TYPE_ORIGINATOR
+        || nbrtype->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE_ORIG) {
+
+    }
+
+    /* parse routable neighbor (which is not an originator) */
+    if (nbrtype->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE) {
+
+    }
+
+
+    nbrtype = nbrtype->next_entry;
+  }
+
+  while (gateway) {
+    /* find routing domain */
+    domain = nhdp_domain_get_by_ext(nbrtype->type_ext);
+    if (domain == NULL) {
+      continue;
+    }
+
+    /* parse attached network */
 
   }
-  else if (nbrtype == NULL && gateway != NULL) {
-
-  }
-  else {
-    return RFC5444_DROP_ADDRESS;
-  }
-
   return RFC5444_OKAY;
 }
 
