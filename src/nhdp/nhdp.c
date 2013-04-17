@@ -64,7 +64,7 @@ static enum olsr_telnet_result _telnet_nhdp_iflink(struct olsr_telnet_data *con)
 static enum olsr_telnet_result _telnet_nhdp_interface(struct olsr_telnet_data *con);
 
 /* nhdp telnet commands */
-struct olsr_telnet_command _cmds[] = {
+static struct olsr_telnet_command _cmds[] = {
     TELNET_CMD("nhdp", _cb_nhdp,
         "NHDP database information command\n"
         "\"nhdp iflink\": shows all nhdp links sorted by interfaces including interface and 2-hop neighbor addresses\n"
