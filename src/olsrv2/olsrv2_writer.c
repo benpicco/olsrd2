@@ -286,20 +286,13 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
 static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   uint8_t vtime_encoded, itime_encoded;
-  struct nhdp_domain *domain;
 
   /* generate validity time and interval time */
   itime_encoded = rfc5444_timetlv_encode(olsrv2_get_tc_interval());
   vtime_encoded = rfc5444_timetlv_encode(olsrv2_get_tc_validity());
 
-  /* update metric version numbers */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    nhdp_domain_update_metric_version(domain);
-  }
-
   /* allocate space for ANSN tlv */
-  rfc5444_writer_allocate_messagetlv(writer, true,
-      sizeof(uint16_t) * nhdp_domain_get_count());
+  rfc5444_writer_allocate_messagetlv(writer, true, 2);
 
   /* add validity and interval time TLV */
   rfc5444_writer_add_messagetlv(writer, RFC5444_MSGTLV_VALIDITY_TIME, 0,
@@ -468,15 +461,12 @@ _cb_finishMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_address *start __attribute__((unused)),
     struct rfc5444_writer_address *end __attribute__((unused)),
     bool complete) {
-  struct nhdp_domain *domain;
-  uint16_t ansn[NHDP_MAXIMUM_DOMAINS];
+  uint16_t ansn;
 
-  /* calculate answer set array */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    ansn[domain->index] = htons(domain->version);
-  }
+  /* get ANSN */
+  ansn = htons(olsrv2_update_ansn());
 
   rfc5444_writer_set_messagetlv(writer, RFC5444_MSGTLV_CONT_SEQ_NUM,
       complete ? RFC5444_CONT_SEQ_NUM_COMPLETE : RFC5444_CONT_SEQ_NUM_INCOMPLETE,
-      ansn, sizeof(uint16_t) * nhdp_domain_get_count());
+      &ansn, sizeof(ansn));
 }

@@ -80,7 +80,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context);
 
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context);
-static enum rfc5444_result _cb_addresstlvs_end(
+static enum rfc5444_result _cb_messagetlvs_end(
     struct rfc5444_reader_tlvblock_context *context, bool dropped);
 
 /* definition of the RFC5444 reader components */
@@ -88,12 +88,12 @@ static struct rfc5444_reader_tlvblock_consumer _olsrv2_message_consumer = {
   .order = RFC5444_MAIN_PARSER_PRIORITY,
   .msg_id = RFC5444_MSGTYPE_TC,
   .block_callback = _cb_messagetlvs,
-  .end_callback = _cb_addresstlvs_end,
+  .end_callback = _cb_messagetlvs_end,
 };
 
 static struct rfc5444_reader_tlvblock_consumer_entry _olsrv2_message_tlvs[] = {
   [IDX_TLV_ITIME] = { .type = RFC5444_MSGTLV_INTERVAL_TIME, .type_ext = 0, .match_type_ext = true,
-      .mandatory = true, .min_length = 1, .max_length = 511, .match_length = true },
+      .min_length = 1, .max_length = 511, .match_length = true },
   [IDX_TLV_VTIME] = { .type = RFC5444_MSGTLV_VALIDITY_TIME, .type_ext = 0, .match_type_ext = true,
       .mandatory = true, .min_length = 1, .max_length = 511, .match_length = true },
   [IDX_TLV_CONT_SEQ_NUM] = { .type = RFC5444_MSGTLV_CONT_SEQ_NUM,
@@ -156,9 +156,14 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   uint64_t itime;
   uint16_t ansn;
   uint8_t tmp;
+  struct netaddr_str buf;
+
+  OLSR_DEBUG(LOG_OLSRV2_R, "Received TC from %s",
+      netaddr_to_string(&buf, _protocol->input_address));
 
   if (!context->has_origaddr || !context->has_hopcount
       || !context->has_hoplimit || !context->has_seqno) {
+    OLSR_DEBUG(LOG_OLSRV2_R, "Missing message flag");
     return RFC5444_DROP_MESSAGE;
   }
 
@@ -169,6 +174,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   tmp = _olsrv2_message_tlvs[IDX_TLV_CONT_SEQ_NUM].type_ext;
   if (tmp != RFC5444_CONT_SEQ_NUM_COMPLETE
       && tmp != RFC5444_CONT_SEQ_NUM_INCOMPLETE) {
+    OLSR_DEBUG(LOG_OLSRV2_R, "Illegal extension of CONT_SEQ_NUM TLV: %u",
+        tmp);
     return RFC5444_DROP_MESSAGE;
   }
   _current.complete_tc = tmp == RFC5444_CONT_SEQ_NUM_COMPLETE;
@@ -204,6 +211,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* test if we already processed the message */
   if (!olsrv2_mpr_shall_process(context, _current.vtime)) {
+    OLSR_DEBUG(LOG_OLSRV2_R, "Processing set says 'do not process'");
     return RFC5444_DROP_MESSAGE;
   }
 
@@ -211,11 +219,13 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   _current.node = olsrv2_tc_node_add(
       &context->orig_addr, _current.vtime, ansn);
   if (_current.node == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2_R, "Cannot create node");
     return RFC5444_DROP_MESSAGE;
   }
 
   /* check if the topology information is recent enough */
   if (rfc5444_seqno_is_smaller(ansn, _current.node->ansn)) {
+    OLSR_DEBUG(LOG_OLSRV2_R, "ANSN is smaller than %u", _current.node->ansn);
     return RFC5444_DROP_MESSAGE;
   }
 
@@ -237,6 +247,10 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   struct olsrv2_tc_edge *edge;
   struct olsrv2_tc_attached_endpoint *end;
   uint16_t cost[NHDP_MAXIMUM_DOMAINS];
+
+  if (_current.node == NULL) {
+    return RFC5444_OKAY;
+  }
 
   memset(cost, 0, sizeof(cost));
   tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_LINK_METRIC].tlv;
@@ -300,10 +314,15 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 }
 
 static enum rfc5444_result
-_cb_addresstlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute__((unused)), bool dropped __attribute__((unused))) {
+_cb_messagetlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
+    bool dropped) {
   /* cleanup everything that is not the current ANSN */
   struct olsrv2_tc_edge *edge, *edge_it;
   struct olsrv2_tc_attached_endpoint *end, *end_it;
+
+  if (dropped || _current.node == NULL) {
+    return RFC5444_OKAY;
+  }
 
   avl_for_each_element_safe(&_current.node->_edges, edge, _node, edge_it) {
     if (edge->ansn != _current.node->ansn) {
@@ -316,5 +335,8 @@ _cb_addresstlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute_
       olsrv2_tc_endpoint_remove(end);
     }
   }
+
+  _current.node = NULL;
+
   return RFC5444_OKAY;
 }

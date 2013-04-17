@@ -56,7 +56,7 @@ static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
 /* domain class */
 struct olsr_class _domain_class = {
-  .name = "NHDP domains",
+  .name = NHDP_CLASS_DOMAIN,
   .size = sizeof(struct nhdp_domain),
 };
 

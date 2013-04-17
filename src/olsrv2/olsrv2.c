@@ -48,6 +48,7 @@
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
 #include "tools/olsr_rfc5444.h"
+#include "tools/olsr_telnet.h"
 
 #include "nhdp/nhdp_interfaces.h"
 
@@ -55,6 +56,7 @@
 #include "olsrv2/olsrv2_lan.h"
 #include "olsrv2/olsrv2_originator.h"
 #include "olsrv2/olsrv2_reader.h"
+#include "olsrv2/olsrv2_tc.h"
 #include "olsrv2/olsrv2_writer.h"
 
 /* definitions */
@@ -72,6 +74,15 @@ struct _config {
 /* prototypes */
 static void _cb_cfg_changed(void);
 static void _cb_generate_tc(void *);
+
+/* prototypes */
+static enum olsr_telnet_result _cb_topology(struct olsr_telnet_data *con);
+
+/* nhdp telnet commands */
+static struct olsr_telnet_command _cmds[] = {
+    TELNET_CMD("olsrv2", _cb_topology,
+        "OLSRv2 database information command\n"),
+};
 
 /* olsrv2 configuration */
 static struct cfg_schema_section _olsrv2_section = {
@@ -110,6 +121,8 @@ static struct olsr_timer_entry _tc_timer = {
 enum log_source LOG_OLSRV2 = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
 
+static uint16_t _ansn;
+
 OLSR_SUBSYSTEM_STATE(_olsrv2_state);
 
 /**
@@ -117,6 +130,8 @@ OLSR_SUBSYSTEM_STATE(_olsrv2_state);
  */
 int
 olsrv2_init(void) {
+  size_t i;
+
   if (olsr_subsystem_init(&_olsrv2_state)) {
     return 0;
   }
@@ -136,6 +151,7 @@ olsrv2_init(void) {
   olsrv2_lan_init();
   olsrv2_originator_init();
   olsrv2_reader_init(_protocol);
+  olsrv2_tc_init();
 
   /* add configuration for olsrv2 section */
   cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
@@ -144,6 +160,11 @@ olsrv2_init(void) {
   /* initialize timer */
   olsr_timer_add(&_tc_timer_class);
 
+  for (i=0; i<ARRAYSIZE(_cmds); i++) {
+    olsr_telnet_add(&_cmds[i]);
+  }
+
+  _ansn = rand() & 0xffff;
   return 0;
 }
 
@@ -152,16 +173,27 @@ olsrv2_init(void) {
  */
 void
 olsrv2_cleanup(void) {
+  size_t i;
+
   if (olsr_subsystem_cleanup(&_olsrv2_state)) {
     return;
   }
 
+  for (i=0; i<ARRAYSIZE(_cmds); i++) {
+    olsr_telnet_remove(&_cmds[i]);
+  }
+
   /* cleanup configuration */
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
+  olsr_acl_remove(&_olsrv2_config.routable);
 
+  olsrv2_writer_cleanup();
   olsrv2_reader_cleanup();
   olsrv2_originator_cleanup();
+  olsrv2_tc_cleanup();
   olsrv2_lan_cleanup();
+
+  olsr_rfc5444_remove_protocol(_protocol);
 }
 
 uint64_t
@@ -183,6 +215,7 @@ bool
 olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   enum olsr_duplicate_result dup_result;
+  struct netaddr_str buf;
 
   OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be processed");
 
@@ -193,15 +226,12 @@ olsrv2_mpr_shall_process(
   }
 
   /* check forwarding set */
-  dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
+  dup_result = olsr_duplicate_entry_add(&_protocol->processed_set,
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
-  if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
-    OLSR_DEBUG(LOG_OLSRV2, "Dupset returned %d", dup_result);
-    return false;
-  }
-
-  return true;
+  OLSR_DEBUG(LOG_OLSRV2, "Message from %s with seqno %d dupset result: %d",
+      netaddr_to_string(&buf, &context->orig_addr), context->seqno, dup_result);
+  return dup_result == OLSR_DUPSET_NEW || dup_result == OLSR_DUPSET_NEWEST;
 }
 
 bool
@@ -281,6 +311,30 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   return flood;
 }
 
+uint16_t
+olsrv2_get_ansn(void) {
+  return _ansn;
+}
+
+uint16_t
+olsrv2_update_ansn(void) {
+  struct nhdp_domain *domain;
+  bool changed;
+
+  changed = false;
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->metric_changed) {
+      changed = true;
+      domain->metric_changed = false;
+    }
+  }
+
+  if (changed) {
+    _ansn++;
+  }
+  return _ansn;
+}
+
 /**
  * Callback fired when configuration changed
  */
@@ -298,4 +352,44 @@ _cb_cfg_changed(void) {
 static void
 _cb_generate_tc(void *ptr __attribute__((unused))) {
   olsrv2_writer_send_tc();
+}
+
+static enum olsr_telnet_result
+_cb_topology(struct olsr_telnet_data *con) {
+  struct olsrv2_tc_node *node;
+  struct olsrv2_tc_edge *edge;
+  struct olsrv2_tc_attached_endpoint *end;
+  struct nhdp_domain *domain;
+  struct netaddr_str nbuf;
+  struct fraction_str tbuf;
+
+  avl_for_each_element(&olsrv2_tc_tree, node, _originator_node) {
+    abuf_appendf(con->out, "Node originator %s: vtime=%s\n",
+        netaddr_to_string(&nbuf, &node->target.addr),
+        olsr_clock_toIntervalString(&tbuf,
+            olsr_timer_get_due(&node->_validity_time)));
+
+    avl_for_each_element(&node->_edges, edge, _node) {
+      abuf_appendf(con->out, "\tlink to %s:\n",
+          netaddr_to_string(&nbuf, &edge->dst->target.addr));
+
+      list_for_each_element(&nhdp_domain_list, domain, _node) {
+        abuf_appendf(con->out, "\t\tmetric '%s': %d\n",
+            domain->metric->name, edge->cost[domain->index]);
+      }
+    }
+
+    avl_for_each_element(&node->_endpoints, end, _src_node) {
+      abuf_appendf(con->out, "\tlink to endpoint %s:\n",
+          netaddr_to_string(&nbuf, &end->dst->target.addr));
+
+        list_for_each_element(&nhdp_domain_list, domain, _node) {
+          abuf_appendf(con->out, "\t\tmetric '%s': %d\n",
+              domain->metric->name, end->cost[domain->index]);
+        }
+
+    }
+  }
+
+  return TELNET_RESULT_ACTIVE;
 }

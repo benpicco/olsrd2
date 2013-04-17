@@ -122,9 +122,6 @@ struct nhdp_domain {
    */
   bool metric_changed;
 
-  /* metric version number */
-  uint16_t version;
-
   /* tlv extension */
   uint8_t ext;
 
@@ -206,27 +203,6 @@ static INLINE struct nhdp_l2hop_domaindata *
 nhdp_domain_get_l2hopdata(
     struct nhdp_domain *domain, struct nhdp_l2hop *l2hop) {
   return &l2hop->_domaindata[domain->index];
-}
-
-/**
- * Increments the metric version number by one if metric has
- * changed since the last update.
- * @param domain NHDP domain
- * @return true if metric version number has changed, false otherwise
- */
-static INLINE bool
-nhdp_domain_update_metric_version(struct nhdp_domain *domain) {
-  if (!domain->metric_changed) {
-    return false;
-  }
-
-  /* update version number */
-  domain->version++;
-
-  /* reset marker */
-  domain->metric_changed = false;
-
-  return true;
 }
 
 #endif /* NHDP_DOMAIN_H_ */
