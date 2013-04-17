@@ -50,6 +50,7 @@
 #include "tools/olsr_rfc5444.h"
 
 #include "olsrv2/olsrv2.h"
+#include "olsrv2/olsrv2_originator.h"
 #include "olsrv2/olsrv2_reader.h"
 #include "olsrv2/olsrv2_tc.h"
 
@@ -167,6 +168,14 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
     return RFC5444_DROP_MESSAGE;
   }
 
+  if (olsrv2_originator_is_local(&context->orig_addr)) {
+    OLSR_DEBUG(LOG_OLSRV2_R, "We are hearing ourself");
+    return RFC5444_DROP_MESSAGE;
+  }
+
+  OLSR_DEBUG(LOG_OLSRV2_R, "Originator: %s   Seqno: %u",
+      netaddr_to_string(&buf, &context->orig_addr), context->seqno);
+
   /* clear session data */
   memset(&_current, 0, sizeof(_current));
 
@@ -246,26 +255,46 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   struct nhdp_domain *domain;
   struct olsrv2_tc_edge *edge;
   struct olsrv2_tc_attached_endpoint *end;
-  uint16_t cost[NHDP_MAXIMUM_DOMAINS];
+  uint32_t cost_in[NHDP_MAXIMUM_DOMAINS];
+  uint32_t cost_out[NHDP_MAXIMUM_DOMAINS];
+  uint16_t tmp;
+  struct netaddr_str buf;
 
   if (_current.node == NULL) {
     return RFC5444_OKAY;
   }
 
-  memset(cost, 0, sizeof(cost));
-  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_LINK_METRIC].tlv;
-  while (tlv) {
+  for (int i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
+    cost_in[i] = RFC5444_METRIC_INFINITE;
+    cost_out[i] = RFC5444_METRIC_INFINITE;
+  }
+
+  for (tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_LINK_METRIC].tlv;
+      tlv; tlv = tlv->next_entry) {
     domain = nhdp_domain_get_by_ext(tlv->type_ext);
     if (domain == NULL) {
       continue;
     }
 
-    memcpy(&cost[domain->index], tlv->single_value, 2);
-    cost[domain->index] = ntohs(domain->index);
+    memcpy(&tmp, tlv->single_value, 2);
+    // TODO tmp = ntohs(tmp);
+
+    OLSR_DEBUG(LOG_OLSRV2_R, "Metric %d: %04x",
+        domain->index, tmp);
+
+    if (tmp & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
+      cost_in[domain->index] =
+          rfc5444_metric_decode(tmp & RFC5444_LINKMETRIC_COST_MASK);
+    }
+
+    if (tmp & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
+      cost_out[domain->index] =
+          rfc5444_metric_decode(tmp & RFC5444_LINKMETRIC_COST_MASK);
+    }
   }
 
-  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_NBR_ADDR_TYPE].tlv;
-  while (tlv) {
+  for (tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_NBR_ADDR_TYPE].tlv;
+      tlv; tlv = tlv->next_entry) {
     /* find routing domain */
     domain = nhdp_domain_get_by_ext(tlv->type_ext);
     if (domain == NULL) {
@@ -277,8 +306,16 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
         || tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE_ORIG) {
       edge = olsrv2_tc_edge_add(_current.node, &context->addr);
       if (edge) {
+        OLSR_DEBUG(LOG_OLSRV2_R, "Originator %s: ansn=%u metric=%d/%d",
+            netaddr_to_string(&buf, &context->addr),
+            _current.node->ansn,
+            cost_out[domain->index], cost_in[domain->index]);
         edge->ansn = _current.node->ansn;
-        edge->cost[domain->index] = cost[domain->index];
+        edge->cost[domain->index] = cost_out[domain->index];
+
+        if (edge->inverse->virtual) {
+          edge->inverse->cost[domain->index] = cost_in[domain->index];
+        }
       }
     }
 
@@ -286,16 +323,18 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     if (tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE) {
       end = olsrv2_tc_endpoint_add(_current.node, &context->addr, true);
       if (end) {
+        OLSR_DEBUG(LOG_OLSRV2_R, "Routable %s: ansn=%u metric=%u",
+            netaddr_to_string(&buf, &context->addr),
+            _current.node->ansn,
+            cost_out[domain->index]);
         end->ansn = _current.node->ansn;
-        end->cost[domain->index] = cost[domain->index];
+        end->cost[domain->index] = cost_out[domain->index];
       }
     }
-
-    tlv = tlv->next_entry;
   }
 
-  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_GATEWAY].tlv;
-  while (tlv) {
+  for (tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_GATEWAY].tlv;
+      tlv; tlv = tlv->next_entry) {
     /* find routing domain */
     domain = nhdp_domain_get_by_ext(tlv->type_ext);
     if (domain == NULL) {
@@ -305,8 +344,13 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     /* parse attached network */
     end = olsrv2_tc_endpoint_add(_current.node, &context->addr, false);
     if (end) {
+      OLSR_DEBUG(LOG_OLSRV2_R, "Attached %s: ansn=%u metric=%u dist=%u",
+          netaddr_to_string(&buf, &context->addr),
+          _current.node->ansn,
+          cost_out[domain->index],
+          tlv->single_value[0]);
       end->ansn = _current.node->ansn;
-      end->cost[domain->index] = cost[domain->index];
+      end->cost[domain->index] = cost_out[domain->index];
       end->distance[domain->index] = tlv->single_value[0];
     }
   }

@@ -215,13 +215,14 @@ bool
 olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   enum olsr_duplicate_result dup_result;
+  bool process;
   struct netaddr_str buf;
-
-  OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be processed");
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OLSR_DEBUG(LOG_OLSRV2, "Originator/Sequence number is missing!");
+    OLSR_DEBUG(LOG_OLSRV2, "Do not process message type %u,"
+        " originator or sequence number is missing!",
+        context->msg_type);
     return false;
   }
 
@@ -229,9 +230,15 @@ olsrv2_mpr_shall_process(
   dup_result = olsr_duplicate_entry_add(&_protocol->processed_set,
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
-  OLSR_DEBUG(LOG_OLSRV2, "Message from %s with seqno %d dupset result: %d",
-      netaddr_to_string(&buf, &context->orig_addr), context->seqno, dup_result);
-  return dup_result == OLSR_DUPSET_NEW || dup_result == OLSR_DUPSET_NEWEST;
+  process = dup_result == OLSR_DUPSET_NEW || dup_result == OLSR_DUPSET_NEWEST;
+
+  OLSR_DEBUG(LOG_OLSRV2, "Do %sprocess message type %u from %s"
+      " with seqno %u (dupset result: %u)",
+      process ? "" : "not ",
+      context->msg_type,
+      netaddr_to_string(&buf, &context->orig_addr),
+      context->seqno, dup_result);
+  return process;
 }
 
 bool
@@ -239,12 +246,13 @@ olsrv2_mpr_shall_forwarding(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   struct nhdp_neighbor *neigh;
   enum olsr_duplicate_result dup_result;
-
-  OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be forwarded");
+  struct netaddr_str buf;
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OLSR_DEBUG(LOG_OLSRV2, "Originator/Sequence number is missing!");
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u,"
+        " originator or sequence number is missing!",
+        context->msg_type);
     return false;
   }
 
@@ -253,20 +261,32 @@ olsrv2_mpr_shall_forwarding(
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
   if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
-    OLSR_DEBUG(LOG_OLSRV2, "Dupset returned %d", dup_result);
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u from %s"
+        " with seqno %u (dupset result: %u)",
+        context->msg_type,
+        netaddr_to_string(&buf, &context->orig_addr),
+        context->seqno, dup_result);
     return false;
   }
 
   /* get NHDP neighbor */
   neigh = nhdp_db_neighbor_get_by_originator(&context->orig_addr);
   if (neigh == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Cannot find neighbor for originator");
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u from %s"
+        " with seqno %u, originator is unknown",
+        context->msg_type,
+        netaddr_to_string(&buf, &context->orig_addr),
+        context->seqno);
     return false;
   }
 
   /* forward if this neighbor has selected us as a flooding MPR */
-  OLSR_DEBUG(LOG_OLSRV2, "Local flodding is '%s'",
-      neigh->local_is_flooding_mpr ? "on" : "off");
+  OLSR_DEBUG(LOG_OLSRV2, "Do %sforward message type %u from %s"
+      " with seqno %u",
+      neigh->local_is_flooding_mpr ? "" : "not ",
+      context->msg_type,
+      netaddr_to_string(&buf, &context->orig_addr),
+      context->seqno);
   return neigh->local_is_flooding_mpr;
 }
 
@@ -279,21 +299,20 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
 
   target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
 
-  OLSR_DEBUG(LOG_OLSRV2, "forwarding selector %s", target->interface->name);
-
   /* test if this is the ipv4 multicast target */
   is_ipv4 = target == target->interface->multicast4;
 
   /* only forward to multicast targets */
   if (!is_ipv4 && target != target->interface->multicast6) {
-    OLSR_DEBUG(LOG_OLSRV2, "Target is unicast");
     return false;
   }
 
   /* get NHDP interface for target */
   interf = nhdp_interface_get(target->interface->name);
   if (interf == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Cannot find interface %s", target->interface->name);
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message"
+        " to interface %s: its unknown to NHDP",
+        target->interface->name);
     return NULL;
   }
 

@@ -143,6 +143,17 @@ olsrv2_originator_get(int af_type) {
   return &_originator_v6;
 }
 
+bool
+olsrv2_originator_is_local(const struct netaddr *addr) {
+  if (netaddr_cmp(&_originator_v4, addr) == 0) {
+    return true;
+  }
+  if (netaddr_cmp(&_originator_v6, addr) == 0) {
+    return true;
+  }
+  return olsrv2_originator_get_entry(addr) != NULL;
+}
+
 /**
  * Add a new entry to the olsrv2 originator set
  * @param originator originator address

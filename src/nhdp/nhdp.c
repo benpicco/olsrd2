@@ -314,11 +314,22 @@ _print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
   struct nhdp_naddr *naddr;
   struct nhdp_link *lnk;
   struct netaddr_str nbuf;
+  struct nhdp_domain *domain;
 
   abuf_appendf(con->out, "%s %s%s\n",
       nhdp_db_neighbor_is_ipv6_dualstack(neigh) ? "         " : "Neighbor:",
       neigh->symmetric > 0 ? "symmetric" : "",
       neigh->dualstack_partner != NULL ? "dualstack" : "");
+
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    abuf_appendf(con->out, "Metric '%s': in=%d, out=%d, MPR=%s, MPRS=%s, will=%d\n",
+        domain->metric->name,
+        nhdp_domain_get_neighbordata(domain, neigh)->metric.in,
+        nhdp_domain_get_neighbordata(domain, neigh)->metric.out,
+        nhdp_domain_get_neighbordata(domain, neigh)->neigh_is_mpr ? "yes" : "no",
+        nhdp_domain_get_neighbordata(domain, neigh)->local_is_mpr ? "yes" : "no",
+        nhdp_domain_get_neighbordata(domain, neigh)->willingness);
+  }
 
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
     if (!nhdp_db_link_is_ipv6_dualstack(lnk)) {
