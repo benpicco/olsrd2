@@ -85,7 +85,7 @@ enum {
 /* prototypes */
 static void cleanup_error(void);
 static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t local_if);
-static void _handle_originator(void);
+static void _handle_originator(struct rfc5444_reader_tlvblock_context *context);
 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context);
@@ -170,7 +170,6 @@ static struct {
 
   struct nhdp_link *link;
 
-  struct netaddr originator;
   struct netaddr originator_v6;
 
   bool naddr_conflict, laddr_conflict;
@@ -323,14 +322,14 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
  * Handle in originator address of NHDP Hello
  */
 static void
-_handle_originator(void) {
+_handle_originator(struct rfc5444_reader_tlvblock_context *context) {
   struct nhdp_neighbor *neigh;
   struct netaddr_str buf;
 
   OLSR_DEBUG(LOG_NHDP_R, "Handle originator %s",
-      netaddr_to_string(&buf, &_current.originator));
+      netaddr_to_string(&buf, &context->orig_addr));
 
-  neigh = nhdp_db_neighbor_get_by_originator(&_current.originator);
+  neigh = nhdp_db_neighbor_get_by_originator(&context->orig_addr);
   if (!neigh) {
     return;
   }
@@ -390,13 +389,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* extract originator address */
   if (context->has_origaddr) {
-    if (netaddr_from_binary(&_current.originator, context->orig_addr, context->addr_len, 0)) {
-      /* error, could not parse address */
-      return RFC5444_DROP_MESSAGE;
-    }
-
     OLSR_DEBUG(LOG_NHDP_R, "Got originator: %s",
-        netaddr_to_string(&buf, &_current.originator));
+        netaddr_to_string(&buf, &context->orig_addr));
   }
 
   /* extract validity time and interval time */
@@ -453,16 +447,10 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context) {
   uint8_t local_if, link_status;
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr;
-  struct netaddr addr;
   struct netaddr_str buf;
 
   local_if = 255;
   link_status = 255;
-
-  if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
-    /* error, could not parse address */
-    return RFC5444_DROP_ADDRESS;
-  }
 
   if (_nhdp_address_pass1_tlvs[IDX_ADDRTLV1_LOCAL_IF].tlv) {
     local_if = _nhdp_address_pass1_tlvs[IDX_ADDRTLV1_LOCAL_IF].tlv->single_value[0];
@@ -472,12 +460,12 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context) {
   }
 
   OLSR_DEBUG(LOG_NHDP_R, "Pass 1: address %s, local_if %u, link_status: %u",
-      netaddr_to_string(&buf, &addr), local_if, link_status);
+      netaddr_to_string(&buf, &context->addr), local_if, link_status);
 
   if (local_if == RFC5444_LOCALIF_THIS_IF
         || local_if == RFC5444_LOCALIF_OTHER_IF) {
     /* still no neighbor address conflict, so keep checking */
-    naddr = nhdp_db_neighbor_addr_get(&addr);
+    naddr = nhdp_db_neighbor_addr_get(&context->addr);
     if (naddr != NULL) {
       OLSR_DEBUG(LOG_NHDP_R, "Found neighbor in database");
       naddr->neigh->_process_count++;
@@ -499,7 +487,7 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context) {
 
   if (local_if == RFC5444_LOCALIF_THIS_IF) {
     /* check for link address conflict */
-    laddr = nhdp_interface_get_link_addr(_current.localif, &addr);
+    laddr = nhdp_interface_get_link_addr(_current.localif, &context->addr);
     if (laddr != NULL) {
       OLSR_DEBUG(LOG_NHDP_R, "Found link in database");
       laddr->link->_process_count++;
@@ -523,15 +511,16 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context) {
   }
 
   /* detect if our own node is seen by our neighbor */
-  if (link_status != 255 && nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
+  if (link_status != 255
+      && nhdp_interface_addr_if_get(_current.localif, &context->addr) != NULL) {
     if (link_status == RFC5444_LINKSTATUS_LOST) {
       OLSR_DEBUG(LOG_NHDP_R, "Link neighbor lost this node address: %s",
-          netaddr_to_string(&buf, &addr));
+          netaddr_to_string(&buf, &context->addr));
       _current.link_lost = true;
     }
     else {
       OLSR_DEBUG(LOG_NHDP_R, "Link neighbor heard this node address: %s",
-          netaddr_to_string(&buf, &addr));
+          netaddr_to_string(&buf, &context->addr));
       _current.link_heard = true;
     }
   }
@@ -559,8 +548,8 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
   }
 
   /* handle originator address */
-  if (netaddr_get_address_family(&_current.originator) != AF_UNSPEC) {
-    _handle_originator();
+  if (netaddr_get_address_family(&context->orig_addr) != AF_UNSPEC) {
+    _handle_originator(context);
   }
 
   /* allocate neighbor and link if necessary */
@@ -630,7 +619,7 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
       nhdp_db_link_connect_dualstack(_current.link, lnk2);
     }
   }
-  else if (netaddr_get_address_family(&_current.originator) == AF_INET
+  else if (netaddr_get_address_family(&context->orig_addr) == AF_INET
       && netaddr_get_address_family(&_current.originator_v6) == AF_UNSPEC) {
     nhdp_db_neigbor_disconnect_dualstack(_current.neighbor);
     nhdp_db_link_disconnect_dualstack(_current.link);
@@ -768,14 +757,7 @@ static enum rfc5444_result
 _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_context *context) {
   uint8_t local_if, link_status, other_neigh;
   struct nhdp_l2hop *l2hop;
-  struct netaddr addr;
-
   struct netaddr_str buf;
-
-  if (netaddr_from_binary(&addr, context->addr, context->addr_len, 0)) {
-    /* error, could not parse address */
-    return RFC5444_DROP_ADDRESS;
-  }
 
   local_if = 255;
   link_status = 255;
@@ -792,28 +774,28 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_context *context) {
     other_neigh = _nhdp_address_pass2_tlvs[IDX_ADDRTLV2_OTHER_NEIGHB].tlv->single_value[0];
   }
   OLSR_DEBUG(LOG_NHDP_R, "Pass 2: address %s, local_if %u, link_status: %u, other_neigh: %u",
-      netaddr_to_string(&buf, &addr), local_if, link_status, other_neigh);
+      netaddr_to_string(&buf, &context->addr), local_if, link_status, other_neigh);
 
   if (local_if == RFC5444_LOCALIF_THIS_IF || local_if == RFC5444_LOCALIF_OTHER_IF) {
     /* parse LOCAL_IF TLV */
-    _pass2_process_localif(&addr, local_if);
+    _pass2_process_localif(&context->addr, local_if);
   }
 
   /* handle 2hop-addresses */
   if (link_status != 255 || other_neigh != 255) {
-    if (nhdp_interface_addr_if_get(_current.localif, &addr) != NULL) {
-      _process_domainspecific_linkdata(&addr);
+    if (nhdp_interface_addr_if_get(_current.localif, &context->addr) != NULL) {
+      _process_domainspecific_linkdata(&context->addr);
     }
-    else if (nhdp_interface_addr_global_get(&addr) != NULL) {
+    else if (nhdp_interface_addr_global_get(&context->addr) != NULL) {
       OLSR_DEBUG(LOG_NHDP_R, "Link neighbor heard this node address: %s",
-          netaddr_to_string(&buf, &addr));
+          netaddr_to_string(&buf, &context->addr));
     }
     else if (link_status == RFC5444_LINKSTATUS_SYMMETRIC
         || other_neigh == RFC5444_OTHERNEIGHB_SYMMETRIC){
-      l2hop  = ndhp_db_link_2hop_get(_current.link, &addr);
+      l2hop  = ndhp_db_link_2hop_get(_current.link, &context->addr);
       if (l2hop == NULL) {
         /* create new 2hop address */
-        l2hop = nhdp_db_link_2hop_add(_current.link, &addr);
+        l2hop = nhdp_db_link_2hop_add(_current.link, &context->addr);
         if (l2hop == NULL) {
           return RFC5444_DROP_MESSAGE;
         }
@@ -822,10 +804,10 @@ _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_context *context) {
       /* refresh validity time of 2hop address */
       nhdp_db_link_2hop_set_vtime(l2hop, _current.vtime);
 
-      _process_domainspecific_2hopdata(l2hop, &addr);
+      _process_domainspecific_2hopdata(l2hop, &context->addr);
     }
     else {
-      l2hop = ndhp_db_link_2hop_get(_current.link, &addr);
+      l2hop = ndhp_db_link_2hop_get(_current.link, &context->addr);
       if (l2hop) {
         /* remove 2hop address */
         nhdp_db_link_2hop_remove(l2hop);
@@ -931,7 +913,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped)
   }
 
   /* overwrite originator of neighbor entry */
-  nhdp_db_neighbor_set_originator(_current.neighbor, &_current.originator);
+  nhdp_db_neighbor_set_originator(_current.neighbor, &context->orig_addr);
 
   /* update MPR sets */
   nhdp_domain_update_mprs();

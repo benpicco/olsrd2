@@ -182,7 +182,6 @@ olsrv2_get_routable(void) {
 bool
 olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
-  struct netaddr originator;
   enum olsr_duplicate_result dup_result;
 
   OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be processed");
@@ -193,15 +192,10 @@ olsrv2_mpr_shall_process(
     return false;
   }
 
-  /* convert originator into binary */
-  if (netaddr_from_binary(&originator, context->orig_addr, context->addr_len, 0)) {
-    OLSR_DEBUG(LOG_OLSRV2, "cannot convert originator");
-    return false;
-  }
-
   /* check forwarding set */
   dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
-      context->msg_type, &originator, context->seqno, vtime + _olsrv2_config.f_hold_time);
+      context->msg_type, &context->orig_addr,
+      context->seqno, vtime + _olsrv2_config.f_hold_time);
   if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
     OLSR_DEBUG(LOG_OLSRV2, "Dupset returned %d", dup_result);
     return false;
@@ -214,7 +208,6 @@ bool
 olsrv2_mpr_shall_forwarding(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   struct nhdp_neighbor *neigh;
-  struct netaddr originator;
   enum olsr_duplicate_result dup_result;
 
   OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be forwarded");
@@ -225,22 +218,17 @@ olsrv2_mpr_shall_forwarding(
     return false;
   }
 
-  /* convert originator into binary */
-  if (netaddr_from_binary(&originator, context->orig_addr, context->addr_len, 0)) {
-    OLSR_DEBUG(LOG_OLSRV2, "cannot convert originator");
-    return false;
-  }
-
   /* check forwarding set */
   dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
-      context->msg_type, &originator, context->seqno, vtime + _olsrv2_config.f_hold_time);
+      context->msg_type, &context->orig_addr,
+      context->seqno, vtime + _olsrv2_config.f_hold_time);
   if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
     OLSR_DEBUG(LOG_OLSRV2, "Dupset returned %d", dup_result);
     return false;
   }
 
   /* get NHDP neighbor */
-  neigh = nhdp_db_neighbor_get_by_originator(&originator);
+  neigh = nhdp_db_neighbor_get_by_originator(&context->orig_addr);
   if (neigh == NULL) {
     OLSR_DEBUG(LOG_OLSRV2, "Cannot find neighbor for originator");
     return false;

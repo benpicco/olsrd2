@@ -41,15 +41,17 @@
 
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
+#include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444_reader.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
 #include "tools/olsr_duplicate_set.h"
 #include "tools/olsr_rfc5444.h"
 
+#include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_reader.h"
+#include "olsrv2/olsrv2_tc.h"
 
 /* NHDP message TLV array index */
 enum {
@@ -63,6 +65,14 @@ enum {
   IDX_ADDRTLV_LINK_METRIC,
   IDX_ADDRTLV_NBR_ADDR_TYPE,
   IDX_ADDRTLV_GATEWAY,
+};
+
+struct _olsrv2_data {
+  struct olsrv2_tc_node *node;
+
+  uint64_t vtime;
+
+  bool complete_tc;
 };
 
 static enum rfc5444_result
@@ -83,11 +93,11 @@ static struct rfc5444_reader_tlvblock_consumer _olsrv2_message_consumer = {
 
 static struct rfc5444_reader_tlvblock_consumer_entry _olsrv2_message_tlvs[] = {
   [IDX_TLV_ITIME] = { .type = RFC5444_MSGTLV_INTERVAL_TIME, .type_ext = 0, .match_type_ext = true,
-      .mandatory = true, .min_length = 1, .match_length = true },
+      .mandatory = true, .min_length = 1, .max_length = 511, .match_length = true },
   [IDX_TLV_VTIME] = { .type = RFC5444_MSGTLV_VALIDITY_TIME, .type_ext = 0, .match_type_ext = true,
-      .mandatory = true, .min_length = 1, .match_length = true },
+      .mandatory = true, .min_length = 1, .max_length = 511, .match_length = true },
   [IDX_TLV_CONT_SEQ_NUM] = { .type = RFC5444_MSGTLV_CONT_SEQ_NUM,
-      .mandatory = true, .min_length = 1, .max_length = 512, .match_length = true },
+      .mandatory = true, .min_length = 2, .match_length = true },
 };
 
 static struct rfc5444_reader_tlvblock_consumer _olsrv2_address_consumer = {
@@ -109,7 +119,9 @@ static struct rfc5444_reader_tlvblock_consumer_entry _olsrv2_address_tlvs[] = {
 /* nhdp multiplexer/protocol */
 static struct olsr_rfc5444_protocol *_protocol = NULL;
 
-static enum log_source LOG_NHDP_R = LOG_MAIN;
+static enum log_source LOG_OLSRV2_R = LOG_MAIN;
+
+static struct _olsrv2_data _current;
 
 /**
  * Initialize nhdp reader
@@ -118,7 +130,7 @@ void
 olsrv2_reader_init(struct olsr_rfc5444_protocol *p) {
   _protocol = p;
 
-  LOG_NHDP_R = olsr_log_register_source("nhdp_r");
+  LOG_OLSRV2_R = olsr_log_register_source("olsrv2_r");
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_olsrv2_message_consumer,
@@ -141,30 +153,168 @@ olsrv2_reader_cleanup(void) {
 
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
-  //enum olsr_duplicate_result result;
-  struct netaddr originator;
+  uint64_t itime;
+  uint16_t ansn;
+  uint8_t tmp;
 
   if (!context->has_origaddr || !context->has_hopcount
       || !context->has_hoplimit || !context->has_seqno) {
     return RFC5444_DROP_MESSAGE;
   }
 
-  if (netaddr_from_binary(&originator,
-      context->orig_addr, context->addr_len, 0)) {
+  /* clear session data */
+  memset(&_current, 0, sizeof(_current));
+
+  /* get cont_seq_num extension */
+  tmp = _olsrv2_message_tlvs[IDX_TLV_CONT_SEQ_NUM].type_ext;
+  if (tmp != RFC5444_CONT_SEQ_NUM_COMPLETE
+      && tmp != RFC5444_CONT_SEQ_NUM_INCOMPLETE) {
+    return RFC5444_DROP_MESSAGE;
+  }
+  _current.complete_tc = tmp == RFC5444_CONT_SEQ_NUM_COMPLETE;
+
+  /* get ANSN */
+  memcpy(&ansn,
+      _olsrv2_message_tlvs[IDX_TLV_CONT_SEQ_NUM].tlv->single_value, 2);
+  ansn = ntohs(ansn);
+
+  /* get VTime/ITime */
+  tmp = rfc5444_timetlv_get_from_vector(
+      _olsrv2_message_tlvs[IDX_TLV_VTIME].tlv->single_value,
+      _olsrv2_message_tlvs[IDX_TLV_VTIME].tlv->length,
+      context->hopcount);
+  _current.vtime = rfc5444_timetlv_decode(tmp);
+
+  if (_olsrv2_message_tlvs[IDX_TLV_ITIME].tlv) {
+    tmp = rfc5444_timetlv_get_from_vector(
+        _olsrv2_message_tlvs[IDX_TLV_ITIME].tlv->single_value,
+        _olsrv2_message_tlvs[IDX_TLV_ITIME].tlv->length,
+        context->hopcount);
+    itime = rfc5444_timetlv_decode(tmp);
+  }
+  else {
+    itime = 0;
+  }
+
+  /* test if we already forwarded the message */
+  if (!olsrv2_mpr_shall_forwarding(context, _current.vtime)) {
+    /* mark message as 'no forward */
+    rfc5444_reader_prevent_forwarding(context);
+  }
+
+  /* test if we already processed the message */
+  if (!olsrv2_mpr_shall_process(context, _current.vtime)) {
     return RFC5444_DROP_MESSAGE;
   }
 
-//  result = olsr_duplicate_entry_add(&_protocol->processed_set,
-//      context->msg_type, &originator, context->seqno,
+  /* get tc node */
+  _current.node = olsrv2_tc_node_add(
+      &context->orig_addr, _current.vtime, ansn);
+  if (_current.node == NULL) {
+    return RFC5444_DROP_MESSAGE;
+  }
+
+  /* check if the topology information is recent enough */
+  if (rfc5444_seqno_is_smaller(ansn, _current.node->ansn)) {
+    return RFC5444_DROP_MESSAGE;
+  }
+
+  /* overwrite old ansn */
+  _current.node->ansn = ansn;
+
+  /* reset validity time and interval time */
+  olsr_timer_set(&_current.node->_validity_time, _current.vtime);
+  _current.node->interval_time = itime;
+
+  /* continue parsing the message */
   return RFC5444_OKAY;
 }
 
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
+  struct rfc5444_reader_tlvblock_entry *tlv;
+  struct nhdp_domain *domain;
+  struct olsrv2_tc_edge *edge;
+  struct olsrv2_tc_attached_endpoint *end;
+  uint16_t cost[NHDP_MAXIMUM_DOMAINS];
+
+  memset(cost, 0, sizeof(cost));
+  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_LINK_METRIC].tlv;
+  while (tlv) {
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain == NULL) {
+      continue;
+    }
+
+    memcpy(&cost[domain->index], tlv->single_value, 2);
+    cost[domain->index] = ntohs(domain->index);
+  }
+
+  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_NBR_ADDR_TYPE].tlv;
+  while (tlv) {
+    /* find routing domain */
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain == NULL) {
+      continue;
+    }
+
+    /* parse originator neighbor */
+    if (tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ORIGINATOR
+        || tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE_ORIG) {
+      edge = olsrv2_tc_edge_add(_current.node, &context->addr);
+      if (edge) {
+        edge->ansn = _current.node->ansn;
+        edge->cost[domain->index] = cost[domain->index];
+      }
+    }
+
+    /* parse routable neighbor (which is not an originator) */
+    if (tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE) {
+      end = olsrv2_tc_endpoint_add(_current.node, &context->addr, true);
+      if (end) {
+        end->ansn = _current.node->ansn;
+        end->cost[domain->index] = cost[domain->index];
+      }
+    }
+
+    tlv = tlv->next_entry;
+  }
+
+  tlv = _olsrv2_address_tlvs[IDX_ADDRTLV_GATEWAY].tlv;
+  while (tlv) {
+    /* find routing domain */
+    domain = nhdp_domain_get_by_ext(tlv->type_ext);
+    if (domain == NULL) {
+      continue;
+    }
+
+    /* parse attached network */
+    end = olsrv2_tc_endpoint_add(_current.node, &context->addr, false);
+    if (end) {
+      end->ansn = _current.node->ansn;
+      end->cost[domain->index] = cost[domain->index];
+      end->distance[domain->index] = tlv->single_value[0];
+    }
+  }
   return RFC5444_OKAY;
 }
 
 static enum rfc5444_result
 _cb_addresstlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute__((unused)), bool dropped __attribute__((unused))) {
+  /* cleanup everything that is not the current ANSN */
+  struct olsrv2_tc_edge *edge, *edge_it;
+  struct olsrv2_tc_attached_endpoint *end, *end_it;
+
+  avl_for_each_element_safe(&_current.node->_edges, edge, _node, edge_it) {
+    if (edge->ansn != _current.node->ansn) {
+      olsrv2_tc_edge_remove(edge);
+    }
+  }
+
+  avl_for_each_element_safe(&_current.node->_endpoints, end, _src_node, end_it) {
+    if (end->ansn != _current.node->ansn) {
+      olsrv2_tc_endpoint_remove(end);
+    }
+  }
   return RFC5444_OKAY;
 }
