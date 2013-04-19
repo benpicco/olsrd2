@@ -244,8 +244,11 @@ olsrv2_mpr_shall_process(
 bool
 olsrv2_mpr_shall_forwarding(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
+  struct nhdp_interface *interf;
+  struct nhdp_laddr *laddr;
   struct nhdp_neighbor *neigh;
   enum olsr_duplicate_result dup_result;
+  bool forward;
   struct netaddr_str buf;
 
   /* check if message has originator and sequence number */
@@ -269,25 +272,47 @@ olsrv2_mpr_shall_forwarding(
     return false;
   }
 
-  /* get NHDP neighbor */
-  neigh = nhdp_db_neighbor_get_by_originator(&context->orig_addr);
-  if (neigh == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u from %s"
-        " with seqno %u, originator is unknown",
-        context->msg_type,
-        netaddr_to_string(&buf, &context->orig_addr),
-        context->seqno);
+  /* check input interface */
+  if (_protocol->input_interface == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because input interface is not set");
     return false;
   }
 
+  /* checp input source address */
+  if (_protocol->input_address == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because input source is not set");
+    return false;
+  }
+
+  /* get NHDP interface */
+  interf = nhdp_interface_get(_protocol->input_interface->name);
+  if (interf == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because NHDP does not handle"
+        " interface '%s'", _protocol->input_interface->name);
+    return false;
+  }
+
+  /* get NHDP link address corresponding to source */
+  laddr = nhdp_interface_get_link_addr(interf, _protocol->input_address);
+  if (laddr == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because source IP %s is"
+        " not a direct neighbor",
+        netaddr_to_string(&buf, _protocol->input_address));
+    return false;
+  }
+
+  /* get NHDP neighbor */
+  neigh = laddr->link->neigh;
+
   /* forward if this neighbor has selected us as a flooding MPR */
+  forward = neigh->local_is_flooding_mpr && neigh->symmetric > 0;
   OLSR_DEBUG(LOG_OLSRV2, "Do %sforward message type %u from %s"
       " with seqno %u",
-      neigh->local_is_flooding_mpr ? "" : "not ",
+      forward ? "" : "not ",
       context->msg_type,
       netaddr_to_string(&buf, &context->orig_addr),
       context->seqno);
-  return neigh->local_is_flooding_mpr;
+  return forward;
 }
 
 bool
@@ -389,8 +414,9 @@ _cb_topology(struct olsr_telnet_data *con) {
             olsr_timer_get_due(&node->_validity_time)));
 
     avl_for_each_element(&node->_edges, edge, _node) {
-      abuf_appendf(con->out, "\tlink to %s:\n",
-          netaddr_to_string(&nbuf, &edge->dst->target.addr));
+      abuf_appendf(con->out, "\tlink to %s%s:\n",
+          netaddr_to_string(&nbuf, &edge->dst->target.addr),
+          edge->virtual ? " (virtual)" : "");
 
       list_for_each_element(&nhdp_domain_list, domain, _node) {
         abuf_appendf(con->out, "\t\tmetric '%s': %d\n",

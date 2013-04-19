@@ -151,7 +151,10 @@ olsrv2_tc_node_add(struct netaddr *originator,
     /* hook into global tree */
     avl_insert(&olsrv2_tc_tree, &node->_originator_node);
   }
-
+  else if (!olsr_timer_is_active(&node->_validity_time)) {
+    /* node was virtual */
+    node->ansn = ansn;
+  }
   olsr_timer_set(&node->_validity_time, vtime);
   return node;
 }

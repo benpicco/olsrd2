@@ -234,7 +234,8 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* check if the topology information is recent enough */
   if (rfc5444_seqno_is_smaller(ansn, _current.node->ansn)) {
-    OLSR_DEBUG(LOG_OLSRV2_R, "ANSN is smaller than %u", _current.node->ansn);
+    OLSR_DEBUG(LOG_OLSRV2_R, "ANSN %u is smaller than last stored ANSN %u",
+        ansn, _current.node->ansn);
     return RFC5444_DROP_MESSAGE;
   }
 
