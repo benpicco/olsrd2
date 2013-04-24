@@ -64,7 +64,7 @@ EXPORT const struct olsr_netaddr_acl *olsrv2_get_routable(void);
 EXPORT bool olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *, uint64_t vtime);
 EXPORT bool olsrv2_mpr_shall_forwarding(
-    struct rfc5444_reader_tlvblock_context *, uint64_t vtime);
+    struct rfc5444_reader_tlvblock_context *context, uint64_t vtime);
 EXPORT bool olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *);
 EXPORT uint16_t olsrv2_get_ansn(void);
 EXPORT uint16_t olsrv2_update_ansn(void);

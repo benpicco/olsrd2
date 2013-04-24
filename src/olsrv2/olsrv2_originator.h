@@ -60,6 +60,7 @@ void olsrv2_originator_init(void);
 void olsrv2_originator_cleanup(void);
 
 EXPORT const struct netaddr *olsrv2_originator_get(int af_type);
+EXPORT bool olsrv2_originator_is_local(const struct netaddr *);
 
 /**
  * @param addr originator address

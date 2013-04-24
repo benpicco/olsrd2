@@ -158,7 +158,6 @@ olsrv2_writer_cleanup(void) {
 
 void
 olsrv2_writer_send_tc(void) {
-
   /* send IPv4 */
   OLSR_INFO(LOG_OLSRV2_W, "Emit IPv4 TC message.");
   _send_msg_type = AF_INET;
@@ -217,12 +216,7 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
   struct nhdp_link *lnk;
   int target_af_type;
 
-  struct netaddr_str buf;
-
   target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
-
-  OLSR_DEBUG(LOG_OLSRV2_W, "Test if TC should be sent to %s on %s",
-      netaddr_to_string(&buf, &target->dst), target->interface->name);
 
   if (target == target->interface->multicast4) {
     target_af_type = AF_INET;
@@ -232,20 +226,17 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
   }
   else {
     /* do not use unicast targets with this selector */
-    OLSR_DEBUG(LOG_OLSRV2_W, "Target is no multicast target");
     return false;
   }
 
   interf = nhdp_interface_get(target->interface->name);
   if (interf == NULL) {
     /* unknown interface */
-    OLSR_DEBUG(LOG_OLSRV2_W, "Cannot find nhdp interface");
     return false;
   }
 
   if (list_is_empty(&interf->_links)) {
     /* no neighbor */
-    OLSR_DEBUG(LOG_OLSRV2_W, "NHDP interface has no links");
     return false;
   }
 
@@ -279,7 +270,6 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
   }
 
   /* nothing to do with this interface */
-  OLSR_DEBUG(LOG_OLSRV2_W, "No fitting link found, ignore interface");
   return false;
 }
 
@@ -312,7 +302,6 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
   struct nhdp_domain *domain;
 
   struct olsrv2_lan_entry *lan;
-  bool advertised[NHDP_MAXIMUM_DOMAINS];
   bool any_advertised;
   uint8_t nbr_addrtype_value;
 
@@ -327,14 +316,15 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
     any_advertised = false;
     /* calculate advertised array */
     list_for_each_element(&nhdp_domain_list, domain, _node) {
-      advertised[domain->index] =
-          nhdp_domain_get_neighbordata(domain, neigh)->neigh_is_mpr;
-
-      any_advertised |= advertised[domain->index];
+      if (nhdp_domain_get_neighbordata(domain, neigh)->neigh_is_mpr) {
+        any_advertised = true;
+        break;
+      }
     }
 
     if (!any_advertised) {
       /* neighbor is not advertised */
+      OLSR_DEBUG(LOG_OLSRV2_W, "Unadvertised neighbor");
       continue;
     }
 
@@ -342,6 +332,8 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
     avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
       if (netaddr_get_address_family(&naddr->neigh_addr) != _send_msg_type) {
         /* wrong address family */
+        OLSR_DEBUG(LOG_OLSRV2_W, "Wrong address type of neighbor %s",
+            netaddr_to_string(&buf, &naddr->neigh_addr));
         continue;
       }
 
@@ -356,6 +348,8 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
       if (nbr_addrtype_value == 0) {
         /* skip this address */
+        OLSR_DEBUG(LOG_OLSRV2_W, "Address %s is neither routable"
+            " nor an originator", netaddr_to_string(&buf, &naddr->neigh_addr));
         continue;
       }
 
@@ -381,14 +375,14 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
         metric_in = rfc5444_metric_encode(neigh_domain->metric.in);
         metric_out = rfc5444_metric_encode(neigh_domain->metric.out);
 
-        if (!advertised[domain->index]) {
+        if (!nhdp_domain_get_neighbordata(domain, neigh)->neigh_is_mpr) {
           /* just put in an empty metric so we don't need to start a second TLV */
           metric_in = 0;
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
-              &metric_in, sizeof(metric_in), false);
+              &metric_in, sizeof(metric_in), true);
         }
         else if (metric_in == metric_out) {
           /* incoming and outgoing metric are the same */
@@ -398,7 +392,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
-              &metric_in, sizeof(metric_in), false);
+              &metric_in, sizeof(metric_in), true);
         }
         else {
           /* different metrics for incoming and outgoing link */
@@ -408,12 +402,12 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
-              &metric_in, sizeof(metric_in), false);
+              &metric_in, sizeof(metric_in), true);
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_out);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[1],
-              &metric_out, sizeof(metric_out), false);
+              &metric_out, sizeof(metric_out), true);
         }
       }
     }

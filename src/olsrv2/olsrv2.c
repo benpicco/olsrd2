@@ -215,13 +215,14 @@ bool
 olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   enum olsr_duplicate_result dup_result;
+  bool process;
   struct netaddr_str buf;
-
-  OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be processed");
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OLSR_DEBUG(LOG_OLSRV2, "Originator/Sequence number is missing!");
+    OLSR_DEBUG(LOG_OLSRV2, "Do not process message type %u,"
+        " originator or sequence number is missing!",
+        context->msg_type);
     return false;
   }
 
@@ -229,22 +230,32 @@ olsrv2_mpr_shall_process(
   dup_result = olsr_duplicate_entry_add(&_protocol->processed_set,
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
-  OLSR_DEBUG(LOG_OLSRV2, "Message from %s with seqno %d dupset result: %d",
-      netaddr_to_string(&buf, &context->orig_addr), context->seqno, dup_result);
-  return dup_result == OLSR_DUPSET_NEW || dup_result == OLSR_DUPSET_NEWEST;
+  process = dup_result == OLSR_DUPSET_NEW || dup_result == OLSR_DUPSET_NEWEST;
+
+  OLSR_DEBUG(LOG_OLSRV2, "Do %sprocess message type %u from %s"
+      " with seqno %u (dupset result: %u)",
+      process ? "" : "not ",
+      context->msg_type,
+      netaddr_to_string(&buf, &context->orig_addr),
+      context->seqno, dup_result);
+  return process;
 }
 
 bool
 olsrv2_mpr_shall_forwarding(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
+  struct nhdp_interface *interf;
+  struct nhdp_laddr *laddr;
   struct nhdp_neighbor *neigh;
   enum olsr_duplicate_result dup_result;
-
-  OLSR_DEBUG(LOG_OLSRV2, "Test if message shall be forwarded");
+  bool forward;
+  struct netaddr_str buf;
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OLSR_DEBUG(LOG_OLSRV2, "Originator/Sequence number is missing!");
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u,"
+        " originator or sequence number is missing!",
+        context->msg_type);
     return false;
   }
 
@@ -253,21 +264,55 @@ olsrv2_mpr_shall_forwarding(
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
   if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
-    OLSR_DEBUG(LOG_OLSRV2, "Dupset returned %d", dup_result);
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u from %s"
+        " with seqno %u (dupset result: %u)",
+        context->msg_type,
+        netaddr_to_string(&buf, &context->orig_addr),
+        context->seqno, dup_result);
+    return false;
+  }
+
+  /* check input interface */
+  if (_protocol->input_interface == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because input interface is not set");
+    return false;
+  }
+
+  /* checp input source address */
+  if (_protocol->input_address == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because input source is not set");
+    return false;
+  }
+
+  /* get NHDP interface */
+  interf = nhdp_interface_get(_protocol->input_interface->name);
+  if (interf == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because NHDP does not handle"
+        " interface '%s'", _protocol->input_interface->name);
+    return false;
+  }
+
+  /* get NHDP link address corresponding to source */
+  laddr = nhdp_interface_get_link_addr(interf, _protocol->input_address);
+  if (laddr == NULL) {
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because source IP %s is"
+        " not a direct neighbor",
+        netaddr_to_string(&buf, _protocol->input_address));
     return false;
   }
 
   /* get NHDP neighbor */
-  neigh = nhdp_db_neighbor_get_by_originator(&context->orig_addr);
-  if (neigh == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Cannot find neighbor for originator");
-    return false;
-  }
+  neigh = laddr->link->neigh;
 
   /* forward if this neighbor has selected us as a flooding MPR */
-  OLSR_DEBUG(LOG_OLSRV2, "Local flodding is '%s'",
-      neigh->local_is_flooding_mpr ? "on" : "off");
-  return neigh->local_is_flooding_mpr;
+  forward = neigh->local_is_flooding_mpr && neigh->symmetric > 0;
+  OLSR_DEBUG(LOG_OLSRV2, "Do %sforward message type %u from %s"
+      " with seqno %u",
+      forward ? "" : "not ",
+      context->msg_type,
+      netaddr_to_string(&buf, &context->orig_addr),
+      context->seqno);
+  return forward;
 }
 
 bool
@@ -279,21 +324,20 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
 
   target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
 
-  OLSR_DEBUG(LOG_OLSRV2, "forwarding selector %s", target->interface->name);
-
   /* test if this is the ipv4 multicast target */
   is_ipv4 = target == target->interface->multicast4;
 
   /* only forward to multicast targets */
   if (!is_ipv4 && target != target->interface->multicast6) {
-    OLSR_DEBUG(LOG_OLSRV2, "Target is unicast");
     return false;
   }
 
   /* get NHDP interface for target */
   interf = nhdp_interface_get(target->interface->name);
   if (interf == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Cannot find interface %s", target->interface->name);
+    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message"
+        " to interface %s: its unknown to NHDP",
+        target->interface->name);
     return NULL;
   }
 
@@ -370,8 +414,9 @@ _cb_topology(struct olsr_telnet_data *con) {
             olsr_timer_get_due(&node->_validity_time)));
 
     avl_for_each_element(&node->_edges, edge, _node) {
-      abuf_appendf(con->out, "\tlink to %s:\n",
-          netaddr_to_string(&nbuf, &edge->dst->target.addr));
+      abuf_appendf(con->out, "\tlink to %s%s:\n",
+          netaddr_to_string(&nbuf, &edge->dst->target.addr),
+          edge->virtual ? " (virtual)" : "");
 
       list_for_each_element(&nhdp_domain_list, domain, _node) {
         abuf_appendf(con->out, "\t\tmetric '%s': %d\n",
