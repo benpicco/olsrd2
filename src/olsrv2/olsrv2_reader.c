@@ -54,6 +54,10 @@
 #include "olsrv2/olsrv2_reader.h"
 #include "olsrv2/olsrv2_tc.h"
 
+#ifdef RIOT
+#include "sys/net/net_help/net_help.h"
+#endif
+
 /* NHDP message TLV array index */
 enum {
   IDX_TLV_ITIME,

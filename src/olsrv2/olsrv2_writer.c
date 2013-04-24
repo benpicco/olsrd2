@@ -56,6 +56,10 @@
 #include "olsrv2/olsrv2_originator.h"
 #include "olsrv2/olsrv2_writer.h"
 
+#ifdef RIOT
+#include "sys/net/net_help/net_help.h"
+#endif
+
 /* constants */
 enum {
   IDX_ADDRTLV_NBR_ADDR_TYPE,
