@@ -47,9 +47,10 @@
 #include "core/olsr_class.h"
 #include "core/olsr_logging.h"
 
+#include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_domain.h"
-#include "nhdp/nhdp.h"
+#include "nhdp/nhdp_interfaces.h"
 
 static struct nhdp_domain *_get_new_domain(uint8_t ext);
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
@@ -321,6 +322,8 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
     data->metric.in = domain->metric->incoming_link_start;
     data->metric.out = domain->metric->outgoing_link_start;
 
+    data->best_link = NULL;
+
     data->willingness = domain->mpr->willingness;
     data->local_is_mpr = domain->mpr->mprs_start;
     data->neigh_is_mpr = domain->mpr->mpr_start;
@@ -394,16 +397,25 @@ nhdp_domain_calculate_neighbor_metric(
   neighdata->metric.in = RFC5444_METRIC_INFINITE;
   neighdata->metric.out = RFC5444_METRIC_INFINITE;
 
+  /* reset best link */
+  neighdata->best_link = NULL;
+
   /* get best metric */
   list_for_each_element(&neigh->_links, lnk, _neigh_node) {
     linkdata = nhdp_domain_get_linkdata(domain, lnk);
 
     if (linkdata->metric.out < neighdata->metric.out) {
       neighdata->metric.out = linkdata->metric.out;
+      neighdata->best_link = lnk;
     }
     if (linkdata->metric.in < neighdata->metric.in) {
       neighdata->metric.in = linkdata->metric.in;
     }
+  }
+
+  if (neighdata->best_link != NULL) {
+    neighdata->best_link_ifindex =
+        nhdp_interface_get_coreif(neighdata->best_link->local_if)->data.index;
   }
 
   if (memcmp(&oldmetric, &neighdata->metric, sizeof(oldmetric)) != 0) {

@@ -51,6 +51,8 @@
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
 
+#include "olsrv2/olsrv2_routing.h"
+
 enum olsrv2_target_type {
   OLSRV2_NODE_TARGET,
   OLSRV2_ADDRESS_TARGET,
@@ -63,6 +65,9 @@ struct olsrv2_tc_target {
 
   /* type of target */
   enum olsrv2_target_type type;
+
+  /* internal data for dijkstra run */
+  struct olsrv2_dijkstra_node _dijkstra;
 };
 
 struct olsrv2_tc_node {
@@ -149,6 +154,7 @@ struct olsrv2_tc_endpoint {
 };
 
 EXPORT extern struct avl_tree olsrv2_tc_tree;
+EXPORT extern struct avl_tree olsrv2_tc_endpoint_tree;
 
 void olsrv2_tc_init(void);
 void olsrv2_tc_cleanup(void);
@@ -166,4 +172,17 @@ EXPORT struct olsrv2_tc_attached_endpoint *olsrv2_tc_endpoint_add(
 EXPORT void olsrv2_tc_endpoint_remove(
     struct olsrv2_tc_attached_endpoint *);
 
+static inline struct olsrv2_tc_node *
+olsrv2_tc_node_get(struct netaddr *originator) {
+  struct olsrv2_tc_node *node;
+
+  return avl_find_element(&olsrv2_tc_tree, originator, node, _originator_node);
+}
+
+static inline struct olsrv2_tc_endpoint *
+olsrv2_tc_endpoint_get(struct netaddr *prefix) {
+  struct olsrv2_tc_endpoint *end;
+
+  return avl_find_element(&olsrv2_tc_endpoint_tree, prefix, end, _node);
+}
 #endif /* OLSRV2_TC_H_ */

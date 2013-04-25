@@ -589,6 +589,9 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
     }
   }
 
+  /* copy interface address of link */
+  memcpy(&_current.link->if_addr, _protocol->input_address, sizeof(struct netaddr));
+
   if (!_current.has_thisif) {
     struct netaddr addr;
 

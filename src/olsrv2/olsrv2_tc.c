@@ -50,6 +50,7 @@
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
 
+#include "olsrv2/olsrv2_routing.h"
 #include "olsrv2/olsrv2_tc.h"
 
 static void _cb_tc_node_timeout(void *);
@@ -147,6 +148,9 @@ olsrv2_tc_node_add(struct netaddr *originator,
     node->_validity_time.cb_context = node;
 
     node->ansn = ansn;
+
+    /* initialize dijkstra data */
+    olsrv2_routing_dijkstra_init(&node->target._dijkstra);
 
     /* hook into global tree */
     avl_insert(&olsrv2_tc_tree, &node->_originator_node);

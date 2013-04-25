@@ -91,6 +91,12 @@ struct nhdp_neighbor_domaindata {
   /* incoming and outgoing metric cost */
   struct nhdp_metric metric;
 
+  /* pointer to the best link available to the neighbor */
+  struct nhdp_link *best_link;
+
+  /* interface index for the best link available to the neighbor */
+  unsigned best_link_ifindex;
+
   /* true if the local router has been selected as a MPR by the neighbor */
   bool local_is_mpr;
 
@@ -138,6 +144,9 @@ struct nhdp_link {
 
   /* pointer to neighbor entry of the other side of the link */
   struct nhdp_neighbor *neigh;
+
+  /* local interface address heard from the link */
+  struct netaddr if_addr;
 
   /* internal field for NHDP processing */
   int _process_count;
@@ -219,6 +228,7 @@ struct nhdp_neighbor {
 
   /* number of links to this neighbor which are symmetric */
   int symmetric;
+
   /* pointer to other (dualstack) representation of this neighbor */
   struct nhdp_neighbor *dualstack_partner;
 

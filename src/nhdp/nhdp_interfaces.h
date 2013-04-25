@@ -247,4 +247,13 @@ nhdp_interface_link_get_by_originator(
   return avl_find_element(&interf->_link_originators, originator, lnk, _originator_node);
 }
 
+/**
+ * @param nhdp_if pointer to nhdp interface
+ * @return pointer to corresponding olsr_interface
+ */
+static inline struct olsr_interface *
+nhdp_interface_get_coreif(struct nhdp_interface *nhdp_if) {
+  return olsr_rfc5444_get_core_interface(nhdp_if->rfc5444_if.interface);
+}
+
 #endif /* NHDP_INTERFACES_H_ */
