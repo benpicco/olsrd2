@@ -172,6 +172,8 @@ static struct {
   bool link_heard, link_lost;
   bool has_thisif;
 
+  bool originator_in_addrblk;
+
   uint64_t vtime, itime;
 } _current;
 
@@ -458,6 +460,12 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context) {
   OLSR_DEBUG(LOG_NHDP_R, "Pass 1: address %s, local_if %u, link_status: %u",
       netaddr_to_string(&buf, &context->addr), local_if, link_status);
 
+  if (!_current.originator_in_addrblk
+      && netaddr_cmp(&context->addr, &context->orig_addr) == 0) {
+    /* originator is inside address block, prevent using it */
+    _current.originator_in_addrblk = true;
+  }
+
   if (local_if == RFC5444_LOCALIF_THIS_IF
         || local_if == RFC5444_LOCALIF_OTHER_IF) {
     /* still no neighbor address conflict, so keep checking */
@@ -544,7 +552,8 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
   }
 
   /* handle originator address */
-  if (netaddr_get_address_family(&context->orig_addr) != AF_UNSPEC) {
+  if (!_current.originator_in_addrblk
+      && netaddr_get_address_family(&context->orig_addr) != AF_UNSPEC) {
     _handle_originator(context);
   }
 

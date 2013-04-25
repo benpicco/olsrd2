@@ -290,6 +290,10 @@ _print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
       olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
       lnk->dualstack_partner != NULL ? "dualstack " : "",
       nhdp_hysteresis_to_string(&hbuf, lnk));
+  if (netaddr_get_address_family(&lnk->neigh->originator) != AF_UNSPEC) {
+    abuf_appendf(con->out, "%s\tOriginator: %s\n", prefix,
+        netaddr_to_string(&nbuf, &lnk->neigh->originator));
+  }
 
   avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
     abuf_appendf(con->out, "%s\tLink addresses: %s\n",
@@ -322,7 +326,7 @@ _print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
       neigh->dualstack_partner != NULL ? "dualstack" : "");
 
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    abuf_appendf(con->out, "Metric '%s': in=%d, out=%d, MPR=%s, MPRS=%s, will=%d\n",
+    abuf_appendf(con->out, "\tMetric '%s': in=%d, out=%d, MPR=%s, MPRS=%s, will=%d\n",
         domain->metric->name,
         nhdp_domain_get_neighbordata(domain, neigh)->metric.in,
         nhdp_domain_get_neighbordata(domain, neigh)->metric.out,
