@@ -95,6 +95,7 @@ struct olsrv2_routing_entry_data {
   /* forwarding information before the current dijkstra run */
   unsigned _old_if_index;
   struct netaddr _old_next_hop;
+  uint8_t _old_distance;
 
   /* back pointer to routing entry */
   struct olsrv2_routing_entry *rtentry;

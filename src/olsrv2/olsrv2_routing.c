@@ -232,6 +232,7 @@ _prepare_routes(struct nhdp_domain *domain) {
 
     rtdata->_updated = false;
     rtdata->_old_if_index = rtdata->if_index;
+    rtdata->_old_distance = rtdata->distance;
     memcpy(&rtdata->_old_next_hop, &rtdata->next_hop, sizeof(struct netaddr));
   }
 
@@ -346,6 +347,7 @@ _update_routes(struct nhdp_domain *domain) {
     if (data->_updated) {
       if (data->_set
           && data->_old_if_index == data->if_index
+          && data->_old_distance == data->distance
           && netaddr_cmp(&data->_old_next_hop, &data->next_hop) == 0) {
         /* no change, ignore this entry */
         continue;
@@ -353,6 +355,7 @@ _update_routes(struct nhdp_domain *domain) {
 
       /* entry is new or was updated */
       data->_old_if_index = data->if_index;
+      data->_old_distance = data->distance;
       memcpy(&data->_old_next_hop, &data->next_hop, sizeof(struct netaddr));
 
       data->_set = true;
