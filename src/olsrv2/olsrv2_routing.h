@@ -65,6 +65,9 @@ struct olsrv2_dijkstra_node {
 
   /* true if route is single-hop */
   bool single_hop;
+
+  /* true if this node is ourself */
+  bool local;
 };
 
 struct olsrv2_routing_entry_data {
@@ -85,6 +88,9 @@ struct olsrv2_routing_entry_data {
 
   /* true if nexthop was changed in current dijkstra run */
   bool _updated;
+
+  /* true if this routing entry is active */
+  bool _set;
 
   /* forwarding information before the current dijkstra run */
   unsigned _old_if_index;

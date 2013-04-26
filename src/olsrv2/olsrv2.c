@@ -152,6 +152,7 @@ olsrv2_init(void) {
   olsrv2_originator_init();
   olsrv2_reader_init(_protocol);
   olsrv2_tc_init();
+  olsrv2_routing_init();
 
   /* add configuration for olsrv2 section */
   cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
@@ -187,6 +188,7 @@ olsrv2_cleanup(void) {
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
   olsr_acl_remove(&_olsrv2_config.routable);
 
+  olsrv2_routing_cleanup();
   olsrv2_writer_cleanup();
   olsrv2_reader_cleanup();
   olsrv2_originator_cleanup();

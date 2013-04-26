@@ -46,11 +46,13 @@
 #include "common/netaddr.h"
 #include "core/olsr_class.h"
 #include "core/olsr_logging.h"
+#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444.h"
 
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_domain.h"
 
+#include "olsrv2_originator.h"
 #include "olsrv2/olsrv2_tc.h"
 #include "olsrv2/olsrv2_routing.h"
 
@@ -59,12 +61,26 @@ static void _remove_entry(struct olsrv2_routing_entry *);
 static void _prepare_routes(struct nhdp_domain *);
 static void _handle_working_queue(struct nhdp_domain *);
 static void _update_routes(struct nhdp_domain *);
+static void _cb_trigger_dijkstra(void *);
 
 static struct olsr_class _rtset_entry = {
   .name = "Olsrv2 Routing Set Entry",
   .size = sizeof(struct olsrv2_routing_entry),
 };
 
+/* rate limitation for dijkstra algorithm */
+static struct olsr_timer_info _rate_limit_info = {
+  .name = "Dijkstra rate limitation",
+  .callback = _cb_trigger_dijkstra,
+};
+
+static struct olsr_timer_entry _rate_limit_timer = {
+  .info = &_rate_limit_info
+};
+
+static bool _trigger_dijkstra = false;
+
+/* global datastructure for routing */
 struct avl_tree olsrv2_routing_tree;
 static struct avl_tree _working_tree;
 static struct list_entity _routing_queue;
@@ -76,6 +92,8 @@ olsrv2_routing_init(void) {
   LOG_OLSRV2_ROUTING = olsr_log_register_source("olsrv2_routing");
 
   olsr_class_add(&_rtset_entry);
+  olsr_timer_add(&_rate_limit_info);
+
   avl_init(&olsrv2_routing_tree, avl_comp_netaddr, false);
   avl_init(&_working_tree, avl_comp_uint32, true);
   list_init_head(&_routing_queue);
@@ -96,6 +114,16 @@ olsrv2_routing_update(void) {
   struct nhdp_domain *domain;
   struct olsrv2_routing_entry_data *data;
 
+  if (olsr_timer_is_active(&_rate_limit_timer)) {
+    /* trigger dijkstra later */
+    _trigger_dijkstra = true;
+
+    OLSR_DEBUG(LOG_OLSRV2_ROUTING, "Delay Dijkstra");
+    return;
+  }
+
+  OLSR_DEBUG(LOG_OLSRV2_ROUTING, "Run Dijkstra");
+
   list_for_each_element(&nhdp_domain_list, domain, _node) {
     _prepare_routes(domain);
 
@@ -112,11 +140,21 @@ olsrv2_routing_update(void) {
     data = list_first_element(&_routing_queue, data, _working_node);
 
     // TODO: apply route to kernel
-    // TODO: removal should be async
+    // TODO: removal from the working queue should be async
+
+    if (data->_set) {
+      /* add to kernel */
+    }
+    else {
+      /* remove from kernel */
+    }
 
     /* remove from working list */
     list_remove(&data->_working_node);
   }
+
+  /* make sure dijkstra is not called too often */
+  olsr_timer_set(&_rate_limit_timer, 250);
 }
 
 void
@@ -125,27 +163,52 @@ olsrv2_routing_dijkstra_init(struct olsrv2_dijkstra_node *dijkstra) {
 }
 
 static struct olsrv2_routing_entry *
-_add_entry(struct netaddr *prefix __attribute__((unused))) {
-  return NULL;
+_add_entry(struct netaddr *prefix) {
+  struct olsrv2_routing_entry *rtentry;
+
+  rtentry = avl_find_element(&olsrv2_routing_tree, prefix, rtentry, _global_node);
+  if (rtentry) {
+    return rtentry;
+  }
+
+  rtentry = olsr_class_malloc(&_rtset_entry);
+  if (rtentry == NULL) {
+    return NULL;
+  }
+
+  memcpy(&rtentry->destination, prefix, sizeof(struct netaddr));
+  rtentry->_global_node.key = &rtentry->destination;
+
+  avl_insert(&olsrv2_routing_tree, &rtentry->_global_node);
+  return rtentry;
 }
 
 static void
-_remove_entry(struct olsrv2_routing_entry *entry __attribute__((unused))) {
+_remove_entry(struct olsrv2_routing_entry *entry) {
+  avl_remove(&olsrv2_routing_tree, &entry->_global_node);
+  olsr_class_free(&_rtset_entry, entry);
 }
 
 static void
-_insert_into_working_tree(struct olsrv2_dijkstra_node *node,
+_insert_into_working_tree(struct olsrv2_tc_target *target,
     struct nhdp_neighbor *neigh,
     uint32_t pathcost, uint8_t distance, bool single_hop) {
-  if (node->first_hop != NULL) {
-    if (node->path_cost < pathcost) {
-      /* current target is better */
-      return;
-    }
+  struct olsrv2_dijkstra_node *node;
+  struct netaddr_str buf;
 
+  node = &target->_dijkstra;
+  if (node->first_hop != NULL) {
     /* already hooked into dijkstra ! */
     avl_remove(&_working_tree, &node->_node);
   }
+
+  if (node->path_cost <= pathcost || node->local) {
+    /* current target is better or it is ourselves */
+    return;
+  }
+
+  OLSR_DEBUG(LOG_OLSRV2_ROUTING, "Add target %s with pastcost %u to working queue",
+      netaddr_to_string(&buf, &target->addr), node->path_cost);
 
   node->path_cost = pathcost;
   node->first_hop = neigh;
@@ -175,6 +238,8 @@ _prepare_routes(struct nhdp_domain *domain) {
   avl_for_each_element(&olsrv2_tc_tree, node, _originator_node) {
     node->target._dijkstra.first_hop = NULL;
     node->target._dijkstra.path_cost = RFC5444_METRIC_INFINITE_PATH;
+    node->target._dijkstra.local =
+        olsrv2_originator_is_local(&node->target.addr);
   }
 
   avl_for_each_element(&olsrv2_tc_endpoint_tree, end, _node) {
@@ -188,7 +253,7 @@ _prepare_routes(struct nhdp_domain *domain) {
         && netaddr_get_address_family(&neigh->originator) != AF_UNSPEC
         && (node = olsrv2_tc_node_get(&neigh->originator)) != NULL) {
       /* found node for neighbor, add to worker list */
-      _insert_into_working_tree(&node->target._dijkstra, neigh,
+      _insert_into_working_tree(&node->target, neigh,
           nhdp_domain_get_neighbordata(domain, neigh)->metric.out, 0, true);
     }
   }
@@ -206,10 +271,14 @@ _handle_working_queue(struct nhdp_domain *domain) {
   struct olsrv2_tc_edge *tc_edge;
   struct olsrv2_tc_attached_endpoint *tc_attached;
 
+  struct netaddr_str buf;
+
   /* get tc target */
   target = avl_first_element(&_working_tree, target, _dijkstra._node);
 
   /* remove current node from working tree */
+  OLSR_DEBUG(LOG_OLSRV2_ROUTING, "Remove node %s from working queue",
+      netaddr_to_string(&buf, &target->addr));
   avl_remove(&_working_tree, &target->_dijkstra._node);
 
   /* add routing entry */
@@ -236,30 +305,31 @@ _handle_working_queue(struct nhdp_domain *domain) {
   /* mark as updated */
   rtdata->_updated = true;
 
-  if (target->type != OLSRV2_NODE_TARGET) {
-    /* not a node, we are done here */
-    return;
-  }
+  if (target->type == OLSRV2_NODE_TARGET) {
+    /* calculate pointer of olsrv2_tc_node */
+    tc_node = container_of(target, struct olsrv2_tc_node, target);
 
-  /* calculate pointer of olsrv2_tc_node */
-  tc_node = container_of(target, struct olsrv2_tc_node, target);
+    /* iterate over edges */
+    avl_for_each_element(&tc_node->_edges, tc_edge, _node) {
+      if (tc_edge->cost[domain->index] < RFC5444_METRIC_INFINITE) {
+        /* add new tc_node to working tree */
+        _insert_into_working_tree(&tc_edge->dst->target, first_hop,
+            target->_dijkstra.path_cost + tc_edge->cost[domain->index],
+            0, false);
+      }
+    }
 
-  /* iterate over edges */
-  avl_for_each_element(&tc_node->_edges, tc_edge, _node) {
-    if (tc_edge->cost[domain->index] < RFC5444_METRIC_INFINITE) {
-      /* add new tc_node to working tree */
-      _insert_into_working_tree(&tc_edge->dst->target._dijkstra,
-          first_hop, tc_edge->cost[domain->index], 0, false);
+    /* iterate over attached networks and addresses */
+    avl_for_each_element(&tc_node->_endpoints, tc_attached, _src_node) {
+      /* add attached network or address to working tree */
+      _insert_into_working_tree(&tc_attached->dst->target, first_hop,
+          target->_dijkstra.path_cost + tc_attached->cost[domain->index],
+          tc_attached->distance[domain->index], false);
     }
   }
 
-  /* iterate over attached networks and addresses */
-  avl_for_each_element(&tc_node->_endpoints, tc_attached, _src_node) {
-    /* add attached network or address to working tree */
-    _insert_into_working_tree(&tc_attached->dst->target._dijkstra,
-        first_hop, tc_attached->cost[domain->index],
-        tc_attached->distance[domain->index], false);
-  }
+  /* cleanup temporary dijkstra data */
+  target->_dijkstra.first_hop = NULL;
 }
 
 static void
@@ -274,7 +344,8 @@ _update_routes(struct nhdp_domain *domain) {
     data = &rtentry->data[domain->index];
 
     if (data->_updated) {
-      if (data->_old_if_index == data->if_index
+      if (data->_set
+          && data->_old_if_index == data->if_index
           && netaddr_cmp(&data->_old_next_hop, &data->next_hop) == 0) {
         /* no change, ignore this entry */
         continue;
@@ -284,12 +355,13 @@ _update_routes(struct nhdp_domain *domain) {
       data->_old_if_index = data->if_index;
       memcpy(&data->_old_next_hop, &data->next_hop, sizeof(struct netaddr));
 
+      data->_set = true;
+
       OLSR_INFO(LOG_OLSRV2_ROUTING,
-          "Route %s over if_index %u to nexthop %s with pathcost %u and distance %u",
+          "Route %s over if_index %u to nexthop %s",
           netaddr_to_string(&nbuf1, &rtentry->destination),
           data->if_index,
-          netaddr_to_string(&nbuf2, &data->next_hop),
-          data->cost, data->distance);
+          netaddr_to_string(&nbuf2, &data->next_hop));
 
       if (data->single_hop) {
         /* insert/update single-hop routes early */
@@ -300,12 +372,14 @@ _update_routes(struct nhdp_domain *domain) {
         list_add_tail(&_routing_queue, &data->_working_node);
       }
     }
-    else {
+    else if (data->_set) {
       OLSR_INFO(LOG_OLSRV2_ROUTING,
           "Remove route %s over if_index %u to nexthop %s",
           netaddr_to_string(&nbuf1, &rtentry->destination),
           data->if_index,
           netaddr_to_string(&nbuf2, &data->next_hop));
+
+      data->_set = false;
 
       if (!data->single_hop) {
         /* remove single-hop routes late */
@@ -316,5 +390,13 @@ _update_routes(struct nhdp_domain *domain) {
         list_add_tail(&_routing_queue, &data->_working_node);
       }
     }
+  }
+}
+
+static void
+_cb_trigger_dijkstra(void *unused __attribute__((unused))) {
+  if (_trigger_dijkstra) {
+    _trigger_dijkstra = false;
+    olsrv2_routing_update();
   }
 }

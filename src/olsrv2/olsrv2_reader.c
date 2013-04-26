@@ -52,6 +52,7 @@
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_originator.h"
 #include "olsrv2/olsrv2_reader.h"
+#include "olsrv2/olsrv2_routing.h"
 #include "olsrv2/olsrv2_tc.h"
 
 /* NHDP message TLV array index */
@@ -382,6 +383,9 @@ _cb_messagetlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute_
   }
 
   _current.node = NULL;
+
+  /* Update routing table */
+  olsrv2_routing_update();
 
   return RFC5444_OKAY;
 }
