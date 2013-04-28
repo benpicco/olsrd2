@@ -1,6 +1,3 @@
-# olsrorg api
-/olsrorg-api/
-
 # build directories
 /build/
 /build-win32/
@@ -11,3 +8,7 @@
 /.cproject
 /.project
 /.settings/
+
+# kdevelop development files/directory
+/.kdev4/
+/olsrd2.kdev4
