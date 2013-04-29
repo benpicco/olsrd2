@@ -404,7 +404,7 @@ static enum olsr_telnet_result
 _cb_topology(struct olsr_telnet_data *con) {
   struct olsrv2_tc_node *node;
   struct olsrv2_tc_edge *edge;
-  struct olsrv2_tc_attached_endpoint *end;
+  struct olsrv2_tc_attachment *end;
   struct nhdp_domain *domain;
   struct netaddr_str nbuf;
   struct fraction_str tbuf;

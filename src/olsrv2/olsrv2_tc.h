@@ -119,7 +119,7 @@ struct olsrv2_tc_edge {
   struct avl_node _node;
 };
 
-struct olsrv2_tc_attached_endpoint {
+struct olsrv2_tc_attachment {
   /* pointer to source of edge */
   struct olsrv2_tc_node *src;
 
@@ -167,10 +167,10 @@ EXPORT struct olsrv2_tc_edge *olsrv2_tc_edge_add(
     struct olsrv2_tc_node *, struct netaddr *);
 EXPORT bool olsrv2_tc_edge_remove(struct olsrv2_tc_edge *);
 
-EXPORT struct olsrv2_tc_attached_endpoint *olsrv2_tc_endpoint_add(
+EXPORT struct olsrv2_tc_attachment *olsrv2_tc_endpoint_add(
     struct olsrv2_tc_node *, struct netaddr *, bool mesh);
 EXPORT void olsrv2_tc_endpoint_remove(
-    struct olsrv2_tc_attached_endpoint *);
+    struct olsrv2_tc_attachment *);
 
 static inline struct olsrv2_tc_node *
 olsrv2_tc_node_get(struct netaddr *originator) {

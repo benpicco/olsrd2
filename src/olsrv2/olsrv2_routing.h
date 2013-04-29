@@ -111,7 +111,7 @@ struct olsrv2_routing_entry {
   struct olsrv2_routing_entry_data data[NHDP_MAXIMUM_DOMAINS];
 
   /* global node */
-  struct avl_node _global_node;
+  struct avl_node _node;
 };
 
 EXPORT extern struct avl_tree olsrv2_routing_tree;
@@ -121,6 +121,7 @@ void olsrv2_routing_cleanup(void);
 
 void olsrv2_routing_dijkstra_init(struct olsrv2_dijkstra_node *);
 
-EXPORT void olsrv2_routing_update(void);
+EXPORT void olsrv2_routing_force_update(bool skip_wait);
+EXPORT void olsrv2_routing_trigger_update(void);
 
 #endif /* OLSRV2_ROUTING_SET_H_ */

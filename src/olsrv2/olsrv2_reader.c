@@ -256,7 +256,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_domain *domain;
   struct olsrv2_tc_edge *edge;
-  struct olsrv2_tc_attached_endpoint *end;
+  struct olsrv2_tc_attachment *end;
   uint32_t cost_in[NHDP_MAXIMUM_DOMAINS];
   uint32_t cost_out[NHDP_MAXIMUM_DOMAINS];
   uint16_t tmp;
@@ -364,7 +364,7 @@ _cb_messagetlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute_
     bool dropped) {
   /* cleanup everything that is not the current ANSN */
   struct olsrv2_tc_edge *edge, *edge_it;
-  struct olsrv2_tc_attached_endpoint *end, *end_it;
+  struct olsrv2_tc_attachment *end, *end_it;
 
   if (dropped || _current.node == NULL) {
     return RFC5444_OKAY;
@@ -383,9 +383,6 @@ _cb_messagetlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute_
   }
 
   _current.node = NULL;
-
-  /* Update routing table */
-  olsrv2_routing_update();
 
   return RFC5444_OKAY;
 }
