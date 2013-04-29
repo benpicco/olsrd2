@@ -134,8 +134,7 @@ struct nhdp_domain {
 
 /* listener for NHDP domain updates */
 struct nhdp_domain_listener {
-  void (*metric_update)(struct nhdp_domain *, struct nhdp_neighbor *);
-  void (*mpr_update)(struct nhdp_domain *);
+  void (*update)(struct nhdp_domain *, struct nhdp_neighbor *);
 
   struct list_entity _node;
 };
@@ -183,7 +182,6 @@ EXPORT uint8_t nhdp_domain_get_willingness_tlvvalue(
     struct nhdp_domain *);
 EXPORT uint8_t nhdp_domain_get_mpr_tlvvalue(
     struct nhdp_domain *, struct nhdp_link *);
-EXPORT void nhdp_domain_update_mprs(struct nhdp_domain *);
 
 /**
  * @param domain NHDP domain

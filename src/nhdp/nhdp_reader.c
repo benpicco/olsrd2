@@ -926,7 +926,6 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped)
   /* update MPR sets and link metrics */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
     nhdp_domain_calculate_neighbor_metric(domain, _current.neighbor);
-    nhdp_domain_update_mprs(domain);
   }
 
   /* update ip flooding settings */

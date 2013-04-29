@@ -450,10 +450,15 @@ nhdp_domain_calculate_neighbor_metric(
     /* mark metric as updated */
     domain->metric_changed = true;
 
+    /* update MPR set */
+    if (domain->mpr->update_mpr) {
+      domain->mpr->update_mpr();
+    }
+
     /* call listeners */
     list_for_each_element(&nhdp_domain_listener_list, listener, _node) {
-      if (listener->metric_update) {
-        listener->metric_update(domain, neigh);
+      if (listener->update) {
+        listener->update(domain, neigh);
       }
     }
   }
@@ -545,25 +550,6 @@ nhdp_domain_get_mpr_tlvvalue(
     }
     else {
       return RFC5444_MPR_NOMPR;
-    }
-  }
-}
-
-/**
- * Update all MPR sets
- */
-void
-nhdp_domain_update_mprs(struct nhdp_domain *domain) {
-  struct nhdp_domain_listener *listener;
-
-  if (domain->mpr->update_mpr) {
-    domain->mpr->update_mpr();
-
-    /* call listeners */
-    list_for_each_element(&nhdp_domain_listener_list, listener, _node) {
-      if (listener->mpr_update) {
-        listener->mpr_update(domain);
-      }
     }
   }
 }
