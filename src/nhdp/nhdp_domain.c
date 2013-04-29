@@ -86,6 +86,8 @@ static struct nhdp_domain_mpr _no_mprs = {
 
 /* non-default routing domains registered to NHDP */
 struct list_entity nhdp_domain_list;
+struct list_entity nhdp_domain_listener_list;
+
 static size_t _domain_counter = 0;
 
 /* flooding MPR handler registered to NHDP */
@@ -105,6 +107,7 @@ nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
 
   olsr_class_add(&_domain_class);
   list_init_head(&nhdp_domain_list);
+  list_init_head(&nhdp_domain_listener_list);
 }
 
 /**
@@ -113,6 +116,7 @@ nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
 void
 nhdp_domain_cleanup(void) {
   struct nhdp_domain *domain, *d_it;
+  struct nhdp_domain_listener *listener, *l_it;
 
   list_for_each_element_safe(&nhdp_domain_list, domain, _node, d_it) {
     /* remove metric */
@@ -120,6 +124,9 @@ nhdp_domain_cleanup(void) {
     olsr_class_free(&_domain_class, domain);
   }
 
+  list_for_each_element_safe(&nhdp_domain_listener_list, listener, _node, l_it) {
+    nhdp_domain_listener_remove(listener);
+  }
   olsr_class_remove(&_domain_class);
 }
 
@@ -247,6 +254,26 @@ nhdp_domain_mpr_remove(struct nhdp_domain *domain) {
       &domain->mpr->_mpr_addrtlv);
 
   domain->mpr = &_no_mprs;
+}
+
+/**
+ * Adds a listener to the NHDP domain system
+ * @param listener pointer to NHDP domain listener
+ */
+void
+nhdp_domain_listener_add(struct nhdp_domain_listener *listener) {
+  list_add_tail(&nhdp_domain_listener_list, &listener->_node);
+}
+
+/**
+ * Removes a listener from the NHDP domain system
+ * @param listener pointer to NHDP domain listener
+ */
+void
+nhdp_domain_listener_remove(struct nhdp_domain_listener *listener) {
+  if (list_is_node_added(&listener->_node)) {
+    list_remove(&listener->_node);
+  }
 }
 
 /**
@@ -387,6 +414,7 @@ nhdp_domain_calculate_neighbor_metric(
   struct nhdp_link_domaindata *linkdata;
   struct nhdp_neighbor_domaindata *neighdata;
   struct nhdp_metric oldmetric;
+  struct nhdp_domain_listener *listener;
 
   neighdata = nhdp_domain_get_neighbordata(domain, neigh);
 
@@ -421,6 +449,13 @@ nhdp_domain_calculate_neighbor_metric(
   if (memcmp(&oldmetric, &neighdata->metric, sizeof(oldmetric)) != 0) {
     /* mark metric as updated */
     domain->metric_changed = true;
+
+    /* call listeners */
+    list_for_each_element(&nhdp_domain_listener_list, listener, _node) {
+      if (listener->metric_update) {
+        listener->metric_update(domain, neigh);
+      }
+    }
   }
 }
 
@@ -518,12 +553,17 @@ nhdp_domain_get_mpr_tlvvalue(
  * Update all MPR sets
  */
 void
-nhdp_domain_update_mprs(void) {
-  struct nhdp_domain *domain;
+nhdp_domain_update_mprs(struct nhdp_domain *domain) {
+  struct nhdp_domain_listener *listener;
 
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    if (domain->mpr->update_mpr) {
-      domain->mpr->update_mpr();
+  if (domain->mpr->update_mpr) {
+    domain->mpr->update_mpr();
+
+    /* call listeners */
+    list_for_each_element(&nhdp_domain_listener_list, listener, _node) {
+      if (listener->mpr_update) {
+        listener->mpr_update(domain);
+      }
     }
   }
 }

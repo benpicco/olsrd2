@@ -132,7 +132,16 @@ struct nhdp_domain {
   struct list_entity _node;
 };
 
+/* listener for NHDP domain updates */
+struct nhdp_domain_listener {
+  void (*metric_update)(struct nhdp_domain *, struct nhdp_neighbor *);
+  void (*mpr_update)(struct nhdp_domain *);
+
+  struct list_entity _node;
+};
+
 EXPORT extern struct list_entity nhdp_domain_list;
+EXPORT extern struct list_entity nhdp_domain_listener_list;
 
 void nhdp_domain_init(struct olsr_rfc5444_protocol *);
 void nhdp_domain_cleanup(void);
@@ -146,6 +155,9 @@ EXPORT void nhdp_domain_metric_remove(struct nhdp_domain *d);
 EXPORT struct nhdp_domain *nhdp_domain_mpr_add(
     struct nhdp_domain_mpr *h, uint8_t etx);
 EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain *d);
+
+EXPORT void nhdp_domain_listener_add(struct nhdp_domain_listener *);
+EXPORT void nhdp_domain_listener_remove(struct nhdp_domain_listener *);
 
 EXPORT void nhdp_domain_set_flooding_mpr(
     struct nhdp_domain_mpr *, uint8_t ext);
@@ -171,7 +183,7 @@ EXPORT uint8_t nhdp_domain_get_willingness_tlvvalue(
     struct nhdp_domain *);
 EXPORT uint8_t nhdp_domain_get_mpr_tlvvalue(
     struct nhdp_domain *, struct nhdp_link *);
-EXPORT void nhdp_domain_update_mprs(void);
+EXPORT void nhdp_domain_update_mprs(struct nhdp_domain *);
 
 /**
  * @param domain NHDP domain
