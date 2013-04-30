@@ -244,18 +244,6 @@ struct nhdp_neighbor {
   /* internal field for NHDP processing */
   int _process_count;
 
-  /*
-   * timer that fires when the ipv6 addresses
-   * of this neighbor have to be removed
-   */
-  struct olsr_timer_entry _vtime_v4;
-
-  /*
-   * timer that fires when the ipv6 addresses
-   * of this neighbor have to be removed
-   */
-  struct olsr_timer_entry _vtime_v6;
-
   /* list of links for this neighbor */
   struct list_entity _links;
 

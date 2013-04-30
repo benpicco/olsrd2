@@ -358,6 +358,7 @@ _cb_tc_node_timeout(void *ptr) {
   struct olsrv2_tc_node *node = ptr;
 
   olsrv2_tc_node_remove(node);
+  olsrv2_routing_trigger_update();
 }
 
 static bool

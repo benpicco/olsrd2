@@ -381,7 +381,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
         }
         else if (metric_in == metric_out) {
@@ -391,7 +391,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
         }
         else {
@@ -401,12 +401,12 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_out);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[1],
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[1],
               &metric_out, sizeof(metric_out), true);
         }
       }
@@ -438,7 +438,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
       /* add Metric TLV */
       OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
           domain->ext, metric_out);
-      rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+      rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
           &metric_out, sizeof(metric_out), false);
 
       /* add Gateway TLV */

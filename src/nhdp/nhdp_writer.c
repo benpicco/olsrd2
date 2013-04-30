@@ -383,7 +383,7 @@ _add_link_address(struct rfc5444_writer *writer, struct rfc5444_writer_content_p
       mpr = nhdp_domain_get_mpr_tlvvalue(domain, laddr->link);
       if (mpr != RFC5444_MPR_NOMPR) {
         rfc5444_writer_add_addrtlv(writer, address,
-            &domain->mpr->_mpr_addrtlv, &mpr, sizeof(mpr), false);
+            &domain->_mpr_addrtlv, &mpr, sizeof(mpr), false);
 
         OLSR_DEBUG(LOG_NHDP_W, "Add %s (mpr=%d, etx=%d) to NHDP hello",
             netaddr_to_string(&buf, &naddr->neigh_addr), mpr, domain->ext);
@@ -493,7 +493,7 @@ _write_metric_tlv(struct rfc5444_writer *writer, struct rfc5444_writer_address *
 
     /* add to rfc5444 address */
     rfc5444_writer_add_addrtlv(writer, addr,
-        &domain->metric->_metric_addrtlvs[k++],
+        &domain->_metric_addrtlvs[k++],
         &tlv_value, sizeof(tlv_value), true);
   }
 }

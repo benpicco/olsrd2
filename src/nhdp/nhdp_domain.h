@@ -51,6 +51,13 @@
 
 #define NHDP_CLASS_DOMAIN             "nhdp_domain"
 
+#define CFG_NHDP_DOMAIN_SECTION       "domain"
+
+enum {
+  NHDP_DOMAIN_METRIC_MAXLEN = 16,
+  NHDP_DOMAIN_MPR_MAXLEN = 16,
+};
+
 /* Buffer for string representation of a linkmetric value */
 struct nhdp_metric_str {
   char buf[128];
@@ -71,11 +78,14 @@ struct nhdp_domain_metric {
   /* true if metrics should not be handled by nhdp reader/writer */
   bool no_default_handling;
 
+  /* backpointer to domain */
+  struct nhdp_domain *domain;
+
   /* conversion of metric value into string function */
   const char *(*to_string)(struct nhdp_metric_str *, uint32_t);
 
-  /* storage for the up to four additional link metrics */
-  struct rfc5444_writer_tlvtype _metric_addrtlvs[4];
+  /* node for tree of metrics */
+  struct avl_node _node;
 };
 
 /* MPR handler for a NHDP domain */
@@ -98,11 +108,14 @@ struct nhdp_domain_mpr {
   /* true if MPRs/Willingness should not be handled by nhdp reader/writer */
   bool no_default_handling;
 
-  /* storage for the additional mpr tlv */
-  struct rfc5444_writer_tlvtype _mpr_addrtlv;
+  /* backpointer to domain */
+  struct nhdp_domain *domain;
 
   /* temporary storage of willingness during message parsing */
   uint8_t _tmp_willingness;
+
+  /* node for tree of MPR algorithms */
+  struct avl_node _node;
 };
 
 /*
@@ -113,6 +126,9 @@ struct nhdp_domain_mpr {
  * specified TLV extension value on MPR and LQ TLVs.
  */
 struct nhdp_domain {
+  char metric_name[NHDP_DOMAIN_METRIC_MAXLEN];
+  char mpr_name[NHDP_DOMAIN_MPR_MAXLEN];
+
   struct nhdp_domain_metric *metric;
   struct nhdp_domain_mpr *mpr;
 
@@ -128,13 +144,19 @@ struct nhdp_domain {
   /* index in the metric array */
   int index;
 
+  /* storage for the up to four additional link metrics */
+  struct rfc5444_writer_tlvtype _metric_addrtlvs[4];
+
+  /* storage for the additional mpr tlv */
+  struct rfc5444_writer_tlvtype _mpr_addrtlv;
+
   /* list of nhdp domains */
   struct list_entity _node;
 };
 
 /* listener for NHDP domain updates */
 struct nhdp_domain_listener {
-  void (*update)(struct nhdp_domain *, struct nhdp_neighbor *);
+  void (*update)(struct nhdp_neighbor *);
 
   struct list_entity _node;
 };
@@ -146,14 +168,13 @@ void nhdp_domain_init(struct olsr_rfc5444_protocol *);
 void nhdp_domain_cleanup(void);
 
 EXPORT size_t nhdp_domain_get_count(void);
+EXPORT struct nhdp_domain *nhdp_domain_add(uint8_t ext);
 
-EXPORT struct nhdp_domain *nhdp_domain_metric_add(
-    struct nhdp_domain_metric *h, uint8_t ext);
-EXPORT void nhdp_domain_metric_remove(struct nhdp_domain *d);
+EXPORT int nhdp_domain_metric_add(struct nhdp_domain_metric *);
+EXPORT void nhdp_domain_metric_remove(struct nhdp_domain_metric *);
 
-EXPORT struct nhdp_domain *nhdp_domain_mpr_add(
-    struct nhdp_domain_mpr *h, uint8_t etx);
-EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain *d);
+EXPORT int nhdp_domain_mpr_add(struct nhdp_domain_mpr *);
+EXPORT void nhdp_domain_mpr_remove(struct nhdp_domain_mpr *);
 
 EXPORT void nhdp_domain_listener_add(struct nhdp_domain_listener *);
 EXPORT void nhdp_domain_listener_remove(struct nhdp_domain_listener *);
@@ -171,8 +192,9 @@ EXPORT void nhdp_domain_process_metric_linktlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint16_t tlvvalue);
 EXPORT void nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *d,
     struct nhdp_l2hop *l2hop, uint16_t tlvvalue);
-EXPORT void nhdp_domain_calculate_neighbor_metric(
-    struct nhdp_domain *, struct nhdp_neighbor *);
+
+EXPORT void nhdp_domain_neighborhood_changed(void);
+EXPORT void nhdp_domain_neighbor_changed(struct nhdp_neighbor *neigh);
 
 EXPORT void nhdp_domain_process_mpr_tlv(struct nhdp_domain *,
     struct nhdp_link *lnk, uint8_t tlvvalue);

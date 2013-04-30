@@ -212,7 +212,7 @@ struct olsr_timer_info _hello_lost_info = {
 
 /* nhdp metric handler */
 struct nhdp_domain_metric _etxff_handler = {
-  .name = "ETXFF metric handler",
+  .name = OLSR_PLUGIN7_GET_NAME(),
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
   .metric_maximum = ETXFF_LINKCOST_MAXIMUM,
@@ -221,8 +221,6 @@ struct nhdp_domain_metric _etxff_handler = {
 
   .to_string = _to_string,
 };
-
-struct nhdp_domain *_domain;
 
 /**
  * Constructor of plugin
@@ -257,8 +255,7 @@ _cb_plugin_enable(void) {
     return -1;
   }
 
-  _domain = nhdp_domain_metric_add(&_etxff_handler, 0);
-  if (!_domain) {
+  if (nhdp_domain_metric_add(&_etxff_handler)) {
     olsr_class_listener_remove(&_link_listener);
     return -1;
   }
@@ -288,7 +285,7 @@ _cb_plugin_disable(void) {
   olsr_rfc5444_remove_protocol_pktseqno(_protocol);
   olsr_rfc5444_remove_protocol(_protocol);
 
-  nhdp_domain_metric_remove(_domain);
+  nhdp_domain_metric_remove(&_etxff_handler);
 
   olsr_class_listener_remove(&_link_listener);
 
@@ -368,7 +365,6 @@ static void
 _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct link_etxff_data *ldata;
   struct nhdp_link_domaindata *domaindata;
-  struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
@@ -378,6 +374,11 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct netaddr_str buf;
 
   OLSR_DEBUG(LOG_PLUGINS, "Calculate ETX from sampled data");
+
+  if (!_etxff_handler.domain) {
+    /* metric not used */
+    return;
+  }
 
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     ldata = olsr_class_get_extension(&_link_extenstion, lnk);
@@ -425,7 +426,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    domaindata = nhdp_domain_get_linkdata(_domain, lnk);
+    domaindata = nhdp_domain_get_linkdata(_etxff_handler.domain, lnk);
     domaindata->metric.in = (uint32_t)metric;
 
     OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
@@ -443,9 +444,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   }
 
   /* update neighbor metrics */
-  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    nhdp_domain_calculate_neighbor_metric(_domain, neigh);
-  }
+  nhdp_domain_neighborhood_changed();
 }
 
 /**

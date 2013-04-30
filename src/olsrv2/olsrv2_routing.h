@@ -47,8 +47,11 @@
 #include "common/list.h"
 #include "common/netaddr.h"
 
+#include "core/os_routing.h"
+
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"
+#include "nhdp/nhdp_domain.h"
 
 struct olsrv2_dijkstra_node {
   /* hook into the working list of the dijkstra */
@@ -70,51 +73,43 @@ struct olsrv2_dijkstra_node {
   bool local;
 };
 
-struct olsrv2_routing_entry_data {
-  /* interface index through which this target can be reached */
-  unsigned if_index;
+struct olsrv2_routing_entry {
+  /* Settings for the kernel route */
+  struct os_route route;
 
-  /* address of the next hop to reach this target */
-  struct netaddr next_hop;
+  /* nhdp domain of route */
+  struct nhdp_domain *domain;
 
   /* path cost to reach the target */
   uint32_t cost;
 
-  /* hopcount distance the target should have */
-  uint8_t distance;
-
-  /* true if route is single-hop */
-  bool single_hop;
-
-  /* true if nexthop was changed in current dijkstra run */
-  bool _updated;
-
-  /* true if this routing entry is active */
-  bool _set;
+  /*
+   * true if the entry represents a route that should be in the kernel,
+   * false if the entry should be removed from the kernel
+   */
+  bool set;
 
   /* forwarding information before the current dijkstra run */
   unsigned _old_if_index;
   struct netaddr _old_next_hop;
   uint8_t _old_distance;
 
-  /* back pointer to routing entry */
-  struct olsrv2_routing_entry *rtentry;
-
-  /* hook into routing queue */
+  /* hook into working queues */
   struct list_entity _working_node;
-};
-
-struct olsrv2_routing_entry {
-  struct netaddr destination;
-
-  /* parameters to reach the destination in each topology */
-  struct olsrv2_routing_entry_data data[NHDP_MAXIMUM_DOMAINS];
 
   /* global node */
   struct avl_node _node;
 };
 
-EXPORT extern struct avl_tree olsrv2_routing_tree;
+/* routing domain specific parameters */
+struct olsrv2_routing_domain {
+  bool use_srcip_in_routes;
+  uint8_t protocol;
+  uint8_t table;
+  uint8_t distance;
+};
+
+EXPORT extern struct avl_tree olsrv2_routing_tree[NHDP_MAXIMUM_DOMAINS];
 
 void olsrv2_routing_init(void);
 void olsrv2_routing_cleanup(void);
@@ -123,5 +118,8 @@ void olsrv2_routing_dijkstra_init(struct olsrv2_dijkstra_node *);
 
 EXPORT void olsrv2_routing_force_update(bool skip_wait);
 EXPORT void olsrv2_routing_trigger_update(void);
+
+EXPORT const struct olsrv2_routing_domain *
+    olsrv2_routing_get_parameters(struct nhdp_domain *);
 
 #endif /* OLSRV2_ROUTING_SET_H_ */

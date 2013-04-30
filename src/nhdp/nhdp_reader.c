@@ -303,16 +303,6 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
     nhdp_db_neighbor_addr_not_lost(naddr);
   }
 
-
-  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET) {
-    /* update _vtime_v6 timer */
-    olsr_timer_set(&_current.neighbor->_vtime_v4, _current.vtime);
-  }
-  if (netaddr_get_address_family(&naddr->neigh_addr) == AF_INET6) {
-    /* update _vtime_v6 timer */
-    olsr_timer_set(&_current.neighbor->_vtime_v6, _current.vtime);
-  }
-
   return RFC5444_OKAY;
 }
 
@@ -838,20 +828,11 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped)
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr, *la_it;
   struct nhdp_l2hop *twohop, *twohop_it;
-  struct nhdp_domain *domain;
   uint64_t t;
 
   if (dropped) {
     cleanup_error();
     return RFC5444_OKAY;
-  }
-
-  /* remember when we saw the last IPv4/IPv6 */
-  if (context->addr_len == 4) {
-    olsr_timer_set(&_current.neighbor->_vtime_v4, _current.vtime);
-  }
-  else {
-    olsr_timer_set(&_current.neighbor->_vtime_v6, _current.vtime);
   }
 
   /* remove leftover link addresses */
@@ -924,9 +905,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped)
   nhdp_db_neighbor_set_originator(_current.neighbor, &context->orig_addr);
 
   /* update MPR sets and link metrics */
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    nhdp_domain_calculate_neighbor_metric(domain, _current.neighbor);
-  }
+  nhdp_domain_neighbor_changed(_current.neighbor);
 
   /* update ip flooding settings */
   nhdp_interface_update_status(_current.localif);
