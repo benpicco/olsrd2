@@ -118,8 +118,6 @@ static struct cfg_schema_entry _interface_entries[] = {
 /* other global variables */
 static struct olsr_rfc5444_protocol *_protocol;
 
-// TODO: add callback provider
-
 /**
  * Initialize NHDP interface subsystem
  */
