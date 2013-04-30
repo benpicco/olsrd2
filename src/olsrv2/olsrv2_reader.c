@@ -384,5 +384,8 @@ _cb_messagetlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute_
 
   _current.node = NULL;
 
+  /* recalculate routing table */
+  olsrv2_routing_trigger_update();
+
   return RFC5444_OKAY;
 }

@@ -224,6 +224,11 @@ nhdp_domain_metric_add(struct nhdp_domain_metric *metric) {
     metric->outgoing_2hop_start = RFC5444_METRIC_INFINITE;
   }
 
+  /* initialize to_string method if empty */
+  if (metric->to_string == NULL) {
+    metric->to_string = _to_string;
+  }
+
   /* hook into tree */
   if (avl_insert(&nhdp_domain_metrics, &metric->_node)) {
     return -1;
@@ -754,11 +759,6 @@ _apply_metric(struct nhdp_domain *domain, const char *metric_name) {
   /* link domain and metric */
   domain->metric = metric;
   metric->domain = domain;
-
-  /* initialize to_string method if empty */
-  if (metric->to_string == NULL) {
-    metric->to_string = _to_string;
-  }
 }
 
 static void
