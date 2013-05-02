@@ -178,6 +178,7 @@ void
 olsrv2_routing_force_update(bool skip_wait) {
   struct olsrv2_routing_entry *rtentry, *rt_it;
   struct nhdp_domain *domain;
+  struct os_route_str rbuf;
 
   /* handle dijkstra rate limitation timer */
   if (olsr_timer_is_active(&_rate_limit_timer)) {
@@ -215,11 +216,17 @@ olsrv2_routing_force_update(bool skip_wait) {
 
     if (rtentry->set) {
       /* add to kernel */
-
+      if (os_routing_set(&rtentry->route, true, true)) {
+        OLSR_WARN(LOG_OLSRV2_ROUTING, "Could not set route %s",
+            os_routing_to_string(&rbuf, &rtentry->route));
+      }
     }
     else  {
       /* remove from kernel */
-      _remove_entry(rtentry);
+      if (os_routing_set(&rtentry->route, false, true)) {
+        OLSR_WARN(LOG_OLSRV2_ROUTING, "Could not remove route %s",
+            os_routing_to_string(&rbuf, &rtentry->route));
+      }
     }
   }
 
@@ -228,7 +235,7 @@ olsrv2_routing_force_update(bool skip_wait) {
 }
 
 void
-olsrv2_routing_dijkstra_init(struct olsrv2_dijkstra_node *dijkstra) {
+olsrv2_routing_dijkstra_node_init(struct olsrv2_dijkstra_node *dijkstra) {
   dijkstra->_node.key = &dijkstra->path_cost;
 }
 
@@ -257,6 +264,7 @@ _add_entry(struct nhdp_domain *domain, struct netaddr *prefix) {
   /* initialize path costs and os-route callback */
   rtentry->cost = RFC5444_METRIC_INFINITE_PATH;
   rtentry->route.cb_finished = _cb_route_finished;
+  rtentry->route.family = netaddr_get_address_family(prefix);
 
   avl_insert(&olsrv2_routing_tree[domain->index], &rtentry->_node);
   return rtentry;
@@ -514,9 +522,17 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
 static void
 _process_dijkstra_result(struct nhdp_domain *domain) {
   struct olsrv2_routing_entry *rtentry;
-  struct netaddr_str nbuf1, nbuf2;
+  struct os_route_str rbuf;
+  struct netaddr_str nbuf;
 
   avl_for_each_element(&olsrv2_routing_tree[domain->index], rtentry, _node) {
+    /* initialize rest of route parameters */
+    rtentry->route.table = _domain_parameter[rtentry->domain->index].table;
+    rtentry->route.protocol = _domain_parameter[rtentry->domain->index].protocol;
+    rtentry->route.metric = _domain_parameter[rtentry->domain->index].distance;
+
+    // TODO: handle source ip
+
     if (rtentry->set) {
       if (rtentry->_old_if_index == rtentry->route.if_index
         && rtentry->_old_distance == rtentry->route.metric
@@ -526,10 +542,10 @@ _process_dijkstra_result(struct nhdp_domain *domain) {
       }
 
       OLSR_INFO(LOG_OLSRV2_ROUTING,
-          "Route %s over if_index %u to nexthop %s",
-          netaddr_to_string(&nbuf1, &rtentry->route.dst),
-          rtentry->route.if_index,
-          netaddr_to_string(&nbuf2, &rtentry->route.gw));
+          "Dijkstra result: set route %s (%u %u %s)",
+          os_routing_to_string(&rbuf, &rtentry->route),
+          rtentry->_old_if_index, rtentry->_old_distance,
+          netaddr_to_string(&nbuf, &rtentry->_old_next_hop));
 
       if (netaddr_get_address_family(&rtentry->route.gw) == AF_UNSPEC) {
         /* insert/update single-hop routes early */
@@ -542,10 +558,8 @@ _process_dijkstra_result(struct nhdp_domain *domain) {
     }
     else if (!rtentry->set) {
       OLSR_INFO(LOG_OLSRV2_ROUTING,
-          "Remove route %s over if_index %u to nexthop %s",
-          netaddr_to_string(&nbuf1, &rtentry->route.dst),
-          rtentry->route.if_index,
-          netaddr_to_string(&nbuf2, &rtentry->route.gw));
+          "Dijkstra result: remove route %s",
+          os_routing_to_string(&rbuf, &rtentry->route));
 
       if (netaddr_get_address_family(&rtentry->route.gw) == AF_UNSPEC) {
         /* remove single-hop routes late */
@@ -575,23 +589,28 @@ _cb_nhdp_update(struct nhdp_neighbor *neigh __attribute__((unused))) {
 static void
 _cb_route_finished(struct os_route *route, int error) {
   struct olsrv2_routing_entry *rtentry;
+  struct os_route_str rbuf;
 
   rtentry = container_of(route, struct olsrv2_routing_entry, route);
-  list_remove(&rtentry->_working_node);
 
   if (error) {
     /* an error happened, try again later */
+    OLSR_WARN(LOG_OLSRV2_ROUTING, "Error in route %s %s: %s (%d)",
+        rtentry->set ? "setting" : "removal",
+        os_routing_to_string(&rbuf, &rtentry->route),
+        strerror(error), error);
 
     // TODO: trigger new dijkstra route-handling
     return;
   }
   if (rtentry->set) {
     /* route was set/updated successfully */
-    rtentry->_old_if_index = rtentry->route.if_index;
-    rtentry->_old_distance = rtentry->route.metric;
-    memcpy(&rtentry->_old_next_hop, &rtentry->route.gw, sizeof(struct netaddr));
+    OLSR_INFO(LOG_OLSRV2_ROUTING, "Successfully set route %s",
+        os_routing_to_string(&rbuf, &rtentry->route));
   }
   else {
+    OLSR_INFO(LOG_OLSRV2_ROUTING, "Successfully removed route %s",
+        os_routing_to_string(&rbuf, &rtentry->route));
     _remove_entry(rtentry);
   }
 }
