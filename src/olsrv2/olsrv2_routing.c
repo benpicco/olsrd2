@@ -101,13 +101,13 @@ static struct olsr_class _rtset_entry = {
 };
 
 /* rate limitation for dijkstra algorithm */
-static struct olsr_timer_info _rate_limit_info = {
-  .name = "Dijkstra rate limitation",
+static struct olsr_timer_info _dijkstra_timer_info = {
+  .name = "Dijkstra timer",
   .callback = _cb_trigger_dijkstra,
 };
 
 static struct olsr_timer_entry _rate_limit_timer = {
-  .info = &_rate_limit_info
+  .info = &_dijkstra_timer_info
 };
 
 /* callback for NHDP domain events */
@@ -131,7 +131,7 @@ olsrv2_routing_init(void) {
   LOG_OLSRV2_ROUTING = olsr_log_register_source("olsrv2_routing");
 
   olsr_class_add(&_rtset_entry);
-  olsr_timer_add(&_rate_limit_info);
+  olsr_timer_add(&_dijkstra_timer_info);
 
   for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
     avl_init(&olsrv2_routing_tree[i], avl_comp_netaddr, false);
@@ -157,6 +157,7 @@ olsrv2_routing_cleanup(void) {
       _remove_entry(entry);
     }
   }
+  olsr_timer_remove(&_dijkstra_timer_info);
   olsr_class_remove(&_rtset_entry);
 
   cfg_schema_remove_section(olsr_cfg_get_schema(), &_rt_domain_section);
@@ -191,6 +192,7 @@ olsrv2_routing_force_update(bool skip_wait) {
     }
     olsr_timer_stop(&_rate_limit_timer);
   }
+
 
   OLSR_DEBUG(LOG_OLSRV2_ROUTING, "Run Dijkstra");
 
@@ -600,7 +602,13 @@ _cb_route_finished(struct os_route *route, int error) {
         os_routing_to_string(&rbuf, &rtentry->route),
         strerror(error), error);
 
-    // TODO: trigger new dijkstra route-handling
+    /* revert attempted change */
+    if (rtentry->set) {
+      _remove_entry(rtentry);
+    }
+    else {
+      rtentry->set = true;
+    }
     return;
   }
   if (rtentry->set) {
