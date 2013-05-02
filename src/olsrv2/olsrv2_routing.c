@@ -450,10 +450,10 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
   struct nhdp_naddr *naddr;
   struct nhdp_l2hop *l2hop;
   struct nhdp_link *lnk;
+  uint32_t neighcost;
+  uint32_t l2hop_pathcost;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    uint32_t neighcost;
-    bool improved;
 
     /* get linkcost to neighbor */
     neigh_data = nhdp_domain_get_neighbordata(domain, neigh);
@@ -463,34 +463,28 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
       continue;
     }
 
-    /* remember if we improved the link neighcost */
-    improved = false;
-
     /* make sure all addresses of the neighbor are better than our direct link */
     avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
+      if (!olsr_acl_check_accept(olsrv2_get_routable(), &naddr->neigh_addr)) {
+        /* not a routable address, check the next one */
+        continue;
+      }
+
       rtentry = _add_entry(domain, &naddr->neigh_addr);
       if (rtentry == NULL || (rtentry->set && rtentry->cost <= neighcost)) {
-        /* next neighbor address */
+        /*
+         * error in rtentry creation or existing entry is better than
+         * the new one, check next neighbor address
+         */
         continue;
       }
 
       /* the direct link is better than the dijkstra calculation */
       _update_routing_entry(rtentry, domain, neigh, 0, neighcost, true);
-
-      /* found better route, remember for 2-hop test */
-      improved = true;
-    }
-
-    /* was direct connection better than dijkstra result? */
-    if (!improved) {
-      /* next neighbor */
-      continue;
     }
 
     list_for_each_element(&neigh->_links, lnk, _neigh_node) {
       avl_for_each_element(&lnk->_2hop, l2hop, _link_node) {
-        uint32_t l2hop_pathcost;
-
         /* get new pathcost to 2hop neighbor */
         l2hop_pathcost = nhdp_domain_get_l2hopdata(domain, l2hop)->metric.out;
         if (l2hop_pathcost >= RFC5444_METRIC_INFINITE) {
@@ -498,7 +492,7 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
         }
 
         if (!olsr_acl_check_accept(olsrv2_get_routable(), &l2hop->twohop_addr)) {
-          /* not routable, cannot be reached over two hops */
+          /* not a routable address, check the next one */
           continue;
         }
 
