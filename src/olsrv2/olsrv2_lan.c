@@ -36,11 +36,6 @@ static const char *_parse_lan_parameters(struct _lan_data *dst, const char *src)
 static void _cb_cfg_changed(void);
 
 /* olsrv2 LAN configuration */
-static struct cfg_schema_section _olsrv2_section = {
-  .type = CFG_OLSRV2_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
-};
-
 static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_VALIDATE_LAN(LOCAL_ATTACHED_NETWORK_KEY, "",
       "locally attached network, a combination of an"
@@ -48,6 +43,13 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
       " which define link metric cost, hopcount distance and domain of the prefix"
       " ( <metric=...> <dist=...> <domain=...> ).",
       .list = true),
+};
+
+static struct cfg_schema_section _olsrv2_section = {
+  .type = CFG_OLSRV2_SECTION,
+  .cb_delta_handler = _cb_cfg_changed,
+  .entries = _olsrv2_entries,
+  .entry_count = ARRAYSIZE(_olsrv2_entries),
 };
 
 /* originator set class and timer */
@@ -69,8 +71,7 @@ olsrv2_lan_init(void) {
   avl_init(&olsrv2_lan_tree, avl_comp_netaddr, false);
 
   /* add LAN configuration to OLSRv2 section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section, _olsrv2_entries,
-      ARRAYSIZE(_olsrv2_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section);
 }
 
 /**

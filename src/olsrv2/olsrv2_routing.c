@@ -75,12 +75,6 @@ static void _cb_route_finished(struct os_route *route, int error);
 static void _cb_cfg_domain_changed(void);
 
 /* configuration for domain specific routing parameters */
-static struct cfg_schema_section _rt_domain_section = {
-  .type = CFG_NHDP_DOMAIN_SECTION,
-  .mode = CFG_SSMODE_NAMED,
-  .cb_delta_handler = _cb_cfg_domain_changed,
-};
-
 static struct cfg_schema_entry _rt_domain_entries[] = {
   CFG_MAP_BOOL(olsrv2_routing_domain, use_srcip_in_routes, "srcip_routes", "no",
       "Set the source IP of IPv4-routes to a fixed value."),
@@ -90,6 +84,14 @@ static struct cfg_schema_entry _rt_domain_entries[] = {
       "Routing table number for routes", 1, 254),
   CFG_MAP_INT_MINMAX(olsrv2_routing_domain, distance, "distance", "2",
       "Metric Distance to be used in routing table", 1, 255),
+};
+
+static struct cfg_schema_section _rt_domain_section = {
+  .type = CFG_NHDP_DOMAIN_SECTION,
+  .mode = CFG_SSMODE_NAMED,
+  .cb_delta_handler = _cb_cfg_domain_changed,
+  .entries = _rt_domain_entries,
+  .entry_count = ARRAYSIZE(_rt_domain_entries),
 };
 
 static struct olsrv2_routing_domain _domain_parameter[NHDP_MAXIMUM_DOMAINS];
@@ -140,8 +142,7 @@ olsrv2_routing_init(void) {
   list_init_head(&_kernel_queue);
 
   nhdp_domain_listener_add(&_nhdp_listener);
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_rt_domain_section,
-      _rt_domain_entries, ARRAYSIZE(_rt_domain_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_rt_domain_section);
 }
 
 void

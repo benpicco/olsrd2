@@ -100,12 +100,6 @@ static struct olsr_timer_info _removed_address_hold_timer = {
   .callback = _cb_remove_addr,
 };
 
-static struct cfg_schema_section _interface_section = {
-  .type = CFG_INTERFACE_SECTION,
-  .mode = CFG_SSMODE_NAMED_MANDATORY,
-  .cb_delta_handler = _cb_cfg_interface_changed,
-};
-
 static struct cfg_schema_entry _interface_entries[] = {
   CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
       "Filter for ip interface addresses that should be included in HELLO messages"),
@@ -113,6 +107,14 @@ static struct cfg_schema_entry _interface_entries[] = {
     "Validity time for NHDP Hello Messages", 100),
   CFG_MAP_CLOCK_MIN(nhdp_interface, refresh_interval, "hello-interval", "2.0",
     "Time interval between two NHDP Hello Messages", 100),
+};
+
+static struct cfg_schema_section _interface_section = {
+  .type = CFG_INTERFACE_SECTION,
+  .mode = CFG_SSMODE_NAMED_MANDATORY,
+  .cb_delta_handler = _cb_cfg_interface_changed,
+  .entries = _interface_entries,
+  .entry_count = ARRAYSIZE(_interface_entries),
 };
 
 /* other global variables */
@@ -134,8 +136,7 @@ nhdp_interfaces_init(struct olsr_rfc5444_protocol *p) {
   _protocol = p;
 
   /* add additional configuration for interface section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_interface_section,
-      _interface_entries, ARRAYSIZE(_interface_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_interface_section);
 }
 
 /**

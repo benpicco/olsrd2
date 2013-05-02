@@ -38,11 +38,6 @@ static void _cb_originator_entry_vtime(void *);
 static void _cb_cfg_changed(void);
 
 /* olsrv2 configuration */
-static struct cfg_schema_section _originator_section = {
-  .type = CFG_OLSRV2_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
-};
-
 static struct cfg_schema_entry _originator_entries[] = {
   CFG_MAP_ACL_V4(_config, v4_acl, "originator_v4",
       OLSRV2_ROUTABLE_IPV4 ACL_DEFAULT_ACCEPT,
@@ -52,6 +47,13 @@ static struct cfg_schema_entry _originator_entries[] = {
       "Filter for router IPv6 originator address"),
   CFG_MAP_CLOCK_MIN(_config, o_hold_time, "originator_hold_time", "30.0",
     "Validity time for former Originator addresses", 100),
+};
+
+static struct cfg_schema_section _originator_section = {
+  .type = CFG_OLSRV2_SECTION,
+  .cb_delta_handler = _cb_cfg_changed,
+  .entries = _originator_entries,
+  .entry_count = ARRAYSIZE(_originator_entries),
 };
 
 /* originator set class and timer */
@@ -84,8 +86,7 @@ static struct netaddr _originator_v4, _originator_v6;
 void
 olsrv2_originator_init(void) {
   /* add configuration for olsrv2 section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_originator_section,
-      _originator_entries, ARRAYSIZE(_originator_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_originator_section);
 
   /* initialize class and timer */
   olsr_class_add(&_originator_entry_class);

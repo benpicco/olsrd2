@@ -85,11 +85,6 @@ static struct olsr_telnet_command _cmds[] = {
 };
 
 /* olsrv2 configuration */
-static struct cfg_schema_section _olsrv2_section = {
-  .type = CFG_OLSRV2_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
-};
-
 static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_MAP_CLOCK_MIN(_config, tc_interval, "tc_interval", "5.0",
     "Time between two TC messages", 100),
@@ -102,6 +97,13 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_MAP_ACL_V46(_config, routable, "routable",
       OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter to decide which addresses are considered routable"),
+};
+
+static struct cfg_schema_section _olsrv2_section = {
+  .type = CFG_OLSRV2_SECTION,
+  .cb_delta_handler = _cb_cfg_changed,
+  .entries = _olsrv2_entries,
+  .entry_count = ARRAYSIZE(_olsrv2_entries),
 };
 
 static struct _config _olsrv2_config;
@@ -155,8 +157,7 @@ olsrv2_init(void) {
   olsrv2_routing_init();
 
   /* add configuration for olsrv2 section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section,
-      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section);
 
   /* initialize timer */
   olsr_timer_add(&_tc_timer_class);

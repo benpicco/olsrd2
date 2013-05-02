@@ -148,12 +148,6 @@ OLSR_PLUGIN7 {
 };
 
 /* configuration options */
-static struct cfg_schema_section _etxff_section = {
-  .type = CFG_ETXFF_SECTION,
-  .cb_validate = _cb_cfg_validate,
-  .cb_delta_handler = _cb_cfg_changed,
-};
-
 static struct cfg_schema_entry _etxff_entries[] = {
   CFG_MAP_CLOCK_MIN(_config, interval, "interval", "1.0",
       "Time interval between recalculations of metric", 100),
@@ -165,6 +159,14 @@ static struct cfg_schema_entry _etxff_entries[] = {
       " rise of metric value, it cannot be larger than the normal"
       " windows size.",
       1, 65535),
+};
+
+static struct cfg_schema_section _etxff_section = {
+  .type = CFG_ETXFF_SECTION,
+  .cb_validate = _cb_cfg_validate,
+  .cb_delta_handler = _cb_cfg_changed,
+  .entries = _etxff_entries,
+  .entry_count = ARRAYSIZE(_etxff_entries),
 };
 
 static struct _config _etxff_config = { 0,0,0 };
@@ -228,8 +230,7 @@ struct nhdp_domain_metric _etxff_handler = {
  */
 static int
 _cb_plugin_load(void) {
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_etxff_section,
-      _etxff_entries, ARRAYSIZE(_etxff_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_etxff_section);
 
   return 0;
 }

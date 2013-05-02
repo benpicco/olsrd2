@@ -113,12 +113,6 @@ OLSR_PLUGIN7 {
 };
 
 /* configuration options */
-static struct cfg_schema_section _hysteresis_section = {
-  .type = CFG_HYSTERESIS_OLSRV1_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
-  .cb_validate = _cb_cfg_validate,
-};
-
 static struct cfg_schema_entry _hysteresis_entries[] = {
   CFG_MAP_FRACTIONAL_MINMAX(_config, accept, "accept", "0.7",
       "link quality to consider a link up", 3, 0, 1000),
@@ -126,6 +120,14 @@ static struct cfg_schema_entry _hysteresis_entries[] = {
       "link quality to consider a link down", 3, 0, 1000),
   CFG_MAP_FRACTIONAL_MINMAX(_config, scaling, "scaling", "0.25",
       "exponential aging to control speed of link hysteresis", 3, 1, 1000),
+};
+
+static struct cfg_schema_section _hysteresis_section = {
+  .type = CFG_HYSTERESIS_OLSRV1_SECTION,
+  .cb_delta_handler = _cb_cfg_changed,
+  .cb_validate = _cb_cfg_validate,
+  .entries = _hysteresis_entries,
+  .entry_count = ARRAYSIZE(_hysteresis_entries),
 };
 
 static struct _config _hysteresis_config;
@@ -165,8 +167,7 @@ struct nhdp_hysteresis_handler _hysteresis_handler = {
  */
 static int
 _cb_plugin_load(void) {
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_hysteresis_section,
-      _hysteresis_entries, ARRAYSIZE(_hysteresis_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_hysteresis_section);
 
   return 0;
 }

@@ -106,12 +106,6 @@ static struct nhdp_domain_mpr _no_mprs = {
   .no_default_handling = true,
 };
 
-static struct cfg_schema_section _domain_section = {
-  .type = CFG_NHDP_DOMAIN_SECTION,
-  .mode = CFG_SSMODE_NAMED,
-  .cb_delta_handler = _cb_cfg_domain_changed,
-};
-
 static struct cfg_schema_entry _domain_entries[] = {
   CFG_MAP_STRING_ARRAY(_domain_parameters, metric_name, "metric", _ANY_METRIC,
       "ID of the routing metric used for this domain. '"_NO_METRIC"'"
@@ -123,6 +117,14 @@ static struct cfg_schema_entry _domain_entries[] = {
       " means no mpr algorithm(everyone is MPR), '"_ANY_MPR"' means"
       "any metric that is loaded (with fallback on '"_NO_MPR"').",
       NHDP_DOMAIN_MPR_MAXLEN),
+};
+
+static struct cfg_schema_section _domain_section = {
+  .type = CFG_NHDP_DOMAIN_SECTION,
+  .mode = CFG_SSMODE_NAMED,
+  .cb_delta_handler = _cb_cfg_domain_changed,
+  .entries = _domain_entries,
+  .entry_count = ARRAYSIZE(_domain_entries),
 };
 
 /* non-default routing domains registered to NHDP */
@@ -157,8 +159,7 @@ nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
   avl_init(&nhdp_domain_metrics, avl_comp_strcasecmp, false);
   avl_init(&nhdp_domain_mprs, avl_comp_strcasecmp, false);
 
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_domain_section,
-      _domain_entries, ARRAYSIZE(_domain_entries));
+  cfg_schema_add_section(olsr_cfg_get_schema(), &_domain_section);
 }
 
 /**
