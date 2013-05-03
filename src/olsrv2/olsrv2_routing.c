@@ -148,13 +148,14 @@ olsrv2_routing_init(void) {
 void
 olsrv2_routing_cleanup(void) {
   struct olsrv2_routing_entry *entry, *e_it;
-  struct nhdp_domain *domain;
+  int i;
 
   nhdp_domain_listener_remove(&_nhdp_listener);
 
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    avl_for_each_element_safe(
-        &olsrv2_routing_tree[domain->index], entry, _node, e_it) {
+  olsr_timer_stop(&_rate_limit_timer);
+
+  for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
+    avl_for_each_element_safe(&olsrv2_routing_tree[i], entry, _node, e_it) {
       _remove_entry(entry);
     }
   }

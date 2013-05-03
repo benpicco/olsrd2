@@ -57,6 +57,8 @@
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
 
+#include "hysteresis_olsrv1/hysteresis_olsrv1.h"
+
 /* definitions and constants */
 #define CFG_HYSTERESIS_OLSRV1_SECTION "hysteresis_olsrv1"
 
@@ -75,10 +77,8 @@ struct link_hysteresis_data {
 };
 
 /* prototypes */
-static int _cb_plugin_load(void);
-static int _cb_plugin_unload(void);
-static int _cb_plugin_enable(void);
-static int _cb_plugin_disable(void);
+static int _init(void);
+static void _cleanup(void);
 
 static void _update_hysteresis(struct nhdp_link *,
     struct link_hysteresis_data *, bool);
@@ -97,20 +97,6 @@ static void _cb_timer_hello_lost(void *);
 static void _cb_cfg_changed(void);
 static int _cb_cfg_validate(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
-
-/* plugin declaration */
-OLSR_PLUGIN7 {
-  .descr = "OLSRD2 olsrV1 hysteresis plugin",
-  .author = "Henning Rogge",
-
-  .load = _cb_plugin_load,
-  .unload = _cb_plugin_unload,
-  .enable = _cb_plugin_enable,
-  .disable = _cb_plugin_disable,
-
-  .can_disable = true,
-  .can_unload = false,
-};
 
 /* configuration options */
 static struct cfg_schema_entry _hysteresis_entries[] = {
@@ -131,6 +117,19 @@ static struct cfg_schema_section _hysteresis_section = {
 };
 
 static struct _config _hysteresis_config;
+
+/* plugin declaration */
+struct oonf_subsystem olsrv2_hysteresis_olsrv1_subsystem = {
+  .name = OONF_PLUGIN_GET_NAME(),
+  .descr = "OLSRD2 olsrv1-style hysteresis plugin",
+  .author = "Henning Rogge",
+
+  .cfg_section = &_hysteresis_section,
+
+  .init = _init,
+  .cleanup = _cleanup,
+};
+DECLARE_OONF_PLUGIN(olsrv2_hysteresis_olsrv1_subsystem);
 
 /* storage extension for nhdp_link */
 struct olsr_class_extension _link_extenstion = {
@@ -162,32 +161,11 @@ struct nhdp_hysteresis_handler _hysteresis_handler = {
 };
 
 /**
- * Constructor of plugin
- * @return 0 if initialization was successful, -1 otherwise
+ * Initialize plugin
+ * @return -1 if an error happened, 0 otherwise
  */
 static int
-_cb_plugin_load(void) {
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_hysteresis_section);
-
-  return 0;
-}
-
-/**
- * Destructor of plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_unload(void) {
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_hysteresis_section);
-  return 0;
-}
-
-/**
- * Enable plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_enable(void) {
+_init(void) {
   if (olsr_class_is_extension_registered(&_link_extenstion)) {
     struct nhdp_link *lnk;
 
@@ -209,11 +187,10 @@ _cb_plugin_enable(void) {
 }
 
 /**
- * Disable plugin
- * @return always returns 0 (cannot fail)
+ * Cleanup plugin
  */
-static int
-_cb_plugin_disable(void) {
+static void
+_cleanup(void) {
   struct nhdp_link *lnk;
 
   /* remove all custom extensions for link */
@@ -223,7 +200,6 @@ _cb_plugin_disable(void) {
 
   nhdp_hysteresis_set_handler(NULL);
   olsr_class_listener_remove(&_link_listener);
-  return 0;
 }
 
 /**

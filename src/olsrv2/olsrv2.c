@@ -178,9 +178,6 @@ _init(void) {
   olsrv2_tc_init();
   olsrv2_routing_init();
 
-  /* add configuration for olsrv2 section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_olsrv2_section);
-
   /* initialize timer */
   olsr_timer_add(&_tc_timer_class);
 
@@ -204,7 +201,6 @@ _cleanup(void) {
   }
 
   /* cleanup configuration */
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_olsrv2_section);
   olsr_acl_remove(&_olsrv2_config.routable);
 
   olsrv2_routing_cleanup();

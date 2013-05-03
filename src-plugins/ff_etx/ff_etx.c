@@ -58,6 +58,8 @@
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_interfaces.h"
 
+#include "ff_etx/ff_etx.h"
+
 /* definitions and constants */
 #define CFG_ETXFF_SECTION "ff_etx"
 
@@ -111,10 +113,8 @@ struct link_etxff_data {
 };
 
 /* prototypes */
-static int _cb_plugin_load(void);
-static int _cb_plugin_unload(void);
-static int _cb_plugin_enable(void);
-static int _cb_plugin_disable(void);
+static int _init(void);
+static void _cleanup(void);
 
 static void _cb_link_added(void *);
 static void _cb_link_changed(void *);
@@ -134,20 +134,6 @@ static int _cb_cfg_validate(const char *section_name,
 static void _cb_cfg_changed(void);
 
 /* plugin declaration */
-OLSR_PLUGIN7 {
-  .descr = "OLSRD2 Funkfeuer ETX plugin",
-  .author = "Henning Rogge",
-
-  .load = _cb_plugin_load,
-  .unload = _cb_plugin_unload,
-  .enable = _cb_plugin_enable,
-  .disable = _cb_plugin_disable,
-
-  .can_disable = false,
-  .can_unload = false,
-};
-
-/* configuration options */
 static struct cfg_schema_entry _etxff_entries[] = {
   CFG_MAP_CLOCK_MIN(_config, interval, "interval", "1.0",
       "Time interval between recalculations of metric", 100),
@@ -170,6 +156,18 @@ static struct cfg_schema_section _etxff_section = {
 };
 
 static struct _config _etxff_config = { 0,0,0 };
+
+struct oonf_subsystem olsrv2_ffetx_subsystem = {
+  .name = OONF_PLUGIN_GET_NAME(),
+  .descr = "OLSRD2 Funkfeuer ETX plugin",
+  .author = "Henning Rogge",
+
+  .cfg_section = &_etxff_section,
+
+  .init = _init,
+  .cleanup = _cleanup,
+};
+DECLARE_OONF_PLUGIN(olsrv2_ffetx_subsystem);
 
 /* RFC5444 packet listener */
 struct olsr_rfc5444_protocol *_protocol;
@@ -214,7 +212,7 @@ struct olsr_timer_info _hello_lost_info = {
 
 /* nhdp metric handler */
 struct nhdp_domain_metric _etxff_handler = {
-  .name = OLSR_PLUGIN7_GET_NAME(),
+  .name = OONF_PLUGIN_GET_NAME(),
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
   .metric_maximum = ETXFF_LINKCOST_MAXIMUM,
@@ -225,32 +223,11 @@ struct nhdp_domain_metric _etxff_handler = {
 };
 
 /**
- * Constructor of plugin
- * @return 0 if initialization was successful, -1 otherwise
+ * Initialize plugin
+ * @return -1 if an error happened, 0 otherwise
  */
 static int
-_cb_plugin_load(void) {
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_etxff_section);
-
-  return 0;
-}
-
-/**
- * Destructor of plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_unload(void) {
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_etxff_section);
-  return 0;
-}
-
-/**
- * Enable plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_enable(void) {
+_init(void) {
 
   if (olsr_class_listener_add(&_link_listener)) {
     return -1;
@@ -272,11 +249,10 @@ _cb_plugin_enable(void) {
 }
 
 /**
- * Disable plugin
- * @return always returns 0 (cannot fail)
+ * Cleanup plugin
  */
-static int
-_cb_plugin_disable(void) {
+static void
+_cleanup(void) {
   struct nhdp_link *lnk;
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     _cb_link_removed(lnk);
@@ -290,9 +266,10 @@ _cb_plugin_disable(void) {
 
   olsr_class_listener_remove(&_link_listener);
 
+  olsr_timer_stop(&_sampling_timer);
+
   olsr_timer_remove(&_sampling_timer_info);
   olsr_timer_remove(&_hello_lost_info);
-  return 0;
 }
 
 /**
@@ -571,7 +548,7 @@ _cb_cfg_changed(void) {
   if (cfg_schema_tobin(&_etxff_config, _etxff_section.post,
       _etxff_entries, ARRAYSIZE(_etxff_entries))) {
     OLSR_WARN(LOG_PLUGINS, "Cannot convert configuration for %s",
-        OLSR_PLUGIN7_GET_NAME());
+        OONF_PLUGIN_GET_NAME());
     return;
   }
 

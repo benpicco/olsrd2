@@ -1,7 +1,7 @@
 
 /*
  * The olsr.org Optimized Link-State Routing daemon(olsrd)
- * Copyright (c) 2004-2012, the olsr.org team - see HISTORY file
+ * Copyright (c) 2004-2013, the olsr.org team - see HISTORY file
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,14 +39,12 @@
  *
  */
 
-#ifndef OLSR_APP_CONFIG_H_
-#define OLSR_APP_CONFIG_H_
+#ifndef NHDPCHECK_H_
+#define NHDPCHECK_H_
 
-#include "core/olsr_logging.h"
+#include "common/common_types.h"
+#include "core/olsr_subsystem.h"
 
-#define OONF_NEED_ROOT ${OONF_NEED_ROOT}
-#define OONF_NEED_ROUTING ${OONF_NEED_ROUTING}
+EXPORT extern struct oonf_subsystem olsrv2_nhdpcheck_subsystem;
 
-const struct olsr_appdata *olsr_appdata_get(void);
-
-#endif /* OLSR_APP_CONFIG_H_ */
+#endif /* NHDPCHECK_H_ */

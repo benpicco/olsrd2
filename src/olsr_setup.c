@@ -43,12 +43,16 @@
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
 
+#include "cfgio_file/cfgio_file.h"
+#include "cfgparser_compact/cfgparser_compact.h"
 #include "nhdp/nhdp.h"
 #include "olsrv2/olsrv2.h"
 
 #include "olsr_setup.h"
 
 static struct oonf_subsystem *_app_subsystems[] = {
+  //&oonf_io_file_subsystem,
+  //&oonf_compact_parser_subsystem,
   &nhdp_subsystem,
   &olsrv2_subsystem,
 };

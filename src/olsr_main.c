@@ -185,9 +185,8 @@ main(int argc, char **argv) {
   int return_code;
   int fork_pipe;
   size_t i;
-  size_t initialized, enabled;
+  size_t initialized;
 
-  struct cfg_schema_section *schema_section;
   struct oonf_subsystem **subsystems;
   size_t subsystem_count;
 
@@ -195,7 +194,6 @@ main(int argc, char **argv) {
   return_code = 1;
   fork_pipe = -1;
   initialized = 0;
-  enabled = 0;
 
   _schema_name = NULL;
   _display_schema = false;
@@ -232,7 +230,10 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* add configuration definition */
+  /* prepare plugin initialization */
+  olsr_plugins_init();
+
+  /* initialize configuration system */
   if (olsr_cfg_init(argc, argv)) {
     goto olsrd_cleanup;
   }
@@ -240,13 +241,9 @@ main(int argc, char **argv) {
   /* add custom configuration definitions */
   olsr_logcfg_init(olsr_setup_get_level1_logs(), olsr_setup_get_level1count());
 
-  /* prepare plugin initialization */
-  olsr_plugins_init();
-
-  /* load static plugins */
-  olsr_plugins_load_static();
-  if (olsr_plugins_init_static()) {
-    goto olsrd_cleanup;
+  /* add configuration options for subsystems */
+  for (i=0; i<subsystem_count; i++) {
+    olsr_subsystem_configure(olsr_cfg_get_schema(), subsystems[i]);
   }
 
   /* parse command line and read configuration files */
@@ -265,11 +262,6 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* preload plugins to show their schemas */
-  if (olsr_cfg_loadplugins()) {
-    goto olsrd_cleanup;
-  }
-
   /* see if we need to fork */
   if (config_global.fork) {
     /* fork into background */
@@ -285,13 +277,9 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* add configuration options for subsystems */
-  for (i=0; i<subsystem_count; i++) {
-    schema_section = subsystems[i]->cfg_section;
-    while (schema_section) {
-      cfg_schema_add_section(olsr_cfg_get_schema(), schema_section);
-      schema_section = schema_section->next_section;
-    }
+  /* load plugins */
+  if (olsr_cfg_loadplugins()) {
+    goto olsrd_cleanup;
   }
 
   /* show schema if necessary */
@@ -318,14 +306,8 @@ main(int argc, char **argv) {
     }
   }
 
-  /* enable framework */
-  for (enabled=0; enabled<subsystem_count; enabled++) {
-    if (subsystems[enabled]->enable != NULL) {
-      if (subsystems[enabled]->enable()) {
-        goto olsrd_cleanup;
-      }
-    }
-  }
+  /* call initialization callbacks of dynamic plugins */
+  olsr_cfg_initplugins();
 
   /* apply configuration */
   if (olsr_cfg_apply()) {
@@ -352,14 +334,8 @@ main(int argc, char **argv) {
 
 olsrd_cleanup:
   /* free plugins */
+  olsr_cfg_unconfigure_plugins();
   olsr_plugins_cleanup();
-
-  /* disable framework */
-  while (enabled-- > 0) {
-    if (subsystems[enabled]->disable != NULL) {
-      subsystems[enabled]->disable();
-    }
-  }
 
   /* cleanup framework */
   while (initialized-- > 0) {
@@ -382,6 +358,7 @@ olsrd_cleanup:
     daemonize_finish(fork_pipe, return_code);
   }
 
+  free (subsystems);
   return return_code;
 }
 
@@ -526,7 +503,6 @@ parse_early_commandline(int argc, char **argv) {
 static int
 parse_commandline(int argc, char **argv, bool reload_only) {
   const char *parameters;
-  struct olsr_plugin *plugin, *plugin_it;
   struct autobuf log;
   struct cfg_db *db;
   int opt, opt_idx, return_code;
@@ -572,9 +548,6 @@ parse_commandline(int argc, char **argv, bool reload_only) {
 
       case 'v':
         olsr_log_printversion(&log);
-        OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-          abuf_appendf(&log, " Static plugin: %s\n", plugin->name);
-        }
         return_code = 0;
         break;
       case 'p':

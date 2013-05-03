@@ -52,25 +52,21 @@
 
 #include "nhdp/nhdp_interfaces.h"
 
+#include "nhdpcheck/nhdpcheck.h"
+
 /* prototypes */
-static int _cb_plugin_load(void);
-static int _cb_plugin_unload(void);
-static int _cb_plugin_enable(void);
-static int _cb_plugin_disable(void);
+static int _init(void);
+static void _cleanup(void);
 
 /* plugin declaration */
-OLSR_PLUGIN7 {
+struct oonf_subsystem olsrv2_nhdpcheck_subsystem = {
+  .name = OONF_PLUGIN_GET_NAME(),
   .descr = "OLSRD2 nhdpcheck plugin",
   .author = "Henning Rogge",
-
-  .load = _cb_plugin_load,
-  .unload = _cb_plugin_unload,
-  .enable = _cb_plugin_enable,
-  .disable = _cb_plugin_disable,
-
-  .can_disable = true,
-  .can_unload = true,
+  .init = _init,
+  .cleanup = _cleanup,
 };
+DECLARE_OONF_PLUGIN(olsrv2_nhdpcheck_subsystem);
 
 /* NHDP message TLV array index */
 enum {
@@ -123,32 +119,14 @@ static struct olsr_rfc5444_protocol *_protocol = NULL;
 
 static enum log_source LOG_NHDP_CHECK = LOG_MAIN;
 
-
 /**
- * Constructor of plugin
- * @return 0 if initialization was successful, -1 otherwise
- */
-static int
-_cb_plugin_load(void) {
-  LOG_NHDP_CHECK = olsr_log_register_source("nhdp_check");
-  return 0;
-}
-
-/**
- * Destructor of plugin
+ * Initialize plugin
  * @return always returns 0 (cannot fail)
  */
 static int
-_cb_plugin_unload(void) {
-  return 0;
-}
+_init(void) {
+  LOG_NHDP_CHECK = olsr_log_register_source("nhdpcheck");
 
-/**
- * Enable plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_enable(void) {
   _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
     return -1;
@@ -165,11 +143,10 @@ _cb_plugin_enable(void) {
 }
 
 /**
- * Disable plugin
- * @return always returns 0 (cannot fail)
+ * Cleanup plugin
  */
-static int
-_cb_plugin_disable(void) {
+static void
+_cleanup(void) {
   rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_message_consumer);
   rfc5444_reader_remove_message_consumer(
@@ -177,7 +154,6 @@ _cb_plugin_disable(void) {
 
   olsr_rfc5444_remove_protocol(_protocol);
   _protocol = NULL;
-  return 0;
 }
 
 /**
