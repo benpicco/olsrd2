@@ -51,8 +51,6 @@
 
 #define NHDP_CLASS_DOMAIN             "nhdp_domain"
 
-#define CFG_NHDP_DOMAIN_SECTION       "domain"
-
 enum {
   NHDP_DOMAIN_METRIC_MAXLEN = 16,
   NHDP_DOMAIN_MPR_MAXLEN = 16,
@@ -169,6 +167,8 @@ void nhdp_domain_cleanup(void);
 
 EXPORT size_t nhdp_domain_get_count(void);
 EXPORT struct nhdp_domain *nhdp_domain_add(uint8_t ext);
+EXPORT struct nhdp_domain *nhdp_domain_configure(
+    uint8_t ext, const char *metric_name, const char *mpr_name);
 
 EXPORT int nhdp_domain_metric_add(struct nhdp_domain_metric *);
 EXPORT void nhdp_domain_metric_remove(struct nhdp_domain_metric *);

@@ -85,6 +85,15 @@
 #include "core/os_routing.h"
 #endif
 
+/* prototypes */
+static void quit_signal_handler(int);
+static void hup_signal_handler(int);
+static void setup_signalhandler(void);
+static int mainloop(int argc, char **argv);
+static void parse_early_commandline(int argc, char **argv);
+static int parse_commandline(int argc, char **argv, bool reload_only);
+static int display_schema(void);
+
 static bool _end_olsr_signal, _display_schema, _debug_early, _ignore_unknown;
 static char *_schema_name;
 
@@ -146,14 +155,27 @@ static const char *help_text =
 ;
 #endif
 
-/* prototype for local statics */
-static void quit_signal_handler(int);
-static void hup_signal_handler(int);
-static void setup_signalhandler(void);
-static int mainloop(int argc, char **argv);
-static void parse_early_commandline(int argc, char **argv);
-static int parse_commandline(int argc, char **argv, bool reload_only);
-static int display_schema(void);
+/* initialize basic framework */
+static struct oonf_subsystem *_api_subsystems[] = {
+  &oonf_os_syslog_subsystem,
+  &oonf_class_subsystem,
+  &oonf_os_clock_subsystem,
+  &oonf_clock_subsystem,
+  &oonf_timer_subsystem,
+  &oonf_socket_subsystem,
+  &oonf_packet_socket_subsystem,
+  &oonf_stream_socket_subsystem,
+  &oonf_os_system_subsystem,
+#if OONF_NEED_ROUTING
+  &oonf_os_routing_subsystem,
+#endif
+  &oonf_os_net_subsystem,
+  &oonf_interface_subsystem,
+  &oonf_duplicate_set_subsystem,
+  &oonf_rfc5444_subsystem,
+  &oonf_telnet_subsystem,
+  &oonf_http_subsystem,
+};
 
 /**
  * Main program
@@ -162,14 +184,39 @@ int
 main(int argc, char **argv) {
   int return_code;
   int fork_pipe;
+  size_t i;
+  size_t initialized, enabled;
+
+  struct cfg_schema_section *schema_section;
+  struct oonf_subsystem **subsystems;
+  size_t subsystem_count;
 
   /* early initialization */
   return_code = 1;
   fork_pipe = -1;
+  initialized = 0;
+  enabled = 0;
+
   _schema_name = NULL;
   _display_schema = false;
   _debug_early = false;
   _ignore_unknown = false;
+
+  /* assemble list of subsystems first */
+  subsystem_count = ARRAYSIZE(_api_subsystems)
+      + olsr_setup_get_subsystem_count();
+
+  subsystems = calloc(subsystem_count, sizeof(struct oonf_subsystem *));
+  if(!subsystems) {
+    fprintf(stderr, "Out of memory error for subsystem array\n");
+    return -1;
+  }
+
+  memcpy(&subsystems[0], _api_subsystems,
+      sizeof(struct oonf_subsystem *) * ARRAYSIZE(_api_subsystems));
+  memcpy(&subsystems[ARRAYSIZE(_api_subsystems)],
+      olsr_setup_get_subsystems(),
+      sizeof(struct oonf_subsystem *) * olsr_setup_get_subsystem_count());
 
   srand(times(NULL));
 
@@ -223,15 +270,6 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* check if we are root, otherwise stop */
-#if OONF_NEED_ROOT == true
-  if (geteuid() != 0) {
-    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
-        olsr_appdata_get()->app_name);
-    goto olsrd_cleanup;
-  }
-#endif
-
   /* see if we need to fork */
   if (config_global.fork) {
     /* fork into background */
@@ -247,59 +285,46 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
-  /* initialize basic framework */
-  os_syslog_init();
-  olsr_class_init();
-  if (os_clock_init()) {
-    goto olsrd_cleanup;
-  }
-  if (olsr_clock_init()) {
-    goto olsrd_cleanup;
-  }
-  olsr_timer_init();
-  olsr_socket_init();
-  olsr_packet_init();
-  olsr_stream_init();
-
-  /* activate os-specific code */
-  if (os_system_init()) {
-    goto olsrd_cleanup;
-  }
-
-#if OONF_NEED_ROUTING == true
-  if (os_routing_init()) {
-    goto olsrd_cleanup;
-  }
-#endif
-
-  if (os_net_init()) {
-    goto olsrd_cleanup;
-  }
-
-  /* activate interface listening system */
-  olsr_interface_init();
-
-  /* activate rfc5444 scheduler */
-  if (olsr_rfc5444_init()) {
-    goto olsrd_cleanup;
-  }
-
-  /* activate duplicate handling code */
-  olsr_duplicate_set_init();
-
-  /* activate telnet and http */
-  olsr_telnet_init();
-  olsr_http_init();
-
-  /* activate custom additions to framework */
-  if (olsr_setup_init()) {
-    goto olsrd_cleanup;
+  /* add configuration options for subsystems */
+  for (i=0; i<subsystem_count; i++) {
+    schema_section = subsystems[i]->cfg_section;
+    while (schema_section) {
+      cfg_schema_add_section(olsr_cfg_get_schema(), schema_section);
+      schema_section = schema_section->next_section;
+    }
   }
 
   /* show schema if necessary */
   if (_display_schema) {
     return_code = display_schema();
     goto olsrd_cleanup;
+  }
+
+  /* check if we are root, otherwise stop */
+#if OONF_NEED_ROOT == true
+  if (geteuid() != 0) {
+    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
+        olsr_appdata_get()->app_name);
+    goto olsrd_cleanup;
+  }
+#endif
+
+  /* initialize framework */
+  for (initialized=0; initialized<subsystem_count; initialized++) {
+    if (subsystems[initialized]->init != NULL) {
+      if (subsystems[initialized]->init()) {
+        goto olsrd_cleanup;
+      }
+    }
+  }
+
+  /* enable framework */
+  for (enabled=0; enabled<subsystem_count; enabled++) {
+    if (subsystems[enabled]->enable != NULL) {
+      if (subsystems[enabled]->enable()) {
+        goto olsrd_cleanup;
+      }
+    }
   }
 
   /* apply configuration */
@@ -329,28 +354,21 @@ olsrd_cleanup:
   /* free plugins */
   olsr_plugins_cleanup();
 
-  /* free custom framework additions */
-  olsr_setup_cleanup();
+  /* disable framework */
+  while (enabled-- > 0) {
+    if (subsystems[enabled]->disable != NULL) {
+      subsystems[enabled]->disable();
+    }
+  }
 
-  /* free framework resources */
-  olsr_http_cleanup();
-  olsr_telnet_cleanup();
-  olsr_duplicate_set_cleanup();
-  olsr_rfc5444_cleanup();
-  olsr_interface_cleanup();
-  os_net_cleanup();
-#if OONF_NEED_ROUTING
-  os_routing_cleanup();
-#endif
-  os_system_cleanup();
-  olsr_stream_cleanup();
-  olsr_packet_cleanup();
-  olsr_socket_cleanup();
-  olsr_timer_cleanup();
-  olsr_clock_cleanup();
-  os_clock_cleanup();
-  olsr_class_cleanup();
-  os_syslog_cleanup();
+  /* cleanup framework */
+  while (initialized-- > 0) {
+    if (subsystems[initialized]->cleanup != NULL) {
+      subsystems[initialized]->cleanup();
+    }
+  }
+
+  /* free logging/config bridge resources */
   olsr_logcfg_cleanup();
 
   /* free configuration resources */

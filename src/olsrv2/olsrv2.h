@@ -44,8 +44,8 @@
 
 #include "common/common_types.h"
 #include "common/netaddr.h"
-
 #include "core/olsr_netaddr_acl.h"
+#include "core/olsr_subsystem.h"
 
 #include "nhdp/nhdp_domain.h"
 
@@ -53,10 +53,11 @@
 
 #define OLSRV2_ROUTABLE_IPV4 "-169.254.0.0/16\0-127.0.0.1\0-224.0.0.0/12\0"
 #define OLSRV2_ROUTABLE_IPV6 "-fe80::/10\0-::1\0-ff00::/8\0"
-EXPORT extern enum log_source LOG_OLSRV2;
 
-int olsrv2_init(void) __attribute__((warn_unused_result));;
-void olsrv2_cleanup(void);
+#define CFG_VALIDATE_LAN(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsrv2_validate_lan, ##args )
+
+EXPORT struct oonf_subsystem olsrv2_subsystem;
+EXPORT extern enum log_source LOG_OLSRV2;
 
 EXPORT uint64_t olsrv2_get_tc_interval(void);
 EXPORT uint64_t olsrv2_get_tc_validity(void);
@@ -68,5 +69,7 @@ EXPORT bool olsrv2_mpr_shall_forwarding(
 EXPORT bool olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *);
 EXPORT uint16_t olsrv2_get_ansn(void);
 EXPORT uint16_t olsrv2_update_ansn(void);
+EXPORT int olsrv2_validate_lan(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out);
 
 #endif /* OLSRV2_H_ */

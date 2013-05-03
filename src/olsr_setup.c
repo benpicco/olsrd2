@@ -42,56 +42,29 @@
 #include "common/common_types.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
-#include "tools/olsr_logging_cfg.h"
 
 #include "nhdp/nhdp.h"
 #include "olsrv2/olsrv2.h"
 
 #include "olsr_setup.h"
 
+static struct oonf_subsystem *_app_subsystems[] = {
+  &nhdp_subsystem,
+  &olsrv2_subsystem,
+};
 
-/* define the logging sources that are part of debug level 1 */
 static enum log_source _level_1_sources[] = {
   LOG_MAIN,
 };
 
-/* remember if initialized or not */
-OLSR_SUBSYSTEM_STATE(_setup_state);
-
-/**
- * Allocate resources for the user of the framework
- * @return -1 if an error happened, 0 otherwise
- */
-int
-olsr_setup_init(void) {
-  if (olsr_subsystem_is_initialized(&_setup_state))
-    return 0;
-
-  /* add custom service setup here */
-  if (nhdp_init()) {
-    return -1;
-  }
-
-  if (olsrv2_init()) {
-    return -1;
-  }
-
-  /* no error happened */
-  olsr_subsystem_init(&_setup_state);
-  return 0;
+struct oonf_subsystem **
+olsr_setup_get_subsystems(void) {
+  return _app_subsystems;
 }
 
-/**
- * Cleanup all resources allocated by setup initialization
- */
-void
-olsr_setup_cleanup(void) {
-  if (olsr_subsystem_cleanup(&_setup_state))
-    return;
-
-  /* add cleanup for custom services here */
-  olsrv2_cleanup();
-  nhdp_cleanup();
+size_t
+olsr_setup_get_subsystem_count(void) {
+  return ARRAYSIZE(_app_subsystems);
 }
 
 /**

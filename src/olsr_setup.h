@@ -42,8 +42,12 @@
 #ifndef OLSR_SETUP_H_
 #define OLSR_SETUP_H_
 
-int olsr_setup_init(void) __attribute__((warn_unused_result));
-void olsr_setup_cleanup(void);
+#include "core/olsr_subsystem.h"
+#include "core/olsr_logging.h"
+
+struct oonf_subsystem **olsr_setup_get_subsystems(void);
+size_t olsr_setup_get_subsystem_count(void);
+
 size_t olsr_setup_get_level1count(void);
 enum log_source *olsr_setup_get_level1_logs(void);
 

@@ -40,6 +40,7 @@
  */
 
 #include "common/common_types.h"
+#include "config/cfg_schema.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
@@ -56,12 +57,25 @@
 /* definitions */
 #define _LOG_NHDP_NAME "nhdp"
 
+struct _domain_parameters {
+  char metric_name[NHDP_DOMAIN_METRIC_MAXLEN];
+  char mpr_name[NHDP_DOMAIN_MPR_MAXLEN];
+};
+
 /* prototypes */
+static int _init(void);
+static void _cleanup(void);
+
 static enum olsr_telnet_result _cb_nhdp(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _telnet_nhdp_neighbor(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _telnet_nhdp_neighlink(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _telnet_nhdp_iflink(struct olsr_telnet_data *con);
 static enum olsr_telnet_result _telnet_nhdp_interface(struct olsr_telnet_data *con);
+
+static void _cb_cfg_domain_changed(void);
+static void _cb_cfg_interface_changed(void);
+static int _cb_validate_domain_section(const char *section_name,
+    struct cfg_named_section *, struct autobuf *);
 
 /* nhdp telnet commands */
 static struct olsr_telnet_command _cmds[] = {
@@ -73,9 +87,54 @@ static struct olsr_telnet_command _cmds[] = {
         "\"nhdp interface\": shows all local nhdp interfaces including addresses\n"),
 };
 
-/* other global variables */
-OLSR_SUBSYSTEM_STATE(_nhdp_state);
+/* subsystem definition */
+static struct cfg_schema_entry _interface_entries[] = {
+  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
+      "Filter for ip interface addresses that should be included in HELLO messages"),
+  CFG_MAP_CLOCK_MIN(nhdp_interface, h_hold_time, "hello-validity", "6.0",
+    "Validity time for NHDP Hello Messages", 100),
+  CFG_MAP_CLOCK_MIN(nhdp_interface, refresh_interval, "hello-interval", "2.0",
+    "Time interval between two NHDP Hello Messages", 100),
+};
 
+static struct cfg_schema_section _interface_section = {
+  .type = CFG_INTERFACE_SECTION,
+  .mode = CFG_SSMODE_NAMED_MANDATORY,
+  .cb_delta_handler = _cb_cfg_interface_changed,
+  .entries = _interface_entries,
+  .entry_count = ARRAYSIZE(_interface_entries),
+};
+
+static struct cfg_schema_entry _domain_entries[] = {
+  CFG_MAP_STRING_ARRAY(_domain_parameters, metric_name, "metric", CFG_DOMAIN_ANY_METRIC,
+      "ID of the routing metric used for this domain. '"CFG_DOMAIN_NO_METRIC"'"
+      " means no metric (hopcount!), '"CFG_DOMAIN_ANY_METRIC"' means any metric"
+      " that is loaded (with fallback on '"CFG_DOMAIN_NO_METRIC"').",
+      NHDP_DOMAIN_METRIC_MAXLEN),
+  CFG_MAP_STRING_ARRAY(_domain_parameters, mpr_name,  "mpr", CFG_DOMAIN_ANY_MPR,
+      "ID of the mpr algorithm used for this domain. '"CFG_DOMAIN_NO_MPR"'"
+      " means no mpr algorithm(everyone is MPR), '"CFG_DOMAIN_ANY_MPR"' means"
+      "any metric that is loaded (with fallback on '"CFG_DOMAIN_NO_MPR"').",
+      NHDP_DOMAIN_MPR_MAXLEN),
+};
+
+static struct cfg_schema_section _domain_section = {
+  .type = CFG_NHDP_DOMAIN_SECTION,
+  .mode = CFG_SSMODE_NAMED,
+  .cb_delta_handler = _cb_cfg_domain_changed,
+  .cb_validate = _cb_validate_domain_section,
+  .entries = _domain_entries,
+  .entry_count = ARRAYSIZE(_domain_entries),
+  .next_section = &_interface_section,
+};
+
+struct oonf_subsystem nhdp_subsystem = {
+  .init = _init,
+  .cleanup = _cleanup,
+  .cfg_section = &_domain_section,
+};
+
+/* other global variables */
 enum log_source LOG_NHDP = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
 
@@ -86,13 +145,9 @@ static struct netaddr _originator_v4, _originator_v6;
  * Initialize NHDP subsystem
  * @return 0 if initialized, -1 if an error happened
  */
-int
-nhdp_init(void) {
+static int
+_init(void) {
   size_t i;
-
-  if (olsr_subsystem_is_initialized(&_nhdp_state)) {
-    return 0;
-  }
 
   LOG_NHDP = olsr_log_register_source(_LOG_NHDP_NAME);
 
@@ -114,20 +169,15 @@ nhdp_init(void) {
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_add(&_cmds[i]);
   }
-
-  olsr_subsystem_init(&_nhdp_state);
   return 0;
 }
 
 /**
  * Cleanup NHDP subsystem
  */
-void
-nhdp_cleanup(void) {
+static void
+_cleanup(void) {
   size_t i;
-  if (olsr_subsystem_cleanup(&_nhdp_state)) {
-    return;
-  }
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_remove(&_cmds[i]);
@@ -440,4 +490,81 @@ _telnet_nhdp_interface(struct olsr_telnet_data *con) {
     }
   }
   return TELNET_RESULT_ACTIVE;
+}
+
+/**
+ * Configuration of a NHDP domain changed
+ */
+static void
+_cb_cfg_domain_changed(void) {
+  struct _domain_parameters param;
+  int ext;
+
+  ext = strtol(_domain_section.section_name, NULL, 10);
+
+  if (cfg_schema_tobin(&param, _domain_section.post,
+      _domain_entries, ARRAYSIZE(_domain_entries))) {
+    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP domain configuration.");
+    return;
+  }
+
+  nhdp_domain_configure(ext, param.metric_name, param.mpr_name);
+}
+
+/**
+ * Configuration has changed, handle the changes
+ */
+static void
+_cb_cfg_interface_changed(void) {
+  struct nhdp_interface *interf;
+
+  OLSR_DEBUG(LOG_NHDP, "Configuration of NHDP interface %s changed",
+      _interface_section.section_name);
+
+  /* get interface */
+  interf = nhdp_interface_get(_interface_section.section_name);
+
+  if (_interface_section.post == NULL) {
+    /* section was removed */
+    if (interf != NULL) {
+      nhdp_interface_remove(interf);
+    }
+    return;
+  }
+
+  if (interf == NULL) {
+    interf = nhdp_interface_add(_interface_section.section_name);
+  }
+
+  if (cfg_schema_tobin(interf, _interface_section.post,
+      _interface_entries, ARRAYSIZE(_interface_entries))) {
+    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP configuration for interface.");
+    return;
+  }
+
+  /* apply new settings to interface */
+  nhdp_interface_apply_settings(interf);
+}
+
+static int
+_cb_validate_domain_section(const char *section_name,
+    struct cfg_named_section *named, struct autobuf *out) {
+  char *error = NULL;
+  int ext;
+
+  ext = strtol(named->name, &error, 10);
+  if (error != NULL && *error != 0) {
+    /* illegal domain name */
+    abuf_appendf(out, "name of section '%s' must be a number between 0 and 255",
+        section_name);
+    return -1;
+  }
+
+  if (ext < 0 || ext > 255) {
+    /* name out of range */
+    abuf_appendf(out, "name of section '%s' must be a number between 0 and 255",
+        section_name);
+    return -1;
+  }
+  return 0;
 }

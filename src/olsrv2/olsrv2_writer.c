@@ -432,7 +432,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
     /* add Gateway TLV and Metric TLV */
     list_for_each_element(&nhdp_domain_list, domain, _node) {
-      metric_out = rfc5444_metric_encode(lan->outgoing_metric[domain->index]);
+      metric_out = rfc5444_metric_encode(lan->data[domain->index].outgoing_metric);
       metric_out |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
 
       /* add Metric TLV */
@@ -445,7 +445,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
       OLSR_DEBUG(LOG_OLSRV2_W, "Add Gateway (ext %u) TLV with value 0x%04x",
           domain->ext, metric_in);
       rfc5444_writer_add_addrtlv(writer, addr, &_gateway_addrtlvs[domain->index],
-          &lan->distance[domain->index], 1, false);
+          &lan->data[domain->index]. distance, 1, false);
     }
   }
 }

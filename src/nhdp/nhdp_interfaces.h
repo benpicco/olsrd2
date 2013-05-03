@@ -81,7 +81,7 @@ struct nhdp_interface {
 
   /*
    * true if this interface has a neighbor that should be reached through
-   * IPv4/IPv6 for flooding.
+   * IPv4/IPv6 for flooding. This is set by the nhdp interface code.
    */
   bool use_ipv4_for_flooding;
   bool use_ipv6_for_flooding;
@@ -137,6 +137,9 @@ EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
 
+EXPORT struct nhdp_interface *nhdp_interface_add(const char *name);
+EXPORT void nhdp_interface_remove(struct nhdp_interface *interf);
+EXPORT void nhdp_interface_apply_settings(struct nhdp_interface *interf);
 EXPORT void nhdp_interface_update_status(struct nhdp_interface *);
 
 /**

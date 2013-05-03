@@ -39,9 +39,12 @@
  *
  */
 
+#include <errno.h>
+
 #include "common/common_types.h"
 #include "common/netaddr.h"
 #include "config/cfg_schema.h"
+#include "rfc5444/rfc5444.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_netaddr_acl.h"
 #include "core/olsr_subsystem.h"
@@ -61,6 +64,7 @@
 
 /* definitions */
 #define _LOG_OLSRV2_NAME "olsrv2"
+#define _LOCAL_ATTACHED_NETWORK_KEY "lan"
 
 struct _config {
   uint64_t tc_interval;
@@ -71,7 +75,18 @@ struct _config {
   struct olsr_netaddr_acl routable;
 };
 
+struct _lan_data {
+  struct nhdp_domain *domain;
+  uint32_t metric;
+  uint32_t dist;
+};
+
 /* prototypes */
+static int _init(void);
+static void _cleanup(void);
+
+static const char *_parse_lan_parameters(struct _lan_data *dst, const char *src);
+static void _parse_lan_array(struct cfg_named_section *section, bool add);
 static void _cb_cfg_changed(void);
 static void _cb_generate_tc(void *);
 
@@ -84,7 +99,7 @@ static struct olsr_telnet_command _cmds[] = {
         "OLSRv2 database information command\n"),
 };
 
-/* olsrv2 configuration */
+/* subsystem definition */
 static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_MAP_CLOCK_MIN(_config, tc_interval, "tc_interval", "5.0",
     "Time between two TC messages", 100),
@@ -97,6 +112,12 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_MAP_ACL_V46(_config, routable, "routable",
       OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter to decide which addresses are considered routable"),
+  CFG_VALIDATE_LAN(_LOCAL_ATTACHED_NETWORK_KEY, "",
+      "locally attached network, a combination of an"
+      " ip address or prefix followed by an up to three optional parameters"
+      " which define link metric cost, hopcount distance and domain of the prefix"
+      " ( <metric=...> <dist=...> <domain=...> ).",
+      .list = true),
 };
 
 static struct cfg_schema_section _olsrv2_section = {
@@ -104,6 +125,12 @@ static struct cfg_schema_section _olsrv2_section = {
   .cb_delta_handler = _cb_cfg_changed,
   .entries = _olsrv2_entries,
   .entry_count = ARRAYSIZE(_olsrv2_entries),
+};
+
+struct oonf_subsystem olsrv2_subsystem = {
+  .init = _init,
+  .cleanup = _cleanup,
+  .cfg_section = &_olsrv2_section,
 };
 
 static struct _config _olsrv2_config;
@@ -125,18 +152,13 @@ static struct olsr_rfc5444_protocol *_protocol;
 
 static uint16_t _ansn;
 
-OLSR_SUBSYSTEM_STATE(_olsrv2_state);
-
 /**
  * Initialize OLSRv2 subsystem
+ * @return -1 if an error happened, 0 otherwise
  */
-int
-olsrv2_init(void) {
+static int
+_init(void) {
   size_t i;
-
-  if (olsr_subsystem_init(&_olsrv2_state)) {
-    return 0;
-  }
 
   LOG_OLSRV2 = olsr_log_register_source(_LOG_OLSRV2_NAME);
 
@@ -173,13 +195,9 @@ olsrv2_init(void) {
 /**
  * Cleanup OLSRv2 subsystem
  */
-void
-olsrv2_cleanup(void) {
+static void
+_cleanup(void) {
   size_t i;
-
-  if (olsr_subsystem_cleanup(&_olsrv2_state)) {
-    return;
-  }
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_remove(&_cmds[i]);
@@ -383,17 +401,154 @@ olsrv2_update_ansn(void) {
 }
 
 /**
- * Callback fired when configuration changed
+ * Schema entry validator for an attached network.
+ * See CFG_VALIDATE_ACL_*() macros.
+ * @param entry pointer to schema entry
+ * @param section_name name of section type and name
+ * @param value value of schema entry
+ * @param out pointer to autobuffer for validator output
+ * @return 0 if validation found no problems, -1 otherwise
+ */
+int
+olsrv2_validate_lan(const struct cfg_schema_entry *entry,
+    const char *section_name, const char *value, struct autobuf *out) {
+  struct netaddr_str buf;
+  struct _lan_data data;
+  const char *ptr, *result;
+
+  if (value == NULL) {
+    cfg_schema_validate_netaddr(entry, section_name, value, out);
+    cfg_append_printable_line(out,
+        "    This value is followed by a list of three optional parameters.");
+    cfg_append_printable_line(out,
+        "    - 'metric=<m>' the link metric of the LAN (between %u and %u)."
+        " The default is 0.", RFC5444_METRIC_MIN, RFC5444_METRIC_MAX);
+    cfg_append_printable_line(out,
+        "    - 'domain=<d>' the domain of the LAN (between 0 and 255)."
+        " The default is 0.");
+    cfg_append_printable_line(out,
+        "    - 'dist=<d>' the hopcount distance of the LAN (between 0 and 255)."
+        " The default is 2.");
+    return 0;
+  }
+
+  ptr = str_cpynextword(buf.buf, value, sizeof(buf));
+  if (cfg_schema_validate_netaddr(entry, section_name, value, out)) {
+    /* check prefix first */
+    return -1;
+  }
+
+  result = _parse_lan_parameters(&data, ptr);
+  if (result) {
+    cfg_append_printable_line(out, "Value '%s' for entry '%s'"
+        " in section %s has %s",
+        value, entry->key.entry, section_name, result);
+    return -1;
+  }
+
+  if (data.metric < RFC5444_METRIC_MIN || data.metric > RFC5444_METRIC_MAX) {
+    cfg_append_printable_line(out, "Metric %u for prefix %s must be between %u and %u",
+        data.metric, buf.buf, RFC5444_METRIC_MIN, RFC5444_METRIC_MAX);
+    return -1;
+  }
+  if (data.dist > 255) {
+    cfg_append_printable_line(out,
+        "Distance %u for prefix %s must be between 0 and 255", data.dist, buf.buf);
+    return -1;
+  }
+
+  return 0;
+}
+
+/**
+ * Parse parameters of lan prefix string
+ * @param dst pointer to data structure to store results.
+ * @param src source string
+ * @return NULL if parser worked without an error, a pointer
+ *   to the suffix of the error message otherwise.
+ */
+static const char *
+_parse_lan_parameters(struct _lan_data *dst, const char *src) {
+  char buffer[64];
+  const char *ptr, *next;
+  unsigned ext;
+
+  ptr = src;
+  while (ptr != NULL) {
+    next = str_cpynextword(buffer, ptr, sizeof(buffer));
+
+    if (strncasecmp(buffer, "metric=", 7) == 0) {
+      dst->metric = strtoul(&buffer[7], NULL, 0);
+      if (dst->metric == 0 && errno != 0) {
+        return "an illegal metric parameter";
+      }
+    }
+    else if (strncasecmp(buffer, "domain=", 7) == 0) {
+      ext = strtoul(&buffer[7], NULL, 10);
+      if ((ext == 0 && errno != 0) || ext > 255) {
+        return "an illegal domain parameter";
+      }
+      dst->domain = nhdp_domain_get_by_ext(ext);
+      if (dst->domain == NULL) {
+        return "an unknown domain extension number";
+      }
+    }
+    else if (strncasecmp(buffer, "dist=", 5) == 0) {
+      dst->dist = strtoul(&buffer[5], NULL, 10);
+      if (dst->dist == 0 && errno != 0) {
+        return "an illegal distance parameter";
+      }
+    }
+    else {
+      return "an unknown parameter";
+    }
+    ptr = next;
+  }
+  return NULL;
+}
+
+/**
+ * Takes a named configuration section, extracts the attached network
+ * array and apply it
+ * @param section pointer to configuration section.
+ * @param add true if new lan entries should be created, false if
+ *   existing entries should be removed.
  */
 static void
-_cb_cfg_changed(void) {
-  if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
-      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
-    OLSR_WARN(LOG_OLSRV2, "Cannot convert OLSRv2 configuration.");
+_parse_lan_array(struct cfg_named_section *section, bool add) {
+  struct netaddr_str addr_buf;
+  struct netaddr prefix;
+  struct _lan_data data;
+
+  const char *value, *ptr;
+  struct cfg_entry *entry;
+
+  if (section == NULL) {
     return;
   }
 
-  olsr_timer_set(&_tc_timer, _olsrv2_config.tc_interval);
+  entry = cfg_db_get_entry(section, _LOCAL_ATTACHED_NETWORK_KEY);
+  if (entry == NULL) {
+    return;
+  }
+
+  FOR_ALL_STRINGS(&entry->val, value) {
+    /* extract data */
+    ptr = str_cpynextword(addr_buf.buf, value, sizeof(addr_buf));
+    if (netaddr_from_string(&prefix, addr_buf.buf)) {
+      continue;
+    }
+    if (_parse_lan_parameters(&data, ptr)) {
+      continue;
+    }
+
+    if (add) {
+      olsrv2_lan_add(data.domain, &prefix, data.metric, data.dist);
+    }
+    else {
+      olsrv2_lan_remove(data.domain, &prefix);
+    }
+  }
 }
 
 static void
@@ -440,4 +595,24 @@ _cb_topology(struct olsr_telnet_data *con) {
   }
 
   return TELNET_RESULT_ACTIVE;
+}
+
+/**
+ * Callback fired when configuration changed
+ */
+static void
+_cb_cfg_changed(void) {
+  if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
+      _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
+    OLSR_WARN(LOG_OLSRV2, "Cannot convert OLSRv2 configuration.");
+    return;
+  }
+
+  olsr_timer_set(&_tc_timer, _olsrv2_config.tc_interval);
+
+  /* run through all pre-update LAN entries and remove them */
+  _parse_lan_array(_olsrv2_section.pre, false);
+
+  /* run through all post-update LAN entries and add them */
+  _parse_lan_array(_olsrv2_section.post, true);
 }

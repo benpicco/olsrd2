@@ -48,13 +48,16 @@
 
 #include "nhdp/nhdp.h"
 
-#define CFG_VALIDATE_LAN(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsrv2_lan_validate, ##args )
+struct olsrv2_lan_domaindata {
+  uint32_t outgoing_metric;
+  uint8_t distance;
+  bool active;
+};
 
 struct olsrv2_lan_entry {
   struct netaddr prefix;
 
-  uint32_t outgoing_metric[NHDP_MAXIMUM_DOMAINS];
-  uint8_t distance[NHDP_MAXIMUM_DOMAINS];
+  struct olsrv2_lan_domaindata data[NHDP_MAXIMUM_DOMAINS];
 
   struct avl_node _node;
 };
@@ -64,8 +67,12 @@ EXPORT extern struct avl_tree olsrv2_lan_tree;
 void olsrv2_lan_init(void);
 void olsrv2_lan_cleanup(void);
 
-EXPORT struct olsrv2_lan_entry *olsrv2_lan_add(struct netaddr *);
-EXPORT void olsrv2_lan_remove(struct netaddr *);
+
+EXPORT struct olsrv2_lan_entry *olsrv2_lan_add(
+    struct nhdp_domain *domain, struct netaddr *prefix,
+    uint32_t metric, uint8_t distance);
+EXPORT void olsrv2_lan_remove(struct nhdp_domain *,
+    struct netaddr *prefix);
 
 EXPORT int olsrv2_lan_validate(const struct cfg_schema_entry *entry,
     const char *section_name, const char *value, struct autobuf *out);

@@ -57,16 +57,6 @@
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_interfaces.h"
 
-#define _NO_METRIC  "-"
-#define _ANY_METRIC "*"
-#define _NO_MPR     "-"
-#define _ANY_MPR    "*"
-
-struct _domain_parameters {
-  char metric_name[NHDP_DOMAIN_METRIC_MAXLEN];
-  char mpr_name[NHDP_DOMAIN_MPR_MAXLEN];
-};
-
 static void _apply_metric(struct nhdp_domain *domain, const char *metric_name);
 static void _remove_metric(struct nhdp_domain *);
 static void _apply_mpr(struct nhdp_domain *domain, const char *mpr_name);
@@ -75,7 +65,6 @@ static void _remove_mpr(struct nhdp_domain *);
 static void _recalculate_neighbor_metric(struct nhdp_domain *domain,
     struct nhdp_neighbor *neigh);
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
-static void _cb_cfg_domain_changed(void);
 
 /* domain class */
 struct olsr_class _domain_class = {
@@ -104,27 +93,6 @@ static struct nhdp_domain_mpr _no_mprs = {
   .willingness = RFC5444_WILLINGNESS_DEFAULT,
 
   .no_default_handling = true,
-};
-
-static struct cfg_schema_entry _domain_entries[] = {
-  CFG_MAP_STRING_ARRAY(_domain_parameters, metric_name, "metric", _ANY_METRIC,
-      "ID of the routing metric used for this domain. '"_NO_METRIC"'"
-      " means no metric (hopcount!), '"_ANY_METRIC"' means any metric"
-      " that is loaded (with fallback on '"_NO_METRIC"').",
-      NHDP_DOMAIN_METRIC_MAXLEN),
-  CFG_MAP_STRING_ARRAY(_domain_parameters, mpr_name,  "mpr", _ANY_MPR,
-      "ID of the mpr algorithm used for this domain. '"_NO_MPR"'"
-      " means no mpr algorithm(everyone is MPR), '"_ANY_MPR"' means"
-      "any metric that is loaded (with fallback on '"_NO_MPR"').",
-      NHDP_DOMAIN_MPR_MAXLEN),
-};
-
-static struct cfg_schema_section _domain_section = {
-  .type = CFG_NHDP_DOMAIN_SECTION,
-  .mode = CFG_SSMODE_NAMED,
-  .cb_delta_handler = _cb_cfg_domain_changed,
-  .entries = _domain_entries,
-  .entry_count = ARRAYSIZE(_domain_entries),
 };
 
 /* non-default routing domains registered to NHDP */
@@ -158,8 +126,6 @@ nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
 
   avl_init(&nhdp_domain_metrics, avl_comp_strcasecmp, false);
   avl_init(&nhdp_domain_mprs, avl_comp_strcasecmp, false);
-
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_domain_section);
 }
 
 /**
@@ -712,8 +678,8 @@ nhdp_domain_add(uint8_t ext) {
   return domain;
 }
 
-static struct nhdp_domain *
-_configure_domain(uint8_t ext, const char *metric_name, const char *mpr_name) {
+struct nhdp_domain *
+nhdp_domain_configure(uint8_t ext, const char *metric_name, const char *mpr_name) {
   struct nhdp_domain *domain;
 
   domain = nhdp_domain_add(ext);
@@ -737,12 +703,12 @@ _apply_metric(struct nhdp_domain *domain, const char *metric_name) {
   if (strcasecmp(domain->metric_name, metric_name) != 0) {
     if (domain->metric != &_no_metric) {
       _remove_metric(domain);
-      strscpy(domain->metric_name, _NO_METRIC, sizeof(domain->metric_name));
+      strscpy(domain->metric_name, CFG_DOMAIN_NO_METRIC, sizeof(domain->metric_name));
     }
   }
 
   /* Handle wildcard metric name first */
-  if (strcasecmp(metric_name, _ANY_METRIC) == 0
+  if (strcasecmp(metric_name, CFG_DOMAIN_ANY_METRIC) == 0
       && !avl_is_empty(&nhdp_domain_metrics)) {
     metric_name = avl_first_element(&nhdp_domain_metrics, metric, _node)->name;
   }
@@ -764,7 +730,7 @@ _apply_metric(struct nhdp_domain *domain, const char *metric_name) {
 
 static void
 _remove_metric(struct nhdp_domain *domain) {
-  strscpy(domain->metric_name, _NO_METRIC, sizeof(domain->metric_name));
+  strscpy(domain->metric_name, CFG_DOMAIN_NO_METRIC, sizeof(domain->metric_name));
   domain->metric->domain = NULL;
   domain->metric = &_no_metric;
 }
@@ -777,12 +743,12 @@ _apply_mpr(struct nhdp_domain *domain, const char *mpr_name) {
   if (strcasecmp(domain->mpr_name, mpr_name) != 0) {
     if (domain->mpr != &_no_mprs) {
       _remove_mpr(domain);
-      strscpy(domain->mpr_name, _NO_MPR, sizeof(domain->mpr_name));
+      strscpy(domain->mpr_name, CFG_DOMAIN_NO_MPR, sizeof(domain->mpr_name));
     }
   }
 
   /* Handle wildcard mpr name first */
-  if (strcasecmp(mpr_name, _ANY_METRIC) == 0
+  if (strcasecmp(mpr_name, CFG_DOMAIN_ANY_METRIC) == 0
       && !avl_is_empty(&nhdp_domain_mprs)) {
     mpr_name = avl_first_element(&nhdp_domain_mprs, mpr, _node)->name;
   }
@@ -804,7 +770,7 @@ _apply_mpr(struct nhdp_domain *domain, const char *mpr_name) {
 
 static void
 _remove_mpr(struct nhdp_domain *domain) {
-  strscpy(domain->mpr_name, _NO_MPR, sizeof(domain->mpr_name));
+  strscpy(domain->mpr_name, CFG_DOMAIN_NO_MPR, sizeof(domain->mpr_name));
   domain->mpr->domain = NULL;
   domain->mpr = &_no_mprs;
 }
@@ -820,33 +786,4 @@ _to_string(struct nhdp_metric_str *buf, uint32_t metric) {
   snprintf(buf->buf, sizeof(*buf), "0x%x", metric);
 
   return buf->buf;
-}
-
-/**
- * Configuration of a NHDP domain changed
- */
-static void
-_cb_cfg_domain_changed(void) {
-  struct _domain_parameters param;
-  char *error = NULL;
-  int ext;
-
-  ext = strtol(_domain_section.section_name, &error, 10);
-  if (error != NULL && *error != 0) {
-    /* illegal domain name */
-    return;
-  }
-
-  if (ext < 0 || ext > 255) {
-    /* name out of range */
-    return;
-  }
-
-  if (cfg_schema_tobin(&param, _domain_section.post,
-      _domain_entries, ARRAYSIZE(_domain_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP domain configuration.");
-    return;
-  }
-
-  _configure_domain(ext, param.metric_name, param.mpr_name);
 }

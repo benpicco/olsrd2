@@ -61,8 +61,6 @@
 #include "nhdp/nhdp_writer.h"
 
 /* Prototypes of local functions */
-static struct nhdp_interface *_interface_add(const char *name);
-static void _interface_remove(struct nhdp_interface *interf);
 static struct nhdp_interface_addr *_addr_add(
     struct nhdp_interface *, struct netaddr *addr);
 static void _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime);
@@ -71,7 +69,6 @@ static void _cb_remove_addr(void *ptr);
 static int avl_comp_ifaddr(const void *k1, const void *k2);
 
 static void _cb_generate_hello(void *ptr);
-static void _cb_cfg_interface_changed(void);
 static void _cb_interface_event(struct olsr_rfc5444_interface_listener *, bool);
 
 /* global tree of nhdp interfaces, filters and addresses */
@@ -100,23 +97,6 @@ static struct olsr_timer_info _removed_address_hold_timer = {
   .callback = _cb_remove_addr,
 };
 
-static struct cfg_schema_entry _interface_entries[] = {
-  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
-      "Filter for ip interface addresses that should be included in HELLO messages"),
-  CFG_MAP_CLOCK_MIN(nhdp_interface, h_hold_time, "hello-validity", "6.0",
-    "Validity time for NHDP Hello Messages", 100),
-  CFG_MAP_CLOCK_MIN(nhdp_interface, refresh_interval, "hello-interval", "2.0",
-    "Time interval between two NHDP Hello Messages", 100),
-};
-
-static struct cfg_schema_section _interface_section = {
-  .type = CFG_INTERFACE_SECTION,
-  .mode = CFG_SSMODE_NAMED_MANDATORY,
-  .cb_delta_handler = _cb_cfg_interface_changed,
-  .entries = _interface_entries,
-  .entry_count = ARRAYSIZE(_interface_entries),
-};
-
 /* other global variables */
 static struct olsr_rfc5444_protocol *_protocol;
 
@@ -134,9 +114,6 @@ nhdp_interfaces_init(struct olsr_rfc5444_protocol *p) {
 
   /* default protocol should be always available */
   _protocol = p;
-
-  /* add additional configuration for interface section */
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_interface_section);
 }
 
 /**
@@ -147,10 +124,8 @@ nhdp_interfaces_cleanup(void) {
   struct nhdp_interface *interf, *if_it;
 
   avl_for_each_element_safe(&nhdp_interface_tree, interf, _node, if_it) {
-    _interface_remove(interf);
+    nhdp_interface_remove(interf);
   }
-
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_interface_section);
 
   olsr_timer_remove(&_interface_hello_timer);
   olsr_timer_remove(&_removed_address_hold_timer);
@@ -195,8 +170,8 @@ nhdp_interface_update_status(struct nhdp_interface *interf) {
  * @param name name of interface
  * @return pointer to nhdp interface, NULL if out of memory
  */
-static struct nhdp_interface *
-_interface_add(const char *name) {
+struct nhdp_interface *
+nhdp_interface_add(const char *name) {
   struct nhdp_interface *interf;
 
   OLSR_DEBUG(LOG_NHDP, "Add interface to NHDP_interface tree: %s", name);
@@ -246,8 +221,8 @@ _interface_add(const char *name) {
  * Mark a nhdp interface as removed and start cleanup timer
  * @param interf pointer to nhdp interface
  */
-static void
-_interface_remove(struct nhdp_interface *interf) {
+void
+nhdp_interface_remove(struct nhdp_interface *interf) {
   struct nhdp_interface_addr *addr, *a_it;
   struct nhdp_link *lnk, *l_it;
 
@@ -270,6 +245,20 @@ _interface_remove(struct nhdp_interface *interf) {
   olsr_rfc5444_remove_interface(interf->rfc5444_if.interface, &interf->rfc5444_if);
   avl_remove(&nhdp_interface_tree, &interf->_node);
   olsr_class_free(&_interface_info, interf);
+}
+
+void
+nhdp_interface_apply_settings(struct nhdp_interface *interf) {
+  /* parse ip address list again and apply ACL */
+  _cb_interface_event(&interf->rfc5444_if, false);
+
+  /* reset hello generation frequency */
+  olsr_timer_set(&interf->_hello_timer, interf->refresh_interval);
+
+  /* just copy hold time for now */
+  interf->l_hold_time = interf->h_hold_time;
+  interf->n_hold_time = interf->l_hold_time;
+  interf->i_hold_time = interf->n_hold_time;
 }
 
 /**
@@ -383,57 +372,6 @@ avl_comp_ifaddr(const void *k1, const void *k2) {
 static void
 _cb_generate_hello(void *ptr) {
   nhdp_writer_send_hello(ptr);
-}
-
-/**
- * Configuration has changed, handle the changes
- */
-static void
-_cb_cfg_interface_changed(void) {
-  struct nhdp_interface *interf;
-  const char *name;
-
-  /* get section name */
-  if (_interface_section.pre) {
-    name = _interface_section.pre->name;
-  }
-  else {
-    name = _interface_section.post->name;
-  }
-
-  OLSR_DEBUG(LOG_NHDP, "Configuration of NHDP interface %s changed", name);
-
-  /* get interface */
-  interf = nhdp_interface_get(name);
-
-  if (_interface_section.post == NULL) {
-    /* section was removed */
-    if (interf != NULL) {
-      _interface_remove(interf);
-    }
-    return;
-  }
-
-  if (interf == NULL) {
-    interf = _interface_add(name);
-  }
-
-  if (cfg_schema_tobin(interf, _interface_section.post,
-      _interface_entries, ARRAYSIZE(_interface_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP configuration for interface.");
-    return;
-  }
-
-  /* trigger interface address change handler */
-  _cb_interface_event(&interf->rfc5444_if, false);
-
-  /* reset hello generation frequency */
-  olsr_timer_set(&interf->_hello_timer, interf->refresh_interval);
-
-  /* just copy hold time for now */
-  interf->l_hold_time = interf->h_hold_time;
-  interf->n_hold_time = interf->l_hold_time;
-  interf->i_hold_time = interf->n_hold_time;
 }
 
 /**
