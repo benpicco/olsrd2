@@ -52,7 +52,7 @@
 #include "core/olsr_interface.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_class.h"
-#include "core/olsr_netaddr_acl.h"
+#include "common/netaddr_acl.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
 #include "nhdp/nhdp.h"
@@ -230,7 +230,7 @@ nhdp_interface_remove(struct nhdp_interface *interf) {
   olsr_class_event(&_interface_info, interf, OLSR_OBJECT_REMOVED);
 
   /* free filter */
-  olsr_acl_remove(&interf->ifaddr_filter);
+  netaddr_acl_remove(&interf->ifaddr_filter);
 
   olsr_timer_stop(&interf->_hello_timer);
 
@@ -431,7 +431,7 @@ _cb_interface_event(struct olsr_rfc5444_interface_listener *ifl,
       }
 
       /* check if IP address fits to ACL */
-      if (olsr_acl_check_accept(&interf->ifaddr_filter, ifaddr)) {
+      if (netaddr_acl_check_accept(&interf->ifaddr_filter, ifaddr)) {
         _addr_add(interf, ifaddr);
       }
     }

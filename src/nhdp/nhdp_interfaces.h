@@ -50,7 +50,7 @@ struct nhdp_interface_addr;
 #include "common/list.h"
 #include "common/netaddr.h"
 #include "core/olsr_interface.h"
-#include "core/olsr_netaddr_acl.h"
+#include "common/netaddr_acl.h"
 #include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "tools/olsr_rfc5444.h"
@@ -77,7 +77,7 @@ struct nhdp_interface {
   uint64_t i_hold_time;
 
   /* ACL for incoming HELLO messages through this interface */
-  struct olsr_netaddr_acl ifaddr_filter;
+  struct netaddr_acl ifaddr_filter;
 
   /*
    * true if this interface has a neighbor that should be reached through

@@ -293,7 +293,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
 
 static void
 _cb_addAddresses(struct rfc5444_writer *writer) {
-  const struct olsr_netaddr_acl *routable_acl;
+  const struct netaddr_acl *routable_acl;
   struct rfc5444_writer_address *addr;
   struct nhdp_neighbor *neigh;
   struct nhdp_naddr *naddr;
@@ -339,7 +339,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
       nbr_addrtype_value = 0;
 
-      if (olsr_acl_check_accept(routable_acl, &naddr->neigh_addr)) {
+      if (netaddr_acl_check_accept(routable_acl, &naddr->neigh_addr)) {
         nbr_addrtype_value += RFC5444_NBR_ADDR_TYPE_ROUTABLE;
       }
       if (netaddr_cmp(&neigh->originator, &naddr->neigh_addr) == 0) {

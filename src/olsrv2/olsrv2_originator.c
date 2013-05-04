@@ -13,7 +13,7 @@
 #include "core/olsr_class.h"
 #include "core/olsr_interface.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_netaddr_acl.h"
+#include "common/netaddr_acl.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
 
@@ -25,7 +25,7 @@
 /* definitions */
 struct _config {
   uint64_t o_hold_time;
-  struct olsr_netaddr_acl v4_acl, v6_acl;
+  struct netaddr_acl v4_acl, v6_acl;
 };
 
 /* prototypes */
@@ -110,8 +110,8 @@ olsrv2_originator_cleanup(void) {
   olsr_interface_remove_listener(&_if_listener);
 
   /* remove ACL in configuration */
-  olsr_acl_remove(&_originator_config.v4_acl);
-  olsr_acl_remove(&_originator_config.v6_acl);
+  netaddr_acl_remove(&_originator_config.v4_acl);
+  netaddr_acl_remove(&_originator_config.v6_acl);
 
   /* remove all originator entries */
   avl_for_each_element_safe(&olsrv2_originator_set_tree, entry, _node, e_it) {
@@ -255,12 +255,12 @@ _update_originators(void) {
 
       if (!keep_v4 && netaddr_get_address_family(&new_v4) == AF_UNSPEC
           && netaddr_get_address_family(addr) == AF_INET
-          && olsr_acl_check_accept(&_originator_config.v4_acl, addr)) {
+          && netaddr_acl_check_accept(&_originator_config.v4_acl, addr)) {
         memcpy(&new_v4, addr, sizeof(new_v4));
       }
       if (!keep_v6 && netaddr_get_address_family(&new_v6) == AF_UNSPEC
           && netaddr_get_address_family(addr) == AF_INET6
-          && olsr_acl_check_accept(&_originator_config.v6_acl, addr)) {
+          && netaddr_acl_check_accept(&_originator_config.v6_acl, addr)) {
         memcpy(&new_v6, addr, sizeof(new_v6));
       }
     }

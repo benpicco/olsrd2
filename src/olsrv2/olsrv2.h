@@ -44,7 +44,7 @@
 
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "core/olsr_netaddr_acl.h"
+#include "common/netaddr_acl.h"
 #include "core/olsr_subsystem.h"
 
 #include "nhdp/nhdp_domain.h"
@@ -61,7 +61,7 @@ EXPORT extern enum log_source LOG_OLSRV2;
 
 EXPORT uint64_t olsrv2_get_tc_interval(void);
 EXPORT uint64_t olsrv2_get_tc_validity(void);
-EXPORT const struct olsr_netaddr_acl *olsrv2_get_routable(void);
+EXPORT const struct netaddr_acl *olsrv2_get_routable(void);
 EXPORT bool olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *, uint64_t vtime);
 EXPORT bool olsrv2_mpr_shall_forwarding(

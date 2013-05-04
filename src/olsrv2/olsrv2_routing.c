@@ -477,7 +477,7 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
 
     /* make sure all addresses of the neighbor are better than our direct link */
     avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
-      if (!olsr_acl_check_accept(olsrv2_get_routable(), &naddr->neigh_addr)) {
+      if (!netaddr_acl_check_accept(olsrv2_get_routable(), &naddr->neigh_addr)) {
         /* not a routable address, check the next one */
         continue;
       }
@@ -503,7 +503,7 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
           continue;
         }
 
-        if (!olsr_acl_check_accept(olsrv2_get_routable(), &l2hop->twohop_addr)) {
+        if (!netaddr_acl_check_accept(olsrv2_get_routable(), &l2hop->twohop_addr)) {
           /* not a routable address, check the next one */
           continue;
         }

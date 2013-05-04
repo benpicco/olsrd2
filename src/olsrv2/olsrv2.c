@@ -46,7 +46,7 @@
 #include "config/cfg_schema.h"
 #include "rfc5444/rfc5444.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_netaddr_acl.h"
+#include "common/netaddr_acl.h"
 #include "core/olsr_subsystem.h"
 #include "core/olsr_timer.h"
 #include "tools/olsr_cfg.h"
@@ -72,7 +72,7 @@ struct _config {
 
   uint64_t f_hold_time;
   uint64_t p_hold_time;
-  struct olsr_netaddr_acl routable;
+  struct netaddr_acl routable;
 };
 
 struct _lan_data {
@@ -201,7 +201,7 @@ _cleanup(void) {
   }
 
   /* cleanup configuration */
-  olsr_acl_remove(&_olsrv2_config.routable);
+  netaddr_acl_remove(&_olsrv2_config.routable);
 
   olsrv2_routing_cleanup();
   olsrv2_writer_cleanup();
@@ -223,7 +223,7 @@ olsrv2_get_tc_validity(void) {
   return _olsrv2_config.tc_validity;
 }
 
-const struct olsr_netaddr_acl *
+const struct netaddr_acl *
 olsrv2_get_routable(void) {
     return &_olsrv2_config.routable;
 }
