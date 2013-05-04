@@ -4,6 +4,7 @@ include (../cmake/prepare_app.cmake)
 # add main program
 set(OONF_SRCS olsr_main.c 
               olsr_setup.c
+              olsr_api_subsystems.c
               ${PROJECT_BINARY_DIR}/app_data.c
               
               nhdp/nhdp.c

@@ -47,43 +47,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
-#include <sys/socket.h>
-#include <net/if.h>
 
 #include "common/daemonize.h"
-#include "common/list.h"
 #include "config/cfg_cmd.h"
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
-#include "core/os_clock.h"
-#include "core/os_net.h"
-#include "core/os_system.h"
-#include "core/os_syslog.h"
-#include "core/olsr_class.h"
 #include "core/olsr_clock.h"
-#include "core/olsr_interface.h"
 #include "core/olsr_libdata.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_packet_socket.h"
 #include "core/olsr_plugins.h"
 #include "core/olsr_socket.h"
-#include "core/olsr_stream_socket.h"
-#include "core/olsr_timer.h"
-#include "olsr_setup.h"
 #include "core/olsr_subsystem.h"
 
 #include "tools/olsr_cfg.h"
-#include "tools/olsr_http.h"
 #include "tools/olsr_logging_cfg.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_telnet.h"
 
-#include "nhdp/nhdp.h"
 #include "app_data.h"
-
-#if OONF_NEED_ROUTING == true
-#include "core/os_routing.h"
-#endif
+#include "olsr_api_subsystems.h"
+#include "olsr_setup.h"
 
 /* prototypes */
 static void quit_signal_handler(int);
@@ -155,28 +136,6 @@ static const char *help_text =
 ;
 #endif
 
-/* initialize basic framework */
-static struct oonf_subsystem *_api_subsystems[] = {
-  &oonf_os_syslog_subsystem,
-  &oonf_class_subsystem,
-  &oonf_os_clock_subsystem,
-  &oonf_clock_subsystem,
-  &oonf_timer_subsystem,
-  &oonf_socket_subsystem,
-  &oonf_packet_socket_subsystem,
-  &oonf_stream_socket_subsystem,
-  &oonf_os_system_subsystem,
-#if OONF_NEED_ROUTING
-  &oonf_os_routing_subsystem,
-#endif
-  &oonf_os_net_subsystem,
-  &oonf_interface_subsystem,
-  &oonf_duplicate_set_subsystem,
-  &oonf_rfc5444_subsystem,
-  &oonf_telnet_subsystem,
-  &oonf_http_subsystem,
-};
-
 /**
  * Main program
  */
@@ -201,7 +160,7 @@ main(int argc, char **argv) {
   _ignore_unknown = false;
 
   /* assemble list of subsystems first */
-  subsystem_count = ARRAYSIZE(_api_subsystems)
+  subsystem_count = get_used_api_subsystem_count()
       + olsr_setup_get_subsystem_count();
 
   subsystems = calloc(subsystem_count, sizeof(struct oonf_subsystem *));
@@ -210,9 +169,9 @@ main(int argc, char **argv) {
     return -1;
   }
 
-  memcpy(&subsystems[0], _api_subsystems,
-      sizeof(struct oonf_subsystem *) * ARRAYSIZE(_api_subsystems));
-  memcpy(&subsystems[ARRAYSIZE(_api_subsystems)],
+  memcpy(&subsystems[0], used_api_subsystems,
+      sizeof(struct oonf_subsystem *) * get_used_api_subsystem_count());
+  memcpy(&subsystems[get_used_api_subsystem_count()],
       olsr_setup_get_subsystems(),
       sizeof(struct oonf_subsystem *) * olsr_setup_get_subsystem_count());
 
