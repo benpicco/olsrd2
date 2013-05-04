@@ -67,6 +67,7 @@
 #include "olsr_setup.h"
 
 /* prototypes */
+static bool _cb_stop_scheduler(void);
 static void quit_signal_handler(int);
 static void hup_signal_handler(int);
 static void setup_signalhandler(void);
@@ -362,7 +363,7 @@ mainloop(int argc, char **argv) {
     }
 
     /* Read incoming data and handle it immediately */
-    if (olsr_socket_handle(0)) {
+    if (olsr_socket_handle(_cb_stop_scheduler, 0)) {
       exit_code = 1;
       break;
     }
@@ -391,12 +392,23 @@ mainloop(int argc, char **argv) {
 
   /* wait for 500 milliseconds and process socket events */
   next_interval = olsr_clock_get_absolute(500);
-  if (olsr_socket_handle(next_interval)) {
+  if (olsr_socket_handle(NULL, next_interval)) {
     exit_code = 1;
   }
 
   OLSR_INFO(LOG_MAIN, "Ending %s", olsr_appdata_get()->app_name);
   return exit_code;
+}
+
+/**
+ * Callback for the scheduler that tells it when to return to the mainloop.
+ * @return true if scheduler should return to the mainloop now
+ */
+static bool
+_cb_stop_scheduler(void) {
+  return olsr_cfg_is_commit_set()
+      || olsr_cfg_is_reload_set()
+      || !olsr_cfg_is_running();
 }
 
 /**
