@@ -144,6 +144,7 @@ int
 main(int argc, char **argv) {
   int return_code;
   int fork_pipe;
+  uint64_t next_interval;
   size_t i;
   size_t initialized;
 
@@ -292,6 +293,19 @@ main(int argc, char **argv) {
   /* activate mainloop */
   return_code = mainloop(argc, argv);
 
+  /* tell framework shutdown is in progress */
+  for (i=0; i<subsystem_count; i++) {
+    if (subsystems[i]->initiate_shutdown != NULL) {
+      subsystems[i]->initiate_shutdown();
+    }
+  }
+
+  /* wait for 500 milliseconds and process socket events */
+  next_interval = olsr_clock_get_absolute(500);
+  if (olsr_socket_handle(NULL, next_interval)) {
+    OLSR_WARN(LOG_MAIN, "Grace period for shutdown failed.");
+  }
+
 olsrd_cleanup:
   /* free plugins */
   olsr_cfg_unconfigure_plugins();
@@ -346,7 +360,6 @@ hup_signal_handler(int signo __attribute__ ((unused))) {
  */
 static int
 mainloop(int argc, char **argv) {
-  uint64_t next_interval;
   int exit_code = 0;
 
   OLSR_INFO(LOG_MAIN, "Starting %s", olsr_appdata_get()->app_name);
@@ -388,12 +401,6 @@ mainloop(int argc, char **argv) {
         break;
       }
     }
-  }
-
-  /* wait for 500 milliseconds and process socket events */
-  next_interval = olsr_clock_get_absolute(500);
-  if (olsr_socket_handle(NULL, next_interval)) {
-    exit_code = 1;
   }
 
   OLSR_INFO(LOG_MAIN, "Ending %s", olsr_appdata_get()->app_name);
