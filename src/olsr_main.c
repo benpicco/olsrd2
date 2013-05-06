@@ -301,6 +301,9 @@ main(int argc, char **argv) {
   }
 
   /* wait for 500 milliseconds and process socket events */
+  if (olsr_clock_update()) {
+    OLSR_WARN(LOG_MAIN, "Clock update for shutdown failed");
+  }
   next_interval = olsr_clock_get_absolute(500);
   if (olsr_socket_handle(NULL, next_interval)) {
     OLSR_WARN(LOG_MAIN, "Grace period for shutdown failed.");
