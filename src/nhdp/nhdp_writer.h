@@ -46,6 +46,7 @@
 
 int nhdp_writer_init(struct olsr_rfc5444_protocol *)
   __attribute__((warn_unused_result));
+void nhdp_writer_initiate_shutdown(void);
 void nhdp_writer_cleanup(void);
 
 EXPORT void nhdp_writer_send_hello(struct nhdp_interface *interf);

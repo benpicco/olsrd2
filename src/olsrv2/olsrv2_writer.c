@@ -106,6 +106,7 @@ static int _send_msg_type;
 static struct olsr_rfc5444_protocol *_protocol;
 
 static enum log_source LOG_OLSRV2_W = LOG_MAIN;
+static bool _cleanedup = false;
 
 int
 olsrv2_writer_init(struct olsr_rfc5444_protocol *protocol) {
@@ -140,6 +141,8 @@ void
 olsrv2_writer_cleanup(void) {
   int i;
 
+  _cleanedup = true;
+
   olsr_class_listener_remove(&_domain_listener);
 
   /* unregister address tlvs */
@@ -158,6 +161,11 @@ olsrv2_writer_cleanup(void) {
 
 void
 olsrv2_writer_send_tc(void) {
+  if (_cleanedup) {
+    /* do not send more TCs during shutdown */
+    return;
+  }
+
   /* send IPv4 */
   OLSR_INFO(LOG_OLSRV2_W, "Emit IPv4 TC message.");
   _send_msg_type = AF_INET;

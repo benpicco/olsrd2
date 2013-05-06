@@ -64,6 +64,7 @@ struct _domain_parameters {
 
 /* prototypes */
 static int _init(void);
+static void _initiate_shutdown(void);
 static void _cleanup(void);
 
 static enum olsr_telnet_result _cb_nhdp(struct olsr_telnet_data *con);
@@ -131,6 +132,7 @@ static struct cfg_schema_section _domain_section = {
 struct oonf_subsystem nhdp_subsystem = {
   .init = _init,
   .cleanup = _cleanup,
+  .initiate_shutdown = _initiate_shutdown,
   .cfg_section = &_domain_section,
 };
 
@@ -173,6 +175,15 @@ _init(void) {
 }
 
 /**
+ * Begin shutdown by deactivating reader and writer
+ */
+static void
+_initiate_shutdown(void) {
+  nhdp_writer_cleanup();
+  nhdp_reader_cleanup();
+}
+
+/**
  * Cleanup NHDP subsystem
  */
 static void
@@ -184,8 +195,6 @@ _cleanup(void) {
   }
 
   nhdp_domain_cleanup();
-  nhdp_writer_cleanup();
-  nhdp_reader_cleanup();
   nhdp_interfaces_cleanup();
   nhdp_db_cleanup();
 }

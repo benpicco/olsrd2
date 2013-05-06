@@ -79,7 +79,7 @@ enum {
 };
 
 /* prototypes */
-static void cleanup_error(void);
+static void _cleanup_error(void);
 static enum rfc5444_result _pass2_process_localif(struct netaddr *addr, uint8_t local_if);
 static void _handle_originator(struct rfc5444_reader_tlvblock_context *context);
 
@@ -219,7 +219,7 @@ nhdp_reader_cleanup(void) {
  * Make sure that there are no uninitialized datastructures left.
  */
 static void
-cleanup_error(void) {
+_cleanup_error(void) {
   if (_current.link) {
     nhdp_db_link_remove(_current.link);
     _current.link = NULL;
@@ -537,7 +537,7 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
   struct nhdp_laddr *laddr;
 
   if (dropped) {
-    cleanup_error();
+    _cleanup_error();
     return RFC5444_OKAY;
   }
 
@@ -831,7 +831,7 @@ _cb_msg_pass2_end(struct rfc5444_reader_tlvblock_context *context, bool dropped)
   uint64_t t;
 
   if (dropped) {
-    cleanup_error();
+    _cleanup_error();
     return RFC5444_OKAY;
   }
 

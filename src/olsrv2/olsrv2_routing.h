@@ -112,6 +112,7 @@ struct olsrv2_routing_domain {
 EXPORT extern struct avl_tree olsrv2_routing_tree[NHDP_MAXIMUM_DOMAINS];
 
 void olsrv2_routing_init(void);
+void olsrv2_routing_initiate_shutdown(void);
 void olsrv2_routing_cleanup(void);
 
 void olsrv2_routing_dijkstra_node_init(struct olsrv2_dijkstra_node *);

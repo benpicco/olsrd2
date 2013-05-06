@@ -96,6 +96,7 @@ static struct rfc5444_writer_tlvtype _nhdp_addrtlvs[] = {
 static struct olsr_rfc5444_protocol *_protocol;
 
 static enum log_source LOG_NHDP_W = LOG_MAIN;
+static bool _cleanedup = false;
 
 /**
  * Initialize nhdp writer
@@ -131,6 +132,9 @@ nhdp_writer_init(struct olsr_rfc5444_protocol *p) {
  */
 void
 nhdp_writer_cleanup(void) {
+  /* remember we already did shut down the writer */
+  _cleanedup = true;
+
   /* remove pbb writer */
   rfc5444_writer_unregister_content_provider(
       &_protocol->writer, &_nhdp_msgcontent_provider,
@@ -144,6 +148,11 @@ nhdp_writer_send_hello(struct nhdp_interface *interf) {
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_WARN
   struct netaddr_str buf;
 #endif
+
+  if (_cleanedup) {
+    /* do not send more Hellos during shutdown */
+    return;
+  }
 
   OLSR_DEBUG(LOG_NHDP, "Sending Hello to interface %s",
       nhdp_interface_get_name(interf));

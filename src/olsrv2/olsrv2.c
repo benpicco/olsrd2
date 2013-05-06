@@ -83,6 +83,7 @@ struct _lan_data {
 
 /* prototypes */
 static int _init(void);
+static void _initiate_shutdown(void);
 static void _cleanup(void);
 
 static const char *_parse_lan_parameters(struct _lan_data *dst, const char *src);
@@ -130,6 +131,7 @@ static struct cfg_schema_section _olsrv2_section = {
 struct oonf_subsystem olsrv2_subsystem = {
   .init = _init,
   .cleanup = _cleanup,
+  .initiate_shutdown = _initiate_shutdown,
   .cfg_section = &_olsrv2_section,
 };
 
@@ -190,6 +192,16 @@ _init(void) {
 }
 
 /**
+ * Begin shutdown by deactivating reader and writer. Also flush all routes
+ */
+static void
+_initiate_shutdown(void) {
+  olsrv2_writer_cleanup();
+  olsrv2_reader_cleanup();
+  olsrv2_routing_initiate_shutdown();
+}
+
+/**
  * Cleanup OLSRv2 subsystem
  */
 static void
@@ -204,8 +216,6 @@ _cleanup(void) {
   netaddr_acl_remove(&_olsrv2_config.routable);
 
   olsrv2_routing_cleanup();
-  olsrv2_writer_cleanup();
-  olsrv2_reader_cleanup();
   olsrv2_originator_cleanup();
   olsrv2_tc_cleanup();
   olsrv2_lan_cleanup();

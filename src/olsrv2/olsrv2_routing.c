@@ -125,6 +125,7 @@ static struct avl_tree _dijkstra_working_tree;
 static struct list_entity _kernel_queue;
 
 static enum log_source LOG_OLSRV2_ROUTING = LOG_MAIN;
+static bool _initiate_shutdown = false;
 
 void
 olsrv2_routing_init(void) {
@@ -146,6 +147,24 @@ olsrv2_routing_init(void) {
 }
 
 void
+olsrv2_routing_initiate_shutdown(void) {
+  struct olsrv2_routing_entry *entry, *e_it;
+  int i;
+
+  _initiate_shutdown = true;
+
+  /* remove all routes */
+  for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
+    avl_for_each_element_safe(&olsrv2_routing_tree[i], entry, _node, e_it) {
+      if (entry->set) {
+        entry->set = false;
+        os_routing_set(&entry->route, false, false);
+      }
+    }
+  }
+}
+
+void
 olsrv2_routing_cleanup(void) {
   struct olsrv2_routing_entry *entry, *e_it;
   int i;
@@ -156,6 +175,11 @@ olsrv2_routing_cleanup(void) {
 
   for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
     avl_for_each_element_safe(&olsrv2_routing_tree[i], entry, _node, e_it) {
+      /* make sure route processing has stopped */
+      entry->route.cb_finished = NULL;
+      os_routing_interrupt(&entry->route);
+
+      /* remove entry from database */
       _remove_entry(entry);
     }
   }
@@ -182,6 +206,11 @@ olsrv2_routing_force_update(bool skip_wait) {
   struct olsrv2_routing_entry *rtentry, *rt_it;
   struct nhdp_domain *domain;
   struct os_route_str rbuf;
+
+  if (_initiate_shutdown) {
+    /* no dijkstra anymore when in shutdown */
+    return;
+  }
 
   /* handle dijkstra rate limitation timer */
   if (olsr_timer_is_active(&_rate_limit_timer)) {
@@ -227,7 +256,7 @@ olsrv2_routing_force_update(bool skip_wait) {
     }
     else  {
       /* remove from kernel */
-      if (os_routing_set(&rtentry->route, false, true)) {
+      if (os_routing_set(&rtentry->route, false, false)) {
         OLSR_WARN(LOG_OLSRV2_ROUTING, "Could not remove route %s",
             os_routing_to_string(&rbuf, &rtentry->route));
       }
@@ -276,6 +305,7 @@ _add_entry(struct nhdp_domain *domain, struct netaddr *prefix) {
 
 static void
 _remove_entry(struct olsrv2_routing_entry *entry) {
+  /* remove entry from database */
   avl_remove(&olsrv2_routing_tree[entry->domain->index], &entry->_node);
   olsr_class_free(&_rtset_entry, entry);
 }
