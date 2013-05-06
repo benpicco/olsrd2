@@ -388,6 +388,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
+          metric_in = htons(metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
         }
@@ -398,6 +399,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
+          metric_in = htons(metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
         }
@@ -408,11 +410,13 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
+          metric_in = htons(metric_in);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
 
           OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_out);
+          metric_out = htons(metric_out);
           rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[1],
               &metric_out, sizeof(metric_out), true);
         }

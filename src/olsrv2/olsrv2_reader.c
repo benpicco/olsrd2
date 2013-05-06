@@ -261,7 +261,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   struct olsrv2_tc_attachment *end;
   uint32_t cost_in[NHDP_MAXIMUM_DOMAINS];
   uint32_t cost_out[NHDP_MAXIMUM_DOMAINS];
-  uint16_t tmp;
+  uint16_t metric_value;
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
 #endif
@@ -282,20 +282,20 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
       continue;
     }
 
-    memcpy(&tmp, tlv->single_value, 2);
-    // TODO tmp = ntohs(tmp);
+    memcpy(&metric_value, tlv->single_value, 2);
+    metric_value = ntohs(metric_value);
 
     OLSR_DEBUG(LOG_OLSRV2_R, "Metric %d: %04x",
-        domain->index, tmp);
+        domain->index, metric_value);
 
-    if (tmp & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
+    if (metric_value & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
       cost_in[domain->index] =
-          rfc5444_metric_decode(tmp & RFC5444_LINKMETRIC_COST_MASK);
+          rfc5444_metric_decode(metric_value & RFC5444_LINKMETRIC_COST_MASK);
     }
 
-    if (tmp & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
+    if (metric_value & RFC5444_LINKMETRIC_OUTGOING_NEIGH) {
       cost_out[domain->index] =
-          rfc5444_metric_decode(tmp & RFC5444_LINKMETRIC_COST_MASK);
+          rfc5444_metric_decode(metric_value & RFC5444_LINKMETRIC_COST_MASK);
     }
   }
 
