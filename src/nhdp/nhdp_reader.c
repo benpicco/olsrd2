@@ -312,7 +312,9 @@ _pass2_process_localif(struct netaddr *addr, uint8_t local_if) {
 static void
 _handle_originator(struct rfc5444_reader_tlvblock_context *context) {
   struct nhdp_neighbor *neigh;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   OLSR_DEBUG(LOG_NHDP_R, "Handle originator %s",
       netaddr_to_string(&buf, &context->orig_addr));
@@ -353,8 +355,9 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
   struct nhdp_domain *domain;
-
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   OLSR_DEBUG(LOG_NHDP_R,
       "Incoming message type %d from %s through %s (addrlen = %u), got message tlvs",
@@ -435,7 +438,9 @@ _cb_addresstlvs_pass1(struct rfc5444_reader_tlvblock_context *context) {
   uint8_t local_if, link_status;
   struct nhdp_naddr *naddr;
   struct nhdp_laddr *laddr;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   local_if = 255;
   link_status = 255;
@@ -633,14 +638,14 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
  * @param addr address the TLVs are attached to
  */
 static void
-_process_domainspecific_linkdata(struct netaddr *addr) {
+_process_domainspecific_linkdata(struct netaddr *addr __attribute__((unused))) {
   struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_domain *domain;
   struct nhdp_neighbor_domaindata *neighdata;
   uint16_t tlvvalue;
-
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
-
+#endif
   /*
    * clear routing mpr, willingness and metric values
    * that should be present in HELLO
@@ -707,13 +712,15 @@ _process_domainspecific_linkdata(struct netaddr *addr) {
  * @param addr address the TLVs are attached to
  */
 static void
-_process_domainspecific_2hopdata(struct nhdp_l2hop *l2hop, struct netaddr *addr) {
+_process_domainspecific_2hopdata(struct nhdp_l2hop *l2hop,
+    struct netaddr *addr __attribute__((unused))) {
   struct rfc5444_reader_tlvblock_entry *tlv;
   struct nhdp_domain *domain;
   struct nhdp_l2hop_domaindata *data;
   uint16_t tlvvalue;
-
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   /* clear metric values that should be present in HELLO */
   list_for_each_element(&nhdp_domain_list, domain, _node) {
@@ -755,7 +762,9 @@ static enum rfc5444_result
 _cb_addr_pass2_block(struct rfc5444_reader_tlvblock_context *context) {
   uint8_t local_if, link_status, other_neigh;
   struct nhdp_l2hop *l2hop;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   local_if = 255;
   link_status = 255;

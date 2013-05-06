@@ -305,17 +305,16 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
   struct rfc5444_writer_address *addr;
   struct nhdp_neighbor *neigh;
   struct nhdp_naddr *naddr;
-
   struct nhdp_neighbor_domaindata *neigh_domain;
   struct nhdp_domain *domain;
-
   struct olsrv2_lan_entry *lan;
   bool any_advertised;
   uint8_t nbr_addrtype_value;
-
   uint16_t metric_in, metric_out;
 
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   routable_acl = olsrv2_get_routable();
 

@@ -347,9 +347,11 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   uint32_t total, received;
   uint64_t metric;
   int i;
-  struct nhdp_laddr *laddr;
 
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+  struct nhdp_laddr *laddr;
   struct netaddr_str buf;
+#endif
 
   OLSR_DEBUG(LOG_PLUGINS, "Calculate ETX from sampled data");
 

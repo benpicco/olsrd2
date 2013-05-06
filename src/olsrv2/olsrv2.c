@@ -243,7 +243,9 @@ olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   enum olsr_duplicate_result dup_result;
   bool process;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
@@ -276,7 +278,9 @@ olsrv2_mpr_shall_forwarding(
   struct nhdp_neighbor *neigh;
   enum olsr_duplicate_result dup_result;
   bool forward;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
@@ -347,8 +351,9 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   struct olsr_rfc5444_target *target;
   struct nhdp_interface *interf;
   bool is_ipv4, flood;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
-
+#endif
   target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
 
   /* test if this is the ipv4 multicast target */

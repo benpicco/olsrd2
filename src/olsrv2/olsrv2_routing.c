@@ -315,8 +315,9 @@ _insert_into_working_tree(struct olsrv2_tc_target *target,
     struct nhdp_neighbor *neigh, uint32_t linkcost,
     uint32_t pathcost, uint8_t distance, bool single_hop) {
   struct olsrv2_dijkstra_node *node;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
-
+#endif
   if (linkcost >= RFC5444_METRIC_INFINITE) {
     return;
   }
@@ -353,7 +354,9 @@ _update_routing_entry(struct olsrv2_routing_entry *rtentry,
     uint8_t distance, uint32_t pathcost,
     bool single_hop) {
   struct nhdp_neighbor_domaindata *neighdata;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   neighdata = nhdp_domain_get_neighbordata(domain, first_hop);
   OLSR_DEBUG(LOG_OLSRV2_ROUTING, "Add dst %s with pastcost %u to working queue",
@@ -429,7 +432,9 @@ _handle_working_queue(struct nhdp_domain *domain) {
   struct olsrv2_tc_edge *tc_edge;
   struct olsrv2_tc_attachment *tc_attached;
 
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   /* get tc target */
   target = avl_first_element(&_dijkstra_working_tree, target, _dijkstra._node);
@@ -556,8 +561,10 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
 static void
 _process_dijkstra_result(struct nhdp_domain *domain) {
   struct olsrv2_routing_entry *rtentry;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_INFO
   struct os_route_str rbuf;
   struct netaddr_str nbuf;
+#endif
 
   avl_for_each_element(&olsrv2_routing_tree[domain->index], rtentry, _node) {
     /* initialize rest of route parameters */

@@ -205,7 +205,9 @@ _cleanup(void) {
  */
 void
 nhdp_set_originator(const struct netaddr *addr) {
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   OLSR_DEBUG(LOG_NHDP, "Set originator to %s", netaddr_to_string(&buf, addr));
   if (netaddr_get_address_family(addr) == AF_INET) {

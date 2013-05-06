@@ -254,8 +254,11 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
-  struct netaddr_str buf;
   uint8_t value;
+
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_INFO
+  struct netaddr_str buf;
+#endif
 
   if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv != NULL) {
     /* check for duplicate LOCAL_IF TLV */

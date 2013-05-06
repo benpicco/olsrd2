@@ -235,7 +235,9 @@ _update_originators(void) {
   struct netaddr new_v4, new_v6;
   bool keep_v4, keep_v6;
   size_t i;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
+#endif
 
   OLSR_DEBUG(LOG_OLSRV2, "Updating OLSRv2 originators");
 
