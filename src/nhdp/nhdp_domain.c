@@ -211,7 +211,7 @@ nhdp_domain_metric_add(struct nhdp_domain_metric *metric) {
 
 /**
  * Remove a metric handler from the nhdp metric core
- * @param h pointer to handler
+ * @param metric pointer to metric handler
  */
 void
 nhdp_domain_metric_remove(struct nhdp_domain_metric *metric) {
@@ -228,8 +228,8 @@ nhdp_domain_metric_remove(struct nhdp_domain_metric *metric) {
 }
 
 /**
- * Add a new metric handler to nhdp
- * @param h pointer to handler
+ * Add a new mpr handler to nhdp
+ * @param mpr pointer to mpr handler
  * @return 0 if successful, -1 if metric is already registered
  */
 int
@@ -253,7 +253,7 @@ nhdp_domain_mpr_add(struct nhdp_domain_mpr *mpr) {
 
 /**
  * Remove a metric handler from the nhdp metric core
- * @param h pointer to handler
+ * @param mpr pointer to mpr handler
  */
 void
 nhdp_domain_mpr_remove(struct nhdp_domain_mpr *mpr) {
@@ -372,7 +372,7 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
 
 /**
  * Process an in linkmetric tlv for a nhdp link
- * @param h pointer to metric handler
+ * @param domain pointer to NHDP domain
  * @param lnk pointer to nhdp link
  * @param tlvvalue value of metric tlv
  */
@@ -393,7 +393,7 @@ nhdp_domain_process_metric_linktlv(struct nhdp_domain *domain,
 
 /**
  * Process an in linkmetric tlv for a nhdp twohop neighbor
- * @param h pointer to metric handler
+ * @param domain pointer to NHDP domain
  * @param l2hop pointer to nhdp twohop neighbor
  * @param tlvvalue value of metric tlv
  */
@@ -494,9 +494,8 @@ nhdp_domain_process_mpr_tlv(struct nhdp_domain *domain,
 /**
  * Process an in Willingness tlv and put values into
  * temporary storage in MPR handler object
- * @param domain
- * @param lnk
- * @param tlvvalue
+ * @param domain pointer to NHDP domain
+ * @param tlvvalue willingness value to parse
  */
 void
 nhdp_domain_process_willingness_tlv(struct nhdp_domain *domain,

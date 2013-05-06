@@ -201,7 +201,7 @@ _cleanup(void) {
 
 /**
  * Sets the originator address used by NHDP to a new value.
- * @param NHDP originator.
+ * @param addr NHDP originator.
  */
 void
 nhdp_set_originator(const struct netaddr *addr) {

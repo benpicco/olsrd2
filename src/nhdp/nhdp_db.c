@@ -370,11 +370,12 @@ nhdp_db_neighbor_addr_move(struct nhdp_neighbor *neigh, struct nhdp_naddr *naddr
 
 /**
  * Sets a new originator address for an NHDP neighbor
- * @param nhdp neighbor
+ * @param neigh nhdp neighbor
  * @param originator originator address, might be type AF_UNSPEC
  */
 void
-nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh, const struct netaddr *originator) {
+nhdp_db_neighbor_set_originator(struct nhdp_neighbor *neigh,
+    const struct netaddr *originator) {
   struct nhdp_neighbor *neigh2;
   struct nhdp_link *lnk;
 
@@ -705,8 +706,8 @@ nhdp_db_link_connect_dualstack(
 }
 
 /**
- * Disconnects the pointers of a dualstack pair of neighbors
- * @param neigh one of the connected neighbors
+ * Disconnects the pointers of a dualstack pair of links
+ * @param lnk one of the connected links
  */
 void
 nhdp_db_link_disconnect_dualstack(struct nhdp_link *lnk) {
