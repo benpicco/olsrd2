@@ -47,14 +47,14 @@
 
 #include "core/olsr_subsystem.h"
 
-#define CFG_NHDP_SECTION "nhdp"
+#define CFG_NHDP_SECTION        "nhdp"
 
-#define CFG_NHDP_DOMAIN_SECTION       "domain"
-
-#define CFG_DOMAIN_NO_METRIC  "-"
-#define CFG_DOMAIN_ANY_METRIC "*"
-#define CFG_DOMAIN_NO_MPR     "-"
-#define CFG_DOMAIN_ANY_MPR    "*"
+#define CFG_NHDP_DOMAIN_SECTION "domain"
+#define CFG_NHDP_DEFAULT_DOMAIN "0"
+#define CFG_DOMAIN_NO_METRIC    "-"
+#define CFG_DOMAIN_ANY_METRIC   "*"
+#define CFG_DOMAIN_NO_MPR       "-"
+#define CFG_DOMAIN_ANY_MPR      "*"
 
 
 enum {

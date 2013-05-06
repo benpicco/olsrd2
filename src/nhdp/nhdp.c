@@ -121,9 +121,12 @@ static struct cfg_schema_entry _domain_entries[] = {
 
 static struct cfg_schema_section _domain_section = {
   .type = CFG_NHDP_DOMAIN_SECTION,
-  .mode = CFG_SSMODE_NAMED,
+  .mode = CFG_SSMODE_NAMED_WITH_DEFAULT,
+  .def_name = CFG_NHDP_DEFAULT_DOMAIN,
+
   .cb_delta_handler = _cb_cfg_domain_changed,
   .cb_validate = _cb_validate_domain_section,
+
   .entries = _domain_entries,
   .entry_count = ARRAYSIZE(_domain_entries),
   .next_section = &_interface_section,
@@ -510,6 +513,11 @@ static void
 _cb_cfg_domain_changed(void) {
   struct _domain_parameters param;
   int ext;
+
+  OLSR_INFO(LOG_NHDP, "Received domain cfg change for name '%s': %s %s",
+      _domain_section.section_name,
+      _domain_section.pre != NULL ? "pre" : "-",
+      _domain_section.post != NULL ? "post" : "-");
 
   ext = strtol(_domain_section.section_name, NULL, 10);
 

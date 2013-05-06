@@ -88,7 +88,8 @@ static struct cfg_schema_entry _rt_domain_entries[] = {
 
 static struct cfg_schema_section _rt_domain_section = {
   .type = CFG_NHDP_DOMAIN_SECTION,
-  .mode = CFG_SSMODE_NAMED,
+  .mode = CFG_SSMODE_NAMED_WITH_DEFAULT,
+  .def_name = CFG_NHDP_DEFAULT_DOMAIN,
   .cb_delta_handler = _cb_cfg_domain_changed,
   .entries = _rt_domain_entries,
   .entry_count = ARRAYSIZE(_rt_domain_entries),
