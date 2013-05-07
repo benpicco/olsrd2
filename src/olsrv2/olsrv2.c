@@ -88,7 +88,8 @@ static void _cleanup(void);
 
 static const char *_parse_lan_parameters(struct _lan_data *dst, const char *src);
 static void _parse_lan_array(struct cfg_named_section *section, bool add);
-static void _cb_cfg_changed(void);
+static void _cb_cfg_olsrv2_changed(void);
+static void _cb_cfg_domain_changed(void);
 static void _cb_generate_tc(void *);
 
 /* prototypes */
@@ -101,6 +102,26 @@ static struct olsr_telnet_command _cmds[] = {
 };
 
 /* subsystem definition */
+static struct cfg_schema_entry _rt_domain_entries[] = {
+  CFG_MAP_BOOL(olsrv2_routing_domain, use_srcip_in_routes, "srcip_routes", "no",
+      "Set the source IP of IPv4-routes to a fixed value."),
+  CFG_MAP_INT_MINMAX(olsrv2_routing_domain, protocol, "protocol", "100",
+      "Protocol number to be used in routing table", 1, 254),
+  CFG_MAP_INT_MINMAX(olsrv2_routing_domain, table, "table", "254",
+      "Routing table number for routes", 1, 254),
+  CFG_MAP_INT_MINMAX(olsrv2_routing_domain, distance, "distance", "2",
+      "Metric Distance to be used in routing table", 1, 255),
+};
+
+static struct cfg_schema_section _rt_domain_section = {
+  .type = CFG_NHDP_DOMAIN_SECTION,
+  .mode = CFG_SSMODE_NAMED_WITH_DEFAULT,
+  .def_name = CFG_NHDP_DEFAULT_DOMAIN,
+  .cb_delta_handler = _cb_cfg_domain_changed,
+  .entries = _rt_domain_entries,
+  .entry_count = ARRAYSIZE(_rt_domain_entries),
+};
+
 static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_MAP_CLOCK_MIN(_config, tc_interval, "tc_interval", "5.0",
     "Time between two TC messages", 100),
@@ -123,9 +144,10 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
 
 static struct cfg_schema_section _olsrv2_section = {
   .type = CFG_OLSRV2_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
+  .cb_delta_handler = _cb_cfg_olsrv2_changed,
   .entries = _olsrv2_entries,
   .entry_count = ARRAYSIZE(_olsrv2_entries),
+  .next_section = &_rt_domain_section,
 };
 
 struct oonf_subsystem olsrv2_subsystem = {
@@ -609,10 +631,10 @@ _cb_topology(struct olsr_telnet_data *con) {
 }
 
 /**
- * Callback fired when configuration changed
+ * Callback fired when olsrv2 section changed
  */
 static void
-_cb_cfg_changed(void) {
+_cb_cfg_olsrv2_changed(void) {
   if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
       _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
     OLSR_WARN(LOG_OLSRV2, "Cannot convert OLSRv2 configuration.");
@@ -626,4 +648,39 @@ _cb_cfg_changed(void) {
 
   /* run through all post-update LAN entries and add them */
   _parse_lan_array(_olsrv2_section.post, true);
+}
+
+/**
+ * Callback fired when domain section changed
+ */
+static void
+_cb_cfg_domain_changed(void) {
+  struct olsrv2_routing_domain rtdomain;
+  struct nhdp_domain *domain;
+  char *error = NULL;
+  int ext;
+
+  ext = strtol(_rt_domain_section.section_name, &error, 10);
+  if (error != NULL && *error != 0) {
+    /* illegal domain name */
+    return;
+  }
+
+  if (ext < 0 || ext > 255) {
+    /* name out of range */
+    return;
+  }
+
+  domain = nhdp_domain_add(ext);
+  if (domain == NULL) {
+    return;
+  }
+
+  if (cfg_schema_tobin(&rtdomain, _rt_domain_section.post,
+      _rt_domain_entries, ARRAYSIZE(_rt_domain_entries))) {
+    OLSR_WARN(LOG_NHDP, "Cannot convert OLSRv2 routing domain parameters.");
+    return;
+  }
+
+  olsrv2_routing_set_domain_parameter(domain, &rtdomain);
 }

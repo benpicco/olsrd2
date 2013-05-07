@@ -51,8 +51,6 @@
 #include "olsr_setup.h"
 
 static struct oonf_subsystem *_app_subsystems[] = {
-  //&oonf_io_file_subsystem,
-  //&oonf_compact_parser_subsystem,
   &nhdp_subsystem,
   &olsrv2_subsystem,
 };

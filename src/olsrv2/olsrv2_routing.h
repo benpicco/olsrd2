@@ -89,6 +89,9 @@ struct olsrv2_routing_entry {
    */
   bool set;
 
+  /* true if this route is being processed by the kernel at the moment */
+  bool in_processing;
+
   /* forwarding information before the current dijkstra run */
   unsigned _old_if_index;
   struct netaddr _old_next_hop;
@@ -116,6 +119,9 @@ void olsrv2_routing_initiate_shutdown(void);
 void olsrv2_routing_cleanup(void);
 
 void olsrv2_routing_dijkstra_node_init(struct olsrv2_dijkstra_node *);
+
+EXPORT void olsrv2_routing_set_domain_parameter(struct nhdp_domain *domain,
+    struct olsrv2_routing_domain *parameter);
 
 EXPORT void olsrv2_routing_force_update(bool skip_wait);
 EXPORT void olsrv2_routing_trigger_update(void);

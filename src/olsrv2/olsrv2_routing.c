@@ -68,32 +68,12 @@ static void _insert_into_working_tree(struct olsrv2_tc_target *target,
 static void _prepare_routes(struct nhdp_domain *);
 static void _handle_working_queue(struct nhdp_domain *);
 static void _handle_nhdp_routes(struct nhdp_domain *);
+static void _add_route_to_kernel_queue(struct olsrv2_routing_entry *rtentry);
 static void _process_dijkstra_result(struct nhdp_domain *);
+static void _process_kernel_queue(void);
 static void _cb_trigger_dijkstra(void *);
 static void _cb_nhdp_update(struct nhdp_neighbor *);
 static void _cb_route_finished(struct os_route *route, int error);
-static void _cb_cfg_domain_changed(void);
-
-/* configuration for domain specific routing parameters */
-static struct cfg_schema_entry _rt_domain_entries[] = {
-  CFG_MAP_BOOL(olsrv2_routing_domain, use_srcip_in_routes, "srcip_routes", "no",
-      "Set the source IP of IPv4-routes to a fixed value."),
-  CFG_MAP_INT_MINMAX(olsrv2_routing_domain, protocol, "protocol", "100",
-      "Protocol number to be used in routing table", 1, 254),
-  CFG_MAP_INT_MINMAX(olsrv2_routing_domain, table, "table", "254",
-      "Routing table number for routes", 1, 254),
-  CFG_MAP_INT_MINMAX(olsrv2_routing_domain, distance, "distance", "2",
-      "Metric Distance to be used in routing table", 1, 255),
-};
-
-static struct cfg_schema_section _rt_domain_section = {
-  .type = CFG_NHDP_DOMAIN_SECTION,
-  .mode = CFG_SSMODE_NAMED_WITH_DEFAULT,
-  .def_name = CFG_NHDP_DEFAULT_DOMAIN,
-  .cb_delta_handler = _cb_cfg_domain_changed,
-  .entries = _rt_domain_entries,
-  .entry_count = ARRAYSIZE(_rt_domain_entries),
-};
 
 static struct olsrv2_routing_domain _domain_parameter[NHDP_MAXIMUM_DOMAINS];
 
@@ -105,7 +85,7 @@ static struct olsr_class _rtset_entry = {
 
 /* rate limitation for dijkstra algorithm */
 static struct olsr_timer_info _dijkstra_timer_info = {
-  .name = "Dijkstra timer",
+  .name = "Dijkstra rate limit timer",
   .callback = _cb_trigger_dijkstra,
 };
 
@@ -120,7 +100,7 @@ static struct nhdp_domain_listener _nhdp_listener = {
 
 static bool _trigger_dijkstra = false;
 
-/* global datastructure for routing */
+/* global datastructures for routing */
 struct avl_tree olsrv2_routing_tree[NHDP_MAXIMUM_DOMAINS];
 static struct avl_tree _dijkstra_working_tree;
 static struct list_entity _kernel_queue;
@@ -144,7 +124,6 @@ olsrv2_routing_init(void) {
   list_init_head(&_kernel_queue);
 
   nhdp_domain_listener_add(&_nhdp_listener);
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_rt_domain_section);
 }
 
 void
@@ -152,6 +131,7 @@ olsrv2_routing_initiate_shutdown(void) {
   struct olsrv2_routing_entry *entry, *e_it;
   int i;
 
+  /* remember we are in shutdown */
   _initiate_shutdown = true;
 
   /* remove all routes */
@@ -159,10 +139,11 @@ olsrv2_routing_initiate_shutdown(void) {
     avl_for_each_element_safe(&olsrv2_routing_tree[i], entry, _node, e_it) {
       if (entry->set) {
         entry->set = false;
-        os_routing_set(&entry->route, false, false);
+        _add_route_to_kernel_queue(entry);
       }
     }
   }
+  _process_kernel_queue();
 }
 
 void
@@ -186,8 +167,6 @@ olsrv2_routing_cleanup(void) {
   }
   olsr_timer_remove(&_dijkstra_timer_info);
   olsr_class_remove(&_rtset_entry);
-
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_rt_domain_section);
 }
 
 void
@@ -204,9 +183,7 @@ olsrv2_routing_trigger_update(void) {
 
 void
 olsrv2_routing_force_update(bool skip_wait) {
-  struct olsrv2_routing_entry *rtentry, *rt_it;
   struct nhdp_domain *domain;
-  struct os_route_str rbuf;
 
   if (_initiate_shutdown) {
     /* no dijkstra anymore when in shutdown */
@@ -244,25 +221,7 @@ olsrv2_routing_force_update(bool skip_wait) {
     _process_dijkstra_result(domain);
   }
 
-  list_for_each_element_safe(&_kernel_queue, rtentry, _working_node, rt_it) {
-    /* remove from routing queue */
-    list_remove(&rtentry->_working_node);
-
-    if (rtentry->set) {
-      /* add to kernel */
-      if (os_routing_set(&rtentry->route, true, true)) {
-        OLSR_WARN(LOG_OLSRV2_ROUTING, "Could not set route %s",
-            os_routing_to_string(&rbuf, &rtentry->route));
-      }
-    }
-    else  {
-      /* remove from kernel */
-      if (os_routing_set(&rtentry->route, false, false)) {
-        OLSR_WARN(LOG_OLSRV2_ROUTING, "Could not remove route %s",
-            os_routing_to_string(&rbuf, &rtentry->route));
-      }
-    }
-  }
+  _process_kernel_queue();
 
   /* make sure dijkstra is not called too often */
   olsr_timer_set(&_rate_limit_timer, 250);
@@ -271,6 +230,46 @@ olsrv2_routing_force_update(bool skip_wait) {
 void
 olsrv2_routing_dijkstra_node_init(struct olsrv2_dijkstra_node *dijkstra) {
   dijkstra->_node.key = &dijkstra->path_cost;
+}
+
+void
+olsrv2_routing_set_domain_parameter(struct nhdp_domain *domain,
+    struct olsrv2_routing_domain *parameter) {
+  struct olsrv2_routing_entry *rtentry;
+
+  if (memcmp(parameter, &_domain_parameter[domain->index],
+      sizeof(*parameter)) == 0) {
+    /* no change */
+    return;
+  }
+
+  /* copy parameters */
+  memcpy(&_domain_parameter[domain->index], parameter, sizeof(*parameter));
+
+  if (avl_is_empty(&olsrv2_routing_tree[domain->index])) {
+    /* no routes present */
+    return;
+  }
+
+  /* remove old kernel routes */
+  avl_for_each_element(&olsrv2_routing_tree[domain->index], rtentry, _node) {
+    if (rtentry->set) {
+      rtentry->set = false;
+
+      if (rtentry->in_processing) {
+        os_routing_interrupt(&rtentry->route);
+        rtentry->set = false;
+      }
+
+      _add_route_to_kernel_queue(rtentry);
+    }
+  }
+
+  _process_kernel_queue();
+
+  /* trigger a dijkstra to write new routes in 100 milliseconds */
+  olsr_timer_set(&_rate_limit_timer, 100);
+  _trigger_dijkstra = true;
 }
 
 static struct olsrv2_routing_entry *
@@ -306,8 +305,10 @@ _add_entry(struct nhdp_domain *domain, struct netaddr *prefix) {
 
 static void
 _remove_entry(struct olsrv2_routing_entry *entry) {
-  /* remove entry from database */
-  avl_remove(&olsrv2_routing_tree[entry->domain->index], &entry->_node);
+  /* remove entry from database if its still there */
+  if (list_is_node_added(&entry->_node.list)) {
+    avl_remove(&olsrv2_routing_tree[entry->domain->index], &entry->_node);
+  }
   olsr_class_free(&_rtset_entry, entry);
 }
 
@@ -560,13 +561,48 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
 }
 
 static void
-_process_dijkstra_result(struct nhdp_domain *domain) {
-  struct olsrv2_routing_entry *rtentry;
+_add_route_to_kernel_queue(struct olsrv2_routing_entry *rtentry) {
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_INFO
   struct os_route_str rbuf;
   struct netaddr_str nbuf;
 #endif
 
+  if (rtentry->set) {
+    OLSR_INFO(LOG_OLSRV2_ROUTING,
+        "Set route %s (%u %u %s)",
+        os_routing_to_string(&rbuf, &rtentry->route),
+        rtentry->_old_if_index, rtentry->_old_distance,
+        netaddr_to_string(&nbuf, &rtentry->_old_next_hop));
+
+    if (netaddr_get_address_family(&rtentry->route.gw) == AF_UNSPEC) {
+      /* insert/update single-hop routes early */
+      list_add_head(&_kernel_queue, &rtentry->_working_node);
+    }
+    else {
+      /* insert/update multi-hop routes late */
+      list_add_tail(&_kernel_queue, &rtentry->_working_node);
+    }
+  }
+  else {
+    OLSR_INFO(LOG_OLSRV2_ROUTING,
+        "Dijkstra result: remove route %s",
+        os_routing_to_string(&rbuf, &rtentry->route));
+
+
+    if (netaddr_get_address_family(&rtentry->route.gw) == AF_UNSPEC) {
+      /* remove single-hop routes late */
+      list_add_tail(&_kernel_queue, &rtentry->_working_node);
+    }
+    else {
+      /* remove multi-hop routes early */
+      list_add_head(&_kernel_queue, &rtentry->_working_node);
+    }
+  }
+}
+
+static void
+_process_dijkstra_result(struct nhdp_domain *domain) {
+  struct olsrv2_routing_entry *rtentry;
   avl_for_each_element(&olsrv2_routing_tree[domain->index], rtentry, _node) {
     /* initialize rest of route parameters */
     rtentry->route.table = _domain_parameter[rtentry->domain->index].table;
@@ -575,46 +611,45 @@ _process_dijkstra_result(struct nhdp_domain *domain) {
 
     // TODO: handle source ip
 
-    if (rtentry->set) {
-      if (rtentry->_old_if_index == rtentry->route.if_index
+    if (rtentry->set
+        && rtentry->_old_if_index == rtentry->route.if_index
         && rtentry->_old_distance == rtentry->route.metric
         && netaddr_cmp(&rtentry->_old_next_hop, &rtentry->route.gw) == 0) {
-        /* no change, ignore this entry */
-        continue;
-      }
+      /* no change, ignore this entry */
+      continue;
+    }
+    _add_route_to_kernel_queue(rtentry);
+  }
+}
 
-      OLSR_INFO(LOG_OLSRV2_ROUTING,
-          "Dijkstra result: set route %s (%u %u %s)",
-          os_routing_to_string(&rbuf, &rtentry->route),
-          rtentry->_old_if_index, rtentry->_old_distance,
-          netaddr_to_string(&nbuf, &rtentry->_old_next_hop));
+static void
+_process_kernel_queue(void) {
+  struct olsrv2_routing_entry *rtentry, *rt_it;
+  struct os_route_str rbuf;
 
-      if (netaddr_get_address_family(&rtentry->route.gw) == AF_UNSPEC) {
-        /* insert/update single-hop routes early */
-        list_add_head(&_kernel_queue, &rtentry->_working_node);
-      }
-      else {
-        /* insert/update multi-hop routes late */
-        list_add_tail(&_kernel_queue, &rtentry->_working_node);
+  list_for_each_element_safe(&_kernel_queue, rtentry, _working_node, rt_it) {
+    /* remove from routing queue */
+    list_remove(&rtentry->_working_node);
+
+    /* mark route as in kernel processing */
+    rtentry->in_processing = true;
+
+    if (rtentry->set) {
+      /* add to kernel */
+      if (os_routing_set(&rtentry->route, true, true)) {
+        OLSR_WARN(LOG_OLSRV2_ROUTING, "Could not set route %s",
+            os_routing_to_string(&rbuf, &rtentry->route));
       }
     }
-    else if (!rtentry->set) {
-      OLSR_INFO(LOG_OLSRV2_ROUTING,
-          "Dijkstra result: remove route %s",
-          os_routing_to_string(&rbuf, &rtentry->route));
-
-      if (netaddr_get_address_family(&rtentry->route.gw) == AF_UNSPEC) {
-        /* remove single-hop routes late */
-        list_add_tail(&_kernel_queue, &rtentry->_working_node);
-      }
-      else {
-        /* remove multi-hop routes early */
-        list_add_head(&_kernel_queue, &rtentry->_working_node);
+    else  {
+      /* remove from kernel */
+      if (os_routing_set(&rtentry->route, false, false)) {
+        OLSR_WARN(LOG_OLSRV2_ROUTING, "Could not remove route %s",
+            os_routing_to_string(&rbuf, &rtentry->route));
       }
     }
   }
 }
-
 static void
 _cb_trigger_dijkstra(void *unused __attribute__((unused))) {
   if (_trigger_dijkstra) {
@@ -635,12 +670,18 @@ _cb_route_finished(struct os_route *route, int error) {
 
   rtentry = container_of(route, struct olsrv2_routing_entry, route);
 
+  /* kernel is not processing this route anymore */
+  rtentry->in_processing = false;
+
   if (error) {
     /* an error happened, try again later */
-    OLSR_WARN(LOG_OLSRV2_ROUTING, "Error in route %s %s: %s (%d)",
-        rtentry->set ? "setting" : "removal",
-        os_routing_to_string(&rbuf, &rtentry->route),
-        strerror(error), error);
+    if (error != -1) {
+      /* do not display a os_routing_interrupt() caused error */
+      OLSR_WARN(LOG_OLSRV2_ROUTING, "Error in route %s %s: %s (%d)",
+          rtentry->set ? "setting" : "removal",
+              os_routing_to_string(&rbuf, &rtentry->route),
+              strerror(error), error);
+    }
 
     /* revert attempted change */
     if (rtentry->set) {
@@ -660,34 +701,5 @@ _cb_route_finished(struct os_route *route, int error) {
     OLSR_INFO(LOG_OLSRV2_ROUTING, "Successfully removed route %s",
         os_routing_to_string(&rbuf, &rtentry->route));
     _remove_entry(rtentry);
-  }
-}
-
-static void
-_cb_cfg_domain_changed(void) {
-  struct nhdp_domain *domain;
-  char *error = NULL;
-  int ext;
-
-  ext = strtol(_rt_domain_section.section_name, &error, 10);
-  if (error != NULL && *error != 0) {
-    /* illegal domain name */
-    return;
-  }
-
-  if (ext < 0 || ext > 255) {
-    /* name out of range */
-    return;
-  }
-
-  domain = nhdp_domain_add(ext);
-  if (domain == NULL) {
-    return;
-  }
-
-  if (cfg_schema_tobin(&_domain_parameter[domain->index], _rt_domain_section.post,
-      _rt_domain_entries, ARRAYSIZE(_rt_domain_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP routing domain parameters.");
-    return;
   }
 }
