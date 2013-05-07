@@ -224,7 +224,7 @@ main(int argc, char **argv) {
   }
 
   /* see if we need to fork */
-  if (config_global.fork) {
+  if (!_display_schema && config_global.fork) {
     /* fork into background */
     fork_pipe = daemonize_prepare();
     if (fork_pipe == -1) {
@@ -483,6 +483,7 @@ parse_early_commandline(int argc, char **argv) {
  */
 static int
 parse_commandline(int argc, char **argv, bool reload_only) {
+  struct oonf_subsystem *plugin;
   const char *parameters;
   struct autobuf log;
   struct cfg_db *db;
@@ -529,6 +530,11 @@ parse_commandline(int argc, char **argv, bool reload_only) {
 
       case 'v':
         olsr_log_printversion(&log);
+        avl_for_each_element(&olsr_plugin_tree, plugin, _node) {
+          if (!oonf_subsystem_is_dynamic(plugin)) {
+            abuf_appendf(&log, "Static plugin: %s\n", plugin->name);
+          }
+        }
         return_code = 0;
         break;
       case 'p':

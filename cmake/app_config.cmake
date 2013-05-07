@@ -49,14 +49,15 @@ set (OONF_APP OLSRd2)
 set (OONF_EXE olsrd2)
 
 # set Application library prefix
-set (OONF_APP_LIBPREFIX olsrd2)
+set (OONF_APP_LIBPREFIX "olsrd2" CACHE STRING 
+     "prefix for dynamic and static plugins of the application")
 
 # set default configuration file
 set (OONF_DEFAULT_CONF "/etc/${OONF_EXE}.conf" CACHE FILEPATH
      "Default position of configuration file")
 
 # setup custom text before and after default help message
-set (OONF_HELP_PREFIX "DLEP layer-2 information management daemon\\n" CACHE STRING
+set (OONF_HELP_PREFIX "OLSRv2 routing agent\\n" CACHE STRING
      "Text to be displayed before command line help")
 set (OONF_HELP_SUFFIX "" CACHE STRING
      "Text to be displayed after command line help")
@@ -76,12 +77,5 @@ set (OONF_FRAMEWORD_DYNAMIC false)
 # set to true to stop application running without root privileges (true/false)
 set (OONF_NEED_ROOT true)
 
-# set to true if the application needs to set ip routes for traffic forwarding
-set (OONF_NEED_ROUTING true)
-
 # set to true to link packetbb API to application
 set (OONF_NEED_PACKETBB true)
-
-# name of the libnl library
-set (OONF_LIBNL nl CACHE STRING
-     "Name of the libnl library (might be nl-tiny for Openwrt)")

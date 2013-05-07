@@ -58,9 +58,7 @@
 
 #include "core/os_clock.h"
 #include "core/os_net.h"
-#if OONF_NEED_ROUTING == true
 #include "core/os_routing.h"
-#endif
 #include "core/os_syslog.h"
 #include "core/os_system.h"
 
@@ -80,9 +78,7 @@ struct oonf_subsystem *used_api_subsystems[] = {
   &oonf_packet_socket_subsystem,
   &oonf_stream_socket_subsystem,
   &oonf_os_system_subsystem,
-#if OONF_NEED_ROUTING == true
   &oonf_os_routing_subsystem,
-#endif
   &oonf_os_net_subsystem,
   &oonf_interface_subsystem,
   &oonf_duplicate_set_subsystem,

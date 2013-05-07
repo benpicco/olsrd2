@@ -45,7 +45,6 @@
 #include "core/olsr_logging.h"
 
 #define OONF_NEED_ROOT ${OONF_NEED_ROOT}
-#define OONF_NEED_ROUTING ${OONF_NEED_ROUTING}
 
 const struct olsr_appdata *olsr_appdata_get(void);
 
