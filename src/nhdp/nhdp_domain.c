@@ -45,7 +45,6 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 #include "common/list.h"
-#include "config/cfg_schema.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
 #include "core/olsr_class.h"

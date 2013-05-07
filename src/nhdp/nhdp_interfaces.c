@@ -46,7 +46,6 @@
 #include "common/avl_comp.h"
 #include "common/container_of.h"
 #include "common/netaddr.h"
-#include "config/cfg_schema.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_interface.h"
