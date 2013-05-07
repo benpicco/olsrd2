@@ -57,9 +57,9 @@ include(${OONF_BUILD_LIBRARY})
 
 # set include directory
 include_directories(${PROJECT_BINARY_DIR})
-include_directories (src)
 include_directories (src-plugins)
+include_directories (src)
 
 # get additional build directories
-add_subdirectory (src)
 add_subdirectory (src-plugins)
+add_subdirectory (src)
