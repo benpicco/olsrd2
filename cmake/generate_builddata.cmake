@@ -9,7 +9,7 @@ IF(${found_git} STREQUAL "found_git-NOTFOUND" OR NOT EXISTS ${GIT})
     SET(OONF_SRC_CHANGE "")
 ELSE()
     # everything is fine, read commit and diff stat
-    execute_process(COMMAND git describe --long --tags 
+    execute_process(COMMAND git describe --always --long --tags 
         OUTPUT_VARIABLE OONF_SRC_GIT OUTPUT_STRIP_TRAILING_WHITESPACE)
     execute_process(COMMAND git diff --shortstat HEAD ./src ./src-plugins ./cmake 
         OUTPUT_VARIABLE OONF_SRC_CHANGE OUTPUT_STRIP_TRAILING_WHITESPACE)

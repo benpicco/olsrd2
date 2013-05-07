@@ -13,7 +13,6 @@ FOREACH(plugin ${PLUGIN_LIST})
         TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive ${OONF_APP_LIBPREFIX}_static_${plugin} -Wl,--no-whole-archive)
     ELSE (TARGET oonf_static_${plugin})
         message ("    Did not found target: oonf_static_${plugin} or ${OONF_APP_LIBPREFIX}_static_${plugin}")
-        TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive ${OONF_APP_LIBPREFIX}_static_${plugin} -Wl,--no-whole-archive)
     ENDIF(TARGET oonf_static_${plugin})
 ENDFOREACH(plugin)
 
