@@ -44,7 +44,6 @@
 #include "common/common_types.h"
 #include "common/list.h"
 #include "common/netaddr.h"
-#include "config/cfg_schema.h"
 #include "core/olsr_class.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_timer.h"
@@ -54,7 +53,7 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_domain.h"
 
-#include "olsrv2_originator.h"
+#include "olsrv2/olsrv2_originator.h"
 #include "olsrv2/olsrv2_tc.h"
 #include "olsrv2/olsrv2_routing.h"
 #include "olsrv2/olsrv2.h"

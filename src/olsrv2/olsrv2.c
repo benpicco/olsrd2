@@ -41,7 +41,9 @@
 
 #include <errno.h>
 
+#include "common/avl.h"
 #include "common/common_types.h"
+#include "common/list.h"
 #include "common/netaddr.h"
 #include "config/cfg_schema.h"
 #include "rfc5444/rfc5444.h"
@@ -73,6 +75,10 @@ struct _config {
   uint64_t f_hold_time;
   uint64_t p_hold_time;
   struct netaddr_acl routable;
+
+  /* configuration for originator set */
+  struct netaddr_acl originator_v4_acl;
+  struct netaddr_acl originator_v6_acl;
 };
 
 struct _lan_data {
@@ -88,9 +94,13 @@ static void _cleanup(void);
 
 static const char *_parse_lan_parameters(struct _lan_data *dst, const char *src);
 static void _parse_lan_array(struct cfg_named_section *section, bool add);
+static void _cb_generate_tc(void *);
+
+static void _update_originators(void);
+static void _cb_if_event(struct olsr_interface_listener *);
+
 static void _cb_cfg_olsrv2_changed(void);
 static void _cb_cfg_domain_changed(void);
-static void _cb_generate_tc(void *);
 
 /* prototypes */
 static enum olsr_telnet_result _cb_topology(struct olsr_telnet_data *con);
@@ -134,12 +144,20 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_MAP_ACL_V46(_config, routable, "routable",
       OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter to decide which addresses are considered routable"),
+
   CFG_VALIDATE_LAN(_LOCAL_ATTACHED_NETWORK_KEY, "",
-      "locally attached network, a combination of an"
-      " ip address or prefix followed by an up to three optional parameters"
-      " which define link metric cost, hopcount distance and domain of the prefix"
-      " ( <metric=...> <dist=...> <domain=...> ).",
-      .list = true),
+    "locally attached network, a combination of an"
+    " ip address or prefix followed by an up to three optional parameters"
+    " which define link metric cost, hopcount distance and domain of the prefix"
+    " ( <metric=...> <dist=...> <domain=...> ).",
+    .list = true),
+
+  CFG_MAP_ACL_V4(_config, originator_v4_acl, "originator_v4",
+    OLSRV2_ROUTABLE_IPV4 ACL_DEFAULT_ACCEPT,
+    "Filter for router IPv4 originator address"),
+  CFG_MAP_ACL_V6(_config, originator_v6_acl, "originator_v6",
+    OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
+    "Filter for router IPv6 originator address"),
 };
 
 static struct cfg_schema_section _olsrv2_section = {
@@ -170,6 +188,11 @@ static struct olsr_timer_entry _tc_timer = {
   .info = &_tc_timer_class,
 };
 
+/* global interface listener */
+struct olsr_interface_listener _if_listener = {
+  .process = _cb_if_event,
+};
+
 /* global variables */
 enum log_source LOG_OLSRV2 = LOG_MAIN;
 static struct olsr_rfc5444_protocol *_protocol;
@@ -196,6 +219,10 @@ _init(void) {
     return -1;
   }
 
+  /* activate interface listener */
+  olsr_interface_add_listener(&_if_listener);
+
+  /* activate the rest of the olsrv2 protocol */
   olsrv2_lan_init();
   olsrv2_originator_init();
   olsrv2_reader_init(_protocol);
@@ -230,18 +257,26 @@ static void
 _cleanup(void) {
   size_t i;
 
+  /* release telnet commands */
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     olsr_telnet_remove(&_cmds[i]);
   }
 
+  /* remove interface listener */
+  olsr_interface_remove_listener(&_if_listener);
+
   /* cleanup configuration */
   netaddr_acl_remove(&_olsrv2_config.routable);
+  netaddr_acl_remove(&_olsrv2_config.originator_v4_acl);
+  netaddr_acl_remove(&_olsrv2_config.originator_v6_acl);
 
+  /* cleanup all parts of olsrv2 */
   olsrv2_routing_cleanup();
   olsrv2_originator_cleanup();
   olsrv2_tc_cleanup();
   olsrv2_lan_cleanup();
 
+  /* free protocol instance */
   olsr_rfc5444_remove_protocol(_protocol);
 }
 
@@ -631,6 +666,75 @@ _cb_topology(struct olsr_telnet_data *con) {
 }
 
 /**
+ * Check if current originators are still valid and
+ * lookup new one if necessary.
+ */
+static void
+_update_originators(void) {
+  const struct netaddr *originator_v4, *originator_v6;
+  struct olsr_interface *interf;
+  struct netaddr new_v4, new_v6;
+  bool keep_v4, keep_v6;
+  size_t i;
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+  struct netaddr_str buf;
+#endif
+
+  OLSR_DEBUG(LOG_OLSRV2, "Updating OLSRv2 originators");
+
+  originator_v4 = olsrv2_originator_get(AF_INET);
+  originator_v6 = olsrv2_originator_get(AF_INET6);
+
+  keep_v4 = false;
+  keep_v6 = false;
+
+  netaddr_invalidate(&new_v4);
+  netaddr_invalidate(&new_v6);
+
+  avl_for_each_element(&olsr_interface_tree, interf, _node) {
+    /* check if originator is still valid */
+    for (i=0; i<interf->data.addrcount; i++) {
+      struct netaddr *addr = &interf->data.addresses[i];
+
+      keep_v4 |= netaddr_cmp(originator_v4, addr) == 0;
+      keep_v6 |= netaddr_cmp(originator_v6, addr) == 0;
+
+      if (!keep_v4 && netaddr_get_address_family(&new_v4) == AF_UNSPEC
+          && netaddr_get_address_family(addr) == AF_INET
+          && netaddr_acl_check_accept(&_olsrv2_config.originator_v4_acl, addr)) {
+        memcpy(&new_v4, addr, sizeof(new_v4));
+      }
+      if (!keep_v6 && netaddr_get_address_family(&new_v6) == AF_UNSPEC
+          && netaddr_get_address_family(addr) == AF_INET6
+          && netaddr_acl_check_accept(&_olsrv2_config.originator_v6_acl, addr)) {
+        memcpy(&new_v6, addr, sizeof(new_v6));
+      }
+    }
+  }
+
+  if (!keep_v4) {
+    OLSR_DEBUG(LOG_OLSRV2, "Set IPv4 originator to %s",
+        netaddr_to_string(&buf, &new_v4));
+    olsrv2_originator_set(&new_v4);
+  }
+
+  if (!keep_v6) {
+    OLSR_DEBUG(LOG_OLSRV2, "Set IPv6 originator to %s",
+        netaddr_to_string(&buf, &new_v6));
+    olsrv2_originator_set(&new_v6);
+  }
+}
+
+/**
+ * Callback for interface events
+ * @param listener pointer to interface listener
+ */
+static void
+_cb_if_event(struct olsr_interface_listener *listener __attribute__((unused))) {
+  _update_originators();
+}
+
+/**
  * Callback fired when olsrv2 section changed
  */
 static void
@@ -641,7 +745,11 @@ _cb_cfg_olsrv2_changed(void) {
     return;
   }
 
+  /* set tc timer interval */
   olsr_timer_set(&_tc_timer, _olsrv2_config.tc_interval);
+
+  /* check if we have to change the originators */
+  _update_originators();
 
   /* run through all pre-update LAN entries and remove them */
   _parse_lan_array(_olsrv2_section.pre, false);
