@@ -16,8 +16,8 @@ FOREACH(plugin ${PLUGIN_LIST})
     ENDIF(TARGET oonf_static_${plugin})
 ENDFOREACH(plugin)
 
-# link tools
-TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive oonf_static_tools -Wl,--no-whole-archive)
+# link subsystems
+TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive oonf_static_subsystems -Wl,--no-whole-archive)
 
 # link core
 TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive oonf_static_core -Wl,--no-whole-archive)

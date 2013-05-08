@@ -49,11 +49,11 @@ struct nhdp_interface_addr;
 #include "common/avl.h"
 #include "common/list.h"
 #include "common/netaddr.h"
-#include "core/olsr_interface.h"
 #include "common/netaddr_acl.h"
-#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
-#include "tools/olsr_rfc5444.h"
+#include "subsystems/olsr_interface.h"
+#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/olsr_timer.h"
 
 #include "nhdp/nhdp_db.h"
 

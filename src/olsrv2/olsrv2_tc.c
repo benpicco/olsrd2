@@ -43,9 +43,9 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "core/olsr_class.h"
-#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444.h"
+#include "subsystems/olsr_class.h"
+#include "subsystems/olsr_timer.h"
 
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"

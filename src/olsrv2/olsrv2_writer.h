@@ -42,7 +42,8 @@
 #ifndef OLSRV2_WRITER_H_
 #define OLSRV2_WRITER_H_
 
-#include "tools/olsr_rfc5444.h"
+#include "common/common_types.h"
+#include "subsystems/olsr_rfc5444.h"
 
 int olsrv2_writer_init(struct olsr_rfc5444_protocol *)
   __attribute__((warn_unused_result));

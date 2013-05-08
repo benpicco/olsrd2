@@ -44,8 +44,8 @@
 #include "rfc5444/rfc5444_writer.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_telnet.h"
+#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/olsr_telnet.h"
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"

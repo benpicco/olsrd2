@@ -47,7 +47,7 @@
 #include "common/list.h"
 #include "common/netaddr.h"
 
-#include "core/os_routing.h"
+#include "subsystems/os_routing.h"
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"

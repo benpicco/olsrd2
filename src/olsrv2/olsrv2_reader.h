@@ -42,7 +42,8 @@
 #ifndef OLSRV2_READER_C_
 #define OLSRV2_READER_C_
 
-#include "tools/olsr_rfc5444.h"
+#include "common/common_types.h"
+#include "subsystems/olsr_rfc5444.h"
 
 void olsrv2_reader_init(struct olsr_rfc5444_protocol *);
 void olsrv2_reader_cleanup(void);

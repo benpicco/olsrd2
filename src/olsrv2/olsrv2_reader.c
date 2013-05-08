@@ -46,8 +46,8 @@
 #include "rfc5444/rfc5444_reader.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
-#include "tools/olsr_duplicate_set.h"
-#include "tools/olsr_rfc5444.h"
+#include "subsystems/olsr_duplicate_set.h"
+#include "subsystems/olsr_rfc5444.h"
 
 #include "olsrv2/olsrv2.h"
 #include "olsrv2/olsrv2_originator.h"

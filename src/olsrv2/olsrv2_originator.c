@@ -44,11 +44,10 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 #include "common/netaddr_acl.h"
-#include "core/olsr_class.h"
-#include "core/olsr_interface.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_timer.h"
-#include "tools/olsr_cfg.h"
+#include "subsystems/olsr_class.h"
+#include "subsystems/olsr_interface.h"
+#include "subsystems/olsr_timer.h"
 
 #include "nhdp/nhdp.h"
 

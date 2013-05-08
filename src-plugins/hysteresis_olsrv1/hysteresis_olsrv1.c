@@ -43,16 +43,15 @@
 
 #include "common/common_types.h"
 #include "common/autobuf.h"
-
-#include "core/olsr_class.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_plugins.h"
-#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_cfg.h"
+#include "core/olsr_cfg.h"
+#include "core/olsr_logging.h"
+#include "core/olsr_plugins.h"
+#include "subsystems/olsr_class.h"
+#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/olsr_timer.h"
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"

@@ -46,7 +46,7 @@
 #include "rfc5444/rfc5444_reader.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
-#include "tools/olsr_rfc5444.h"
+#include "subsystems/olsr_rfc5444.h"
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"

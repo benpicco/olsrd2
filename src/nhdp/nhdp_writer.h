@@ -42,7 +42,8 @@
 #ifndef NHDP_WRITER_H_
 #define NHDP_WRITER_H_
 
-#include "tools/olsr_rfc5444.h"
+#include "common/common_types.h"
+#include "subsystems/olsr_rfc5444.h"
 
 int nhdp_writer_init(struct olsr_rfc5444_protocol *)
   __attribute__((warn_unused_result));

@@ -8,8 +8,8 @@ FOREACH(plugin ${PLUGIN_LIST})
     ENDIF(TARGET oonf_static_${plugin})
 ENDFOREACH(plugin)
 
-# link tools
-TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_tools)
+# link subsystems
+TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_subsystems)
 
 # link core
 TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_core)

@@ -44,11 +44,10 @@
 #include "common/common_types.h"
 #include "common/list.h"
 #include "common/netaddr.h"
-#include "core/olsr_class.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_timer.h"
+#include "subsystems/olsr_class.h"
+#include "subsystems/olsr_timer.h"
 #include "rfc5444/rfc5444.h"
-#include "tools/olsr_cfg.h"
 
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_domain.h"

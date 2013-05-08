@@ -45,7 +45,7 @@
 #include "common/netaddr.h"
 #include "core/olsr_logging.h"
 #include "core/olsr_subsystem.h"
-#include "core/olsr_class.h"
+#include "subsystems/olsr_class.h"
 #include "rfc5444/rfc5444.h"
 
 #include "nhdp/nhdp.h"

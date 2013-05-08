@@ -47,8 +47,7 @@
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_cfg.h"
+#include "subsystems/olsr_rfc5444.h"
 
 #include "nhdp/nhdp_interfaces.h"
 

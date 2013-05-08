@@ -50,10 +50,9 @@
 #include "core/olsr_logging.h"
 #include "common/netaddr_acl.h"
 #include "core/olsr_subsystem.h"
-#include "core/olsr_timer.h"
-#include "tools/olsr_cfg.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_telnet.h"
+#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/olsr_telnet.h"
+#include "subsystems/olsr_timer.h"
 
 #include "nhdp/nhdp_interfaces.h"
 

@@ -45,7 +45,7 @@
 #include "common/avl.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "core/olsr_timer.h"
+#include "subsystems/olsr_timer.h"
 
 struct olsrv2_originator_set_entry {
   struct netaddr originator;

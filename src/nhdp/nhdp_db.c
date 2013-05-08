@@ -48,8 +48,8 @@
 #include "rfc5444/rfc5444.h"
 
 #include "core/olsr_logging.h"
-#include "core/olsr_class.h"
-#include "core/olsr_timer.h"
+#include "subsystems/olsr_class.h"
+#include "subsystems/olsr_timer.h"
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_hysteresis.h"

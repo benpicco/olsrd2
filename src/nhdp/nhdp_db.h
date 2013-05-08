@@ -46,9 +46,8 @@
 #include "common/avl.h"
 #include "common/list.h"
 #include "common/netaddr.h"
-
-#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
+#include "subsystems/olsr_timer.h"
 
 #include "nhdp/nhdp.h"
 

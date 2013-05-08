@@ -41,30 +41,28 @@
 /* initialize basic framework */
 
 #include "common/common_types.h"
-#include "core/olsr_subsystem.h"
 
 #include "app_data.h"
 
-#include "core/olsr_class.h"
-#include "core/olsr_clock.h"
-#include "core/olsr_interface.h"
 #include "core/olsr_libdata.h"
 #include "core/olsr_logging.h"
-#include "core/olsr_packet_socket.h"
 #include "core/olsr_plugins.h"
-#include "core/olsr_socket.h"
-#include "core/olsr_stream_socket.h"
-#include "core/olsr_timer.h"
-
+#include "core/olsr_subsystem.h"
 #include "core/os_clock.h"
-#include "core/os_net.h"
-#include "core/os_routing.h"
 #include "core/os_syslog.h"
-#include "core/os_system.h"
-
-#include "tools/olsr_http.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_telnet.h"
+#include "subsystems/olsr_class.h"
+#include "subsystems/olsr_clock.h"
+#include "subsystems/olsr_interface.h"
+#include "subsystems/olsr_packet_socket.h"
+#include "subsystems/olsr_socket.h"
+#include "subsystems/olsr_stream_socket.h"
+#include "subsystems/olsr_timer.h"
+#include "subsystems/os_net.h"
+#include "subsystems/os_routing.h"
+#include "subsystems/os_system.h"
+#include "subsystems/olsr_http.h"
+#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/olsr_telnet.h"
 
 #include "olsr_api_subsystems.h"
 
