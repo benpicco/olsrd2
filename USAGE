@@ -1,0 +1,30 @@
+The easiest way to use olsrd2 is to use the built in default settings.
+As long as a metric plugin (like ff_etx in the default settings) is compiled
+into the executable, the routing agent can be used without any configuration
+beyond the mesh interfaces.
+
+To activate olsrd2 and set wlan0 as a single mesh interface, start the routing
+agent from a shell like this:
+
+> olsrd2 --set interface[wlan0].
+
+The alternative is to setup a configuration file instead:
+
+[interface=wlan0]
+
+
+
+You can save the configuration file in the default position 
+(/etc/olsrd2/olsrd2.conf), olsrd2 will automatically load it.
+
+> olsrd2
+
+Another option is to explicitly state the configuration file.
+
+> olsrd2 --load /etc/olsrd2/olsrd2.conf
+
+
+
+You can get the full set of configuration options with the following command:
+
+> olsrd2 --help

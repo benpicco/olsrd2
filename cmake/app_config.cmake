@@ -53,7 +53,7 @@ set (OONF_APP_LIBPREFIX "olsrd2" CACHE STRING
      "prefix for dynamic and static plugins of the application")
 
 # set default configuration file
-set (OONF_DEFAULT_CONF "/etc/${OONF_EXE}.conf" CACHE FILEPATH
+set (OONF_DEFAULT_CONF "/etc/${OONF_EXE}/${OONF_EXE}.conf" CACHE FILEPATH
      "Default position of configuration file")
 
 # setup custom text before and after default help message
