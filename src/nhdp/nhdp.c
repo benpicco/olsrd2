@@ -313,6 +313,14 @@ _telnet_nhdp_neighbor(struct oonf_telnet_data *con) {
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Print the content of a NHDP link to the telnet console
+ * @param con telnet data connection
+ * @param lnk NHDP link
+ * @param prefix text prefix for each line
+ * @param other_addr true if the IP addresses not associated
+ *   with this link (but with this neighbor) should be printed
+ */
 static void
 _print_link(struct oonf_telnet_data *con, struct nhdp_link *lnk,
     const char *prefix, bool other_addr) {
@@ -377,6 +385,11 @@ _print_link(struct oonf_telnet_data *con, struct nhdp_link *lnk,
   }
 }
 
+/**
+ * Print a NHDP neighbor to the telnet console
+ * @param con telnet data connection
+ * @param neigh NHDP neighbor
+ */
 static void
 _print_neigh(struct oonf_telnet_data *con, struct nhdp_neighbor *neigh) {
   struct nhdp_naddr *naddr;
@@ -417,8 +430,8 @@ _print_neigh(struct oonf_telnet_data *con, struct nhdp_neighbor *neigh) {
 }
 /**
  * Handle the "nhdp neighlink" command
- * @param con
- * @return
+ * @param con telnet data connection
+ * @return always TELNET_RESULT_ACTIVE
  */
 static enum oonf_telnet_result
 _telnet_nhdp_neighlink(struct oonf_telnet_data *con) {
@@ -437,8 +450,8 @@ _telnet_nhdp_neighlink(struct oonf_telnet_data *con) {
 
 /**
  * Handle the "nhdp iflink" command
- * @param con
- * @return
+ * @param con telnet data connection
+ * @return always TELNET_RESULT_ACTIVE
  */
 static enum oonf_telnet_result
 _telnet_nhdp_iflink(struct oonf_telnet_data *con) {
@@ -472,8 +485,8 @@ _telnet_nhdp_iflink(struct oonf_telnet_data *con) {
 
 /**
  * Handle the "nhdp interface" telnet command
- * @param con
- * @return
+ * @param con telnet data connection
+ * @return always TELNET_RESULT_ACTIVE
  */
 static enum oonf_telnet_result
 _telnet_nhdp_interface(struct oonf_telnet_data *con) {
@@ -565,6 +578,13 @@ _cb_cfg_interface_changed(void) {
   nhdp_interface_apply_settings(interf);
 }
 
+/**
+ * Validate that the name of the domain section is valid
+ * @param section_name name of section including type
+ * @param named cfg named section
+ * @param out output buffer for errors
+ * @return -1 if invalid, 0 otherwise
+ */
 static int
 _cb_validate_domain_section(const char *section_name,
     struct cfg_named_section *named, struct autobuf *out) {

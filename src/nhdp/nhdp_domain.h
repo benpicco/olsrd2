@@ -51,6 +51,7 @@
 
 #define NHDP_CLASS_DOMAIN             "nhdp_domain"
 
+/* constants with maximum length of metric/mpr name */
 enum {
   NHDP_DOMAIN_METRIC_MAXLEN = 16,
   NHDP_DOMAIN_MPR_MAXLEN = 16,

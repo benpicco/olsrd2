@@ -626,6 +626,12 @@ static void _recalculate_neighbor_metric(
   }
 }
 
+/**
+ * Add a new domain to the NHDP system
+ * @param ext TLV extension type used for new domain
+ * @return pointer to new domain, NULL, if out of memory or
+ *   maximum number of domains has been reached.
+ */
 struct nhdp_domain *
 nhdp_domain_add(uint8_t ext) {
   struct nhdp_domain *domain;
@@ -677,6 +683,20 @@ nhdp_domain_add(uint8_t ext) {
   return domain;
 }
 
+/**
+ * Configure a NHDP domain to a metric and a MPR algorithm
+ * @param ext TLV extension type used for new domain
+ * @param metric_name name of the metric algorithm to be used,
+ *   might be CFG_DOMAIN_NO_METRIC (for hopcount metric)
+ *   or CFG_DOMAIN_ANY_METRIC (for a metric the NHDP core should
+ *   choose).
+ * @param mpr_name name of the MPR algorithm to be used,
+ *   might be CFG_DOMAIN_NO_MPR (every node is MPR)
+ *   or CFG_DOMAIN_ANY_MPR (for a MPR the NHDP core should
+ *   choose).
+ * @return pointer to configured domain, NULL, if out of memory or
+ *   maximum number of domains has been reached.
+ */
 struct nhdp_domain *
 nhdp_domain_configure(uint8_t ext, const char *metric_name, const char *mpr_name) {
   struct nhdp_domain *domain;
@@ -694,6 +714,14 @@ nhdp_domain_configure(uint8_t ext, const char *metric_name, const char *mpr_name
   return domain;
 }
 
+/**
+ * Apply a new metric algorithm to a NHDP domain
+ * @param domain pointer to NHDP domain
+ * @param metric_name name of the metric algorithm to be used,
+ *   might be CFG_DOMAIN_NO_METRIC (for hopcount metric)
+ *   or CFG_DOMAIN_ANY_METRIC (for a metric the NHDP core should
+ *   choose).
+ */
 static void
 _apply_metric(struct nhdp_domain *domain, const char *metric_name) {
   struct nhdp_domain_metric *metric;
@@ -727,6 +755,10 @@ _apply_metric(struct nhdp_domain *domain, const char *metric_name) {
   metric->domain = domain;
 }
 
+/**
+ * Reset the metric of a NHDP domain to hopcount
+ * @param domain pointer to NHDP domain
+ */
 static void
 _remove_metric(struct nhdp_domain *domain) {
   strscpy(domain->metric_name, CFG_DOMAIN_NO_METRIC, sizeof(domain->metric_name));
@@ -734,6 +766,14 @@ _remove_metric(struct nhdp_domain *domain) {
   domain->metric = &_no_metric;
 }
 
+/**
+ * Apply a new MPR algorithm to a NHDP domain
+ * @param domain pointer to NHDP domain
+ * @param mpr_name name of the MPR algorithm to be used,
+ *   might be CFG_DOMAIN_NO_MPR (every node is MPR)
+ *   or CFG_DOMAIN_ANY_MPR (for a MPR the NHDP core should
+ *   choose).
+ */
 static void
 _apply_mpr(struct nhdp_domain *domain, const char *mpr_name) {
   struct nhdp_domain_mpr *mpr;
@@ -767,6 +807,10 @@ _apply_mpr(struct nhdp_domain *domain, const char *mpr_name) {
   mpr->domain = domain;
 }
 
+/**
+ * Reset the MPR of a NHDP domain to 'everyone is MPR'
+ * @param domain pointer to NHDP domain
+ */
 static void
 _remove_mpr(struct nhdp_domain *domain) {
   strscpy(domain->mpr_name, CFG_DOMAIN_NO_MPR, sizeof(domain->mpr_name));

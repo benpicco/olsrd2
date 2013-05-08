@@ -246,6 +246,10 @@ nhdp_interface_remove(struct nhdp_interface *interf) {
   oonf_class_free(&_interface_info, interf);
 }
 
+/**
+ * Apply the configuration settings of a NHDP interface
+ * @param interf pointer to nhdp interface
+ */
 void
 nhdp_interface_apply_settings(struct nhdp_interface *interf) {
   /* parse ip address list again and apply ACL */

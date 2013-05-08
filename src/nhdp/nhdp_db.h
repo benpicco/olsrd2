@@ -436,34 +436,62 @@ nhdp_db_neighbor_addr_is_lost(const struct nhdp_naddr *naddr) {
   return oonf_timer_is_active(&naddr->_lost_vtime);
 }
 
-static inline bool
+/**
+ * @param lnk pointer to NHDP link
+ * @param af_type address family type
+ * @return true if link is part of a dualstack link with the specified
+ *   address family
+ */
+static INLINE bool
 nhdp_db_link_is_dualstack_type(const struct nhdp_link *lnk, int af_type) {
   return lnk->dualstack_partner != NULL
       && netaddr_get_address_family(&lnk->neigh->originator) == af_type;
 }
 
-static inline bool
+/**
+ * @param lnk pointer to NHDP link
+ * @return true if link is the IPv4 part of a dualstack link
+ */
+static INLINE bool
 nhdp_db_link_is_ipv4_dualstack(const struct nhdp_link *lnk) {
   return nhdp_db_link_is_dualstack_type(lnk, AF_INET);
 }
 
-static inline bool
+/**
+ * @param lnk pointer to NHDP link
+ * @return true if link is the IPv6 part of a dualstack link
+ */
+static INLINE bool
 nhdp_db_link_is_ipv6_dualstack(const struct nhdp_link *lnk) {
   return nhdp_db_link_is_dualstack_type(lnk, AF_INET6);
 }
 
-static inline bool
+/**
+ * @param neigh pointer to NHDP neighbor
+ * @param af_type address family type
+ * @return true if neighbor is part of a dualstack neighbor with the
+ *   specified address family
+ */
+static INLINE bool
 nhdp_db_neighbor_is_dualstack_type(const struct nhdp_neighbor *neigh, int af_type) {
   return neigh->dualstack_partner != NULL
       && netaddr_get_address_family(&neigh->originator) == af_type;
 }
 
-static inline bool
+/**
+ * @param neigh pointer to NHDP neighbor
+ * @return true if neighbor is the IPv4 part of a dualstack neighbor
+ */
+static INLINE bool
 nhdp_db_neighbor_is_ipv4_dualstack(const struct nhdp_neighbor *neigh) {
   return nhdp_db_neighbor_is_dualstack_type(neigh, AF_INET);
 }
 
-static inline bool
+/**
+ * @param neigh pointer to NHDP neighbor
+ * @return true if neighbor is the IPv6 part of a dualstack neighbor
+ */
+static INLINE bool
 nhdp_db_neighbor_is_ipv6_dualstack(const struct nhdp_neighbor *neigh) {
   return nhdp_db_neighbor_is_dualstack_type(neigh, AF_INET6);
 }

@@ -142,6 +142,11 @@ nhdp_writer_cleanup(void) {
   rfc5444_writer_unregister_message(&_protocol->writer, _nhdp_message);
 }
 
+/**
+ * Send a NHDP Hello through the specified interface. This might result
+ * in both an IPv4 and IPv6 message
+ * @param interf NHDP interface
+ */
 void
 nhdp_writer_send_hello(struct nhdp_interface *interf) {
   enum rfc5444_result result;
