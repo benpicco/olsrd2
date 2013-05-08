@@ -134,7 +134,7 @@ static struct cfg_schema_section _rt_domain_section = {
 static struct cfg_schema_entry _olsrv2_entries[] = {
   CFG_MAP_CLOCK_MIN(_config, tc_interval, "tc_interval", "5.0",
     "Time between two TC messages", 100),
-  CFG_MAP_CLOCK_MIN(_config, tc_validity, "tc_validity", "15.0",
+  CFG_MAP_CLOCK_MIN(_config, tc_validity, "tc_validity", "300.0",
     "Validity time of a TC messages", 100),
   CFG_MAP_CLOCK_MIN(_config, f_hold_time, "forward_hold_time", "300.0",
     "Holdtime for forwarding set information", 100),
