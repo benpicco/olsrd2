@@ -39,16 +39,16 @@
  *
  */
 
-#ifndef OLSRV2_WRITER_H_
-#define OLSRV2_WRITER_H_
+#ifndef OONFV2_WRITER_H_
+#define OONFV2_WRITER_H_
 
 #include "common/common_types.h"
-#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/oonf_rfc5444.h"
 
-int olsrv2_writer_init(struct olsr_rfc5444_protocol *)
+int olsrv2_writer_init(struct oonf_rfc5444_protocol *)
   __attribute__((warn_unused_result));
 void olsrv2_writer_cleanup(void);
 
 EXPORT void olsrv2_writer_send_tc(void);
 
-#endif /* OLSRV2_WRITER_H_ */
+#endif /* OONFV2_WRITER_H_ */

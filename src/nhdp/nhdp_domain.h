@@ -45,7 +45,7 @@
 #include "common/common_types.h"
 #include "common/list.h"
 #include "rfc5444/rfc5444_writer.h"
-#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/oonf_rfc5444.h"
 
 #include "nhdp/nhdp_db.h"
 
@@ -162,7 +162,7 @@ struct nhdp_domain_listener {
 EXPORT extern struct list_entity nhdp_domain_list;
 EXPORT extern struct list_entity nhdp_domain_listener_list;
 
-void nhdp_domain_init(struct olsr_rfc5444_protocol *);
+void nhdp_domain_init(struct oonf_rfc5444_protocol *);
 void nhdp_domain_cleanup(void);
 
 EXPORT size_t nhdp_domain_get_count(void);

@@ -39,8 +39,8 @@
  *
  */
 
-#ifndef OLSRV2_ROUTING_H_
-#define OLSRV2_ROUTING_H_
+#ifndef OONFV2_ROUTING_H_
+#define OONFV2_ROUTING_H_
 
 #include "common/avl.h"
 #include "common/common_types.h"
@@ -129,4 +129,4 @@ EXPORT void olsrv2_routing_trigger_update(void);
 EXPORT const struct olsrv2_routing_domain *
     olsrv2_routing_get_parameters(struct nhdp_domain *);
 
-#endif /* OLSRV2_ROUTING_SET_H_ */
+#endif /* OONFV2_ROUTING_SET_H_ */

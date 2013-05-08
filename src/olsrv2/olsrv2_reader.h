@@ -39,13 +39,13 @@
  *
  */
 
-#ifndef OLSRV2_READER_C_
-#define OLSRV2_READER_C_
+#ifndef OONFV2_READER_C_
+#define OONFV2_READER_C_
 
 #include "common/common_types.h"
-#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/oonf_rfc5444.h"
 
-void olsrv2_reader_init(struct olsr_rfc5444_protocol *);
+void olsrv2_reader_init(struct oonf_rfc5444_protocol *);
 void olsrv2_reader_cleanup(void);
 
-#endif /* OLSRV2_READER_C_ */
+#endif /* OONFV2_READER_C_ */

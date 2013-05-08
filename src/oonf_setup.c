@@ -40,15 +40,15 @@
  */
 
 #include "common/common_types.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_subsystem.h"
 
 #include "cfgio_file/cfgio_file.h"
 #include "cfgparser_compact/cfgparser_compact.h"
 #include "nhdp/nhdp.h"
 #include "olsrv2/olsrv2.h"
 
-#include "olsr_setup.h"
+#include "oonf_setup.h"
 
 static struct oonf_subsystem *_app_subsystems[] = {
   &nhdp_subsystem,
@@ -60,12 +60,12 @@ static enum log_source _level_1_sources[] = {
 };
 
 struct oonf_subsystem **
-olsr_setup_get_subsystems(void) {
+oonf_setup_get_subsystems(void) {
   return _app_subsystems;
 }
 
 size_t
-olsr_setup_get_subsystem_count(void) {
+oonf_setup_get_subsystem_count(void) {
   return ARRAYSIZE(_app_subsystems);
 }
 
@@ -73,7 +73,7 @@ olsr_setup_get_subsystem_count(void) {
  * @return number of logging sources for debug level 1
  */
 size_t
-olsr_setup_get_level1count(void) {
+oonf_setup_get_level1count(void) {
   return ARRAYSIZE(_level_1_sources);
 }
 
@@ -81,6 +81,6 @@ olsr_setup_get_level1count(void) {
  * @return array of logging sources for debug level 1
  */
 enum log_source *
-olsr_setup_get_level1_logs(void) {
+oonf_setup_get_level1_logs(void) {
   return _level_1_sources;
 }

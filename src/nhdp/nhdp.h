@@ -45,7 +45,7 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
-#include "core/olsr_subsystem.h"
+#include "core/oonf_subsystem.h"
 
 #define CFG_NHDP_SECTION        "nhdp"
 

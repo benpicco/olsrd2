@@ -39,8 +39,8 @@
  *
  */
 
-#ifndef OLSRV2_LAN_H_
-#define OLSRV2_LAN_H_
+#ifndef OONFV2_LAN_H_
+#define OONFV2_LAN_H_
 
 #include "common/avl.h"
 #include "common/common_types.h"
@@ -87,4 +87,4 @@ olsrv2_lan_get(struct netaddr *addr) {
   return avl_find_element(&olsrv2_lan_tree, addr, entry, _node);
 }
 
-#endif /* OLSRV2_LAN_H_ */
+#endif /* OONFV2_LAN_H_ */

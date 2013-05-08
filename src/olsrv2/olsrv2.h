@@ -39,25 +39,25 @@
  *
  */
 
-#ifndef OLSRV2_H_
-#define OLSRV2_H_
+#ifndef OONFV2_H_
+#define OONFV2_H_
 
 #include "common/common_types.h"
 #include "common/netaddr.h"
 #include "common/netaddr_acl.h"
-#include "core/olsr_subsystem.h"
+#include "core/oonf_subsystem.h"
 
 #include "nhdp/nhdp_domain.h"
 
-#define CFG_OLSRV2_SECTION "olsrv2"
+#define CFG_OONFV2_SECTION "olsrv2"
 
-#define OLSRV2_ROUTABLE_IPV4 "-169.254.0.0/16\0-127.0.0.1\0-224.0.0.0/12\0"
-#define OLSRV2_ROUTABLE_IPV6 "-fe80::/10\0-::1\0-ff00::/8\0"
+#define OONFV2_ROUTABLE_IPV4 "-169.254.0.0/16\0-127.0.0.1\0-224.0.0.0/12\0"
+#define OONFV2_ROUTABLE_IPV6 "-fe80::/10\0-::1\0-ff00::/8\0"
 
 #define CFG_VALIDATE_LAN(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsrv2_validate_lan, ##args )
 
 EXPORT struct oonf_subsystem olsrv2_subsystem;
-EXPORT extern enum log_source LOG_OLSRV2;
+EXPORT extern enum log_source LOG_OONFV2;
 
 EXPORT uint64_t olsrv2_get_tc_interval(void);
 EXPORT uint64_t olsrv2_get_tc_validity(void);
@@ -80,4 +80,4 @@ olsrv2_get_old_originator_validity(void) {
   return olsrv2_get_tc_validity() * 2;
 }
 
-#endif /* OLSRV2_H_ */
+#endif /* OONFV2_H_ */

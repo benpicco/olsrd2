@@ -43,7 +43,7 @@
 #define FF_ETX_H_
 
 #include "common/common_types.h"
-#include "core/olsr_subsystem.h"
+#include "core/oonf_subsystem.h"
 
 EXPORT extern struct oonf_subsystem olsrv2_ffetx_subsystem;
 

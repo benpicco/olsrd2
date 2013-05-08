@@ -40,13 +40,52 @@
  */
 /* initialize basic framework */
 
-#ifndef OLSR_API_SUBMODULES_H_
-#define OLSR_API_SUBMODULES_H_
+#include "common/common_types.h"
 
-#include "core/olsr_subsystem.h"
+#include "app_data.h"
 
-EXPORT extern struct oonf_subsystem *used_api_subsystems[];
+#include "core/oonf_libdata.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_plugins.h"
+#include "core/oonf_subsystem.h"
+#include "core/os_clock.h"
+#include "core/os_syslog.h"
+#include "subsystems/oonf_class.h"
+#include "subsystems/oonf_clock.h"
+#include "subsystems/oonf_interface.h"
+#include "subsystems/oonf_packet_socket.h"
+#include "subsystems/oonf_socket.h"
+#include "subsystems/oonf_stream_socket.h"
+#include "subsystems/oonf_timer.h"
+#include "subsystems/os_net.h"
+#include "subsystems/os_routing.h"
+#include "subsystems/os_system.h"
+#include "subsystems/oonf_http.h"
+#include "subsystems/oonf_rfc5444.h"
+#include "subsystems/oonf_telnet.h"
 
-EXPORT size_t get_used_api_subsystem_count(void);
+#include "oonf_api_subsystems.h"
 
-#endif /* OLSR_API_SUBMODULES_H_ */
+struct oonf_subsystem *used_api_subsystems[] = {
+  &oonf_os_syslog_subsystem,
+  &oonf_class_subsystem,
+  &oonf_os_clock_subsystem,
+  &oonf_clock_subsystem,
+  &oonf_timer_subsystem,
+  &oonf_socket_subsystem,
+  &oonf_packet_socket_subsystem,
+  &oonf_stream_socket_subsystem,
+  &oonf_os_system_subsystem,
+  &oonf_os_routing_subsystem,
+  &oonf_os_net_subsystem,
+  &oonf_interface_subsystem,
+  &oonf_duplicate_set_subsystem,
+  &oonf_rfc5444_subsystem,
+  &oonf_telnet_subsystem,
+  &oonf_http_subsystem,
+};
+
+size_t
+get_used_api_subsystem_count(void) {
+  return ARRAYSIZE(used_api_subsystems);
+}

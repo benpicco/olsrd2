@@ -47,9 +47,9 @@
 
 #include "rfc5444/rfc5444.h"
 
-#include "core/olsr_logging.h"
-#include "subsystems/olsr_class.h"
-#include "subsystems/olsr_timer.h"
+#include "core/oonf_logging.h"
+#include "subsystems/oonf_class.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_hysteresis.h"
@@ -69,52 +69,52 @@ static void _cb_l2hop_vtime(void *);
 static void _cb_naddr_vtime(void *);
 
 /* memory and timer classes necessary for NHDP */
-static struct olsr_class _neigh_info = {
+static struct oonf_class _neigh_info = {
   .name = NHDP_CLASS_NEIGHBOR,
   .size = sizeof(struct nhdp_neighbor),
 };
 
-static struct olsr_class _link_info = {
+static struct oonf_class _link_info = {
   .name = NHDP_CLASS_LINK,
   .size = sizeof(struct nhdp_link),
 };
 
-static struct olsr_class _laddr_info = {
+static struct oonf_class _laddr_info = {
   .name = NHDP_CLASS_LINK_ADDRESS,
   .size = sizeof(struct nhdp_laddr),
 };
 
-static struct olsr_class _l2hop_info = {
+static struct oonf_class _l2hop_info = {
   .name = NHDP_CLASS_LINK_2HOP,
   .size = sizeof(struct nhdp_l2hop),
 };
 
-static struct olsr_class _naddr_info = {
+static struct oonf_class _naddr_info = {
   .name = NHDP_CLASS_NEIGHBOR_ADDRESS,
   .size = sizeof(struct nhdp_naddr),
 };
 
-static struct olsr_timer_info _link_vtime_info = {
+static struct oonf_timer_info _link_vtime_info = {
   .name = "NHDP link vtime",
   .callback = _cb_link_vtime,
 };
 
-static struct olsr_timer_info _link_heard_info = {
+static struct oonf_timer_info _link_heard_info = {
   .name = "NHDP link heard-time",
   .callback = _cb_link_heard,
 };
 
-static struct olsr_timer_info _link_symtime_info = {
+static struct oonf_timer_info _link_symtime_info = {
   .name = "NHDP link symtime",
   .callback = _cb_link_symtime,
 };
 
-static struct olsr_timer_info _naddr_vtime_info = {
+static struct oonf_timer_info _naddr_vtime_info = {
   .name = "NHDP neighbor address vtime",
   .callback = _cb_naddr_vtime,
 };
 
-static struct olsr_timer_info _l2hop_vtime_info = {
+static struct oonf_timer_info _l2hop_vtime_info = {
   .name = "NHDP 2hop vtime",
   .callback = _cb_l2hop_vtime,
 };
@@ -141,17 +141,17 @@ nhdp_db_init(void) {
   avl_init(&nhdp_neigh_originator_tree, avl_comp_netaddr, false);
   list_init_head(&nhdp_link_list);
 
-  olsr_class_add(&_neigh_info);
-  olsr_class_add(&_naddr_info);
-  olsr_class_add(&_link_info);
-  olsr_class_add(&_laddr_info);
-  olsr_class_add(&_l2hop_info);
+  oonf_class_add(&_neigh_info);
+  oonf_class_add(&_naddr_info);
+  oonf_class_add(&_link_info);
+  oonf_class_add(&_laddr_info);
+  oonf_class_add(&_l2hop_info);
 
-  olsr_timer_add(&_naddr_vtime_info);
-  olsr_timer_add(&_link_vtime_info);
-  olsr_timer_add(&_link_heard_info);
-  olsr_timer_add(&_link_symtime_info);
-  olsr_timer_add(&_l2hop_vtime_info);
+  oonf_timer_add(&_naddr_vtime_info);
+  oonf_timer_add(&_link_vtime_info);
+  oonf_timer_add(&_link_heard_info);
+  oonf_timer_add(&_link_symtime_info);
+  oonf_timer_add(&_l2hop_vtime_info);
 }
 
 /**
@@ -167,18 +167,18 @@ nhdp_db_cleanup(void) {
   }
 
   /* cleanup all timers */
-  olsr_timer_remove(&_l2hop_vtime_info);
-  olsr_timer_remove(&_link_symtime_info);
-  olsr_timer_remove(&_link_heard_info);
-  olsr_timer_remove(&_link_vtime_info);
-  olsr_timer_remove(&_naddr_vtime_info);
+  oonf_timer_remove(&_l2hop_vtime_info);
+  oonf_timer_remove(&_link_symtime_info);
+  oonf_timer_remove(&_link_heard_info);
+  oonf_timer_remove(&_link_vtime_info);
+  oonf_timer_remove(&_naddr_vtime_info);
 
   /* cleanup all memory cookies */
-  olsr_class_remove(&_l2hop_info);
-  olsr_class_remove(&_laddr_info);
-  olsr_class_remove(&_link_info);
-  olsr_class_remove(&_naddr_info);
-  olsr_class_remove(&_neigh_info);
+  oonf_class_remove(&_l2hop_info);
+  oonf_class_remove(&_laddr_info);
+  oonf_class_remove(&_link_info);
+  oonf_class_remove(&_naddr_info);
+  oonf_class_remove(&_neigh_info);
 }
 
 /**
@@ -189,12 +189,12 @@ struct nhdp_neighbor *
 nhdp_db_neighbor_add(void) {
   struct nhdp_neighbor *neigh;
 
-  neigh = olsr_class_malloc(&_neigh_info);
+  neigh = oonf_class_malloc(&_neigh_info);
   if (neigh == NULL) {
     return NULL;
   }
 
-  OLSR_DEBUG(LOG_NHDP, "New Neighbor: 0x%0zx", (size_t)neigh);
+  OONF_DEBUG(LOG_NHDP, "New Neighbor: 0x%0zx", (size_t)neigh);
 
   /* initialize trees and lists */
   avl_init(&neigh->_neigh_addresses, avl_comp_netaddr, false);
@@ -211,7 +211,7 @@ nhdp_db_neighbor_add(void) {
   nhdp_domain_init_neighbor(neigh);
 
   /* trigger event */
-  olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_ADDED);
+  oonf_class_event(&_neigh_info, neigh, OONF_OBJECT_ADDED);
   return neigh;
 }
 
@@ -224,10 +224,10 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
   struct nhdp_naddr *naddr, *na_it;
   struct nhdp_link *lnk, *l_it;
 
-  OLSR_DEBUG(LOG_NHDP, "Remove Neighbor: 0x%0zx", (size_t)neigh);
+  OONF_DEBUG(LOG_NHDP, "Remove Neighbor: 0x%0zx", (size_t)neigh);
 
   /* trigger event */
-  olsr_class_event(&_neigh_info, neigh, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_neigh_info, neigh, OONF_OBJECT_REMOVED);
 
   /* remove all links */
   list_for_each_element_safe(&neigh->_links, lnk, _neigh_node, l_it) {
@@ -246,7 +246,7 @@ nhdp_db_neighbor_remove(struct nhdp_neighbor *neigh) {
 
   /* remove from global list and free memory */
   list_remove(&neigh->_global_node);
-  olsr_class_free(&_neigh_info, neigh);
+  oonf_class_free(&_neigh_info, neigh);
 }
 
 /**
@@ -304,7 +304,7 @@ nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh,
     const struct netaddr *addr) {
   struct nhdp_naddr *naddr;
 
-  naddr = olsr_class_malloc(&_naddr_info);
+  naddr = oonf_class_malloc(&_naddr_info);
   if (naddr == NULL) {
     return NULL;
   }
@@ -326,7 +326,7 @@ nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh,
   avl_insert(&neigh->_neigh_addresses, &naddr->_neigh_node);
 
   /* trigger event */
-  olsr_class_event(&_naddr_info, naddr, OLSR_OBJECT_ADDED);
+  oonf_class_event(&_naddr_info, naddr, OONF_OBJECT_ADDED);
 
   return naddr;
 }
@@ -338,17 +338,17 @@ nhdp_db_neighbor_addr_add(struct nhdp_neighbor *neigh,
 void
 nhdp_db_neighbor_addr_remove(struct nhdp_naddr *naddr) {
   /* trigger event */
-  olsr_class_event(&_naddr_info, naddr, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_naddr_info, naddr, OONF_OBJECT_REMOVED);
 
   /* remove from trees */
   avl_remove(&nhdp_naddr_tree, &naddr->_global_node);
   avl_remove(&naddr->neigh->_neigh_addresses, &naddr->_neigh_node);
 
   /* stop timer */
-  olsr_timer_stop(&naddr->_lost_vtime);
+  oonf_timer_stop(&naddr->_lost_vtime);
 
   /* free memory */
-  olsr_class_free(&_naddr_info, naddr);
+  oonf_class_free(&_naddr_info, naddr);
 }
 
 /**
@@ -463,7 +463,7 @@ struct nhdp_link *
 nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   struct nhdp_link *lnk;
 
-  lnk = olsr_class_malloc(&_link_info);
+  lnk = oonf_class_malloc(&_link_info);
   if (lnk == NULL) {
     return NULL;
   }
@@ -500,7 +500,7 @@ nhdp_db_link_add(struct nhdp_neighbor *neigh, struct nhdp_interface *local_if) {
   nhdp_domain_init_link(lnk);
 
   /* trigger event */
-  olsr_class_event(&_link_info, lnk, OLSR_OBJECT_ADDED);
+  oonf_class_event(&_link_info, lnk, OONF_OBJECT_ADDED);
 
   return lnk;
 }
@@ -515,16 +515,16 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   struct nhdp_l2hop *twohop, *th_it;
 
   /* trigger event */
-  olsr_class_event(&_link_info, lnk, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_link_info, lnk, OONF_OBJECT_REMOVED);
 
   if (lnk->status == NHDP_LINK_SYMMETRIC) {
     _link_status_not_symmetric_anymore(lnk);
   }
 
   /* stop link timers */
-  olsr_timer_stop(&lnk->sym_time);
-  olsr_timer_stop(&lnk->heard_time);
-  olsr_timer_stop(&lnk->vtime);
+  oonf_timer_stop(&lnk->sym_time);
+  oonf_timer_stop(&lnk->heard_time);
+  oonf_timer_stop(&lnk->vtime);
 
   if (netaddr_get_address_family(&lnk->neigh->originator) != AF_UNSPEC) {
     avl_remove(&lnk->local_if->_link_originators, &lnk->_originator_node);
@@ -548,7 +548,7 @@ nhdp_db_link_remove(struct nhdp_link *lnk) {
   list_remove(&lnk->_global_node);
 
   /* free memory */
-  olsr_class_free(&_link_info, lnk);
+  oonf_class_free(&_link_info, lnk);
 }
 
 /**
@@ -561,7 +561,7 @@ struct nhdp_laddr *
 nhdp_db_link_addr_add(struct nhdp_link *lnk, const struct netaddr *addr) {
   struct nhdp_laddr *laddr;
 
-  laddr = olsr_class_malloc(&_laddr_info);
+  laddr = oonf_class_malloc(&_laddr_info);
   if (laddr == NULL) {
     return NULL;
   }
@@ -581,7 +581,7 @@ nhdp_db_link_addr_add(struct nhdp_link *lnk, const struct netaddr *addr) {
   nhdp_interface_add_laddr(laddr);
 
   /* trigger event */
-  olsr_class_event(&_laddr_info, laddr, OLSR_OBJECT_ADDED);
+  oonf_class_event(&_laddr_info, laddr, OONF_OBJECT_ADDED);
 
   return laddr;
 }
@@ -593,7 +593,7 @@ nhdp_db_link_addr_add(struct nhdp_link *lnk, const struct netaddr *addr) {
 void
 nhdp_db_link_addr_remove(struct nhdp_laddr *laddr) {
   /* trigger event */
-  olsr_class_event(&_laddr_info, laddr, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_laddr_info, laddr, OONF_OBJECT_REMOVED);
 
   /* remove from trees */
   nhdp_interface_remove_laddr(laddr);
@@ -601,7 +601,7 @@ nhdp_db_link_addr_remove(struct nhdp_laddr *laddr) {
   avl_remove(&laddr->link->neigh->_link_addresses, &laddr->_neigh_node);
 
   /* free memory */
-  olsr_class_free(&_laddr_info, laddr);
+  oonf_class_free(&_laddr_info, laddr);
 }
 
 /**
@@ -638,7 +638,7 @@ struct nhdp_l2hop *
 nhdp_db_link_2hop_add(struct nhdp_link *lnk, const struct netaddr *addr) {
   struct nhdp_l2hop *l2hop;
 
-  l2hop = olsr_class_malloc(&_l2hop_info);
+  l2hop = oonf_class_malloc(&_l2hop_info);
   if (l2hop == NULL) {
     return NULL;
   }
@@ -661,7 +661,7 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, const struct netaddr *addr) {
   nhdp_domain_init_l2hop(l2hop);
 
   /* trigger event */
-  olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_ADDED);
+  oonf_class_event(&_l2hop_info, l2hop, OONF_OBJECT_ADDED);
 
   return l2hop;
 }
@@ -673,16 +673,16 @@ nhdp_db_link_2hop_add(struct nhdp_link *lnk, const struct netaddr *addr) {
 void
 nhdp_db_link_2hop_remove(struct nhdp_l2hop *l2hop) {
   /* trigger event */
-  olsr_class_event(&_l2hop_info, l2hop, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_l2hop_info, l2hop, OONF_OBJECT_REMOVED);
 
   /* remove from tree */
   avl_remove(&l2hop->link->_2hop, &l2hop->_link_node);
 
   /* stop validity timer */
-  olsr_timer_stop(&l2hop->_vtime);
+  oonf_timer_stop(&l2hop->_vtime);
 
   /* free memory */
-  olsr_class_free(&_l2hop_info, l2hop);
+  oonf_class_free(&_l2hop_info, l2hop);
 }
 
 /**
@@ -745,7 +745,7 @@ nhdp_db_link_update_status(struct nhdp_link *lnk) {
   }
 
   /* trigger change event */
-  olsr_class_event(&_link_info, lnk, OLSR_OBJECT_CHANGED);
+  oonf_class_event(&_link_info, lnk, OONF_OBJECT_CHANGED);
 }
 
 /**
@@ -759,9 +759,9 @@ _nhdp_db_link_calculate_status(struct nhdp_link *lnk) {
     return NHDP_LINK_PENDING;
   if (nhdp_hysteresis_is_lost(lnk))
     return RFC5444_LINKSTATUS_LOST;
-  if (olsr_timer_is_active(&lnk->sym_time))
+  if (oonf_timer_is_active(&lnk->sym_time))
     return RFC5444_LINKSTATUS_SYMMETRIC;
-  if (olsr_timer_is_active(&lnk->heard_time))
+  if (oonf_timer_is_active(&lnk->heard_time))
     return RFC5444_LINKSTATUS_HEARD;
   return RFC5444_LINKSTATUS_LOST;
 }
@@ -815,7 +815,7 @@ _cb_link_vtime(void *ptr) {
   struct nhdp_link *lnk = ptr;
   struct nhdp_neighbor *neigh;
 
-  OLSR_DEBUG(LOG_NHDP, "Link vtime fired: 0x%0zx", (size_t)ptr);
+  OONF_DEBUG(LOG_NHDP, "Link vtime fired: 0x%0zx", (size_t)ptr);
 
   neigh = lnk->neigh;
 
@@ -842,7 +842,7 @@ _cb_link_vtime(void *ptr) {
  */
 static void
 _cb_link_heard(void *ptr) {
-  OLSR_DEBUG(LOG_NHDP, "Link heard fired: 0x%0zx", (size_t)ptr);
+  OONF_DEBUG(LOG_NHDP, "Link heard fired: 0x%0zx", (size_t)ptr);
   nhdp_db_link_update_status(ptr);
 }
 
@@ -854,7 +854,7 @@ static void
 _cb_link_symtime(void *ptr) {
   struct nhdp_link *lnk = ptr;
 
-  OLSR_DEBUG(LOG_NHDP, "Link Symtime fired: 0x%0zx", (size_t)ptr);
+  OONF_DEBUG(LOG_NHDP, "Link Symtime fired: 0x%0zx", (size_t)ptr);
   nhdp_db_link_update_status(lnk);
   nhdp_domain_neighbor_changed(lnk->neigh);
 }
@@ -867,7 +867,7 @@ static void
 _cb_naddr_vtime(void *ptr) {
   struct nhdp_naddr *naddr = ptr;
 
-  OLSR_DEBUG(LOG_NHDP, "Neighbor Address Lost fired: 0x%0zx", (size_t)ptr);
+  OONF_DEBUG(LOG_NHDP, "Neighbor Address Lost fired: 0x%0zx", (size_t)ptr);
 
   nhdp_db_neighbor_addr_remove(naddr);
 }
@@ -883,7 +883,7 @@ _cb_l2hop_vtime(void *ptr) {
 
   neigh = l2hop->link->neigh;
 
-  OLSR_DEBUG(LOG_NHDP, "2Hop vtime fired: 0x%0zx", (size_t)ptr);
+  OONF_DEBUG(LOG_NHDP, "2Hop vtime fired: 0x%0zx", (size_t)ptr);
   nhdp_db_link_2hop_remove(l2hop);
   nhdp_domain_neighbor_changed(neigh);
 }

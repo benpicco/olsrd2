@@ -44,8 +44,8 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 #include "rfc5444/rfc5444.h"
-#include "subsystems/olsr_class.h"
-#include "subsystems/olsr_timer.h"
+#include "subsystems/oonf_class.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
@@ -57,28 +57,28 @@ static void _cb_tc_node_timeout(void *);
 static bool _remove_edge(struct olsrv2_tc_edge *edge, bool cleanup);
 
 /* classes for topology data */
-static struct olsr_class _tc_node_class = {
+static struct oonf_class _tc_node_class = {
   .name = "olsrv2 tc node",
   .size = sizeof(struct olsrv2_tc_node),
 };
 
-static struct olsr_class _tc_edge_class = {
+static struct oonf_class _tc_edge_class = {
   .name = "olsrv2 tc edge",
   .size = sizeof(struct olsrv2_tc_edge),
 };
 
-static struct olsr_class _tc_attached_class = {
+static struct oonf_class _tc_attached_class = {
   .name = "olsrv2 tc attached network",
   .size = sizeof(struct olsrv2_tc_attachment),
 };
 
-static struct olsr_class _tc_endpoint_class = {
+static struct oonf_class _tc_endpoint_class = {
   .name = "olsrv2 tc attached network endpoint",
   .size = sizeof(struct olsrv2_tc_endpoint),
 };
 
 /* validity timer for tc nodes */
-static struct olsr_timer_info _validity_info = {
+static struct oonf_timer_info _validity_info = {
   .name = "olsrv2 tc node validity",
   .callback = _cb_tc_node_timeout,
 };
@@ -87,10 +87,10 @@ struct avl_tree olsrv2_tc_endpoint_tree;
 
 void
 olsrv2_tc_init(void) {
-  olsr_class_add(&_tc_node_class);
-  olsr_class_add(&_tc_edge_class);
-  olsr_class_add(&_tc_attached_class);
-  olsr_class_add(&_tc_endpoint_class);
+  oonf_class_add(&_tc_node_class);
+  oonf_class_add(&_tc_edge_class);
+  oonf_class_add(&_tc_attached_class);
+  oonf_class_add(&_tc_endpoint_class);
 
   avl_init(&olsrv2_tc_tree, avl_comp_netaddr, false);
   avl_init(&olsrv2_tc_endpoint_tree, avl_comp_netaddr, true);
@@ -117,10 +117,10 @@ olsrv2_tc_cleanup(void) {
     olsrv2_tc_node_remove(node);
   }
 
-  olsr_class_remove(&_tc_endpoint_class);
-  olsr_class_remove(&_tc_attached_class);
-  olsr_class_remove(&_tc_edge_class);
-  olsr_class_remove(&_tc_node_class);
+  oonf_class_remove(&_tc_endpoint_class);
+  oonf_class_remove(&_tc_attached_class);
+  oonf_class_remove(&_tc_edge_class);
+  oonf_class_remove(&_tc_node_class);
 }
 
 struct olsrv2_tc_node *
@@ -131,7 +131,7 @@ olsrv2_tc_node_add(struct netaddr *originator,
   node = avl_find_element(
       &olsrv2_tc_tree, originator, node, _originator_node);
   if (!node) {
-    node = olsr_class_malloc(&_tc_node_class);
+    node = oonf_class_malloc(&_tc_node_class);
     if (node == NULL) {
       return NULL;
     }
@@ -156,16 +156,16 @@ olsrv2_tc_node_add(struct netaddr *originator,
     avl_insert(&olsrv2_tc_tree, &node->_originator_node);
 
     /* fire event */
-    olsr_class_event(&_tc_node_class, node, OLSR_OBJECT_ADDED);
+    oonf_class_event(&_tc_node_class, node, OONF_OBJECT_ADDED);
   }
-  else if (!olsr_timer_is_active(&node->_validity_time)) {
+  else if (!oonf_timer_is_active(&node->_validity_time)) {
     /* node was virtual */
     node->ansn = ansn;
 
     /* fire event */
-    olsr_class_event(&_tc_node_class, node, OLSR_OBJECT_ADDED);
+    oonf_class_event(&_tc_node_class, node, OONF_OBJECT_ADDED);
   }
-  olsr_timer_set(&node->_validity_time, vtime);
+  oonf_timer_set(&node->_validity_time, vtime);
   return node;
 }
 
@@ -174,7 +174,7 @@ olsrv2_tc_node_remove(struct olsrv2_tc_node *node) {
   struct olsrv2_tc_edge *edge, *edge_it;
   struct olsrv2_tc_attachment *net, *net_it;
 
-  olsr_class_event(&_tc_node_class, node, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_tc_node_class, node, OONF_OBJECT_REMOVED);
 
   /* remove tc_edges */
   avl_for_each_element_safe(&node->_edges, edge, _node, edge_it) {
@@ -189,12 +189,12 @@ olsrv2_tc_node_remove(struct olsrv2_tc_node *node) {
   }
 
   /* stop validity timer */
-  olsr_timer_stop(&node->_validity_time);
+  oonf_timer_stop(&node->_validity_time);
 
   /* remove from global tree and free memory if node is not needed anymore*/
   if (node->_edges.count == 0) {
     avl_remove(&olsrv2_tc_tree, &node->_originator_node);
-    olsr_class_free(&_tc_node_class, node);
+    oonf_class_free(&_tc_node_class, node);
   }
 }
 
@@ -209,20 +209,20 @@ olsrv2_tc_edge_add(struct olsrv2_tc_node *src, struct netaddr *addr) {
     edge->virtual = false;
 
     /* fire event */
-    olsr_class_event(&_tc_edge_class, edge, OLSR_OBJECT_ADDED);
+    oonf_class_event(&_tc_edge_class, edge, OONF_OBJECT_ADDED);
     return edge;
   }
 
   /* allocate edge */
-  edge = olsr_class_malloc(&_tc_edge_class);
+  edge = oonf_class_malloc(&_tc_edge_class);
   if (edge == NULL) {
     return NULL;
   }
 
   /* allocate inverse edge */
-  inverse = olsr_class_malloc(&_tc_edge_class);
+  inverse = oonf_class_malloc(&_tc_edge_class);
   if (inverse == NULL) {
-    olsr_class_free(&_tc_edge_class, edge);
+    oonf_class_free(&_tc_edge_class, edge);
     return NULL;
   }
 
@@ -232,8 +232,8 @@ olsrv2_tc_edge_add(struct olsrv2_tc_node *src, struct netaddr *addr) {
     /* create virtual node */
     dst = olsrv2_tc_node_add(addr, 0, 0);
     if (dst == NULL) {
-      olsr_class_free(&_tc_edge_class, edge);
-      olsr_class_free(&_tc_edge_class, inverse);
+      oonf_class_free(&_tc_edge_class, edge);
+      oonf_class_free(&_tc_edge_class, inverse);
       return NULL;
     }
   }
@@ -264,7 +264,7 @@ olsrv2_tc_edge_add(struct olsrv2_tc_node *src, struct netaddr *addr) {
   avl_insert(&dst->_edges, &inverse->_node);
 
   /* fire event */
-  olsr_class_event(&_tc_edge_class, edge, OLSR_OBJECT_ADDED);
+  oonf_class_event(&_tc_edge_class, edge, OONF_OBJECT_ADDED);
   return edge;
 }
 
@@ -285,7 +285,7 @@ olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
     return net;
   }
 
-  net = olsr_class_malloc(&_tc_attached_class);
+  net = oonf_class_malloc(&_tc_attached_class);
   if (net == NULL) {
     return NULL;
   }
@@ -293,14 +293,14 @@ olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
   end = avl_find_element(&olsrv2_tc_endpoint_tree, prefix, end, _node);
   if (end == NULL) {
     /* create new endpoint */
-    end = olsr_class_malloc(&_tc_endpoint_class);
+    end = oonf_class_malloc(&_tc_endpoint_class);
     if (end == NULL) {
-      olsr_class_free(&_tc_attached_class, net);
+      oonf_class_free(&_tc_attached_class, net);
       return NULL;
     }
 
     /* initialize endpoint */
-    end->target.type = mesh ? OLSRV2_ADDRESS_TARGET : OLSRV2_NETWORK_TARGET;
+    end->target.type = mesh ? OONFV2_ADDRESS_TARGET : OONFV2_NETWORK_TARGET;
     avl_init(&end->_attached_networks, avl_comp_netaddr, false);
 
     /* attach to global tree */
@@ -308,7 +308,7 @@ olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
     end->_node.key = &end->target.addr;
     avl_insert(&olsrv2_tc_endpoint_tree, &end->_node);
 
-    olsr_class_event(&_tc_endpoint_class, end, OLSR_OBJECT_ADDED);
+    oonf_class_event(&_tc_endpoint_class, end, OONF_OBJECT_ADDED);
   }
 
   /* initialize attached network */
@@ -326,14 +326,14 @@ olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
   net->_endpoint_node.key = &node->target.addr;
   avl_insert(&end->_attached_networks, &net->_endpoint_node);
 
-  olsr_class_event(&_tc_attached_class, net, OLSR_OBJECT_ADDED);
+  oonf_class_event(&_tc_attached_class, net, OONF_OBJECT_ADDED);
   return net;
 }
 
 void
 olsrv2_tc_endpoint_remove(
     struct olsrv2_tc_attachment *net) {
-  olsr_class_event(&_tc_attached_class, net, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_tc_attached_class, net, OONF_OBJECT_REMOVED);
 
   /* remove from node */
   avl_remove(&net->src->_endpoints, &net->_src_node);
@@ -342,15 +342,15 @@ olsrv2_tc_endpoint_remove(
   avl_remove(&net->dst->_attached_networks, &net->_endpoint_node);
 
   if (net->dst->_attached_networks.count == 0) {
-    olsr_class_event(&_tc_endpoint_class, net->dst, OLSR_OBJECT_REMOVED);
+    oonf_class_event(&_tc_endpoint_class, net->dst, OONF_OBJECT_REMOVED);
 
     /* remove endpoint */
     avl_remove(&olsrv2_tc_endpoint_tree, &net->dst->_node);
-    olsr_class_free(&_tc_endpoint_class, net->dst);
+    oonf_class_free(&_tc_endpoint_class, net->dst);
   }
 
   /* free attached network */
-  olsr_class_free(&_tc_attached_class, net);
+  oonf_class_free(&_tc_attached_class, net);
 }
 
 void
@@ -371,7 +371,7 @@ _remove_edge(struct olsrv2_tc_edge *edge, bool cleanup) {
   }
 
   /* fire event */
-  olsr_class_event(&_tc_edge_class, edge, OLSR_OBJECT_REMOVED);
+  oonf_class_event(&_tc_edge_class, edge, OONF_OBJECT_REMOVED);
 
   if (!edge->inverse->virtual) {
     /* make this edge virtual */
@@ -385,7 +385,7 @@ _remove_edge(struct olsrv2_tc_edge *edge, bool cleanup) {
   avl_remove(&edge->dst->_edges, &edge->inverse->_node);
 
   if (edge->dst->_edges.count == 0 && cleanup
-      && !olsr_timer_is_active(&edge->dst->_validity_time)) {
+      && !oonf_timer_is_active(&edge->dst->_validity_time)) {
     /*
      * node is already virtual and has no
      * incoming links anymore.
@@ -395,8 +395,8 @@ _remove_edge(struct olsrv2_tc_edge *edge, bool cleanup) {
     removed_node = true;
   }
 
-  olsr_class_free(&_tc_edge_class, edge->inverse);
-  olsr_class_free(&_tc_edge_class, edge);
+  oonf_class_free(&_tc_edge_class, edge->inverse);
+  oonf_class_free(&_tc_edge_class, edge);
 
   return removed_node;
 }

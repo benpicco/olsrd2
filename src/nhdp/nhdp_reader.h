@@ -43,9 +43,9 @@
 #define NHDP_INCOMING_H_
 
 #include "common/common_types.h"
-#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/oonf_rfc5444.h"
 
-void nhdp_reader_init(struct olsr_rfc5444_protocol *);
+void nhdp_reader_init(struct oonf_rfc5444_protocol *);
 void nhdp_reader_cleanup(void);
 
 #endif /* NHDP_INCOMING_H_ */

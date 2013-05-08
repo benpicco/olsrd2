@@ -39,13 +39,13 @@
  *
  */
 
-#ifndef OLSR_APP_CONFIG_H_
-#define OLSR_APP_CONFIG_H_
+#ifndef OONF_APP_CONFIG_H_
+#define OONF_APP_CONFIG_H_
 
-#include "core/olsr_logging.h"
+#include "core/oonf_logging.h"
 
 #define OONF_NEED_ROOT ${OONF_NEED_ROOT}
 
-const struct olsr_appdata *olsr_appdata_get(void);
+const struct oonf_appdata *oonf_appdata_get(void);
 
-#endif /* OLSR_APP_CONFIG_H_ */
+#endif /* OONF_APP_CONFIG_H_ */

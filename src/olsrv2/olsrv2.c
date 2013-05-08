@@ -47,12 +47,12 @@
 #include "common/netaddr.h"
 #include "config/cfg_schema.h"
 #include "rfc5444/rfc5444.h"
-#include "core/olsr_logging.h"
+#include "core/oonf_logging.h"
 #include "common/netaddr_acl.h"
-#include "core/olsr_subsystem.h"
-#include "subsystems/olsr_rfc5444.h"
-#include "subsystems/olsr_telnet.h"
-#include "subsystems/olsr_timer.h"
+#include "core/oonf_subsystem.h"
+#include "subsystems/oonf_rfc5444.h"
+#include "subsystems/oonf_telnet.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp_interfaces.h"
 
@@ -64,7 +64,7 @@
 #include "olsrv2/olsrv2_writer.h"
 
 /* definitions */
-#define _LOG_OLSRV2_NAME "olsrv2"
+#define _LOG_OONFV2_NAME "olsrv2"
 #define _LOCAL_ATTACHED_NETWORK_KEY "lan"
 
 struct _config {
@@ -96,18 +96,18 @@ static void _parse_lan_array(struct cfg_named_section *section, bool add);
 static void _cb_generate_tc(void *);
 
 static void _update_originators(void);
-static void _cb_if_event(struct olsr_interface_listener *);
+static void _cb_if_event(struct oonf_interface_listener *);
 
 static void _cb_cfg_olsrv2_changed(void);
 static void _cb_cfg_domain_changed(void);
 
 /* prototypes */
-static enum olsr_telnet_result _cb_topology(struct olsr_telnet_data *con);
+static enum oonf_telnet_result _cb_topology(struct oonf_telnet_data *con);
 
 /* nhdp telnet commands */
-static struct olsr_telnet_command _cmds[] = {
+static struct oonf_telnet_command _cmds[] = {
     TELNET_CMD("olsrv2", _cb_topology,
-        "OLSRv2 database information command\n"),
+        "OONFv2 database information command\n"),
 };
 
 /* subsystem definition */
@@ -141,7 +141,7 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
     CFG_MAP_CLOCK_MIN(_config, p_hold_time, "processing_hold_time", "300.0",
       "Holdtime for processing set information", 100),
   CFG_MAP_ACL_V46(_config, routable, "routable",
-      OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
+      OONFV2_ROUTABLE_IPV4 OONFV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter to decide which addresses are considered routable"),
 
   CFG_VALIDATE_LAN(_LOCAL_ATTACHED_NETWORK_KEY, "",
@@ -152,15 +152,15 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
     .list = true),
 
   CFG_MAP_ACL_V4(_config, originator_v4_acl, "originator_v4",
-    OLSRV2_ROUTABLE_IPV4 ACL_DEFAULT_ACCEPT,
+    OONFV2_ROUTABLE_IPV4 ACL_DEFAULT_ACCEPT,
     "Filter for router IPv4 originator address"),
   CFG_MAP_ACL_V6(_config, originator_v6_acl, "originator_v6",
-    OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
+    OONFV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter for router IPv6 originator address"),
 };
 
 static struct cfg_schema_section _olsrv2_section = {
-  .type = CFG_OLSRV2_SECTION,
+  .type = CFG_OONFV2_SECTION,
   .cb_delta_handler = _cb_cfg_olsrv2_changed,
   .entries = _olsrv2_entries,
   .entry_count = ARRAYSIZE(_olsrv2_entries),
@@ -177,49 +177,49 @@ struct oonf_subsystem olsrv2_subsystem = {
 static struct _config _olsrv2_config;
 
 /* timer for TC generation */
-static struct olsr_timer_info _tc_timer_class = {
+static struct oonf_timer_info _tc_timer_class = {
   .name = "TC generation",
   .periodic = true,
   .callback = _cb_generate_tc,
 };
 
-static struct olsr_timer_entry _tc_timer = {
+static struct oonf_timer_entry _tc_timer = {
   .info = &_tc_timer_class,
 };
 
 /* global interface listener */
-struct olsr_interface_listener _if_listener = {
+struct oonf_interface_listener _if_listener = {
   .process = _cb_if_event,
 };
 
 /* global variables */
-enum log_source LOG_OLSRV2 = LOG_MAIN;
-static struct olsr_rfc5444_protocol *_protocol;
+enum log_source LOG_OONFV2 = LOG_MAIN;
+static struct oonf_rfc5444_protocol *_protocol;
 
 static uint16_t _ansn;
 
 /**
- * Initialize OLSRv2 subsystem
+ * Initialize OONFv2 subsystem
  * @return -1 if an error happened, 0 otherwise
  */
 static int
 _init(void) {
   size_t i;
 
-  LOG_OLSRV2 = olsr_log_register_source(_LOG_OLSRV2_NAME);
+  LOG_OONFV2 = oonf_log_register_source(_LOG_OONFV2_NAME);
 
-  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
+  _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
     return -1;
   }
 
   if (olsrv2_writer_init(_protocol)) {
-    olsr_rfc5444_remove_protocol(_protocol);
+    oonf_rfc5444_remove_protocol(_protocol);
     return -1;
   }
 
   /* activate interface listener */
-  olsr_interface_add_listener(&_if_listener);
+  oonf_interface_add_listener(&_if_listener);
 
   /* activate the rest of the olsrv2 protocol */
   olsrv2_lan_init();
@@ -229,10 +229,10 @@ _init(void) {
   olsrv2_routing_init();
 
   /* initialize timer */
-  olsr_timer_add(&_tc_timer_class);
+  oonf_timer_add(&_tc_timer_class);
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
-    olsr_telnet_add(&_cmds[i]);
+    oonf_telnet_add(&_cmds[i]);
   }
 
   _ansn = rand() & 0xffff;
@@ -250,7 +250,7 @@ _initiate_shutdown(void) {
 }
 
 /**
- * Cleanup OLSRv2 subsystem
+ * Cleanup OONFv2 subsystem
  */
 static void
 _cleanup(void) {
@@ -258,11 +258,11 @@ _cleanup(void) {
 
   /* release telnet commands */
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
-    olsr_telnet_remove(&_cmds[i]);
+    oonf_telnet_remove(&_cmds[i]);
   }
 
   /* remove interface listener */
-  olsr_interface_remove_listener(&_if_listener);
+  oonf_interface_remove_listener(&_if_listener);
 
   /* cleanup configuration */
   netaddr_acl_remove(&_olsrv2_config.routable);
@@ -276,7 +276,7 @@ _cleanup(void) {
   olsrv2_lan_cleanup();
 
   /* free protocol instance */
-  olsr_rfc5444_remove_protocol(_protocol);
+  oonf_rfc5444_remove_protocol(_protocol);
 }
 
 uint64_t
@@ -297,7 +297,7 @@ olsrv2_get_routable(void) {
 bool
 olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
-  enum olsr_duplicate_result dup_result;
+  enum oonf_duplicate_result dup_result;
   bool process;
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
@@ -305,19 +305,19 @@ olsrv2_mpr_shall_process(
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not process message type %u,"
+    OONF_DEBUG(LOG_OONFV2, "Do not process message type %u,"
         " originator or sequence number is missing!",
         context->msg_type);
     return false;
   }
 
   /* check forwarding set */
-  dup_result = olsr_duplicate_entry_add(&_protocol->processed_set,
+  dup_result = oonf_duplicate_entry_add(&_protocol->processed_set,
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
-  process = dup_result == OLSR_DUPSET_NEW || dup_result == OLSR_DUPSET_NEWEST;
+  process = dup_result == OONF_DUPSET_NEW || dup_result == OONF_DUPSET_NEWEST;
 
-  OLSR_DEBUG(LOG_OLSRV2, "Do %sprocess message type %u from %s"
+  OONF_DEBUG(LOG_OONFV2, "Do %sprocess message type %u from %s"
       " with seqno %u (dupset result: %u)",
       process ? "" : "not ",
       context->msg_type,
@@ -332,7 +332,7 @@ olsrv2_mpr_shall_forwarding(
   struct nhdp_interface *interf;
   struct nhdp_laddr *laddr;
   struct nhdp_neighbor *neigh;
-  enum olsr_duplicate_result dup_result;
+  enum oonf_duplicate_result dup_result;
   bool forward;
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
@@ -340,18 +340,18 @@ olsrv2_mpr_shall_forwarding(
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u,"
+    OONF_DEBUG(LOG_OONFV2, "Do not forward message type %u,"
         " originator or sequence number is missing!",
         context->msg_type);
     return false;
   }
 
   /* check forwarding set */
-  dup_result = olsr_duplicate_entry_add(&_protocol->forwarded_set,
+  dup_result = oonf_duplicate_entry_add(&_protocol->forwarded_set,
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
-  if (dup_result != OLSR_DUPSET_NEW && dup_result != OLSR_DUPSET_NEWEST) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message type %u from %s"
+  if (dup_result != OONF_DUPSET_NEW && dup_result != OONF_DUPSET_NEWEST) {
+    OONF_DEBUG(LOG_OONFV2, "Do not forward message type %u from %s"
         " with seqno %u (dupset result: %u)",
         context->msg_type,
         netaddr_to_string(&buf, &context->orig_addr),
@@ -361,20 +361,20 @@ olsrv2_mpr_shall_forwarding(
 
   /* check input interface */
   if (_protocol->input_interface == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because input interface is not set");
+    OONF_DEBUG(LOG_OONFV2, "Do not forward because input interface is not set");
     return false;
   }
 
   /* checp input source address */
   if (_protocol->input_address == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because input source is not set");
+    OONF_DEBUG(LOG_OONFV2, "Do not forward because input source is not set");
     return false;
   }
 
   /* get NHDP interface */
   interf = nhdp_interface_get(_protocol->input_interface->name);
   if (interf == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because NHDP does not handle"
+    OONF_DEBUG(LOG_OONFV2, "Do not forward because NHDP does not handle"
         " interface '%s'", _protocol->input_interface->name);
     return false;
   }
@@ -382,7 +382,7 @@ olsrv2_mpr_shall_forwarding(
   /* get NHDP link address corresponding to source */
   laddr = nhdp_interface_get_link_addr(interf, _protocol->input_address);
   if (laddr == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward because source IP %s is"
+    OONF_DEBUG(LOG_OONFV2, "Do not forward because source IP %s is"
         " not a direct neighbor",
         netaddr_to_string(&buf, _protocol->input_address));
     return false;
@@ -393,7 +393,7 @@ olsrv2_mpr_shall_forwarding(
 
   /* forward if this neighbor has selected us as a flooding MPR */
   forward = neigh->local_is_flooding_mpr && neigh->symmetric > 0;
-  OLSR_DEBUG(LOG_OLSRV2, "Do %sforward message type %u from %s"
+  OONF_DEBUG(LOG_OONFV2, "Do %sforward message type %u from %s"
       " with seqno %u",
       forward ? "" : "not ",
       context->msg_type,
@@ -404,13 +404,13 @@ olsrv2_mpr_shall_forwarding(
 
 bool
 olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
-  struct olsr_rfc5444_target *target;
+  struct oonf_rfc5444_target *target;
   struct nhdp_interface *interf;
   bool is_ipv4, flood;
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str buf;
 #endif
-  target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
+  target = container_of(rfc5444_target, struct oonf_rfc5444_target, rfc5444_target);
 
   /* test if this is the ipv4 multicast target */
   is_ipv4 = target == target->interface->multicast4;
@@ -423,7 +423,7 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   /* get NHDP interface for target */
   interf = nhdp_interface_get(target->interface->name);
   if (interf == NULL) {
-    OLSR_DEBUG(LOG_OLSRV2, "Do not forward message"
+    OONF_DEBUG(LOG_OONFV2, "Do not forward message"
         " to interface %s: its unknown to NHDP",
         target->interface->name);
     return NULL;
@@ -437,7 +437,7 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
     flood =  interf->use_ipv6_for_flooding;
   }
 
-  OLSR_DEBUG(LOG_OLSRV2, "Flooding to target %s: %s",
+  OONF_DEBUG(LOG_OONFV2, "Flooding to target %s: %s",
       netaddr_to_string(&buf, &target->dst), flood ? "yes" : "no");
 
   return flood;
@@ -623,8 +623,8 @@ _cb_generate_tc(void *ptr __attribute__((unused))) {
   olsrv2_writer_send_tc();
 }
 
-static enum olsr_telnet_result
-_cb_topology(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_cb_topology(struct oonf_telnet_data *con) {
   struct olsrv2_tc_node *node;
   struct olsrv2_tc_edge *edge;
   struct olsrv2_tc_attachment *end;
@@ -635,8 +635,8 @@ _cb_topology(struct olsr_telnet_data *con) {
   avl_for_each_element(&olsrv2_tc_tree, node, _originator_node) {
     abuf_appendf(con->out, "Node originator %s: vtime=%s\n",
         netaddr_to_string(&nbuf, &node->target.addr),
-        olsr_clock_toIntervalString(&tbuf,
-            olsr_timer_get_due(&node->_validity_time)));
+        oonf_clock_toIntervalString(&tbuf,
+            oonf_timer_get_due(&node->_validity_time)));
 
     avl_for_each_element(&node->_edges, edge, _node) {
       abuf_appendf(con->out, "\tlink to %s%s:\n",
@@ -671,7 +671,7 @@ _cb_topology(struct olsr_telnet_data *con) {
 static void
 _update_originators(void) {
   const struct netaddr *originator_v4, *originator_v6;
-  struct olsr_interface *interf;
+  struct oonf_interface *interf;
   struct netaddr new_v4, new_v6;
   bool keep_v4, keep_v6;
   size_t i;
@@ -679,7 +679,7 @@ _update_originators(void) {
   struct netaddr_str buf;
 #endif
 
-  OLSR_DEBUG(LOG_OLSRV2, "Updating OLSRv2 originators");
+  OONF_DEBUG(LOG_OONFV2, "Updating OONFv2 originators");
 
   originator_v4 = olsrv2_originator_get(AF_INET);
   originator_v6 = olsrv2_originator_get(AF_INET6);
@@ -690,7 +690,7 @@ _update_originators(void) {
   netaddr_invalidate(&new_v4);
   netaddr_invalidate(&new_v6);
 
-  avl_for_each_element(&olsr_interface_tree, interf, _node) {
+  avl_for_each_element(&oonf_interface_tree, interf, _node) {
     /* check if originator is still valid */
     for (i=0; i<interf->data.addrcount; i++) {
       struct netaddr *addr = &interf->data.addresses[i];
@@ -712,13 +712,13 @@ _update_originators(void) {
   }
 
   if (!keep_v4) {
-    OLSR_DEBUG(LOG_OLSRV2, "Set IPv4 originator to %s",
+    OONF_DEBUG(LOG_OONFV2, "Set IPv4 originator to %s",
         netaddr_to_string(&buf, &new_v4));
     olsrv2_originator_set(&new_v4);
   }
 
   if (!keep_v6) {
-    OLSR_DEBUG(LOG_OLSRV2, "Set IPv6 originator to %s",
+    OONF_DEBUG(LOG_OONFV2, "Set IPv6 originator to %s",
         netaddr_to_string(&buf, &new_v6));
     olsrv2_originator_set(&new_v6);
   }
@@ -729,7 +729,7 @@ _update_originators(void) {
  * @param listener pointer to interface listener
  */
 static void
-_cb_if_event(struct olsr_interface_listener *listener __attribute__((unused))) {
+_cb_if_event(struct oonf_interface_listener *listener __attribute__((unused))) {
   _update_originators();
 }
 
@@ -740,12 +740,12 @@ static void
 _cb_cfg_olsrv2_changed(void) {
   if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
       _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
-    OLSR_WARN(LOG_OLSRV2, "Cannot convert OLSRv2 configuration.");
+    OONF_WARN(LOG_OONFV2, "Cannot convert OONFv2 configuration.");
     return;
   }
 
   /* set tc timer interval */
-  olsr_timer_set(&_tc_timer, _olsrv2_config.tc_interval);
+  oonf_timer_set(&_tc_timer, _olsrv2_config.tc_interval);
 
   /* check if we have to change the originators */
   _update_originators();
@@ -785,7 +785,7 @@ _cb_cfg_domain_changed(void) {
 
   if (cfg_schema_tobin(&rtdomain, _rt_domain_section.post,
       _rt_domain_entries, ARRAYSIZE(_rt_domain_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert OLSRv2 routing domain parameters.");
+    OONF_WARN(LOG_NHDP, "Cannot convert OONFv2 routing domain parameters.");
     return;
   }
 

@@ -39,14 +39,14 @@
  *
  */
 
-#ifndef OLSRV2_TC_H_
-#define OLSRV2_TC_H_
+#ifndef OONFV2_TC_H_
+#define OONFV2_TC_H_
 
 #include "common/avl.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
-#include "subsystems/olsr_timer.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
@@ -54,9 +54,9 @@
 #include "olsrv2/olsrv2_routing.h"
 
 enum olsrv2_target_type {
-  OLSRV2_NODE_TARGET,
-  OLSRV2_ADDRESS_TARGET,
-  OLSRV2_NETWORK_TARGET,
+  OONFV2_NODE_TARGET,
+  OONFV2_ADDRESS_TARGET,
+  OONFV2_NETWORK_TARGET,
 };
 
 struct olsrv2_tc_target {
@@ -81,7 +81,7 @@ struct olsrv2_tc_node {
   uint64_t interval_time;
 
   /* time until this node has to be removed */
-  struct olsr_timer_entry _validity_time;
+  struct oonf_timer_entry _validity_time;
 
   /* tree of olsrv2_tc_edges */
   struct avl_tree _edges;
@@ -185,4 +185,4 @@ olsrv2_tc_endpoint_get(struct netaddr *prefix) {
 
   return avl_find_element(&olsrv2_tc_endpoint_tree, prefix, end, _node);
 }
-#endif /* OLSRV2_TC_H_ */
+#endif /* OONFV2_TC_H_ */

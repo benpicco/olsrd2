@@ -42,10 +42,10 @@
 #include "common/common_types.h"
 #include "config/cfg_schema.h"
 #include "rfc5444/rfc5444_writer.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "subsystems/olsr_rfc5444.h"
-#include "subsystems/olsr_telnet.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_subsystem.h"
+#include "subsystems/oonf_rfc5444.h"
+#include "subsystems/oonf_telnet.h"
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
@@ -67,11 +67,11 @@ static int _init(void);
 static void _initiate_shutdown(void);
 static void _cleanup(void);
 
-static enum olsr_telnet_result _cb_nhdp(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_neighbor(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_neighlink(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_iflink(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_interface(struct olsr_telnet_data *con);
+static enum oonf_telnet_result _cb_nhdp(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_neighbor(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_neighlink(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_iflink(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_interface(struct oonf_telnet_data *con);
 
 static void _cb_cfg_domain_changed(void);
 static void _cb_cfg_interface_changed(void);
@@ -79,7 +79,7 @@ static int _cb_validate_domain_section(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
 
 /* nhdp telnet commands */
-static struct olsr_telnet_command _cmds[] = {
+static struct oonf_telnet_command _cmds[] = {
     TELNET_CMD("nhdp", _cb_nhdp,
         "NHDP database information command\n"
         "\"nhdp iflink\": shows all nhdp links sorted by interfaces including interface and 2-hop neighbor addresses\n"
@@ -141,7 +141,7 @@ struct oonf_subsystem nhdp_subsystem = {
 
 /* other global variables */
 enum log_source LOG_NHDP = LOG_MAIN;
-static struct olsr_rfc5444_protocol *_protocol;
+static struct oonf_rfc5444_protocol *_protocol;
 
 /* NHDP originator address, might be undefined */
 static struct netaddr _originator_v4, _originator_v6;
@@ -154,15 +154,15 @@ static int
 _init(void) {
   size_t i;
 
-  LOG_NHDP = olsr_log_register_source(_LOG_NHDP_NAME);
+  LOG_NHDP = oonf_log_register_source(_LOG_NHDP_NAME);
 
-  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
+  _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
     return -1;
   }
 
   if (nhdp_writer_init(_protocol)) {
-    olsr_rfc5444_remove_protocol(_protocol);
+    oonf_rfc5444_remove_protocol(_protocol);
     return -1;
   }
 
@@ -172,7 +172,7 @@ _init(void) {
   nhdp_domain_init(_protocol);
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
-    olsr_telnet_add(&_cmds[i]);
+    oonf_telnet_add(&_cmds[i]);
   }
   return 0;
 }
@@ -194,7 +194,7 @@ _cleanup(void) {
   size_t i;
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
-    olsr_telnet_remove(&_cmds[i]);
+    oonf_telnet_remove(&_cmds[i]);
   }
 
   nhdp_domain_cleanup();
@@ -212,7 +212,7 @@ nhdp_set_originator(const struct netaddr *addr) {
   struct netaddr_str buf;
 #endif
 
-  OLSR_DEBUG(LOG_NHDP, "Set originator to %s", netaddr_to_string(&buf, addr));
+  OONF_DEBUG(LOG_NHDP, "Set originator to %s", netaddr_to_string(&buf, addr));
   if (netaddr_get_address_family(addr) == AF_INET) {
     memcpy(&_originator_v4, addr, sizeof(*addr));
   }
@@ -257,8 +257,8 @@ nhdp_get_originator(int af_type) {
  * @param con
  * @return
  */
-static enum olsr_telnet_result
-_cb_nhdp(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_cb_nhdp(struct oonf_telnet_data *con) {
   const char *next;
 
   if ((next = str_hasnextword(con->parameter, "neighlink"))) {
@@ -286,8 +286,8 @@ _cb_nhdp(struct olsr_telnet_data *con) {
  * @param con
  * @return
  */
-static enum olsr_telnet_result
-_telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_neighbor(struct oonf_telnet_data *con) {
   struct nhdp_neighbor *neigh;
   struct nhdp_naddr *naddr;
   struct netaddr_str nbuf;
@@ -305,7 +305,7 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
       if (nhdp_db_neighbor_addr_is_lost(naddr)) {
         abuf_appendf(con->out, "\tLost address: %s (vtime=%s)\n",
             netaddr_to_string(&nbuf, &naddr->neigh_addr),
-            olsr_clock_toIntervalString(&tbuf, olsr_timer_get_due(&naddr->_lost_vtime)));
+            oonf_clock_toIntervalString(&tbuf, oonf_timer_get_due(&naddr->_lost_vtime)));
       }
     }
   }
@@ -314,7 +314,7 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
 }
 
 static void
-_print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
+_print_link(struct oonf_telnet_data *con, struct nhdp_link *lnk,
     const char *prefix, bool other_addr) {
   static const char *PENDING = "pending";
   static const char *HEARD = "heard";
@@ -349,9 +349,9 @@ _print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
       nhdp_db_link_is_ipv6_dualstack(lnk)  ? "     " : "Link:",
       status,
       nhdp_interface_get_name(lnk->local_if),
-      olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
-      olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
-      olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
+      oonf_clock_toIntervalString(&tbuf1, oonf_timer_get_due(&lnk->vtime)),
+      oonf_clock_toIntervalString(&tbuf2, oonf_timer_get_due(&lnk->heard_time)),
+      oonf_clock_toIntervalString(&tbuf3, oonf_timer_get_due(&lnk->sym_time)),
       lnk->dualstack_partner != NULL ? "dualstack " : "",
       nhdp_hysteresis_to_string(&hbuf, lnk));
   if (netaddr_get_address_family(&lnk->neigh->originator) != AF_UNSPEC) {
@@ -378,7 +378,7 @@ _print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
 }
 
 static void
-_print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
+_print_neigh(struct oonf_telnet_data *con, struct nhdp_neighbor *neigh) {
   struct nhdp_naddr *naddr;
   struct nhdp_link *lnk;
   struct netaddr_str nbuf;
@@ -420,8 +420,8 @@ _print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
  * @param con
  * @return
  */
-static enum olsr_telnet_result
-_telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_neighlink(struct oonf_telnet_data *con) {
   struct nhdp_neighbor *neigh;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
@@ -440,8 +440,8 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
  * @param con
  * @return
  */
-static enum olsr_telnet_result
-_telnet_nhdp_iflink(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_iflink(struct oonf_telnet_data *con) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
 
@@ -454,8 +454,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
 
     abuf_appendf(con->out, "Interface '%s': hello_interval=%s hello_vtime=%s\n",
         nhdp_interface_get_name(interf),
-        olsr_clock_toIntervalString(&tbuf1, interf->refresh_interval),
-        olsr_clock_toIntervalString(&tbuf2, interf->h_hold_time));
+        oonf_clock_toIntervalString(&tbuf1, interf->refresh_interval),
+        oonf_clock_toIntervalString(&tbuf2, interf->h_hold_time));
 
     avl_for_each_element(&interf->_if_addresses, addr, _if_node) {
       if (!addr->removed) {
@@ -475,8 +475,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
  * @param con
  * @return
  */
-static enum olsr_telnet_result
-_telnet_nhdp_interface(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_interface(struct oonf_telnet_data *con) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
   struct fraction_str tbuf1, tbuf2;
@@ -486,8 +486,8 @@ _telnet_nhdp_interface(struct olsr_telnet_data *con) {
 
     abuf_appendf(con->out, "Interface '%s': hello_interval=%s hello_vtime=%s\n",
         nhdp_interface_get_name(interf),
-        olsr_clock_toIntervalString(&tbuf1, interf->refresh_interval),
-        olsr_clock_toIntervalString(&tbuf2, interf->h_hold_time));
+        oonf_clock_toIntervalString(&tbuf1, interf->refresh_interval),
+        oonf_clock_toIntervalString(&tbuf2, interf->h_hold_time));
 
     avl_for_each_element(&interf->_if_addresses, addr, _if_node) {
       if (!addr->removed) {
@@ -499,7 +499,7 @@ _telnet_nhdp_interface(struct olsr_telnet_data *con) {
       if (addr->removed) {
         abuf_appendf(con->out, "\tRemoved address: %s (vtime=%s)\n",
             netaddr_to_string(&nbuf, &addr->if_addr),
-            olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&addr->_vtime)));
+            oonf_clock_toIntervalString(&tbuf1, oonf_timer_get_due(&addr->_vtime)));
       }
     }
   }
@@ -514,7 +514,7 @@ _cb_cfg_domain_changed(void) {
   struct _domain_parameters param;
   int ext;
 
-  OLSR_INFO(LOG_NHDP, "Received domain cfg change for name '%s': %s %s",
+  OONF_INFO(LOG_NHDP, "Received domain cfg change for name '%s': %s %s",
       _domain_section.section_name,
       _domain_section.pre != NULL ? "pre" : "-",
       _domain_section.post != NULL ? "post" : "-");
@@ -523,7 +523,7 @@ _cb_cfg_domain_changed(void) {
 
   if (cfg_schema_tobin(&param, _domain_section.post,
       _domain_entries, ARRAYSIZE(_domain_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP domain configuration.");
+    OONF_WARN(LOG_NHDP, "Cannot convert NHDP domain configuration.");
     return;
   }
 
@@ -537,7 +537,7 @@ static void
 _cb_cfg_interface_changed(void) {
   struct nhdp_interface *interf;
 
-  OLSR_DEBUG(LOG_NHDP, "Configuration of NHDP interface %s changed",
+  OONF_DEBUG(LOG_NHDP, "Configuration of NHDP interface %s changed",
       _interface_section.section_name);
 
   /* get interface */
@@ -557,7 +557,7 @@ _cb_cfg_interface_changed(void) {
 
   if (cfg_schema_tobin(interf, _interface_section.post,
       _interface_entries, ARRAYSIZE(_interface_entries))) {
-    OLSR_WARN(LOG_NHDP, "Cannot convert NHDP configuration for interface.");
+    OONF_WARN(LOG_NHDP, "Cannot convert NHDP configuration for interface.");
     return;
   }
 

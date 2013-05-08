@@ -43,9 +43,9 @@
 #include "common/avl_comp.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "subsystems/olsr_class.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_subsystem.h"
+#include "subsystems/oonf_class.h"
 #include "rfc5444/rfc5444.h"
 
 #include "nhdp/nhdp.h"
@@ -55,8 +55,8 @@
 static void _remove(struct olsrv2_lan_entry *entry);
 
 /* originator set class and timer */
-static struct olsr_class _lan_class = {
-  .name = "OLSRv2 LAN set",
+static struct oonf_class _lan_class = {
+  .name = "OONFv2 LAN set",
   .size = sizeof(struct olsrv2_lan_entry),
 };
 
@@ -68,7 +68,7 @@ struct avl_tree olsrv2_lan_tree;
  */
 void
 olsrv2_lan_init(void) {
-  olsr_class_add(&_lan_class);
+  oonf_class_add(&_lan_class);
 
   avl_init(&olsrv2_lan_tree, avl_comp_netaddr, false);
 }
@@ -86,7 +86,7 @@ olsrv2_lan_cleanup(void) {
   }
 
   /* remove class */
-  olsr_class_remove(&_lan_class);
+  oonf_class_remove(&_lan_class);
 }
 
 /**
@@ -105,7 +105,7 @@ olsrv2_lan_add(struct nhdp_domain *domain,
 
   entry = olsrv2_lan_get(prefix);
   if (entry == NULL) {
-    entry = olsr_class_malloc(&_lan_class);
+    entry = oonf_class_malloc(&_lan_class);
     if (entry == NULL) {
       return NULL;
     }
@@ -164,5 +164,5 @@ olsrv2_lan_remove(struct nhdp_domain *domain,
 static void
 _remove(struct olsrv2_lan_entry *entry) {
   avl_remove(&olsrv2_lan_tree, &entry->_node);
-  olsr_class_free(&_lan_class, entry);
+  oonf_class_free(&_lan_class, entry);
 }

@@ -47,7 +47,7 @@
 #include "common/list.h"
 #include "common/netaddr.h"
 #include "rfc5444/rfc5444_iana.h"
-#include "subsystems/olsr_timer.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp.h"
 
@@ -124,13 +124,13 @@ struct nhdp_link {
   /* last received interval time */
   uint64_t itime_value;
   /* timer that fires if this link is not symmetric anymore */
-  struct olsr_timer_entry sym_time;
+  struct oonf_timer_entry sym_time;
 
   /* timer that fires if the last received neighbor HELLO timed out */
-  struct olsr_timer_entry heard_time;
+  struct oonf_timer_entry heard_time;
 
   /* timer that fires when the link has to be removed from the database */
-  struct olsr_timer_entry vtime;
+  struct oonf_timer_entry vtime;
 
   /* cached status of the linked */
   enum nhdp_link_status status;
@@ -209,7 +209,7 @@ struct nhdp_l2hop {
   struct nhdp_link *link;
 
   /* validity time for this address */
-  struct olsr_timer_entry _vtime;
+  struct oonf_timer_entry _vtime;
 
   /* member entry for two-hop addresses of neighbor link */
   struct avl_node _link_node;
@@ -277,7 +277,7 @@ struct nhdp_naddr {
   int laddr_count;
 
   /* validity time for this address when its lost */
-  struct olsr_timer_entry _lost_vtime;
+  struct oonf_timer_entry _lost_vtime;
 
   /* member entry for neighbor address tree */
   struct avl_node _neigh_node;
@@ -371,7 +371,7 @@ ndhp_db_link_2hop_get(const struct nhdp_link *lnk, const struct netaddr *addr) {
 static INLINE void
 nhdp_db_link_set_vtime(
     struct nhdp_link *lnk, uint64_t vtime) {
-  olsr_timer_set(&lnk->vtime, vtime);
+  oonf_timer_set(&lnk->vtime, vtime);
 }
 
 /**
@@ -382,7 +382,7 @@ nhdp_db_link_set_vtime(
 static INLINE void
 nhdp_db_link_set_heardtime(
     struct nhdp_link *lnk, uint64_t htime) {
-  olsr_timer_set(&lnk->heard_time, htime);
+  oonf_timer_set(&lnk->heard_time, htime);
 }
 
 /**
@@ -393,7 +393,7 @@ nhdp_db_link_set_heardtime(
 static INLINE void
 nhdp_db_link_set_symtime(
     struct nhdp_link *lnk, uint64_t stime) {
-  olsr_timer_set(&lnk->sym_time, stime);
+  oonf_timer_set(&lnk->sym_time, stime);
   nhdp_db_link_update_status(lnk);
 }
 
@@ -405,7 +405,7 @@ nhdp_db_link_set_symtime(
 static INLINE void
 nhdp_db_link_2hop_set_vtime(
     struct nhdp_l2hop *l2hop, uint64_t vtime) {
-  olsr_timer_set(&l2hop->_vtime, vtime);
+  oonf_timer_set(&l2hop->_vtime, vtime);
 }
 
 /**
@@ -415,7 +415,7 @@ nhdp_db_link_2hop_set_vtime(
  */
 static INLINE void
 nhdp_db_neighbor_addr_set_lost(struct nhdp_naddr *naddr, uint64_t vtime) {
-  olsr_timer_set(&naddr->_lost_vtime, vtime);
+  oonf_timer_set(&naddr->_lost_vtime, vtime);
 }
 
 /**
@@ -424,7 +424,7 @@ nhdp_db_neighbor_addr_set_lost(struct nhdp_naddr *naddr, uint64_t vtime) {
  */
 static INLINE void
 nhdp_db_neighbor_addr_not_lost(struct nhdp_naddr *naddr) {
-  olsr_timer_stop(&naddr->_lost_vtime);
+  oonf_timer_stop(&naddr->_lost_vtime);
 }
 
 /**
@@ -433,7 +433,7 @@ nhdp_db_neighbor_addr_not_lost(struct nhdp_naddr *naddr) {
  */
 static INLINE bool
 nhdp_db_neighbor_addr_is_lost(const struct nhdp_naddr *naddr) {
-  return olsr_timer_is_active(&naddr->_lost_vtime);
+  return oonf_timer_is_active(&naddr->_lost_vtime);
 }
 
 static inline bool

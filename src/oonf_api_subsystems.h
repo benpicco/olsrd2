@@ -38,17 +38,15 @@
  * the copyright holders.
  *
  */
+/* initialize basic framework */
 
-#ifndef OLSR_SETUP_H_
-#define OLSR_SETUP_H_
+#ifndef OONF_API_SUBMODULES_H_
+#define OONF_API_SUBMODULES_H_
 
-#include "core/olsr_subsystem.h"
-#include "core/olsr_logging.h"
+#include "core/oonf_subsystem.h"
 
-struct oonf_subsystem **olsr_setup_get_subsystems(void);
-size_t olsr_setup_get_subsystem_count(void);
+EXPORT extern struct oonf_subsystem *used_api_subsystems[];
 
-size_t olsr_setup_get_level1count(void);
-enum log_source *olsr_setup_get_level1_logs(void);
+EXPORT size_t get_used_api_subsystem_count(void);
 
-#endif /* OLSR_SETUP_H_ */
+#endif /* OONF_API_SUBMODULES_H_ */

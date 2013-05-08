@@ -39,12 +39,12 @@
  *
  */
 
-#ifndef HYSTERESIS_OLSRV1_H_
-#define HYSTERESIS_OLSRV1_H_
+#ifndef HYSTERESIS_OONFV1_H_
+#define HYSTERESIS_OONFV1_H_
 
 #include "common/common_types.h"
-#include "core/olsr_subsystem.h"
+#include "core/oonf_subsystem.h"
 
 EXPORT extern struct oonf_subsystem olsrv2_hysteresis_olsrv1_subsystem;
 
-#endif /* HYSTERESIS_OLSRV1_H_ */
+#endif /* HYSTERESIS_OONFV1_H_ */

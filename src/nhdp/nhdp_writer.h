@@ -43,9 +43,9 @@
 #define NHDP_WRITER_H_
 
 #include "common/common_types.h"
-#include "subsystems/olsr_rfc5444.h"
+#include "subsystems/oonf_rfc5444.h"
 
-int nhdp_writer_init(struct olsr_rfc5444_protocol *)
+int nhdp_writer_init(struct oonf_rfc5444_protocol *)
   __attribute__((warn_unused_result));
 void nhdp_writer_initiate_shutdown(void);
 void nhdp_writer_cleanup(void);

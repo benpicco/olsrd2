@@ -48,9 +48,9 @@
 #include "common/netaddr.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "core/olsr_cfg.h"
-#include "core/olsr_logging.h"
-#include "subsystems/olsr_class.h"
+#include "core/oonf_cfg.h"
+#include "core/oonf_logging.h"
+#include "subsystems/oonf_class.h"
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"
@@ -67,7 +67,7 @@ static void _recalculate_neighbor_metric(struct nhdp_domain *domain,
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
 /* domain class */
-struct olsr_class _domain_class = {
+struct oonf_class _domain_class = {
   .name = NHDP_CLASS_DOMAIN,
   .size = sizeof(struct nhdp_domain),
 };
@@ -110,17 +110,17 @@ struct nhdp_domain_mpr *_flooding_mpr = &_no_mprs;
 uint8_t _flooding_ext = 0;
 
 /* NHDP RFC5444 protocol */
-static struct olsr_rfc5444_protocol *_protocol;
+static struct oonf_rfc5444_protocol *_protocol;
 
 /**
  * Initialize nhdp metric core
  * @param p pointer to rfc5444 protocol
  */
 void
-nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
+nhdp_domain_init(struct oonf_rfc5444_protocol *p) {
   _protocol = p;
 
-  olsr_class_add(&_domain_class);
+  oonf_class_add(&_domain_class);
   list_init_head(&nhdp_domain_list);
   list_init_head(&nhdp_domain_listener_list);
 
@@ -148,13 +148,13 @@ nhdp_domain_cleanup(void) {
 
     /* remove domain */
     list_remove(&domain->_node);
-    olsr_class_free(&_domain_class, domain);
+    oonf_class_free(&_domain_class, domain);
   }
 
   list_for_each_element_safe(&nhdp_domain_listener_list, listener, _node, l_it) {
     nhdp_domain_listener_remove(listener);
   }
-  olsr_class_remove(&_domain_class);
+  oonf_class_remove(&_domain_class);
 }
 
 /**
@@ -637,13 +637,13 @@ nhdp_domain_add(uint8_t ext) {
   }
 
   if (_domain_counter == NHDP_MAXIMUM_DOMAINS) {
-    OLSR_WARN(LOG_NHDP, "Maximum number of NHDP domains reached: %d",
+    OONF_WARN(LOG_NHDP, "Maximum number of NHDP domains reached: %d",
         NHDP_MAXIMUM_DOMAINS);
     return NULL;
   }
 
   /* initialize new domain */
-  domain = olsr_class_malloc(&_domain_class);
+  domain = oonf_class_malloc(&_domain_class);
   if (domain == NULL) {
     return NULL;
   }
@@ -673,7 +673,7 @@ nhdp_domain_add(uint8_t ext) {
 
   list_add_tail(&nhdp_domain_list, &domain->_node);
 
-  olsr_class_event(&_domain_class, domain,OLSR_OBJECT_ADDED);
+  oonf_class_event(&_domain_class, domain,OONF_OBJECT_ADDED);
   return domain;
 }
 
@@ -689,7 +689,7 @@ nhdp_domain_configure(uint8_t ext, const char *metric_name, const char *mpr_name
   _apply_metric(domain, metric_name);
   _apply_mpr(domain, mpr_name);
 
-  olsr_class_event(&_domain_class, domain, OLSR_OBJECT_CHANGED);
+  oonf_class_event(&_domain_class, domain, OONF_OBJECT_CHANGED);
 
   return domain;
 }
