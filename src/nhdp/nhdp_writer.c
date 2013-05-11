@@ -194,7 +194,7 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
     return;
   }
 
-  target = oonf_rfc5444_get_target_from_message(message);
+  target = oonf_rfc5444_get_target_from_writer(writer);
   if (target != target->interface->multicast6
       && target != target->interface->multicast4) {
     OONF_WARN(LOG_NHDP_W, "Cannot generate unicast nhdp message to %s",
@@ -239,7 +239,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   struct nhdp_interface *interf;
   const struct netaddr *v6_originator;
 
-  target = oonf_rfc5444_get_target_from_message(_nhdp_message);
+  target = oonf_rfc5444_get_target_from_writer(writer);
 
   if (target != target->interface->multicast4
       && target != target->interface->multicast6) {
@@ -524,7 +524,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
   struct nhdp_naddr *naddr;
 
   /* have already be checked for message TLVs, so they cannot be NULL */
-  target = oonf_rfc5444_get_target_from_message(_nhdp_message);
+  target = oonf_rfc5444_get_target_from_writer(writer);
   interf = nhdp_interface_get(target->interface->name);
 
   /* transmit interface addresses first */
