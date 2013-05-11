@@ -61,11 +61,11 @@
 #include "ff_etx/ff_etx.h"
 
 /* definitions and constants */
-#define CFG_ETXFF_SECTION "ff_etx"
-
-#define ETXFF_LINKCOST_MINIMUM 0x1000
-#define ETXFF_LINKCOST_START   NHDP_METRIC_DEFAULT
-#define ETXFF_LINKCOST_MAXIMUM NHDP_METRIC_DEFAULT
+enum {
+  ETXFF_LINKCOST_MINIMUM = 0x1000,
+  ETXFF_LINKCOST_START   = NHDP_METRIC_DEFAULT,
+  ETXFF_LINKCOST_MAXIMUM = NHDP_METRIC_DEFAULT,
+};
 
 /* Configuration settings of ETXFF Metric */
 struct _config {
@@ -148,7 +148,7 @@ static struct cfg_schema_entry _etxff_entries[] = {
 };
 
 static struct cfg_schema_section _etxff_section = {
-  .type = CFG_ETXFF_SECTION,
+  .type = OONF_PLUGIN_GET_NAME(),
   .cb_validate = _cb_cfg_validate,
   .cb_delta_handler = _cb_cfg_changed,
   .entries = _etxff_entries,
