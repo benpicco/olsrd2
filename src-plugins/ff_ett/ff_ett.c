@@ -52,6 +52,7 @@
 #include "core/oonf_plugins.h"
 #include "subsystems/oonf_class.h"
 #include "subsystems/oonf_layer2.h"
+#include "subsystems/oonf_l2config.h"
 #include "subsystems/oonf_rfc5444.h"
 #include "subsystems/oonf_timer.h"
 
@@ -63,8 +64,8 @@
 
 /* definitions and constants */
 enum {
-  ETTFF_LINKSPEED_MINIMUM = 1024 * 1204,
-  ETTFF_LINKSPEED_MAXIMUM = 1024 * 1024 * 256,
+  ETTFF_LINKSPEED_MINIMUM = 1024 * 1024,
+  ETTFF_LINKSPEED_MAXIMUM = ETTFF_LINKSPEED_MINIMUM * 256,
   ETTFF_ETXCOST_MINIMUM   = NHDP_METRIC_DEFAULT / 16,
   ETTFF_ETXCOST_MAXIMUM   = NHDP_METRIC_DEFAULT,
   ETTFF_LINKCOST_START    = NHDP_METRIC_DEFAULT,
@@ -72,7 +73,8 @@ enum {
 
 enum {
   ETTFF_LINKCOST_MINIMUM  =
-      ETTFF_ETXCOST_MINIMUM * (ETTFF_LINKSPEED_MAXIMUM / ETTFF_LINKSPEED_MINIMUM),
+      ETTFF_ETXCOST_MINIMUM *
+      (ETTFF_LINKSPEED_MAXIMUM / ETTFF_LINKSPEED_MINIMUM),
   ETTFF_LINKCOST_MAXIMUM  = ETTFF_ETXCOST_MAXIMUM,
 };
 
@@ -391,6 +393,7 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
+  uint64_t tx_bitrate;
   int i;
 
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
@@ -442,19 +445,24 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
     }
 
     /* get linkspeed */
-    ifdata = oonf_interface_get_data(nhdp_interface_get_name(lnk->local_if));
-    if (ifdata != NULL) {
-      l2neigh = oonf_layer2_get_neighbor(
-          &ifdata->mac, &ldata->mac);
-      if (l2neigh != NULL && oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {
-        /* apply linkspeed to metric */
-        if (l2neigh->tx_bitrate > ETTFF_LINKSPEED_MAXIMUM) {
-          metric /= (ETTFF_LINKSPEED_MAXIMUM / ETTFF_LINKSPEED_MINIMUM);
-        }
-        else if (l2neigh->tx_bitrate > ETTFF_LINKSPEED_MINIMUM) {
-          metric /= (l2neigh->tx_bitrate / ETTFF_LINKSPEED_MINIMUM);
+    tx_bitrate = oonf_l2config_tx_bitrate_get(
+        nhdp_interface_get_name(lnk->local_if), &ldata->mac);
+    if (tx_bitrate == 0) {
+      ifdata = oonf_interface_get_data(nhdp_interface_get_name(lnk->local_if), NULL);
+      if (ifdata != NULL) {
+        l2neigh = oonf_layer2_get_neighbor(
+            &ifdata->mac, &ldata->mac);
+        if (l2neigh != NULL && oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {
+          /* apply linkspeed to metric */
+          tx_bitrate = l2neigh->tx_bitrate;
         }
       }
+    }
+    if (tx_bitrate > ETTFF_LINKSPEED_MAXIMUM) {
+      metric /= (ETTFF_LINKSPEED_MAXIMUM / ETTFF_LINKSPEED_MINIMUM);
+    }
+    else if (tx_bitrate > ETTFF_LINKSPEED_MINIMUM) {
+      metric /= (tx_bitrate / ETTFF_LINKSPEED_MINIMUM);
     }
 
     /* convert into in metric value */
@@ -470,10 +478,11 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
     domaindata = nhdp_domain_get_linkdata(_ettff_handler.domain, lnk);
     domaindata->metric.in = (uint32_t)metric;
 
-    OONF_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
+    OONF_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s):"
+        " %d/%d = %" PRIu64 " (w=%d, speed=%"PRIu64 ")\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
         nhdp_interface_get_name(lnk->local_if),
-        received, total, metric, ldata->window_size);
+        received, total, metric, ldata->window_size, tx_bitrate);
 
     /* update rolling buffer */
     ldata->activePtr++;
@@ -591,7 +600,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   struct oonf_interface_data *ifdata;
 
   target = oonf_rfc5444_get_target_from_writer(writer);
-  ifdata = oonf_interface_get_data(target->interface->name);
+  ifdata = oonf_interface_get_data(target->interface->name, NULL);
   if (ifdata == NULL) {
     return;
   }

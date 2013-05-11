@@ -120,7 +120,7 @@ olsrv2_writer_init(struct oonf_rfc5444_protocol *protocol) {
   _olsrv2_message = rfc5444_writer_register_message(
       &_protocol->writer, RFC5444_MSGTYPE_TC, true, 4);
   if (_olsrv2_message == NULL) {
-    OONF_WARN(LOG_OONFV2, "Could not register OONFv2 TC message");
+    OONF_WARN(LOG_OLSRV2, "Could not register OLSRV2 TC message");
     return -1;
   }
 
@@ -131,7 +131,7 @@ olsrv2_writer_init(struct oonf_rfc5444_protocol *protocol) {
       &_protocol->writer, &_olsrv2_msgcontent_provider,
       _olsrv2_addrtlvs, ARRAYSIZE(_olsrv2_addrtlvs))) {
 
-    OONF_WARN(LOG_OONFV2, "Count not register OONFv2 msg contentprovider");
+    OONF_WARN(LOG_OLSRV2, "Count not register OLSRV2 msg contentprovider");
     rfc5444_writer_unregister_message(&_protocol->writer, _olsrv2_message);
     return -1;
   }

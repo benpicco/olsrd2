@@ -56,7 +56,7 @@ static void _remove(struct olsrv2_lan_entry *entry);
 
 /* originator set class and timer */
 static struct oonf_class _lan_class = {
-  .name = "OONFv2 LAN set",
+  .name = "OLSRV2 LAN set",
   .size = sizeof(struct olsrv2_lan_entry),
 };
 

@@ -62,12 +62,12 @@ static void _cb_originator_entry_vtime(void *);
 
 /* originator set class and timer */
 static struct oonf_class _originator_entry_class = {
-  .name = "OONFv2 originator set",
+  .name = "OLSRV2 originator set",
   .size = sizeof(struct olsrv2_originator_set_entry),
 };
 
 static struct oonf_timer_info _originator_entry_timer = {
-  .name = "OONFv2 originator set vtime",
+  .name = "OLSRV2 originator set vtime",
   .callback = _cb_originator_entry_vtime,
 };
 

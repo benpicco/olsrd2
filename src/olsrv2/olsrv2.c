@@ -64,7 +64,7 @@
 #include "olsrv2/olsrv2_writer.h"
 
 /* definitions */
-#define _LOG_OONFV2_NAME "olsrv2"
+#define _LOG_OLSRV2_NAME "olsrv2"
 #define _LOCAL_ATTACHED_NETWORK_KEY "lan"
 
 struct _config {
@@ -107,7 +107,7 @@ static enum oonf_telnet_result _cb_topology(struct oonf_telnet_data *con);
 /* nhdp telnet commands */
 static struct oonf_telnet_command _cmds[] = {
     TELNET_CMD("olsrv2", _cb_topology,
-        "OONFv2 database information command\n"),
+        "OLSRV2 database information command\n"),
 };
 
 /* subsystem definition */
@@ -141,7 +141,7 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
     CFG_MAP_CLOCK_MIN(_config, p_hold_time, "processing_hold_time", "300.0",
       "Holdtime for processing set information", 100),
   CFG_MAP_ACL_V46(_config, routable, "routable",
-      OONFV2_ROUTABLE_IPV4 OONFV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
+      OLSRV2_ROUTABLE_IPV4 OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter to decide which addresses are considered routable"),
 
   CFG_VALIDATE_LAN(_LOCAL_ATTACHED_NETWORK_KEY, "",
@@ -152,15 +152,15 @@ static struct cfg_schema_entry _olsrv2_entries[] = {
     .list = true),
 
   CFG_MAP_ACL_V4(_config, originator_v4_acl, "originator_v4",
-    OONFV2_ROUTABLE_IPV4 ACL_DEFAULT_ACCEPT,
+    OLSRV2_ROUTABLE_IPV4 ACL_DEFAULT_ACCEPT,
     "Filter for router IPv4 originator address"),
   CFG_MAP_ACL_V6(_config, originator_v6_acl, "originator_v6",
-    OONFV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
+    OLSRV2_ROUTABLE_IPV6 ACL_DEFAULT_ACCEPT,
     "Filter for router IPv6 originator address"),
 };
 
 static struct cfg_schema_section _olsrv2_section = {
-  .type = CFG_OONFV2_SECTION,
+  .type = CFG_OLSRV2_SECTION,
   .cb_delta_handler = _cb_cfg_olsrv2_changed,
   .entries = _olsrv2_entries,
   .entry_count = ARRAYSIZE(_olsrv2_entries),
@@ -193,20 +193,20 @@ struct oonf_interface_listener _if_listener = {
 };
 
 /* global variables */
-enum log_source LOG_OONFV2 = LOG_MAIN;
+enum log_source LOG_OLSRV2 = LOG_MAIN;
 static struct oonf_rfc5444_protocol *_protocol;
 
 static uint16_t _ansn;
 
 /**
- * Initialize OONFv2 subsystem
+ * Initialize OLSRV2 subsystem
  * @return -1 if an error happened, 0 otherwise
  */
 static int
 _init(void) {
   size_t i;
 
-  LOG_OONFV2 = oonf_log_register_source(_LOG_OONFV2_NAME);
+  LOG_OLSRV2 = oonf_log_register_source(_LOG_OLSRV2_NAME);
 
   _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
@@ -250,7 +250,7 @@ _initiate_shutdown(void) {
 }
 
 /**
- * Cleanup OONFv2 subsystem
+ * Cleanup OLSRV2 subsystem
  */
 static void
 _cleanup(void) {
@@ -305,7 +305,7 @@ olsrv2_mpr_shall_process(
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OONF_DEBUG(LOG_OONFV2, "Do not process message type %u,"
+    OONF_DEBUG(LOG_OLSRV2, "Do not process message type %u,"
         " originator or sequence number is missing!",
         context->msg_type);
     return false;
@@ -317,7 +317,7 @@ olsrv2_mpr_shall_process(
       context->seqno, vtime + _olsrv2_config.f_hold_time);
   process = dup_result == OONF_DUPSET_NEW || dup_result == OONF_DUPSET_NEWEST;
 
-  OONF_DEBUG(LOG_OONFV2, "Do %sprocess message type %u from %s"
+  OONF_DEBUG(LOG_OLSRV2, "Do %sprocess message type %u from %s"
       " with seqno %u (dupset result: %u)",
       process ? "" : "not ",
       context->msg_type,
@@ -340,7 +340,7 @@ olsrv2_mpr_shall_forwarding(
 
   /* check if message has originator and sequence number */
   if (!context->has_origaddr || !context->has_seqno) {
-    OONF_DEBUG(LOG_OONFV2, "Do not forward message type %u,"
+    OONF_DEBUG(LOG_OLSRV2, "Do not forward message type %u,"
         " originator or sequence number is missing!",
         context->msg_type);
     return false;
@@ -351,7 +351,7 @@ olsrv2_mpr_shall_forwarding(
       context->msg_type, &context->orig_addr,
       context->seqno, vtime + _olsrv2_config.f_hold_time);
   if (dup_result != OONF_DUPSET_NEW && dup_result != OONF_DUPSET_NEWEST) {
-    OONF_DEBUG(LOG_OONFV2, "Do not forward message type %u from %s"
+    OONF_DEBUG(LOG_OLSRV2, "Do not forward message type %u from %s"
         " with seqno %u (dupset result: %u)",
         context->msg_type,
         netaddr_to_string(&buf, &context->orig_addr),
@@ -361,20 +361,20 @@ olsrv2_mpr_shall_forwarding(
 
   /* check input interface */
   if (_protocol->input_interface == NULL) {
-    OONF_DEBUG(LOG_OONFV2, "Do not forward because input interface is not set");
+    OONF_DEBUG(LOG_OLSRV2, "Do not forward because input interface is not set");
     return false;
   }
 
   /* checp input source address */
   if (_protocol->input_address == NULL) {
-    OONF_DEBUG(LOG_OONFV2, "Do not forward because input source is not set");
+    OONF_DEBUG(LOG_OLSRV2, "Do not forward because input source is not set");
     return false;
   }
 
   /* get NHDP interface */
   interf = nhdp_interface_get(_protocol->input_interface->name);
   if (interf == NULL) {
-    OONF_DEBUG(LOG_OONFV2, "Do not forward because NHDP does not handle"
+    OONF_DEBUG(LOG_OLSRV2, "Do not forward because NHDP does not handle"
         " interface '%s'", _protocol->input_interface->name);
     return false;
   }
@@ -382,7 +382,7 @@ olsrv2_mpr_shall_forwarding(
   /* get NHDP link address corresponding to source */
   laddr = nhdp_interface_get_link_addr(interf, _protocol->input_address);
   if (laddr == NULL) {
-    OONF_DEBUG(LOG_OONFV2, "Do not forward because source IP %s is"
+    OONF_DEBUG(LOG_OLSRV2, "Do not forward because source IP %s is"
         " not a direct neighbor",
         netaddr_to_string(&buf, _protocol->input_address));
     return false;
@@ -393,7 +393,7 @@ olsrv2_mpr_shall_forwarding(
 
   /* forward if this neighbor has selected us as a flooding MPR */
   forward = neigh->local_is_flooding_mpr && neigh->symmetric > 0;
-  OONF_DEBUG(LOG_OONFV2, "Do %sforward message type %u from %s"
+  OONF_DEBUG(LOG_OLSRV2, "Do %sforward message type %u from %s"
       " with seqno %u",
       forward ? "" : "not ",
       context->msg_type,
@@ -423,7 +423,7 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   /* get NHDP interface for target */
   interf = nhdp_interface_get(target->interface->name);
   if (interf == NULL) {
-    OONF_DEBUG(LOG_OONFV2, "Do not forward message"
+    OONF_DEBUG(LOG_OLSRV2, "Do not forward message"
         " to interface %s: its unknown to NHDP",
         target->interface->name);
     return NULL;
@@ -437,7 +437,7 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
     flood =  interf->use_ipv6_for_flooding;
   }
 
-  OONF_DEBUG(LOG_OONFV2, "Flooding to target %s: %s",
+  OONF_DEBUG(LOG_OLSRV2, "Flooding to target %s: %s",
       netaddr_to_string(&buf, &target->dst), flood ? "yes" : "no");
 
   return flood;
@@ -679,7 +679,7 @@ _update_originators(void) {
   struct netaddr_str buf;
 #endif
 
-  OONF_DEBUG(LOG_OONFV2, "Updating OONFv2 originators");
+  OONF_DEBUG(LOG_OLSRV2, "Updating OLSRV2 originators");
 
   originator_v4 = olsrv2_originator_get(AF_INET);
   originator_v6 = olsrv2_originator_get(AF_INET6);
@@ -712,13 +712,13 @@ _update_originators(void) {
   }
 
   if (!keep_v4) {
-    OONF_DEBUG(LOG_OONFV2, "Set IPv4 originator to %s",
+    OONF_DEBUG(LOG_OLSRV2, "Set IPv4 originator to %s",
         netaddr_to_string(&buf, &new_v4));
     olsrv2_originator_set(&new_v4);
   }
 
   if (!keep_v6) {
-    OONF_DEBUG(LOG_OONFV2, "Set IPv6 originator to %s",
+    OONF_DEBUG(LOG_OLSRV2, "Set IPv6 originator to %s",
         netaddr_to_string(&buf, &new_v6));
     olsrv2_originator_set(&new_v6);
   }
@@ -740,7 +740,7 @@ static void
 _cb_cfg_olsrv2_changed(void) {
   if (cfg_schema_tobin(&_olsrv2_config, _olsrv2_section.post,
       _olsrv2_entries, ARRAYSIZE(_olsrv2_entries))) {
-    OONF_WARN(LOG_OONFV2, "Cannot convert OONFv2 configuration.");
+    OONF_WARN(LOG_OLSRV2, "Cannot convert OLSRV2 configuration.");
     return;
   }
 
@@ -785,7 +785,7 @@ _cb_cfg_domain_changed(void) {
 
   if (cfg_schema_tobin(&rtdomain, _rt_domain_section.post,
       _rt_domain_entries, ARRAYSIZE(_rt_domain_entries))) {
-    OONF_WARN(LOG_NHDP, "Cannot convert OONFv2 routing domain parameters.");
+    OONF_WARN(LOG_NHDP, "Cannot convert OLSRV2 routing domain parameters.");
     return;
   }
 
