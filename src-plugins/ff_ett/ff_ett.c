@@ -53,7 +53,7 @@
 #include "core/oonf_plugins.h"
 #include "subsystems/oonf_class.h"
 #include "subsystems/oonf_layer2.h"
-#include "subsystems/oonf_l2config.h"
+#include "subsystems/oonf_linkconfig.h"
 #include "subsystems/oonf_rfc5444.h"
 #include "subsystems/oonf_packet_socket.h"
 #include "subsystems/oonf_timer.h"
@@ -477,7 +477,7 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
       l2neigh = NULL;
     }
 
-    tx_bitrate = oonf_l2config_tx_bitrate_get(
+    tx_bitrate = oonf_linkconfig_tx_bitrate_get(
         nhdp_interface_get_name(lnk->local_if), &ldata->mac);
     if (tx_bitrate == 0 && l2neigh != NULL
         && oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {

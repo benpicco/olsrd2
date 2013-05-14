@@ -54,7 +54,7 @@
 #include "subsystems/oonf_clock.h"
 #include "subsystems/oonf_interface.h"
 #include "subsystems/oonf_layer2.h"
-#include "subsystems/oonf_l2config.h"
+#include "subsystems/oonf_linkconfig.h"
 #include "subsystems/oonf_packet_socket.h"
 #include "subsystems/oonf_socket.h"
 #include "subsystems/oonf_stream_socket.h"
@@ -82,7 +82,7 @@ struct oonf_subsystem *used_api_subsystems[] = {
   &oonf_os_net_subsystem,
   &oonf_interface_subsystem,
   &oonf_layer2_subsystem,
-  &oonf_l2config_subsystem,
+  &oonf_linkconfig_subsystem,
   &oonf_duplicate_set_subsystem,
   &oonf_rfc5444_subsystem,
   &oonf_telnet_subsystem,
