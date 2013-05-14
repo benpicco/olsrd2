@@ -477,8 +477,8 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
       l2neigh = NULL;
     }
 
-    tx_bitrate = oonf_linkconfig_tx_bitrate_get(
-        nhdp_interface_get_name(lnk->local_if), &ldata->mac);
+    tx_bitrate = oonf_linkconfig_get(
+        nhdp_interface_get_name(lnk->local_if), &ldata->mac)->tx_bitrate;
     if (tx_bitrate == 0 && l2neigh != NULL
         && oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {
           /* apply linkspeed to metric */
