@@ -124,13 +124,6 @@ struct link_ettff_data {
   /* mac address of link */
   struct netaddr mac;
 
-  /*
-   * number of unicast packets that have been sent over the link
-   * since the last time we had to decide to send a probing
-   * packet or not
-   */
-  uint32_t tx_packets;
-
   /* history ringbuffer */
   struct link_ettff_bucket buckets[0];
 };
@@ -259,10 +252,6 @@ static struct oonf_timer_info _hello_lost_info = {
   .callback = _cb_hello_lost,
 };
 
-/* socket for probing */
-static struct oonf_packet_socket _probing_socket;
-static uint8_t _probing_payload[500];
-
 /* nhdp metric handler */
 static struct nhdp_domain_metric _ettff_handler = {
   .name = OONF_PLUGIN_GET_NAME(),
@@ -281,20 +270,11 @@ static struct nhdp_domain_metric _ettff_handler = {
  */
 static int
 _init(void) {
-  union netaddr_socket sock;
-
   if (oonf_class_listener_add(&_link_listener)) {
     return -1;
   }
 
-  netaddr_socket_init(&sock, &NETADDR_IPV4_ANY, 31415, 0);
-  if (oonf_packet_add(&_probing_socket, &sock, NULL)) {
-    oonf_class_listener_remove(&_link_listener);
-    return -1;
-  }
-
   if (nhdp_domain_metric_add(&_ettff_handler)) {
-    oonf_packet_remove(&_probing_socket, true);
     oonf_class_listener_remove(&_link_listener);
     return -1;
   }
@@ -311,7 +291,6 @@ _init(void) {
   rfc5444_writer_register_msgcontentprovider(&_protocol->writer,
       &_hello_provider, NULL, 0);
 
-  memset(&_probing_payload, 1, sizeof(_probing_payload));
   return 0;
 }
 
@@ -334,8 +313,6 @@ _cleanup(void) {
   oonf_class_listener_remove(&_link_listener);
 
   oonf_timer_stop(&_sampling_timer);
-
-  oonf_packet_remove(&_probing_socket, true);
 
   oonf_timer_remove(&_sampling_timer_info);
   oonf_timer_remove(&_hello_lost_info);
@@ -517,28 +494,6 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
     }
     ldata->buckets[ldata->activePtr].received = 0;
     ldata->buckets[ldata->activePtr].total = 0;
-
-    if (ifdata != NULL && l2neigh != NULL
-       && oonf_layer2_neighbor_has_tx_packets(l2neigh)) {
-      if (l2neigh->tx_packets == ldata->tx_packets) {
-        union netaddr_socket target;
-
-        if (netaddr_get_address_family(&lnk->if_addr) != AF_INET) {
-          continue;
-        }
-        netaddr_socket_init(&target, &lnk->if_addr, 31415,
-            ifdata->index);
-        if (oonf_packet_send(&_probing_socket, &target,
-            _probing_payload, sizeof(_probing_payload))) {
-          OONF_WARN(LOG_PLUGINS, "Error while sending probing packet to %s: %s (%d)",
-              netaddr_to_string(&buf, &lnk->if_addr),
-              strerror(errno), errno);
-        }
-      }
-      else  {
-        ldata->tx_packets = l2neigh->tx_packets;
-      }
-    }
   }
 
   /* update neighbor metrics */
