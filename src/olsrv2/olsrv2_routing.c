@@ -326,6 +326,7 @@ _insert_into_working_tree(struct olsrv2_tc_target *target,
   if (node->first_hop != NULL) {
     /* already hooked into dijkstra ! */
     avl_remove(&_dijkstra_working_tree, &node->_node);
+    node->first_hop = NULL;
   }
 
   /* calculate new total pathcost */

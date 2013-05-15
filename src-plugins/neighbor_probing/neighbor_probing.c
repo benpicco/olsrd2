@@ -217,7 +217,9 @@ _cb_link_removed(void *ptr) {
   struct _probing_link_data *ldata;
 
   ldata = oonf_class_get_extension(&_link_extenstion, ptr);
-  oonf_rfc5444_remove_target(ldata->target);
+  if (ldata->target) {
+    oonf_rfc5444_remove_target(ldata->target);
+  }
 }
 
 static void
