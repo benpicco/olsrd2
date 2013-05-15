@@ -343,6 +343,7 @@ _cb_link_removed(void *ptr) {
  */
 static void
 _cb_ett_sampling(void *ptr __attribute__((unused))) {
+  const struct oonf_linkconfig_data *linkdata;
   struct link_ettff_data *ldata;
   struct nhdp_link_domaindata *domaindata;
   struct oonf_layer2_neighbor *l2neigh;
@@ -410,24 +411,35 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
       l2neigh = NULL;
     }
 
-    tx_bitrate = oonf_linkconfig_get(
-        nhdp_interface_get_name(lnk->local_if), &lnk->remote_mac)->tx_bitrate;
-    if (tx_bitrate == 0 && l2neigh != NULL
+    /* look for link configuration with originator address */
+    linkdata = oonf_linkconfig_get(
+        nhdp_interface_get_name(lnk->local_if), &lnk->neigh->originator);
+    if (linkdata == NULL) {
+      linkdata = oonf_linkconfig_get(
+          nhdp_interface_get_name(lnk->local_if), &lnk->remote_mac);
+    }
+
+    /* calculate tx_rate */
+    if (linkdata) {
+      /* use speed defined in configuration */
+      tx_bitrate = linkdata->tx_bitrate;
+    }
+    else if (l2neigh != NULL
         && oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {
-          /* apply linkspeed to metric */
+          /* use linkspeed from measurement */
       tx_bitrate = l2neigh->tx_bitrate;
     }
+    else {
+      /* no linkspeed available */
+      tx_bitrate = 0;
+    }
+
+    /* apply linkspeed to metric */
     if (tx_bitrate > ETTFF_LINKSPEED_MAXIMUM) {
       metric /= (ETTFF_LINKSPEED_MAXIMUM / ETTFF_LINKSPEED_MINIMUM);
     }
     else if (tx_bitrate > ETTFF_LINKSPEED_MINIMUM) {
       metric /= (tx_bitrate / ETTFF_LINKSPEED_MINIMUM);
-    }
-
-    /* convert into in metric value */
-    if (metric > RFC5444_METRIC_MAX) {
-      /* metric overflow */
-      metric = RFC5444_METRIC_MAX;
     }
 
     /* convert into something that can be transmitted over the network */
