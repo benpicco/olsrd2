@@ -183,11 +183,7 @@ struct oonf_class_extension _link_extenstion = {
   .name = "etxff linkmetric",
   .class_name = NHDP_CLASS_LINK,
   .size = sizeof(struct link_etxff_data),
-};
 
-struct oonf_class_listener _link_listener = {
-  .name = "etxff link listener",
-  .class_name = NHDP_CLASS_LINK,
   .cb_add = _cb_link_added,
   .cb_change = _cb_link_changed,
   .cb_remove = _cb_link_removed,
@@ -228,13 +224,7 @@ struct nhdp_domain_metric _etxff_handler = {
  */
 static int
 _init(void) {
-
-  if (oonf_class_listener_add(&_link_listener)) {
-    return -1;
-  }
-
   if (nhdp_domain_metric_add(&_etxff_handler)) {
-    oonf_class_listener_remove(&_link_listener);
     return -1;
   }
 
@@ -264,7 +254,7 @@ _cleanup(void) {
 
   nhdp_domain_metric_remove(&_etxff_handler);
 
-  oonf_class_listener_remove(&_link_listener);
+  oonf_class_extension_remove(&_link_extenstion);
 
   oonf_timer_stop(&_sampling_timer);
 
@@ -558,7 +548,7 @@ _cb_cfg_changed(void) {
     _link_extenstion.size +=
         sizeof(struct link_etxff_bucket) * _etxff_config.window;
 
-    if (oonf_class_extend(&_link_extenstion)) {
+    if (oonf_class_extension_add(&_link_extenstion)) {
       return;
     }
   }

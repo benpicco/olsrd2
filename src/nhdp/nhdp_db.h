@@ -147,6 +147,9 @@ struct nhdp_link {
   /* local interface address heard from the link */
   struct netaddr if_addr;
 
+  /* mac address of remote link end */
+  struct netaddr remote_mac;
+
   /* internal field for NHDP processing */
   int _process_count;
 

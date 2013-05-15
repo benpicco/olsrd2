@@ -120,17 +120,8 @@ struct link_ettff_data {
   /* last known hello interval */
   uint64_t hello_interval;
 
-  /* mac address of link */
-  struct netaddr mac;
-
   /* history ringbuffer */
   struct link_ettff_bucket buckets[0];
-};
-
-
-enum {
-  ETT_MSGTLV_MAC = 200,
-  IDX_TLV_MAC = 0,
 };
 
 /* prototypes */
@@ -146,10 +137,6 @@ static void _cb_hello_lost(void *);
 
 static enum rfc5444_result _cb_process_packet(
       struct rfc5444_reader_tlvblock_context *context);
-
-static void _cb_addMessageTLVs(struct rfc5444_writer *writer);
-enum rfc5444_result _cb_messagetlvs(
-    struct rfc5444_reader_tlvblock_context *);
 
 static const char *_to_string(
     struct nhdp_metric_str *buf, uint32_t metric);
@@ -203,32 +190,12 @@ static struct rfc5444_reader_tlvblock_consumer _packet_consumer = {
   .start_callback = _cb_process_packet,
 };
 
-static struct rfc5444_reader_tlvblock_consumer _ett_message_consumer = {
-  .order = RFC5444_MAIN_PARSER_PRIORITY,
-  .msg_id = RFC5444_MSGTYPE_HELLO,
-  .block_callback = _cb_messagetlvs,
-};
-
-static struct rfc5444_reader_tlvblock_consumer_entry _ett_message_tlvs[] = {
-  [IDX_TLV_MAC] = { .type = ETT_MSGTLV_MAC, .type_ext = 0, .match_type_ext = true,
-      .mandatory = true, .min_length = 6, .match_length = true },
-};
-
-static struct rfc5444_writer_content_provider _hello_provider = {
-  .msg_type = RFC5444_MSGTYPE_HELLO,
-  .addMessageTLVs = _cb_addMessageTLVs,
-};
-
 /* storage extension and listeners */
 static struct oonf_class_extension _link_extenstion = {
   .name = "ettff linkmetric",
   .class_name = NHDP_CLASS_LINK,
   .size = sizeof(struct link_ettff_data),
-};
 
-static struct oonf_class_listener _link_listener = {
-  .name = "ettff link listener",
-  .class_name = NHDP_CLASS_LINK,
   .cb_add = _cb_link_added,
   .cb_change = _cb_link_changed,
   .cb_remove = _cb_link_removed,
@@ -269,12 +236,7 @@ static struct nhdp_domain_metric _ettff_handler = {
  */
 static int
 _init(void) {
-  if (oonf_class_listener_add(&_link_listener)) {
-    return -1;
-  }
-
   if (nhdp_domain_metric_add(&_ettff_handler)) {
-    oonf_class_listener_remove(&_link_listener);
     return -1;
   }
 
@@ -285,11 +247,6 @@ _init(void) {
 
   oonf_rfc5444_add_protocol_pktseqno(_protocol);
   rfc5444_reader_add_packet_consumer(&_protocol->reader, &_packet_consumer, NULL, 0);
-  rfc5444_reader_add_message_consumer(&_protocol->reader, &_ett_message_consumer,
-      _ett_message_tlvs, ARRAYSIZE(_ett_message_tlvs));
-  rfc5444_writer_register_msgcontentprovider(&_protocol->writer,
-      &_hello_provider, NULL, 0);
-
   return 0;
 }
 
@@ -309,7 +266,7 @@ _cleanup(void) {
 
   nhdp_domain_metric_remove(&_ettff_handler);
 
-  oonf_class_listener_remove(&_link_listener);
+  oonf_class_extension_remove(&_link_extenstion);
 
   oonf_timer_stop(&_sampling_timer);
 
@@ -447,14 +404,14 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
     /* get linkspeed */
     ifdata = oonf_interface_get_data(nhdp_interface_get_name(lnk->local_if), NULL);
     if (ifdata) {
-      l2neigh = oonf_layer2_get_neighbor(&ifdata->mac, &ldata->mac);
+      l2neigh = oonf_layer2_get_neighbor(&ifdata->mac, &lnk->remote_mac);
     }
     else {
       l2neigh = NULL;
     }
 
     tx_bitrate = oonf_linkconfig_get(
-        nhdp_interface_get_name(lnk->local_if), &ldata->mac)->tx_bitrate;
+        nhdp_interface_get_name(lnk->local_if), &lnk->remote_mac)->tx_bitrate;
     if (tx_bitrate == 0 && l2neigh != NULL
         && oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {
           /* apply linkspeed to metric */
@@ -592,60 +549,6 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_context *context) {
 }
 
 /**
- * Callback to add the message TLVs to a HELLO message
- * @param writer
- * @param prv
- */
-static void
-_cb_addMessageTLVs(struct rfc5444_writer *writer) {
-  struct oonf_rfc5444_target *target;
-  struct oonf_interface_data *ifdata;
-
-  target = oonf_rfc5444_get_target_from_writer(writer);
-  ifdata = oonf_interface_get_data(target->interface->name, NULL);
-  if (ifdata == NULL) {
-    return;
-  }
-
-  rfc5444_writer_add_messagetlv(writer, ETT_MSGTLV_MAC, 0,
-      netaddr_get_binptr(&ifdata->mac),
-      netaddr_get_binlength(&ifdata->mac));
-}
-
-enum rfc5444_result
-_cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
-  struct nhdp_interface *interf;
-  struct nhdp_laddr *laddr;
-  struct link_ettff_data *ldata;
-
-  if (!context->has_origaddr) {
-    return RFC5444_OKAY;
-  }
-
-  /* get interface and link */
-  interf = nhdp_interface_get(_protocol->input_interface->name);
-  if (interf == NULL) {
-    /* silently ignore unknown interface */
-    return RFC5444_OKAY;
-  }
-
-  laddr = nhdp_interface_get_link_addr(interf, _protocol->input_address);
-  if (laddr == NULL) {
-    /* silently ignore unknown link*/
-    return RFC5444_OKAY;
-  }
-
-  /* get link and its ett data */
-  ldata = oonf_class_get_extension(&_link_extenstion, laddr->link);
-
-  netaddr_from_binary(&ldata->mac,
-      _ett_message_tlvs[IDX_TLV_MAC].tlv->single_value,
-      6, AF_MAC48);
-
-  return RFC5444_OKAY;
-}
-
-/**
  * Convert ETT-ff metric into string representation
  * @param buf pointer to output buffer
  * @param metric metric value
@@ -684,7 +587,7 @@ _cb_cfg_changed(void) {
     _link_extenstion.size +=
         sizeof(struct link_ettff_bucket) * _ettff_config.window;
 
-    if (oonf_class_extend(&_link_extenstion)) {
+    if (oonf_class_extension_add(&_link_extenstion)) {
       return;
     }
   }

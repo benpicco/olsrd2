@@ -45,6 +45,14 @@
 #include "common/common_types.h"
 #include "core/oonf_subsystem.h"
 
+enum {
+  /* message type for probing */
+  RFC5444_MSGTYPE_PROBING = 192,
+
+  /* message specifc TLV */
+  RFC5444_MSGTLV_PROBING = 128,
+};
+
 EXPORT extern struct oonf_subsystem olsrv2_neighbor_probing_subsystem;
 
 #endif /* NEIGHBOR_PROBING_H_ */

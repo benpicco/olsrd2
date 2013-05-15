@@ -61,6 +61,7 @@ enum {
   IDX_TLV_VTIME,
   IDX_TLV_WILLINGNESS,
   IDX_TLV_IPV6ORIG,
+  IDX_TLV_MAC,
 };
 
 /* NHDP address TLV array index pass 1 */
@@ -113,6 +114,8 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
     .min_length = 1, .match_length = true },
   [IDX_TLV_IPV6ORIG] = { .type = NHDP_MSGTLV_IPV6ORIGINATOR, .type_ext = 0, .match_type_ext = true,
       .min_length = 16, .match_length = true },
+  [IDX_TLV_MAC] = { .type = NHDP_MSGTLV_MAC, .type_ext = 0, .match_type_ext = true,
+      .min_length = 6, .match_length = true },
 };
 
 static struct rfc5444_reader_tlvblock_consumer _nhdp_address_pass1_consumer = {
@@ -167,6 +170,7 @@ static struct {
   struct nhdp_link *link;
 
   struct netaddr originator_v6;
+  struct netaddr mac;
 
   bool naddr_conflict, laddr_conflict;
   bool link_heard, link_lost;
@@ -415,6 +419,15 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
         netaddr_to_string(&buf, &_current.originator_v6));
   }
 
+  /* extract mac address if present */
+  if (_nhdp_message_tlvs[IDX_TLV_MAC].tlv) {
+    if (netaddr_from_binary(&_current.mac,
+        _nhdp_message_tlvs[IDX_TLV_MAC].tlv->single_value, 6, AF_MAC48)) {
+      /* error, could not parse address */
+      return RFC5444_DROP_MESSAGE;
+    }
+  }
+
   /* clear flags in neighbors */
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
     neigh->_process_count = 0;
@@ -586,6 +599,11 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
 
   /* copy interface address of link */
   memcpy(&_current.link->if_addr, _protocol->input_address, sizeof(struct netaddr));
+
+  /* copy mac address */
+  if (netaddr_get_address_family(&_current.mac) == AF_MAC48) {
+    memcpy(&_current.link->remote_mac, &_current.mac, sizeof(_current.mac));
+  }
 
   if (!_current.has_thisif) {
     struct netaddr addr;

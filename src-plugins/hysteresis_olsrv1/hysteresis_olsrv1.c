@@ -135,11 +135,6 @@ struct oonf_class_extension _link_extenstion = {
   .name = "hysteresis_olsrv1",
   .class_name = NHDP_CLASS_LINK,
   .size = sizeof(struct link_hysteresis_data),
-};
-
-struct oonf_class_listener _link_listener = {
-  .name = "hysteresis listener",
-  .class_name = NHDP_CLASS_LINK,
   .cb_add = _cb_link_added,
   .cb_remove = _cb_link_removed,
 };
@@ -173,11 +168,7 @@ _init(void) {
       _cb_link_added(lnk);
     }
   }
-  else if (oonf_class_extend(&_link_extenstion)) {
-    return -1;
-  }
-
-  if (oonf_class_listener_add(&_link_listener)) {
+  else if (oonf_class_extension_add(&_link_extenstion)) {
     return -1;
   }
 
@@ -198,7 +189,7 @@ _cleanup(void) {
   }
 
   nhdp_hysteresis_set_handler(NULL);
-  oonf_class_listener_remove(&_link_listener);
+  oonf_class_extension_remove(&_link_extenstion);
 }
 
 /**

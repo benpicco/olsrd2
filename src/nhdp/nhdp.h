@@ -66,6 +66,9 @@ enum {
 
   /* message tlv for transporting IPv6 originator in ipv4 messages */
   NHDP_MSGTLV_IPV6ORIGINATOR = 226,
+
+  /* message tlv for transporting mac address */
+  NHDP_MSGTLV_MAC = 227,
 };
 
 EXPORT struct oonf_subsystem nhdp_subsystem;

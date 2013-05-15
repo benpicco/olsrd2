@@ -97,7 +97,7 @@ static struct rfc5444_writer_tlvtype _olsrv2_addrtlvs[] = {
 /* handling of gateway TLVs (they are domain specific) */
 static struct rfc5444_writer_tlvtype _gateway_addrtlvs[NHDP_MAXIMUM_DOMAINS];
 
-static struct oonf_class_listener _domain_listener = {
+static struct oonf_class_extension _domain_listener = {
   .name = "olsrv2 writer",
   .class_name = NHDP_CLASS_DOMAIN,
 
@@ -136,7 +136,7 @@ olsrv2_writer_init(struct oonf_rfc5444_protocol *protocol) {
     return -1;
   }
 
-  oonf_class_listener_add(&_domain_listener);
+  oonf_class_extension_add(&_domain_listener);
   return 0;
 }
 
@@ -146,7 +146,7 @@ olsrv2_writer_cleanup(void) {
 
   _cleanedup = true;
 
-  oonf_class_listener_remove(&_domain_listener);
+  oonf_class_extension_remove(&_domain_listener);
 
   /* unregister address tlvs */
   for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {

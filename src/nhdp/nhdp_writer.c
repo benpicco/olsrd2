@@ -238,6 +238,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   struct oonf_rfc5444_target *target;
   struct nhdp_interface *interf;
   const struct netaddr *v6_originator;
+  struct oonf_interface_data *ifdata;
 
   target = oonf_rfc5444_get_target_from_writer(writer);
 
@@ -283,6 +284,14 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
     rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV6ORIGINATOR, 0,
         netaddr_get_binptr(v6_originator), netaddr_get_binlength(v6_originator));
   }
+
+  /* add mac address of local interface */
+  ifdata = oonf_interface_get_data(target->interface->name, NULL);
+  if (ifdata == NULL) {
+    return;
+  }
+  rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_MAC, 0,
+      netaddr_get_binptr(&ifdata->mac), netaddr_get_binlength(&ifdata->mac));
 }
 
 /**
