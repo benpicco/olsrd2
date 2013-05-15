@@ -111,7 +111,7 @@ static struct cfg_schema_section _probing_section = {
   .entry_count = ARRAYSIZE(_probing_entries),
 };
 
-struct oonf_subsystem olsrv2_ffett_subsystem = {
+struct oonf_subsystem olsrv2_neighbor_probing_subsystem = {
   .name = OONF_PLUGIN_GET_NAME(),
   .descr = "OONFD2 Funkfeuer ETT plugin",
   .author = "Henning Rogge",
@@ -121,7 +121,7 @@ struct oonf_subsystem olsrv2_ffett_subsystem = {
   .init = _init,
   .cleanup = _cleanup,
 };
-DECLARE_OONF_PLUGIN(olsrv2_ffett_subsystem);
+DECLARE_OONF_PLUGIN(olsrv2_neighbor_probing_subsystem);
 
 struct _config _probe_config;
 

@@ -337,17 +337,72 @@ _cb_link_removed(void *ptr) {
   oonf_timer_stop(&data->hello_lost_timer);
 }
 
+static uint64_t
+_get_linkspeed(struct nhdp_link *lnk) {
+  const struct oonf_linkconfig_data *linkdata;
+  struct oonf_interface_data *ifdata;
+  struct oonf_layer2_neighbor *l2neigh;
+
+  struct netaddr_str nbuf;
+
+  OONF_DEBUG(LOG_PLUGINS, "Query linkspeed for link %s",
+      netaddr_to_string(&nbuf, &lnk->if_addr));
+
+  /* look for link configuration with originator address */
+  linkdata = oonf_linkconfig_get(
+      nhdp_interface_get_name(lnk->local_if), &lnk->neigh->originator);
+  if (linkdata != NULL
+      && linkdata->tx_bitrate != oonf_linkconfig_default.tx_bitrate) {
+    OONF_DEBUG(LOG_PLUGINS, "Found IP configured linkspeed");
+    return linkdata->tx_bitrate;
+  }
+
+  if (lnk->dualstack_partner) {
+    linkdata = oonf_linkconfig_get(
+        nhdp_interface_get_name(lnk->local_if),
+        &lnk->dualstack_partner->neigh->originator);
+    if (linkdata != NULL
+        && linkdata->tx_bitrate != oonf_linkconfig_default.tx_bitrate) {
+      OONF_DEBUG(LOG_PLUGINS, "Found IP configured linkspeed");
+      return linkdata->tx_bitrate;
+    }
+  }
+
+  /* if not found, try remote mac address */
+  linkdata = oonf_linkconfig_get(
+      nhdp_interface_get_name(lnk->local_if), &lnk->remote_mac);
+  if (linkdata != NULL
+      && linkdata->tx_bitrate != oonf_linkconfig_default.tx_bitrate) {
+    OONF_DEBUG(LOG_PLUGINS, "Found MAC configured linkspeed");
+    return linkdata->tx_bitrate;
+  }
+
+  /* get local interface data  */
+  ifdata = oonf_interface_get_data(nhdp_interface_get_name(lnk->local_if), NULL);
+  if (!ifdata) {
+    return 0;
+  }
+
+  /* query layer2 database about neighbor */
+  l2neigh = oonf_layer2_get_neighbor(&ifdata->mac, &lnk->remote_mac);
+  if (l2neigh == NULL
+          || !oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {
+    return 0;
+  }
+
+  /* use linkspeed from measurement */
+  OONF_DEBUG(LOG_PLUGINS, "Found layer2 linkspeed");
+  return l2neigh->tx_bitrate;
+}
+
 /**
  * Timer callback to sample new ETT values into bucket
  * @param ptr nhdp link
  */
 static void
 _cb_ett_sampling(void *ptr __attribute__((unused))) {
-  const struct oonf_linkconfig_data *linkdata;
   struct link_ettff_data *ldata;
   struct nhdp_link_domaindata *domaindata;
-  struct oonf_layer2_neighbor *l2neigh;
-  struct oonf_interface_data *ifdata;
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
@@ -402,37 +457,8 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
       metric = (ETTFF_ETXCOST_MINIMUM * total) / received;
     }
 
-    /* get linkspeed */
-    ifdata = oonf_interface_get_data(nhdp_interface_get_name(lnk->local_if), NULL);
-    if (ifdata) {
-      l2neigh = oonf_layer2_get_neighbor(&ifdata->mac, &lnk->remote_mac);
-    }
-    else {
-      l2neigh = NULL;
-    }
-
-    /* look for link configuration with originator address */
-    linkdata = oonf_linkconfig_get(
-        nhdp_interface_get_name(lnk->local_if), &lnk->neigh->originator);
-    if (linkdata == NULL) {
-      linkdata = oonf_linkconfig_get(
-          nhdp_interface_get_name(lnk->local_if), &lnk->remote_mac);
-    }
-
-    /* calculate tx_rate */
-    if (linkdata) {
-      /* use speed defined in configuration */
-      tx_bitrate = linkdata->tx_bitrate;
-    }
-    else if (l2neigh != NULL
-        && oonf_layer2_neighbor_has_tx_bitrate(l2neigh)) {
-          /* use linkspeed from measurement */
-      tx_bitrate = l2neigh->tx_bitrate;
-    }
-    else {
-      /* no linkspeed available */
-      tx_bitrate = 0;
-    }
+    /* get link speed */
+    tx_bitrate = _get_linkspeed(lnk);
 
     /* apply linkspeed to metric */
     if (tx_bitrate > ETTFF_LINKSPEED_MAXIMUM) {
