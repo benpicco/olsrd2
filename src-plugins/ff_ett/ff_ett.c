@@ -347,7 +347,9 @@ _get_linkspeed(struct nhdp_link *lnk) {
   struct oonf_interface_data *ifdata;
   struct oonf_layer2_neighbor *l2neigh;
 
+#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct netaddr_str nbuf;
+#endif
 
   OONF_DEBUG(LOG_FF_ETT, "Query linkspeed for link %s",
       netaddr_to_string(&nbuf, &lnk->if_addr));
@@ -415,8 +417,8 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
 
 #if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
   struct nhdp_laddr *laddr;
-#endif
   struct netaddr_str buf;
+#endif
 
   OONF_DEBUG(LOG_FF_ETT, "Calculate ETT from sampled data");
 
