@@ -218,12 +218,16 @@ struct nhdp_domain_metric _etxff_handler = {
   .to_string = _to_string,
 };
 
+static enum log_source LOG_FF_ETX;
+
 /**
  * Initialize plugin
  * @return -1 if an error happened, 0 otherwise
  */
 static int
 _init(void) {
+  LOG_FF_ETX = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
+
   if (nhdp_domain_metric_add(&_etxff_handler)) {
     return -1;
   }
@@ -343,7 +347,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct netaddr_str buf;
 #endif
 
-  OONF_DEBUG(LOG_PLUGINS, "Calculate ETX from sampled data");
+  OONF_DEBUG(LOG_FF_ETX, "Calculate ETX from sampled data");
 
   if (!_etxff_handler.domain) {
     /* metric not used */
@@ -399,7 +403,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     domaindata = nhdp_domain_get_linkdata(_etxff_handler.domain, lnk);
     domaindata->metric.in = (uint32_t)metric;
 
-    OONF_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
+    OONF_DEBUG(LOG_FF_ETX, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
         nhdp_interface_get_name(lnk->local_if),
         received, total, metric, ldata->window_size);
@@ -434,7 +438,7 @@ _cb_hello_lost(void *ptr) {
 
     oonf_timer_set(&ldata->hello_lost_timer, ldata->hello_interval);
 
-    OONF_DEBUG(LOG_PLUGINS, "Missed Hello: %d", ldata->missed_hellos);
+    OONF_DEBUG(LOG_FF_ETX, "Missed Hello: %d", ldata->missed_hellos);
   }
 }
 
@@ -461,7 +465,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_context *context) {
   if (!context->has_pktseqno) {
     struct netaddr_str buf;
 
-    OONF_WARN(LOG_PLUGINS, "Neighbor %s does not send packet sequence numbers, cannot collect etxff data!",
+    OONF_WARN(LOG_FF_ETX, "Neighbor %s does not send packet sequence numbers, cannot collect etxff data!",
         netaddr_socket_to_string(&buf, _protocol->input_socket));
     return RFC5444_OKAY;
   }
@@ -539,7 +543,7 @@ _cb_cfg_changed(void) {
 
   if (cfg_schema_tobin(&_etxff_config, _etxff_section.post,
       _etxff_entries, ARRAYSIZE(_etxff_entries))) {
-    OONF_WARN(LOG_PLUGINS, "Cannot convert configuration for %s",
+    OONF_WARN(LOG_FF_ETX, "Cannot convert configuration for %s",
         OONF_PLUGIN_GET_NAME());
     return;
   }

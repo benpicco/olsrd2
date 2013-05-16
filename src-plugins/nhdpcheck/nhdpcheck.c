@@ -124,7 +124,7 @@ static enum log_source LOG_NHDP_CHECK = LOG_MAIN;
  */
 static int
 _init(void) {
-  LOG_NHDP_CHECK = oonf_log_register_source("nhdpcheck");
+  LOG_NHDP_CHECK = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
 
   _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {

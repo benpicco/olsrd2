@@ -230,12 +230,16 @@ static struct nhdp_domain_metric _ettff_handler = {
   .to_string = _to_string,
 };
 
+static enum log_source LOG_FF_ETT;
+
 /**
  * Initialize plugin
  * @return -1 if an error happened, 0 otherwise
  */
 static int
 _init(void) {
+  LOG_FF_ETT = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
+
   if (nhdp_domain_metric_add(&_ettff_handler)) {
     return -1;
   }
@@ -345,7 +349,7 @@ _get_linkspeed(struct nhdp_link *lnk) {
 
   struct netaddr_str nbuf;
 
-  OONF_DEBUG(LOG_PLUGINS, "Query linkspeed for link %s",
+  OONF_DEBUG(LOG_FF_ETT, "Query linkspeed for link %s",
       netaddr_to_string(&nbuf, &lnk->if_addr));
 
   /* look for link configuration with originator address */
@@ -353,7 +357,7 @@ _get_linkspeed(struct nhdp_link *lnk) {
       nhdp_interface_get_name(lnk->local_if), &lnk->neigh->originator);
   if (linkdata != NULL
       && linkdata->tx_bitrate != oonf_linkconfig_default.tx_bitrate) {
-    OONF_DEBUG(LOG_PLUGINS, "Found IP configured linkspeed");
+    OONF_DEBUG(LOG_FF_ETT, "Found IP configured linkspeed");
     return linkdata->tx_bitrate;
   }
 
@@ -363,7 +367,7 @@ _get_linkspeed(struct nhdp_link *lnk) {
         &lnk->dualstack_partner->neigh->originator);
     if (linkdata != NULL
         && linkdata->tx_bitrate != oonf_linkconfig_default.tx_bitrate) {
-      OONF_DEBUG(LOG_PLUGINS, "Found IP configured linkspeed");
+      OONF_DEBUG(LOG_FF_ETT, "Found IP configured linkspeed");
       return linkdata->tx_bitrate;
     }
   }
@@ -373,7 +377,7 @@ _get_linkspeed(struct nhdp_link *lnk) {
       nhdp_interface_get_name(lnk->local_if), &lnk->remote_mac);
   if (linkdata != NULL
       && linkdata->tx_bitrate != oonf_linkconfig_default.tx_bitrate) {
-    OONF_DEBUG(LOG_PLUGINS, "Found MAC configured linkspeed");
+    OONF_DEBUG(LOG_FF_ETT, "Found MAC configured linkspeed");
     return linkdata->tx_bitrate;
   }
 
@@ -391,7 +395,7 @@ _get_linkspeed(struct nhdp_link *lnk) {
   }
 
   /* use linkspeed from measurement */
-  OONF_DEBUG(LOG_PLUGINS, "Found layer2 linkspeed");
+  OONF_DEBUG(LOG_FF_ETT, "Found layer2 linkspeed");
   return l2neigh->tx_bitrate;
 }
 
@@ -414,7 +418,7 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
 #endif
   struct netaddr_str buf;
 
-  OONF_DEBUG(LOG_PLUGINS, "Calculate ETT from sampled data");
+  OONF_DEBUG(LOG_FF_ETT, "Calculate ETT from sampled data");
 
   if (!_ettff_handler.domain) {
     /* metric not used */
@@ -475,7 +479,7 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
     domaindata = nhdp_domain_get_linkdata(_ettff_handler.domain, lnk);
     domaindata->metric.in = (uint32_t)metric;
 
-    OONF_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s):"
+    OONF_DEBUG(LOG_FF_ETT, "New sampling rate for link %s (%s):"
         " %d/%d = %" PRIu64 " (w=%d, speed=%"PRIu64 ")\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
         nhdp_interface_get_name(lnk->local_if),
@@ -511,7 +515,7 @@ _cb_hello_lost(void *ptr) {
 
     oonf_timer_set(&ldata->hello_lost_timer, ldata->hello_interval);
 
-    OONF_DEBUG(LOG_PLUGINS, "Missed Hello: %d", ldata->missed_hellos);
+    OONF_DEBUG(LOG_FF_ETT, "Missed Hello: %d", ldata->missed_hellos);
   }
 }
 
@@ -538,7 +542,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_context *context) {
   if (!context->has_pktseqno) {
     struct netaddr_str buf;
 
-    OONF_WARN(LOG_PLUGINS, "Neighbor %s does not send packet sequence numbers, cannot collect ettff data!",
+    OONF_WARN(LOG_FF_ETT, "Neighbor %s does not send packet sequence numbers, cannot collect ettff data!",
         netaddr_socket_to_string(&buf, _protocol->input_socket));
     return RFC5444_OKAY;
   }
@@ -616,7 +620,7 @@ _cb_cfg_changed(void) {
 
   if (cfg_schema_tobin(&_ettff_config, _ettff_section.post,
       _ettff_entries, ARRAYSIZE(_ettff_entries))) {
-    OONF_WARN(LOG_PLUGINS, "Cannot convert configuration for %s",
+    OONF_WARN(LOG_FF_ETT, "Cannot convert configuration for %s",
         OONF_PLUGIN_GET_NAME());
     return;
   }

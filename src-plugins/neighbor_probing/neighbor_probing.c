@@ -161,7 +161,7 @@ struct rfc5444_writer_content_provider _probing_msg_provider = {
  */
 static int
 _init(void) {
-  LOG_PROBING = oonf_log_register_source("probing");
+  LOG_PROBING = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
 
   if (oonf_class_extension_add(&_link_extenstion)) {
     return -1;
@@ -327,7 +327,7 @@ static void
 _cb_cfg_changed(void) {
   if (cfg_schema_tobin(&_probe_config, _probing_section.post,
       _probing_entries, ARRAYSIZE(_probing_entries))) {
-    OONF_WARN(LOG_PLUGINS, "Cannot convert configuration for %s plugin",
+    OONF_WARN(LOG_PROBING, "Cannot convert configuration for %s plugin",
         OONF_PLUGIN_GET_NAME());
     return;
   }
