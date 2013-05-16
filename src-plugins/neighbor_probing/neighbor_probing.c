@@ -241,6 +241,8 @@ _cb_probe_link(void *ptr __attribute__((unused))) {
 
   OONF_DEBUG(LOG_PROBING, "Start looking for probe candidate");
 
+  l2neigh = NULL;
+
   avl_for_each_element(&nhdp_interface_tree, ninterf, _node) {
     interf = nhdp_interface_get_coreif(ninterf);
 

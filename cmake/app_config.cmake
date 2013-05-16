@@ -67,12 +67,12 @@ set (OONF_VERSION_TRAILER "Visit http://www.olsr.org\\\\n" CACHE STRING
      "Text to be displayed after version output")
 
 # set static plugins (list of plugin names, separated by space)
-set (OONF_STATIC_PLUGINS "cfgparser_compact cfgio_file ff_etx" CACHE STRING
+set (OONF_STATIC_PLUGINS "cfgparser_compact cfgio_file ff_etx neighbor_probing" CACHE STRING
      "Space separated list of plugins to compile into application")
 
 # choose if framework should be linked static or dynamic
-# TODO: dynamic framework still has problems
-set (OONF_FRAMEWORD_DYNAMIC false)
+set (OONF_FRAMEWORD_DYNAMIC false CACHE BOOL
+     "Compile the application with dynamic libraries instead of linking everything static")
 
 # set to true to stop application running without root privileges (true/false)
 set (OONF_NEED_ROOT true)

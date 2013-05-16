@@ -2,4 +2,4 @@
 SET (source "ff_ett.c")
 
 # use generic plugin maker
-oonf_create_app_plugin("ff_ett" ${source} "" false)
+oonf_create_app_plugin("ff_ett" ${source} "" "")
