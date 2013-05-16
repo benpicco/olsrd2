@@ -342,7 +342,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   uint64_t metric;
   int i;
 
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
 #endif

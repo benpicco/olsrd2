@@ -158,7 +158,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   uint64_t itime;
   uint16_t ansn;
   uint8_t tmp;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 
@@ -262,7 +262,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   uint32_t cost_in[NHDP_MAXIMUM_DOMAINS];
   uint32_t cost_out[NHDP_MAXIMUM_DOMAINS];
   uint16_t metric_value;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 

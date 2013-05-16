@@ -255,7 +255,7 @@ static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   uint8_t value;
 
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_INFO
+#ifdef OONF_LOG_INFO
   struct netaddr_str buf;
 #endif
 

@@ -208,7 +208,7 @@ _cleanup(void) {
  */
 void
 nhdp_set_originator(const struct netaddr *addr) {
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 

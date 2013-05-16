@@ -273,7 +273,7 @@ nhdp_interface_apply_settings(struct nhdp_interface *interf) {
 static struct nhdp_interface_addr *
 _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
   struct nhdp_interface_addr *if_addr;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 
@@ -319,7 +319,7 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
  */
 static void
 _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime) {
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 

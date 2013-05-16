@@ -299,7 +299,7 @@ olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
   enum oonf_duplicate_result dup_result;
   bool process;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 
@@ -334,7 +334,7 @@ olsrv2_mpr_shall_forwarding(
   struct nhdp_neighbor *neigh;
   enum oonf_duplicate_result dup_result;
   bool forward;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 
@@ -407,7 +407,7 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   struct oonf_rfc5444_target *target;
   struct nhdp_interface *interf;
   bool is_ipv4, flood;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
   target = container_of(rfc5444_target, struct oonf_rfc5444_target, rfc5444_target);
@@ -675,7 +675,7 @@ _update_originators(void) {
   struct netaddr new_v4, new_v6;
   bool keep_v4, keep_v6;
   size_t i;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 

@@ -150,9 +150,7 @@ nhdp_writer_cleanup(void) {
 void
 nhdp_writer_send_hello(struct nhdp_interface *interf) {
   enum rfc5444_result result;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_WARN
   struct netaddr_str buf;
-#endif
 
   if (_cleanedup) {
     /* do not send more Hellos during shutdown */

@@ -234,7 +234,7 @@ _cb_probe_link(void *ptr __attribute__((unused))) {
   uint64_t points, best_points;
   uint64_t last_tx_packets;
 
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str nbuf;
 #endif
 

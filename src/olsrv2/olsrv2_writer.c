@@ -315,7 +315,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
   uint8_t nbr_addrtype_value;
   uint16_t metric_in, metric_out;
 
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 

@@ -315,7 +315,7 @@ _insert_into_working_tree(struct olsrv2_tc_target *target,
     struct nhdp_neighbor *neigh, uint32_t linkcost,
     uint32_t pathcost, uint8_t distance, bool single_hop) {
   struct olsrv2_dijkstra_node *node;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
   if (linkcost >= RFC5444_METRIC_INFINITE) {
@@ -355,7 +355,7 @@ _update_routing_entry(struct olsrv2_routing_entry *rtentry,
     uint8_t distance, uint32_t pathcost,
     bool single_hop) {
   struct nhdp_neighbor_domaindata *neighdata;
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 
@@ -433,7 +433,7 @@ _handle_working_queue(struct nhdp_domain *domain) {
   struct olsrv2_tc_edge *tc_edge;
   struct olsrv2_tc_attachment *tc_attached;
 
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
 
@@ -561,7 +561,7 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
 
 static void
 _add_route_to_kernel_queue(struct olsrv2_routing_entry *rtentry) {
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_INFO
+#ifdef OONF_LOG_INFO
   struct os_route_str rbuf;
   struct netaddr_str nbuf;
 #endif

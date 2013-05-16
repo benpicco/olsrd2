@@ -347,7 +347,7 @@ _get_linkspeed(struct nhdp_link *lnk) {
   struct oonf_interface_data *ifdata;
   struct oonf_layer2_neighbor *l2neigh;
 
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str nbuf;
 #endif
 
@@ -415,7 +415,7 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
   uint64_t tx_bitrate;
   int i;
 
-#if OONF_LOGGING_LEVEL >= OONF_LOGGING_LEVEL_DEBUG
+#ifdef OONF_LOG_DEBUG_INFO
   struct nhdp_laddr *laddr;
   struct netaddr_str buf;
 #endif
