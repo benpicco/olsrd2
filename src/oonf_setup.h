@@ -48,7 +48,4 @@
 struct oonf_subsystem **oonf_setup_get_subsystems(void);
 size_t oonf_setup_get_subsystem_count(void);
 
-size_t oonf_setup_get_level1count(void);
-enum log_source *oonf_setup_get_level1_logs(void);
-
 #endif /* OONF_SETUP_H_ */

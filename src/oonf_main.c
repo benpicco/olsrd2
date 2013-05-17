@@ -199,7 +199,7 @@ main(int argc, char **argv) {
   }
 
   /* add custom configuration definitions */
-  oonf_logcfg_init(oonf_setup_get_level1_logs(), oonf_setup_get_level1count());
+  oonf_logcfg_init();
 
   /* add configuration options for subsystems */
   for (i=0; i<subsystem_count; i++) {
