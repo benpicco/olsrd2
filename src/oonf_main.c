@@ -59,6 +59,7 @@
 #include "core/oonf_plugins.h"
 #include "core/oonf_subsystem.h"
 #include "subsystems/oonf_clock.h"
+#include "subsystems/oonf_interface.h"
 #include "subsystems/oonf_socket.h"
 
 #include "app_data.h"
@@ -133,6 +134,8 @@ static const char *help_text =
     "Expert/Experimental arguments\n"
     "  --Xearlydebug                          Activate debugging output before configuration could be parsed\n"
     "  --Xignoreunknown                       Ignore unknown command line arguments\n"
+    "\n"
+    "The remainder of the parameters which are no arguments are handled as interface names.\n"
 ;
 #endif
 
@@ -596,20 +599,19 @@ parse_commandline(int argc, char **argv, bool reload_only) {
     }
   }
 
+  while (return_code == -1 && optind < argc) {
+    /* the rest are interface names */
+    if (cfg_db_add_namedsection(db, CFG_INTERFACE_SECTION, argv[optind]) == NULL) {
+      return_code = 1;
+    }
+    optind++;
+  }
+
   if (return_code == -1 && !loaded_file) {
     /* try to load default config file if no other loaded */
     cfg_cmd_handle_load(oonf_cfg_get_instance(), db,
         oonf_appdata_get()->default_config, NULL);
   }
-
-#if 0
-  if (return_code == -1) {
-    /* validate configuration */
-    if (cfg_schema_validate(db, false, true, &log)) {
-      return_code = 1;
-    }
-  }
-#endif
 
   if (abuf_getlen(&log) > 0) {
     if (reload_only) {
