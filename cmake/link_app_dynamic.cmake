@@ -1,6 +1,7 @@
 # link static plugins
 string(REPLACE " " ";" PLUGIN_LIST "${OONF_STATIC_PLUGINS}")
-message ("Plugins: ${PLUGIN_LIST}")
+message ("Compiling project with dynamic libraries")
+message ("Static plugins: ${PLUGIN_LIST}")
 FOREACH(plugin ${PLUGIN_LIST})
     IF(TARGET oonf_static_${plugin})
         message ("    Found target: oonf_static_${plugin}")  

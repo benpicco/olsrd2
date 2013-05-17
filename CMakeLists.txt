@@ -1,5 +1,5 @@
 project (OONF C)
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8.5 FATAL_ERROR)
 
 ###################################
 #### Application configuration ####
@@ -38,12 +38,14 @@ endif(DOXYGEN_FOUND)
 #### Include API framework ####
 ###############################
 
-if (OONF_API_DIR)
-    set (OONF_DIR "${OONF_API_DIR}/build")
-endif (OONF_API_DIR)
-
 if (OONF_DO_NOT_REGISTER_PACKAGE)
-    find_package(OONF REQUIRED NO_CMAKE_BUILDS_PATH NO_CMAKE_PACKAGE_REGISTRY NO_CMAKE_SYSTEM_PACKAGE_REGISTRY)
+    message ("Looking for OONF-API: ${CMAKE_PREFIX_PATH}")
+    find_package(OONF NO_CMAKE_ENVIRONMENT_PATH
+                      NO_SYSTEM_ENVIRONMENT_PATH
+                      NO_CMAKE_PACKAGE_REGISTRY
+                      NO_CMAKE_BUILDS_PATH
+                      NO_CMAKE_SYSTEM_PATH
+                      NO_CMAKE_SYSTEM_PACKAGE_REGISTRY)
 else (OONF_DO_NOT_REGISTER_PACKAGE)
     find_package(OONF REQUIRED)
 endif (OONF_DO_NOT_REGISTER_PACKAGE)

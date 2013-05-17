@@ -35,37 +35,37 @@ endef
 define Package/olsrd2-git
 	$(call Package/olsrd2-git/template)
 	TITLE:=OLSRd V2 Routing Agent
-	DEPENDS:=+oonf-core-api +oonf-api-subsystems +ldconfig
+	DEPENDS:=+oonf-api-git +ldconfig +librt
 endef
 
 define Package/olsrd2-git-plugin-ff-ett
 	$(call Package/olsrd2-git/template)
 	TITLE:=Freifunk ETT metric
-	DEPENDS:=+olsrd2-git +oonf-core-api +oonf-api-subsystems +ldconfig
+	DEPENDS:=+olsrd2-git +ldconfig
 endef
 
 define Package/olsrd2-git-plugin-ff-etx
 	$(call Package/olsrd2-git/template)
 	TITLE:=Freifunk ETX metric
-	DEPENDS:=+olsrd2-git +oonf-core-api +oonf-api-subsystems +ldconfig
+	DEPENDS:=+olsrd2-git +ldconfig
 endef
 
 define Package/olsrd2-git-plugin-hysteresis-olsrv1
 	$(call Package/olsrd2-git/template)
 	TITLE:=Port of OLSRv1 hysteresis
-	DEPENDS:=+olsrd2-git +oonf-core-api +oonf-api-subsystems +ldconfig
+	DEPENDS:=+olsrd2-git +ldconfig
 endef
 
 define Package/olsrd2-git-plugin-neighbor-probing
 	$(call Package/olsrd2-git/template)
 	TITLE:=Neighbor probing plugin
-	DEPENDS:=+olsrd2-git +oonf-core-api +oonf-api-subsystems +ldconfig
+	DEPENDS:=+olsrd2-git +ldconfig
 endef
 
 define Package/olsrd2-git-plugin-nhdpcheck
 	$(call Package/olsrd2-git/template)
 	TITLE:=More strict checking of incoming NHDP messages
-	DEPENDS:=+olsrd2-git +oonf-core-api +oonf-api-subsystems +ldconfig
+	DEPENDS:=+olsrd2-git +ldconfig
 endef
 
 TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include

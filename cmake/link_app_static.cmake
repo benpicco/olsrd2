@@ -3,6 +3,8 @@
 # other way around
 
 # link static plugins
+message ("Compiling project with static libraries")
+message ("Static plugins: ${PLUGIN_LIST}")
 string(REPLACE " " ";" PLUGIN_LIST "${OONF_STATIC_PLUGINS}")
 FOREACH(plugin ${PLUGIN_LIST})
     IF(TARGET oonf_static_${plugin})

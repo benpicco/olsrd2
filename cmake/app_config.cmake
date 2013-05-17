@@ -57,7 +57,7 @@ set (OONF_DEFAULT_CONF "/etc/${OONF_EXE}/${OONF_EXE}.conf" CACHE FILEPATH
      "Default position of configuration file")
 
 # setup custom text before and after default help message
-set (OONF_HELP_PREFIX "OLSRv2 routing agent\\n" CACHE STRING
+set (OONF_HELP_PREFIX "OLSRv2 routing agent\\\\n" CACHE STRING
      "Text to be displayed before command line help")
 set (OONF_HELP_SUFFIX "" CACHE STRING
      "Text to be displayed after command line help")
