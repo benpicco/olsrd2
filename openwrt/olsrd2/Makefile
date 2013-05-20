@@ -22,7 +22,8 @@ CMAKE_OPTIONS=-DOONF_DO_NOT_REGISTER_PACKAGE:Bool=true \
               -DCMAKE_BUILD_TYPE:String=MinSizeRel \
               -DINSTALL_LIB_DIR:Path=lib/oonf \
               -DINSTALL_INCLUDE_DIR:Path=include/oonf \
-              -DINSTALL_CMAKE_DIR:Path=lib/oonf
+              -DINSTALL_CMAKE_DIR:Path=lib/oonf \
+              -DCMAKE_PREFIX_PATH=$(STAGING_DIR)/usr
 
 define Package/olsrd2-git/template 
 	SECTION:=net
