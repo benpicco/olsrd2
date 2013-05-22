@@ -5,19 +5,18 @@ cmake_minimum_required(VERSION 2.8.5 FATAL_ERROR)
 #### Application configuration ####
 ###################################
 
-# set library version
-set (OONF_MAJOR_VERSION 0)
-set (OONF_MINOR_VERSION 7)
-set (OONF_PATCH_VERSION 0)
-
-# calculate complete library version
-set (OONF_VERSION ${OONF_MAJOR_VERSION}.${OONF_MINOR_VERSION}.${OONF_PATCH_VERSION})
+# set OONF library version
+set (OONF_VERSION "0.1")
 
 # set cached variables
 include (./cmake/app_config.cmake)
 
 # include compiler flags
 include (./cmake/cc_flags.cmake)
+
+# get app version from git tag
+include (./cmake/generate_version.cmake)
+message ("Library version: ${OONF_VERSION}")
 
 ########################
 #### Doxygen target ####
@@ -54,7 +53,6 @@ if (NOT OONF_FOUND)
     message(FATAL_ERROR "Cannot compile application without OONF framework")
 endif (NOT OONF_FOUND)
 
-message ("Include directory: ${OONF_INCLUDE_DIRS}") 
 include_directories(${OONF_INCLUDE_DIRS})
 include(${OONF_BUILD_LIBRARY})
 
