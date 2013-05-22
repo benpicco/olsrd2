@@ -111,6 +111,11 @@ static struct oonf_rfc5444_protocol *_protocol;
 static enum log_source LOG_OONFV2_W = LOG_MAIN;
 static bool _cleanedup = false;
 
+/**
+ * initialize olsrv2 writer
+ * @param protocol rfc5444 protocol
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
 olsrv2_writer_init(struct oonf_rfc5444_protocol *protocol) {
   _protocol = protocol;
@@ -140,6 +145,9 @@ olsrv2_writer_init(struct oonf_rfc5444_protocol *protocol) {
   return 0;
 }
 
+/**
+ * Cleanup olsrv2 writer
+ */
 void
 olsrv2_writer_cleanup(void) {
   int i;
@@ -162,6 +170,9 @@ olsrv2_writer_cleanup(void) {
   rfc5444_writer_unregister_message(&_protocol->writer, _olsrv2_message);
 }
 
+/**
+ * Send a new TC message over all relevant interfaces
+ */
 void
 olsrv2_writer_send_tc(void) {
   if (_cleanedup) {
@@ -182,6 +193,10 @@ olsrv2_writer_send_tc(void) {
   _send_msg_type = AF_UNSPEC;
 }
 
+/**
+ * initialize the gateway tlvs for a nhdp domain
+ * @param ptr nhdp domain
+ */
 static void
 _cb_initialize_gatewaytlv(void *ptr) {
   struct nhdp_domain *domain = ptr;
@@ -193,6 +208,11 @@ _cb_initialize_gatewaytlv(void *ptr) {
       &_gateway_addrtlvs[domain->index], RFC5444_MSGTYPE_TC);
 }
 
+/**
+ * Callback for rfc5444 writer to add message header for tc
+ * @param writer
+ * @param message
+ */
 static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
@@ -284,6 +304,10 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
   return false;
 }
 
+/**
+ * Callback for rfc5444 writer to add message tlvs to tc
+ * @param writer
+ */
 static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   uint8_t vtime_encoded, itime_encoded;
@@ -302,6 +326,10 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
       &itime_encoded, sizeof(itime_encoded));
 }
 
+/**
+ * Callback for rfc5444 writer to add addresses and addresstlvs to tc
+ * @param writer
+ */
 static void
 _cb_addAddresses(struct rfc5444_writer *writer) {
   const struct netaddr_acl *routable_acl;
@@ -464,6 +492,13 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
   }
 }
 
+/**
+ * Callback triggered when tc is finished.
+ * @param writer
+ * @param start
+ * @param end
+ * @param complete
+ */
 static void
 _cb_finishMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_address *start __attribute__((unused)),

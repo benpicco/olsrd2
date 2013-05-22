@@ -108,7 +108,8 @@ olsrv2_originator_cleanup(void) {
 }
 
 /**
- * @return current originator address
+ * @param address type of originator
+ * @return current originator address of specified type
  */
 const struct netaddr *
 olsrv2_originator_get(int af_type) {
@@ -121,6 +122,10 @@ olsrv2_originator_get(int af_type) {
   return NULL;
 }
 
+/**
+ * @param addr network address
+ * @return true if address is (or was) the local originator
+ */
 bool
 olsrv2_originator_is_local(const struct netaddr *addr) {
   if (netaddr_cmp(&_originator_v4, addr) == 0) {

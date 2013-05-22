@@ -53,6 +53,7 @@
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_domain.h"
 
+/* representation of a node in the dijkstra tree */
 struct olsrv2_dijkstra_node {
   /* hook into the working list of the dijkstra */
   struct avl_node _node;
@@ -73,6 +74,7 @@ struct olsrv2_dijkstra_node {
   bool local;
 };
 
+/* representation of one target in the routing entry set */
 struct olsrv2_routing_entry {
   /* Settings for the kernel route */
   struct os_route route;

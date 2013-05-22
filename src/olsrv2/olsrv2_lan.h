@@ -48,12 +48,14 @@
 
 #include "nhdp/nhdp.h"
 
+/* per-domain data for locally attached networks */
 struct olsrv2_lan_domaindata {
   uint32_t outgoing_metric;
   uint8_t distance;
   bool active;
 };
 
+/* one locally attached network */
 struct olsrv2_lan_entry {
   struct netaddr prefix;
 
@@ -67,7 +69,6 @@ EXPORT extern struct avl_tree olsrv2_lan_tree;
 void olsrv2_lan_init(void);
 void olsrv2_lan_cleanup(void);
 
-
 EXPORT struct olsrv2_lan_entry *olsrv2_lan_add(
     struct nhdp_domain *domain, struct netaddr *prefix,
     uint32_t metric, uint8_t distance);
@@ -79,7 +80,7 @@ EXPORT int olsrv2_lan_validate(const struct cfg_schema_entry *entry,
 
 /**
  * @param addr originator address
- * @return pointer to originator set entry, NULL if not found
+ * @return pointer to LAN set entry, NULL if not found
  */
 static INLINE struct olsrv2_lan_entry *
 olsrv2_lan_get(struct netaddr *addr) {

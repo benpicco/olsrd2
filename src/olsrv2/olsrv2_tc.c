@@ -53,6 +53,7 @@
 #include "olsrv2/olsrv2_routing.h"
 #include "olsrv2/olsrv2_tc.h"
 
+/* prototypes */
 static void _cb_tc_node_timeout(void *);
 static bool _remove_edge(struct olsrv2_tc_edge *edge, bool cleanup);
 
@@ -82,9 +83,14 @@ static struct oonf_timer_info _validity_info = {
   .name = "olsrv2 tc node validity",
   .callback = _cb_tc_node_timeout,
 };
+
+/* global trees for tc nodes and endpoints */
 struct avl_tree olsrv2_tc_tree;
 struct avl_tree olsrv2_tc_endpoint_tree;
 
+/**
+ * Initialize tc database
+ */
 void
 olsrv2_tc_init(void) {
   oonf_class_add(&_tc_node_class);
@@ -96,6 +102,9 @@ olsrv2_tc_init(void) {
   avl_init(&olsrv2_tc_endpoint_tree, avl_comp_netaddr, true);
 }
 
+/**
+ * Cleanup tc database
+ */
 void
 olsrv2_tc_cleanup(void) {
   struct olsrv2_tc_node *node, *n_it;
@@ -123,6 +132,13 @@ olsrv2_tc_cleanup(void) {
   oonf_class_remove(&_tc_node_class);
 }
 
+/**
+ * Add a new tc node to the database
+ * @param originator originator address of node
+ * @param vtime validity time for node entry
+ * @param ansn answer set number of node
+ * @return pointer to node, NULL if out of memory
+ */
 struct olsrv2_tc_node *
 olsrv2_tc_node_add(struct netaddr *originator,
     uint64_t vtime, uint16_t ansn) {
@@ -169,6 +185,10 @@ olsrv2_tc_node_add(struct netaddr *originator,
   return node;
 }
 
+/**
+ * Remove a tc node from the database
+ * @param node pointer to node
+ */
 void
 olsrv2_tc_node_remove(struct olsrv2_tc_node *node) {
   struct olsrv2_tc_edge *edge, *edge_it;
@@ -198,6 +218,12 @@ olsrv2_tc_node_remove(struct olsrv2_tc_node *node) {
   }
 }
 
+/**
+ * Add a tc edge to the database
+ * @param src pointer to source node
+ * @param addr pointer to destination address
+ * @return pointer to TC edge, NULL if out of memory
+ */
 struct olsrv2_tc_edge *
 olsrv2_tc_edge_add(struct olsrv2_tc_node *src, struct netaddr *addr) {
   struct olsrv2_tc_edge *edge = NULL, *inverse = NULL;
@@ -268,11 +294,24 @@ olsrv2_tc_edge_add(struct olsrv2_tc_node *src, struct netaddr *addr) {
   return edge;
 }
 
+/**
+ * Remove a tc edge from the database
+ * @param edge pointer to tc edge
+ * @return true if destination of edge was removed too
+ */
 bool
 olsrv2_tc_edge_remove(struct olsrv2_tc_edge *edge) {
   return _remove_edge(edge, true);
 }
 
+/**
+ * Add an endpoint to a tc node
+ * @param node pointer to tc node
+ * @param prefix address prefix of endpoint
+ * @param mesh true if an interface of a mesh node, #
+ *   false if a local attached network.
+ * @return pointer to tc attachment, NULL if out of memory
+ */
 struct olsrv2_tc_attachment *
 olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
     struct netaddr *prefix, bool mesh) {
@@ -330,6 +369,10 @@ olsrv2_tc_endpoint_add(struct olsrv2_tc_node *node,
   return net;
 }
 
+/**
+ * Remove a tc attachment from the database
+ * @param net pointer to tc attachment
+ */
 void
 olsrv2_tc_endpoint_remove(
     struct olsrv2_tc_attachment *net) {
@@ -353,6 +396,10 @@ olsrv2_tc_endpoint_remove(
   oonf_class_free(&_tc_attached_class, net);
 }
 
+/**
+ * Callback triggered when a tc node times out
+ * @param ptr pointer to tc node
+ */
 void
 _cb_tc_node_timeout(void *ptr) {
   struct olsrv2_tc_node *node = ptr;
@@ -361,6 +408,13 @@ _cb_tc_node_timeout(void *ptr) {
   olsrv2_routing_trigger_update();
 }
 
+/**
+ * Remove a tc edge from the database
+ * @param edge pointer to tc edge
+ * @param cleanup true to remove the destination of the edge too
+ *   if its not needed anymore
+ * @return true if destination was removed, false otherwise
+ */
 static bool
 _remove_edge(struct olsrv2_tc_edge *edge, bool cleanup) {
   bool removed_node = false;

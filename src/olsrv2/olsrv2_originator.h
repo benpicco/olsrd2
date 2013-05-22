@@ -47,6 +47,9 @@
 #include "common/netaddr.h"
 #include "subsystems/oonf_timer.h"
 
+/*
+ * Former originator address of the local node
+ */
 struct olsrv2_originator_set_entry {
   struct netaddr originator;
 

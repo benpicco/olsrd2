@@ -51,6 +51,7 @@
 
 #define CFG_OLSRV2_SECTION "olsrv2"
 
+/* default settings for routable addresses */
 #define OLSRV2_ROUTABLE_IPV4 "-169.254.0.0/16\0-127.0.0.1\0-224.0.0.0/12\0"
 #define OLSRV2_ROUTABLE_IPV6 "-fe80::/10\0-::1\0-ff00::/8\0"
 

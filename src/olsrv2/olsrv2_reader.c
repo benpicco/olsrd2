@@ -55,6 +55,8 @@
 #include "olsrv2/olsrv2_routing.h"
 #include "olsrv2/olsrv2_tc.h"
 
+/* constants and definitions */
+
 /* NHDP message TLV array index */
 enum {
   IDX_TLV_ITIME,
@@ -69,14 +71,14 @@ enum {
   IDX_ADDRTLV_GATEWAY,
 };
 
+/* session data during TC parsing */
 struct _olsrv2_data {
   struct olsrv2_tc_node *node;
-
   uint64_t vtime;
-
   bool complete_tc;
 };
 
+/* Prototypes */
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context);
 
@@ -153,6 +155,11 @@ olsrv2_reader_cleanup(void) {
       &_protocol->reader, &_olsrv2_message_consumer);
 }
 
+/**
+ * Callback that parses message TLVs of TC
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   uint64_t itime;
@@ -253,6 +260,11 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   return RFC5444_OKAY;
 }
 
+/**
+ * Callback that parses address TLVs of TC
+ * @param context
+ * @return
+ */
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   struct rfc5444_reader_tlvblock_entry *tlv;
@@ -363,6 +375,12 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   return RFC5444_OKAY;
 }
 
+/**
+ * Callback that is called when message parsing of TLV is finished
+ * @param context
+ * @param dropped
+ * @return
+ */
 static enum rfc5444_result
 _cb_messagetlvs_end(struct rfc5444_reader_tlvblock_context *context __attribute__((unused)),
     bool dropped) {

@@ -59,6 +59,12 @@ enum olsrv2_target_type {
   OONFV2_NETWORK_TARGET,
 };
 
+/*
+ * represents a target that can be reached through a tc node.
+ *
+ * Might be another tc node, a neighbor address or an attached
+ * network.
+ */
 struct olsrv2_tc_target {
   /* address or prefix of this node of the topology graph */
   struct netaddr addr;
@@ -70,6 +76,10 @@ struct olsrv2_tc_target {
   struct olsrv2_dijkstra_node _dijkstra;
 };
 
+/*
+ * represents a tc node which might be connected to other
+ * nodes and endpoints.
+ */
 struct olsrv2_tc_node {
   /* substructure to define target for Dijkstra Algorithm */
   struct olsrv2_tc_target target;
@@ -93,6 +103,7 @@ struct olsrv2_tc_node {
   struct avl_node _originator_node;
 };
 
+/* represents an edge between two tc nodes */
 struct olsrv2_tc_edge {
   /* pointer to source of edge */
   struct olsrv2_tc_node *src;
@@ -119,6 +130,10 @@ struct olsrv2_tc_edge {
   struct avl_node _node;
 };
 
+/*
+ * represents a connection from a tc node to
+ * an endpoint, either a neighbor address or an attached network
+ */
 struct olsrv2_tc_attachment {
   /* pointer to source of edge */
   struct olsrv2_tc_node *src;
@@ -142,6 +157,12 @@ struct olsrv2_tc_attachment {
   struct avl_node _endpoint_node;
 };
 
+/*
+ * reprensents an endpoint of the dijkstra graph, which
+ * does not spawn new edges of the graph.
+ *
+ * Might be a neighbor address or an attached network
+ */
 struct olsrv2_tc_endpoint {
   /* substructure to define target for Dijkstra Algorithm */
   struct olsrv2_tc_target target;
@@ -172,13 +193,21 @@ EXPORT struct olsrv2_tc_attachment *olsrv2_tc_endpoint_add(
 EXPORT void olsrv2_tc_endpoint_remove(
     struct olsrv2_tc_attachment *);
 
-static inline struct olsrv2_tc_node *
+/**
+ * @param originator originator address of a tc node
+ * @return pointer to tc node, NULL if not found
+ */
+static INLINE struct olsrv2_tc_node *
 olsrv2_tc_node_get(struct netaddr *originator) {
   struct olsrv2_tc_node *node;
 
   return avl_find_element(&olsrv2_tc_tree, originator, node, _originator_node);
 }
 
+/**
+ * @param prefix network prefix of tc endpoint
+ * @return pointer to tc endpoint, NULL if not found
+ */
 static inline struct olsrv2_tc_endpoint *
 olsrv2_tc_endpoint_get(struct netaddr *prefix) {
   struct olsrv2_tc_endpoint *end;

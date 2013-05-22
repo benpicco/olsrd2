@@ -57,6 +57,7 @@
 #include "olsrv2/olsrv2_routing.h"
 #include "olsrv2/olsrv2.h"
 
+/* Prototypes */
 static struct olsrv2_routing_entry *_add_entry(
     struct nhdp_domain *, struct netaddr *prefix);
 static void _remove_entry(struct olsrv2_routing_entry *);
@@ -73,6 +74,7 @@ static void _cb_trigger_dijkstra(void *);
 static void _cb_nhdp_update(struct nhdp_neighbor *);
 static void _cb_route_finished(struct os_route *route, int error);
 
+/* Domain parameter of dijkstra algorithm */
 static struct olsrv2_routing_domain _domain_parameter[NHDP_MAXIMUM_DOMAINS];
 
 /* memory class for routing entries */
@@ -106,6 +108,9 @@ static struct list_entity _kernel_queue;
 static enum log_source LOG_OONFV2_ROUTING = LOG_MAIN;
 static bool _initiate_shutdown = false;
 
+/**
+ * Initialize olsrv2 dijkstra and routing code
+ */
 void
 olsrv2_routing_init(void) {
   int i;
@@ -124,6 +129,9 @@ olsrv2_routing_init(void) {
   nhdp_domain_listener_add(&_nhdp_listener);
 }
 
+/**
+ * Trigger cleanup of olsrv2 dijkstra and routing code
+ */
 void
 olsrv2_routing_initiate_shutdown(void) {
   struct olsrv2_routing_entry *entry, *e_it;
@@ -144,6 +152,9 @@ olsrv2_routing_initiate_shutdown(void) {
   _process_kernel_queue();
 }
 
+/**
+ * Finalize cleanup of olsrv2 dijkstra and routing code
+ */
 void
 olsrv2_routing_cleanup(void) {
   struct olsrv2_routing_entry *entry, *e_it;
@@ -167,6 +178,10 @@ olsrv2_routing_cleanup(void) {
   oonf_class_remove(&_rtset_entry);
 }
 
+/**
+ * Trigger a new dijkstra as soon as we are back in the mainloop
+ * (unless the rate limitation timer is active, then we will wait for it)
+ */
 void
 olsrv2_routing_trigger_update(void) {
   if (oonf_timer_is_active(&_rate_limit_timer)) {
@@ -179,6 +194,10 @@ olsrv2_routing_trigger_update(void) {
   }
 }
 
+/**
+ * Trigger dijkstra and routing update now
+ * @param skip_wait true to ignore rate limitation timer
+ */
 void
 olsrv2_routing_force_update(bool skip_wait) {
   struct nhdp_domain *domain;
@@ -225,11 +244,21 @@ olsrv2_routing_force_update(bool skip_wait) {
   oonf_timer_set(&_rate_limit_timer, 250);
 }
 
+/**
+ * Initialize the dijkstra code part of a tc node.
+ * Should normally not be called by other parts of OLSRv2.
+ * @param dijkstra pointer to dijkstra node
+ */
 void
 olsrv2_routing_dijkstra_node_init(struct olsrv2_dijkstra_node *dijkstra) {
   dijkstra->_node.key = &dijkstra->path_cost;
 }
 
+/**
+ * Set the domain parameters of olsrv2
+ * @param domain pointer to NHDP domain
+ * @param parameter pointer to new parameters
+ */
 void
 olsrv2_routing_set_domain_parameter(struct nhdp_domain *domain,
     struct olsrv2_routing_domain *parameter) {
@@ -270,6 +299,12 @@ olsrv2_routing_set_domain_parameter(struct nhdp_domain *domain,
   _trigger_dijkstra = true;
 }
 
+/**
+ * Add a new routing entry to the database
+ * @param domain pointer to nhdp domain
+ * @param prefix network prefix of routing entry
+ * @return pointer to routing entry, NULL if our of memory.
+ */
 static struct olsrv2_routing_entry *
 _add_entry(struct nhdp_domain *domain, struct netaddr *prefix) {
   struct olsrv2_routing_entry *rtentry;
@@ -301,6 +336,10 @@ _add_entry(struct nhdp_domain *domain, struct netaddr *prefix) {
   return rtentry;
 }
 
+/**
+ * Remove a routing entry from the global database
+ * @param entry pointer to routing entry
+ */
 static void
 _remove_entry(struct olsrv2_routing_entry *entry) {
   /* remove entry from database if its still there */
@@ -310,6 +349,15 @@ _remove_entry(struct olsrv2_routing_entry *entry) {
   oonf_class_free(&_rtset_entry, entry);
 }
 
+/**
+ * Insert a new entry into the dijkstra working queue
+ * @param target pointer to tc target
+ * @param neigh next hop through which the target can be reached
+ * @param linkcost cost of the last hop of the path towards the target
+ * @param pathcost remainder of the cost to the target
+ * @param distance hopcount to be used for the route to the target
+ * @param single_hop true if this is a single-hop route, false otherwise
+ */
 static void
 _insert_into_working_tree(struct olsrv2_tc_target *target,
     struct nhdp_neighbor *neigh, uint32_t linkcost,
@@ -348,6 +396,15 @@ _insert_into_working_tree(struct olsrv2_tc_target *target,
   avl_insert(&_dijkstra_working_tree, &node->_node);
 }
 
+/**
+ * Initialize a routing entry with the result of the dijkstra calculation
+ * @param rtentry pointer to routing entry
+ * @param domain nhdp domain
+ * @param first_hop nhdp neighbor for first hop to target
+ * @param distance hopcount distance that should be used for route
+ * @param pathcost pathcost to target
+ * @param single_hop true if route is single hop
+ */
 static void
 _update_routing_entry(struct olsrv2_routing_entry *rtentry,
     struct nhdp_domain *domain,
@@ -381,6 +438,10 @@ _update_routing_entry(struct olsrv2_routing_entry *rtentry,
   }
 }
 
+/**
+ * Initialize internal fields for dijkstra calculation
+ * @param domain nhdp domain
+ */
 static void
 _prepare_routes(struct nhdp_domain *domain) {
   struct olsrv2_routing_entry *rtentry;
@@ -423,6 +484,10 @@ _prepare_routes(struct nhdp_domain *domain) {
   }
 }
 
+/**
+ * Remove item from dijkstra working queue and process it
+ * @param domain nhdp domain
+ */
 static void
 _handle_working_queue(struct nhdp_domain *domain) {
   struct olsrv2_routing_entry *rtentry;
@@ -490,6 +555,10 @@ _handle_working_queue(struct nhdp_domain *domain) {
   target->_dijkstra.first_hop = NULL;
 }
 
+/**
+ * Add routes learned from nhdp to dijkstra results
+ * @param domain nhdp domain
+ */
 static void
 _handle_nhdp_routes(struct nhdp_domain *domain) {
   struct olsrv2_routing_entry *rtentry;
@@ -559,6 +628,10 @@ _handle_nhdp_routes(struct nhdp_domain *domain) {
   }
 }
 
+/**
+ * Add a route to the kernel processing queue
+ * @param rtentry pointer to routing entry
+ */
 static void
 _add_route_to_kernel_queue(struct olsrv2_routing_entry *rtentry) {
 #ifdef OONF_LOG_INFO
@@ -599,6 +672,11 @@ _add_route_to_kernel_queue(struct olsrv2_routing_entry *rtentry) {
   }
 }
 
+/**
+ * process the results of a dijkstra run and add them to the kernel
+ * processing queue
+ * @param domain nhdp domain
+ */
 static void
 _process_dijkstra_result(struct nhdp_domain *domain) {
   struct olsrv2_routing_entry *rtentry;
@@ -621,6 +699,9 @@ _process_dijkstra_result(struct nhdp_domain *domain) {
   }
 }
 
+/**
+ * Process all entries in kernel processing queue and send them to the kernel
+ */
 static void
 _process_kernel_queue(void) {
   struct olsrv2_routing_entry *rtentry, *rt_it;
@@ -649,6 +730,12 @@ _process_kernel_queue(void) {
     }
   }
 }
+
+/**
+ * Callback for checking if dijkstra was triggered during
+ * rate limitation time
+ * @param unused
+ */
 static void
 _cb_trigger_dijkstra(void *unused __attribute__((unused))) {
   if (_trigger_dijkstra) {
@@ -657,11 +744,20 @@ _cb_trigger_dijkstra(void *unused __attribute__((unused))) {
   }
 }
 
+/**
+ * Callback triggered when neighbor metrics are updates
+ * @param neigh
+ */
 static void
 _cb_nhdp_update(struct nhdp_neighbor *neigh __attribute__((unused))) {
   olsrv2_routing_trigger_update();
 }
 
+/**
+ * Callback for kernel route processing results
+ * @param route pointer to kernel route
+ * @param error 0 if no error happened
+ */
 static void
 _cb_route_finished(struct os_route *route, int error) {
   struct olsrv2_routing_entry *rtentry;

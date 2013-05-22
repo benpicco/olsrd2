@@ -279,21 +279,37 @@ _cleanup(void) {
   oonf_rfc5444_remove_protocol(_protocol);
 }
 
+/**
+ * @return interval between two tcs
+ */
 uint64_t
 olsrv2_get_tc_interval(void) {
   return _olsrv2_config.tc_interval;
 }
 
+/**
+ * @return validity of the local TCs
+ */
 uint64_t
 olsrv2_get_tc_validity(void) {
   return _olsrv2_config.tc_validity;
 }
 
+/**
+ * @return acl for checking if an address is routable
+ */
 const struct netaddr_acl *
 olsrv2_get_routable(void) {
     return &_olsrv2_config.routable;
 }
 
+/**
+ * default implementation for rfc5444 processing handling according
+ * to MPR settings.
+ * @param context
+ * @param vtime
+ * @return
+ */
 bool
 olsrv2_mpr_shall_process(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
@@ -326,6 +342,13 @@ olsrv2_mpr_shall_process(
   return process;
 }
 
+/**
+ * default implementation for rfc5444 forwarding handling according
+ * to MPR settings.
+ * @param context
+ * @param vtime
+ * @return
+ */
 bool
 olsrv2_mpr_shall_forwarding(
     struct rfc5444_reader_tlvblock_context *context, uint64_t vtime) {
@@ -402,6 +425,12 @@ olsrv2_mpr_shall_forwarding(
   return forward;
 }
 
+/**
+ * default implementation for rfc5444 forwarding target selection
+ * according to MPR settings
+ * @param rfc5444_target
+ * @return
+ */
 bool
 olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   struct oonf_rfc5444_target *target;
@@ -443,11 +472,18 @@ olsrv2_mpr_forwarding_selector(struct rfc5444_writer_target *rfc5444_target) {
   return flood;
 }
 
+/**
+ * @return current answer set number for local topology database
+ */
 uint16_t
 olsrv2_get_ansn(void) {
   return _ansn;
 }
 
+/**
+ * Update answer set number if metric of a neighbor changed since last update.
+ * @return new answer set number, might be the same if no metric changed.
+ */
 uint16_t
 olsrv2_update_ansn(void) {
   struct nhdp_domain *domain;
@@ -618,11 +654,20 @@ _parse_lan_array(struct cfg_named_section *section, bool add) {
   }
 }
 
+/**
+ * Callback to trigger normal tc generation with timer
+ * @param ptr
+ */
 static void
 _cb_generate_tc(void *ptr __attribute__((unused))) {
   olsrv2_writer_send_tc();
 }
 
+/**
+ * Telnet command to output topology
+ * @param con
+ * @return
+ */
 static enum oonf_telnet_result
 _cb_topology(struct oonf_telnet_data *con) {
   struct olsrv2_tc_node *node;
