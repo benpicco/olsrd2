@@ -259,6 +259,7 @@ nhdp_get_originator(int af_type) {
  */
 static enum oonf_telnet_result
 _cb_nhdp(struct oonf_telnet_data *con) {
+  /* TODO: move this command (or a similar one) to a plugin */
   const char *next;
 
   if ((next = str_hasnextword(con->parameter, "neighlink"))) {

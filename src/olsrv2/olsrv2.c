@@ -670,6 +670,7 @@ _cb_generate_tc(void *ptr __attribute__((unused))) {
  */
 static enum oonf_telnet_result
 _cb_topology(struct oonf_telnet_data *con) {
+  /* TODO: move this command (or a similar one) to a plugin */
   struct olsrv2_tc_node *node;
   struct olsrv2_tc_edge *edge;
   struct olsrv2_tc_attachment *end;
