@@ -26,9 +26,9 @@ set (OONF_REMOVE_HELPTEXT false CACHE BOOL
 #### Install target configuration ####
 ######################################
 
-set (INSTALL_LIB_DIR        lib/olsrv2)
+set (INSTALL_LIB_DIR        lib/oonf)
 set (INSTALL_PKGCONFIG_DIR  lib/pkgconfig)
-set (INSTALL_INCLUDE_DIR    include/olsrv2)
+set (INSTALL_INCLUDE_DIR    include/oonf)
 set (INSTALL_CMAKE_DIR      ${DEF_INSTALL_CMAKE_DIR})
 
 ###########################################
