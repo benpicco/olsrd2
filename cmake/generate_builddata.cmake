@@ -8,7 +8,7 @@ IF(${found_git} STREQUAL "found_git-NOTFOUND" OR NOT EXISTS ${GIT})
     SET(OONF_SRC_GIT "cannot read git repository")
 ELSE()
     # everything is fine, read commit and diff stat
-    execute_process(COMMAND git describe --always --long --tags --dirty
+    execute_process(COMMAND git describe --always --long --tags --dirty --match "v[0-9]*"
         OUTPUT_VARIABLE OONF_SRC_GIT OUTPUT_STRIP_TRAILING_WHITESPACE)
 ENDIF()
 
