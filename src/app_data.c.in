@@ -52,10 +52,6 @@ static struct oonf_appdata _appdata = {
   .default_config = "${OONF_DEFAULT_CONF}",
 
   .git_commit = "${OONF_SRC_GIT}",
-  .git_change = "${OONF_SRC_CHANGE}",
-
-  .builddate = __DATE__" "__TIME__,
-  .buildsystem = "${CMAKE_SYSTEM}",
 
   .sharedlibrary_prefix = "${CMAKE_SHARED_LIBRARY_PREFIX}${OONF_APP_LIBPREFIX}_",
   .sharedlibrary_postfix = "${CMAKE_SHARED_LIBRARY_SUFFIX}",
