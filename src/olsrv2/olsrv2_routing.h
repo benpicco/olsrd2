@@ -108,9 +108,16 @@ struct olsrv2_routing_entry {
 
 /* routing domain specific parameters */
 struct olsrv2_routing_domain {
+  /* true if IPv4 routes should set a source IP */
   bool use_srcip_in_routes;
+
+  /* protocol number for routes */
   uint8_t protocol;
+
+  /* routing table number for routes */
   uint8_t table;
+
+  /* metric value that should be used for routes */
   uint8_t distance;
 };
 
