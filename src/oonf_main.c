@@ -98,6 +98,7 @@ static struct option oonf_options[] = {
   { "get",             optional_argument, 0, 'g' },
   { "format",          required_argument, 0, 'f' },
   { "quit",            no_argument,       0, 'q' },
+  { "nodefault",       no_argument,       0, 'n' },
   { "schema",          optional_argument, 0, argv_option_schema },
   { "Xearlydebug",     no_argument,       0, argv_option_debug_early },
   { "Xignoreunknown",  no_argument,       0, argv_option_ignore_unknown },
@@ -130,6 +131,7 @@ static const char *help_text =
     "           =section_type[name].key       Show the value(s) of a key in a named section\n"
     "  -f, --format=FORMAT                    Set the format for loading/saving data\n"
     "                                         (use 'AUTO' for automatic detection of format)\n"
+    "  -n, --nodefault                        Do not load the default configuration file\n"
     "\n"
     "Expert/Experimental arguments\n"
     "  --Xearlydebug                          Activate debugging output before configuration could be parsed\n"
@@ -490,10 +492,11 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   struct autobuf log;
   struct cfg_db *db;
   int opt, opt_idx, return_code;
-  bool loaded_file;
+  bool loaded_file, nodefault;
 
   return_code = -1;
   loaded_file = false;
+  nodefault = false;
   db = oonf_cfg_get_rawdb();
 
   /* reset getopt_long */
@@ -506,10 +509,10 @@ parse_commandline(int argc, char **argv, bool reload_only) {
 
   if (reload_only) {
     /* only parameters that load and change configuration data */
-    parameters = "-p:l:s:r:f:";
+    parameters = "-p:l:s:r:f:n";
   }
   else {
-    parameters = "-hvp:ql:S:s:r:g::f:";
+    parameters = "-hvp:ql:S:s:r:g::f:n";
   }
 
   while (return_code == -1
@@ -590,6 +593,9 @@ parse_commandline(int argc, char **argv, bool reload_only) {
           return_code = 1;
         }
         break;
+      case 'n':
+        nodefault = true;
+        break;
 
       default:
         if (!(reload_only ||_ignore_unknown)) {
@@ -607,7 +613,7 @@ parse_commandline(int argc, char **argv, bool reload_only) {
     optind++;
   }
 
-  if (return_code == -1 && !loaded_file) {
+  if (return_code == -1 && !loaded_file && !nodefault) {
     /* try to load default config file if no other loaded */
     cfg_cmd_handle_load(oonf_cfg_get_instance(), db,
         oonf_appdata_get()->default_config, NULL);
