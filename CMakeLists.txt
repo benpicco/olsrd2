@@ -24,12 +24,12 @@ message ("Library version: ${OONF_VERSION}")
 
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/files/olsrv2.doxyfile.in
-        ${CMAKE_CURRENT_BINARY_DIR}/olsrv2.doxyfile @ONLY)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/files/app.doxyfile.in
+        ${CMAKE_CURRENT_BINARY_DIR}/app.doxyfile @ONLY)
     add_custom_target(doc
-        ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/olsrv2.doxyfile
+        ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/app.doxyfile
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-        COMMENT "Generating OLSRv2 documentation with Doxygen" VERBATIM
+        COMMENT "Generating App documentation with Doxygen" VERBATIM
     )
 endif(DOXYGEN_FOUND)
 
