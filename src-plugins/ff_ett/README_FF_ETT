@@ -1,0 +1,35 @@
+   PLUGIN USAGE
+==================
+ff_ett plugin by Henning Rogge
+
+This plugin calculates a nhdp link metric based on the approved
+Freifunk ETX metric and the outgoing linkspeed.
+
+The linkspeed can be either queried directly from the
+nl80211 plugin or can be set with the "linkspeed" option
+in the interface section of the configuration.
+
+The plugin assumes that the default (and minimal) linkspeed
+is 1 MBit/s. If the link is faster than this, the total cost
+is calculated by the ETX linkcost, divided by the linkspeed
+in MBit/s (up to a linkspeed of 256 MBit/s).
+
+This mechanism makes the ff_ett metric compatible with the ff_etx metric.
+
+
+
+   PLUGIN CONFIGURATION
+==========================
+
+[ff_ett]
+	interval	1.0
+	window		64
+	start_window	4
+
+"interval" defines the time in seconds after which the ETT-metric is
+recalculated. "window" is the number of memory slots (each "interval"
+seconds long) that are used to smooth the ETX value.
+
+"start_window" is the number of memory slots that are used at startup.
+The number of slots is increased by 1 every interval so that a link can
+quickly get up to a reasonable ETX value.

@@ -1,0 +1,31 @@
+   PLUGIN USAGE
+==================
+neighbor_probing plugin by Henning Rogge
+
+This plugin creates unicast traffic to all known neighbors in a roundrobin
+scheme. This is necessary to get a reliable linkspeed measurement for
+mac80211 links.
+
+The plugin keeps a timestamp for each link when it sent the last probe on
+this link. It regularly takes the link which has the oldest timestamp and
+checks if there has been unicast traffic on it. If yes, the timestamp is
+reset and it continues to look at the other links. If not, the timestamp
+is reset too and a probing packet is sent to the links endpoint.
+ 
+
+   PLUGIN CONFIGURATION
+==========================
+
+[neighbor_probing]
+	interval	1.0
+	size		512
+	only_layer2	true
+
+"interval" defines the time in seconds between two probing packets. "size"
+is the number of bytes of content of the probe (there is some additional
+overhead because the packet is sent as a RFC5444 message).
+
+"only_layer2" can prevent the plugin from sending probing traffic over links
+where it cannot get live layer2 data. This prevents probes on ethernet and
+other interface without linkdata access.
+ 

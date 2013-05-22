@@ -1,0 +1,26 @@
+   PLUGIN USAGE
+==================
+ff_etx plugin by Henning Rogge
+
+This plugin calculates a nhdp link metric based on the approved
+Freifunk ETX metric.
+
+The metric is directional (it does only consider the outgoing
+packet loss), and the ETX value can be between 1 and 16.
+
+
+   PLUGIN CONFIGURATION
+==========================
+
+[ff_ett]
+	interval	1.0
+	window		64
+	start_window	4
+
+"interval" defines the time in seconds after which the ETT-metric is
+recalculated. "window" is the number of memory slots (each "interval"
+seconds long) that are used to smooth the ETX value.
+
+"start_window" is the number of memory slots that are used at startup.
+The number of slots is increased by 1 every interval so that a link can
+quickly get up to a reasonable ETX value.
