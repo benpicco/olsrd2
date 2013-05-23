@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 2.8.5 FATAL_ERROR)
 ###################################
 
 # set OONF library version
-set (OONF_VERSION "0.1")
+set (OONF_VERSION "0.2.0")
 
 # set cached variables
 include (./cmake/app_config.cmake)
@@ -39,14 +39,15 @@ endif(DOXYGEN_FOUND)
 
 if (OONF_DO_NOT_REGISTER_PACKAGE)
     message ("Looking for OONF-API: ${CMAKE_PREFIX_PATH}")
-    find_package(OONF NO_CMAKE_ENVIRONMENT_PATH
+    find_package(OONF ${OONF_VERSION}
+                      NO_CMAKE_ENVIRONMENT_PATH
                       NO_SYSTEM_ENVIRONMENT_PATH
                       NO_CMAKE_PACKAGE_REGISTRY
                       NO_CMAKE_BUILDS_PATH
                       NO_CMAKE_SYSTEM_PATH
                       NO_CMAKE_SYSTEM_PACKAGE_REGISTRY)
 else (OONF_DO_NOT_REGISTER_PACKAGE)
-    find_package(OONF REQUIRED)
+    find_package(OONF ${OONF_VERSION} REQUIRED)
 endif (OONF_DO_NOT_REGISTER_PACKAGE)
 
 if (NOT OONF_FOUND)
