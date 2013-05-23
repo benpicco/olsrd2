@@ -267,6 +267,8 @@ main(int argc, char **argv) {
   for (initialized=0; initialized<subsystem_count; initialized++) {
     if (subsystems[initialized]->init != NULL) {
       if (subsystems[initialized]->init()) {
+        OONF_WARN(LOG_MAIN, "Could not initialize '%s' submodule",
+            subsystems[initialized]->name);
         goto olsrd_cleanup;
       }
     }
@@ -598,8 +600,17 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         nodefault = true;
         break;
 
+      case 1:
+        /* the rest are interface names */
+        if (cfg_db_add_namedsection(db, CFG_INTERFACE_SECTION, optarg) == NULL) {
+          abuf_appendf(&log, "Could not add named section for interface %s", optarg);
+          return_code = 1;
+        }
+        break;
+
       default:
         if (!(reload_only ||_ignore_unknown)) {
+          abuf_appendf(&log, "Unknown parameter: '%c' (%d)\n", opt, opt);
           return_code = 1;
         }
         break;
@@ -607,10 +618,6 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   }
 
   while (return_code == -1 && optind < argc) {
-    /* the rest are interface names */
-    if (cfg_db_add_namedsection(db, CFG_INTERFACE_SECTION, argv[optind]) == NULL) {
-      return_code = 1;
-    }
     optind++;
   }
 
