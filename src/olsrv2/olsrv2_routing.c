@@ -429,7 +429,9 @@ _update_routing_entry(struct olsrv2_routing_entry *rtentry,
   rtentry->set = true;
 
   /* copy gateway if necessary */
-  if (single_hop) {
+  if (single_hop
+      && netaddr_cmp(&neighdata->best_link->if_addr,
+          &rtentry->route.dst) == 0) {
     netaddr_invalidate(&rtentry->route.gw);
   }
   else {
