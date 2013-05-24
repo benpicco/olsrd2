@@ -717,6 +717,7 @@ _cb_topology(struct oonf_telnet_data *con) {
 static void
 _update_originators(void) {
   const struct netaddr *originator_v4, *originator_v6;
+  struct nhdp_interface *n_interf;
   struct oonf_interface *interf;
   struct netaddr new_v4, new_v6;
   bool keep_v4, keep_v6;
@@ -736,7 +737,9 @@ _update_originators(void) {
   netaddr_invalidate(&new_v4);
   netaddr_invalidate(&new_v6);
 
-  avl_for_each_element(&oonf_interface_tree, interf, _node) {
+  avl_for_each_element(&nhdp_interface_tree, n_interf, _node) {
+    interf = nhdp_interface_get_coreif(n_interf);
+
     /* check if originator is still valid */
     for (i=0; i<interf->data.addrcount; i++) {
       struct netaddr *addr = &interf->data.addresses[i];
