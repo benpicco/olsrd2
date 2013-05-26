@@ -39,19 +39,22 @@
  *
  */
 
-#ifndef OLSRV2_ORIGINATOR_SET_H_
-#define OLSRV2_ORIGINATOR_SET_H_
+#ifndef OONFV2_ORIGINATOR_SET_H_
+#define OONFV2_ORIGINATOR_SET_H_
 
 #include "common/avl.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
-#include "core/olsr_timer.h"
+#include "subsystems/oonf_timer.h"
 
+/*
+ * Former originator address of the local node
+ */
 struct olsrv2_originator_set_entry {
   struct netaddr originator;
 
   struct avl_node _node;
-  struct olsr_timer_entry _vtime;
+  struct oonf_timer_entry _vtime;
 };
 
 EXPORT extern struct avl_tree olsrv2_originator_set_tree;
@@ -61,6 +64,7 @@ void olsrv2_originator_cleanup(void);
 
 EXPORT const struct netaddr *olsrv2_originator_get(int af_type);
 EXPORT bool olsrv2_originator_is_local(const struct netaddr *);
+EXPORT void olsrv2_originator_set(const struct netaddr *originator);
 
 /**
  * @param addr originator address
@@ -72,4 +76,4 @@ olsrv2_originator_get_entry(const struct netaddr *addr) {
   return avl_find_element(&olsrv2_originator_set_tree, addr, entry, _node);
 }
 
-#endif /* OLSRV2_ORIGINATOR_SET_H_ */
+#endif /* OONFV2_ORIGINATOR_SET_H_ */

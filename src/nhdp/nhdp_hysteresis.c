@@ -41,7 +41,7 @@
 
 #include "common/common_types.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "core/olsr_logging.h"
+#include "core/oonf_logging.h"
 
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_hysteresis.h"
@@ -100,7 +100,7 @@ static void
 _update_hysteresis(struct nhdp_link *lnk __attribute__((unused)),
     struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   /* do nothing */
-  OLSR_DEBUG(LOG_MAIN, "1");
+  OONF_DEBUG(LOG_MAIN, "1");
   return;
 }
 

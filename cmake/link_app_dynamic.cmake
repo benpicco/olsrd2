@@ -1,15 +1,21 @@
 # link static plugins
 string(REPLACE " " ";" PLUGIN_LIST "${OONF_STATIC_PLUGINS}")
+message ("Compiling project with dynamic libraries")
+message ("Static plugins: ${PLUGIN_LIST}")
 FOREACH(plugin ${PLUGIN_LIST})
     IF(TARGET oonf_static_${plugin})
-        TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_static_${plugin})
+        message ("    Found target: oonf_static_${plugin}")  
+        TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive oonf_static_${plugin} -Wl,--no-whole-archive)
+    ELSEIF (TARGET ${OONF_APP_LIBPREFIX}_static_${plugin})
+        message ("    Found target: ${OONF_APP_LIBPREFIX}_static_${plugin}")  
+        TARGET_LINK_LIBRARIES(${OONF_EXE} -Wl,--whole-archive ${OONF_APP_LIBPREFIX}_static_${plugin} -Wl,--no-whole-archive)
     ELSE (TARGET oonf_static_${plugin})
-        TARGET_LINK_LIBRARIES(${OONF_EXE} ${OONF_APP_LIBPREFIX}_static_${plugin})
+        message (FATAL_ERROR "    Did not found target: oonf_static_${plugin} or ${OONF_APP_LIBPREFIX}_static_${plugin}")
     ENDIF(TARGET oonf_static_${plugin})
 ENDFOREACH(plugin)
 
-# link tools
-TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_tools)
+# link subsystems
+TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_subsystems)
 
 # link core
 TARGET_LINK_LIBRARIES(${OONF_EXE} oonf_core)

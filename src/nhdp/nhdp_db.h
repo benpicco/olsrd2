@@ -46,9 +46,8 @@
 #include "common/avl.h"
 #include "common/list.h"
 #include "common/netaddr.h"
-
-#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp.h"
 
@@ -91,6 +90,12 @@ struct nhdp_neighbor_domaindata {
   /* incoming and outgoing metric cost */
   struct nhdp_metric metric;
 
+  /* pointer to the best link available to the neighbor */
+  struct nhdp_link *best_link;
+
+  /* interface index for the best link available to the neighbor */
+  unsigned best_link_ifindex;
+
   /* true if the local router has been selected as a MPR by the neighbor */
   bool local_is_mpr;
 
@@ -119,13 +124,13 @@ struct nhdp_link {
   /* last received interval time */
   uint64_t itime_value;
   /* timer that fires if this link is not symmetric anymore */
-  struct olsr_timer_entry sym_time;
+  struct oonf_timer_entry sym_time;
 
   /* timer that fires if the last received neighbor HELLO timed out */
-  struct olsr_timer_entry heard_time;
+  struct oonf_timer_entry heard_time;
 
   /* timer that fires when the link has to be removed from the database */
-  struct olsr_timer_entry vtime;
+  struct oonf_timer_entry vtime;
 
   /* cached status of the linked */
   enum nhdp_link_status status;
@@ -138,6 +143,12 @@ struct nhdp_link {
 
   /* pointer to neighbor entry of the other side of the link */
   struct nhdp_neighbor *neigh;
+
+  /* local interface address heard from the link */
+  struct netaddr if_addr;
+
+  /* mac address of remote link end */
+  struct netaddr remote_mac;
 
   /* internal field for NHDP processing */
   int _process_count;
@@ -201,7 +212,7 @@ struct nhdp_l2hop {
   struct nhdp_link *link;
 
   /* validity time for this address */
-  struct olsr_timer_entry _vtime;
+  struct oonf_timer_entry _vtime;
 
   /* member entry for two-hop addresses of neighbor link */
   struct avl_node _link_node;
@@ -219,6 +230,7 @@ struct nhdp_neighbor {
 
   /* number of links to this neighbor which are symmetric */
   int symmetric;
+
   /* pointer to other (dualstack) representation of this neighbor */
   struct nhdp_neighbor *dualstack_partner;
 
@@ -233,18 +245,6 @@ struct nhdp_neighbor {
 
   /* internal field for NHDP processing */
   int _process_count;
-
-  /*
-   * timer that fires when the ipv6 addresses
-   * of this neighbor have to be removed
-   */
-  struct olsr_timer_entry _vtime_v4;
-
-  /*
-   * timer that fires when the ipv6 addresses
-   * of this neighbor have to be removed
-   */
-  struct olsr_timer_entry _vtime_v6;
 
   /* list of links for this neighbor */
   struct list_entity _links;
@@ -280,7 +280,7 @@ struct nhdp_naddr {
   int laddr_count;
 
   /* validity time for this address when its lost */
-  struct olsr_timer_entry _lost_vtime;
+  struct oonf_timer_entry _lost_vtime;
 
   /* member entry for neighbor address tree */
   struct avl_node _neigh_node;
@@ -374,7 +374,7 @@ ndhp_db_link_2hop_get(const struct nhdp_link *lnk, const struct netaddr *addr) {
 static INLINE void
 nhdp_db_link_set_vtime(
     struct nhdp_link *lnk, uint64_t vtime) {
-  olsr_timer_set(&lnk->vtime, vtime);
+  oonf_timer_set(&lnk->vtime, vtime);
 }
 
 /**
@@ -385,7 +385,7 @@ nhdp_db_link_set_vtime(
 static INLINE void
 nhdp_db_link_set_heardtime(
     struct nhdp_link *lnk, uint64_t htime) {
-  olsr_timer_set(&lnk->heard_time, htime);
+  oonf_timer_set(&lnk->heard_time, htime);
 }
 
 /**
@@ -396,7 +396,7 @@ nhdp_db_link_set_heardtime(
 static INLINE void
 nhdp_db_link_set_symtime(
     struct nhdp_link *lnk, uint64_t stime) {
-  olsr_timer_set(&lnk->sym_time, stime);
+  oonf_timer_set(&lnk->sym_time, stime);
   nhdp_db_link_update_status(lnk);
 }
 
@@ -408,7 +408,7 @@ nhdp_db_link_set_symtime(
 static INLINE void
 nhdp_db_link_2hop_set_vtime(
     struct nhdp_l2hop *l2hop, uint64_t vtime) {
-  olsr_timer_set(&l2hop->_vtime, vtime);
+  oonf_timer_set(&l2hop->_vtime, vtime);
 }
 
 /**
@@ -418,7 +418,7 @@ nhdp_db_link_2hop_set_vtime(
  */
 static INLINE void
 nhdp_db_neighbor_addr_set_lost(struct nhdp_naddr *naddr, uint64_t vtime) {
-  olsr_timer_set(&naddr->_lost_vtime, vtime);
+  oonf_timer_set(&naddr->_lost_vtime, vtime);
 }
 
 /**
@@ -427,7 +427,7 @@ nhdp_db_neighbor_addr_set_lost(struct nhdp_naddr *naddr, uint64_t vtime) {
  */
 static INLINE void
 nhdp_db_neighbor_addr_not_lost(struct nhdp_naddr *naddr) {
-  olsr_timer_stop(&naddr->_lost_vtime);
+  oonf_timer_stop(&naddr->_lost_vtime);
 }
 
 /**
@@ -436,37 +436,65 @@ nhdp_db_neighbor_addr_not_lost(struct nhdp_naddr *naddr) {
  */
 static INLINE bool
 nhdp_db_neighbor_addr_is_lost(const struct nhdp_naddr *naddr) {
-  return olsr_timer_is_active(&naddr->_lost_vtime);
+  return oonf_timer_is_active(&naddr->_lost_vtime);
 }
 
-static inline bool
+/**
+ * @param lnk pointer to NHDP link
+ * @param af_type address family type
+ * @return true if link is part of a dualstack link with the specified
+ *   address family
+ */
+static INLINE bool
 nhdp_db_link_is_dualstack_type(const struct nhdp_link *lnk, int af_type) {
   return lnk->dualstack_partner != NULL
       && netaddr_get_address_family(&lnk->neigh->originator) == af_type;
 }
 
-static inline bool
+/**
+ * @param lnk pointer to NHDP link
+ * @return true if link is the IPv4 part of a dualstack link
+ */
+static INLINE bool
 nhdp_db_link_is_ipv4_dualstack(const struct nhdp_link *lnk) {
   return nhdp_db_link_is_dualstack_type(lnk, AF_INET);
 }
 
-static inline bool
+/**
+ * @param lnk pointer to NHDP link
+ * @return true if link is the IPv6 part of a dualstack link
+ */
+static INLINE bool
 nhdp_db_link_is_ipv6_dualstack(const struct nhdp_link *lnk) {
   return nhdp_db_link_is_dualstack_type(lnk, AF_INET6);
 }
 
-static inline bool
+/**
+ * @param neigh pointer to NHDP neighbor
+ * @param af_type address family type
+ * @return true if neighbor is part of a dualstack neighbor with the
+ *   specified address family
+ */
+static INLINE bool
 nhdp_db_neighbor_is_dualstack_type(const struct nhdp_neighbor *neigh, int af_type) {
   return neigh->dualstack_partner != NULL
       && netaddr_get_address_family(&neigh->originator) == af_type;
 }
 
-static inline bool
+/**
+ * @param neigh pointer to NHDP neighbor
+ * @return true if neighbor is the IPv4 part of a dualstack neighbor
+ */
+static INLINE bool
 nhdp_db_neighbor_is_ipv4_dualstack(const struct nhdp_neighbor *neigh) {
   return nhdp_db_neighbor_is_dualstack_type(neigh, AF_INET);
 }
 
-static inline bool
+/**
+ * @param neigh pointer to NHDP neighbor
+ * @return true if neighbor is the IPv6 part of a dualstack neighbor
+ */
+static INLINE bool
 nhdp_db_neighbor_is_ipv6_dualstack(const struct nhdp_neighbor *neigh) {
   return nhdp_db_neighbor_is_dualstack_type(neigh, AF_INET6);
 }

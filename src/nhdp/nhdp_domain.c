@@ -41,21 +41,33 @@
 
 #include <stdio.h>
 
+#include "common/avl.h"
+#include "common/avl_comp.h"
 #include "common/common_types.h"
+#include "common/list.h"
+#include "common/netaddr.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "core/olsr_class.h"
-#include "core/olsr_logging.h"
+#include "core/oonf_cfg.h"
+#include "core/oonf_logging.h"
+#include "subsystems/oonf_class.h"
 
+#include "nhdp/nhdp.h"
 #include "nhdp/nhdp_db.h"
 #include "nhdp/nhdp_domain.h"
-#include "nhdp/nhdp.h"
+#include "nhdp/nhdp_interfaces.h"
 
-static struct nhdp_domain *_get_new_domain(uint8_t ext);
+static void _apply_metric(struct nhdp_domain *domain, const char *metric_name);
+static void _remove_metric(struct nhdp_domain *);
+static void _apply_mpr(struct nhdp_domain *domain, const char *mpr_name);
+static void _remove_mpr(struct nhdp_domain *);
+
+static void _recalculate_neighbor_metric(struct nhdp_domain *domain,
+    struct nhdp_neighbor *neigh);
 static const char *_to_string(struct nhdp_metric_str *, uint32_t);
 
 /* domain class */
-struct olsr_class _domain_class = {
+struct oonf_class _domain_class = {
   .name = NHDP_CLASS_DOMAIN,
   .size = sizeof(struct nhdp_domain),
 };
@@ -85,25 +97,35 @@ static struct nhdp_domain_mpr _no_mprs = {
 
 /* non-default routing domains registered to NHDP */
 struct list_entity nhdp_domain_list;
+struct list_entity nhdp_domain_listener_list;
+
 static size_t _domain_counter = 0;
+
+/* tree of known routing metrics/mpr-algorithms */
+struct avl_tree nhdp_domain_metrics;
+struct avl_tree nhdp_domain_mprs;
 
 /* flooding MPR handler registered to NHDP */
 struct nhdp_domain_mpr *_flooding_mpr = &_no_mprs;
 uint8_t _flooding_ext = 0;
 
 /* NHDP RFC5444 protocol */
-static struct olsr_rfc5444_protocol *_protocol;
+static struct oonf_rfc5444_protocol *_protocol;
 
 /**
  * Initialize nhdp metric core
  * @param p pointer to rfc5444 protocol
  */
 void
-nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
+nhdp_domain_init(struct oonf_rfc5444_protocol *p) {
   _protocol = p;
 
-  olsr_class_add(&_domain_class);
+  oonf_class_add(&_domain_class);
   list_init_head(&nhdp_domain_list);
+  list_init_head(&nhdp_domain_listener_list);
+
+  avl_init(&nhdp_domain_metrics, avl_comp_strcasecmp, false);
+  avl_init(&nhdp_domain_mprs, avl_comp_strcasecmp, false);
 }
 
 /**
@@ -112,14 +134,27 @@ nhdp_domain_init(struct olsr_rfc5444_protocol *p) {
 void
 nhdp_domain_cleanup(void) {
   struct nhdp_domain *domain, *d_it;
+  struct nhdp_domain_listener *listener, *l_it;
+  int i;
 
   list_for_each_element_safe(&nhdp_domain_list, domain, _node, d_it) {
-    /* remove metric */
+    /* free allocated TLVs */
+    for (i=0; i<4; i++) {
+      rfc5444_writer_unregister_addrtlvtype(
+          &_protocol->writer, &domain->_metric_addrtlvs[i]);
+    }
+    rfc5444_writer_unregister_addrtlvtype(
+        &_protocol->writer, &domain->_mpr_addrtlv);
+
+    /* remove domain */
     list_remove(&domain->_node);
-    olsr_class_free(&_domain_class, domain);
+    oonf_class_free(&_domain_class, domain);
   }
 
-  olsr_class_remove(&_domain_class);
+  list_for_each_element_safe(&nhdp_domain_listener_list, listener, _node, l_it) {
+    nhdp_domain_listener_remove(listener);
+  }
+  oonf_class_remove(&_domain_class);
 }
 
 /**
@@ -132,26 +167,15 @@ nhdp_domain_get_count(void) {
 
 /**
  * Add a new metric handler to nhdp
- * @param h pointer to handler
- * @return 0 if successful, -1 if metric extension is already blocked
+ * @param metric pointer to NHDP link metric
+ * @return 0 if successful, -1 if metric was already registered
  */
-struct nhdp_domain *
-nhdp_domain_metric_add(struct nhdp_domain_metric *metric, uint8_t ext) {
+int
+nhdp_domain_metric_add(struct nhdp_domain_metric *metric) {
   struct nhdp_domain *domain;
-  int i;
 
-  domain = _get_new_domain(ext);
-  if (domain == NULL) {
-    return NULL;
-  }
-  if (domain->metric != &_no_metric) {
-    OLSR_WARN(LOG_NHDP, "Error, link metric extension %u collision between '%s' and '%s'",
-        domain->ext, metric->name, domain->metric->name);
-    return NULL;
-  }
-
-  /* link metric */
-  domain->metric = metric;
+  /* initialize key */
+  metric->_node.key = metric->name;
 
   /* insert default values if not set */
   if (metric->incoming_link_start == 0) {
@@ -167,85 +191,102 @@ nhdp_domain_metric_add(struct nhdp_domain_metric *metric, uint8_t ext) {
     metric->outgoing_2hop_start = RFC5444_METRIC_INFINITE;
   }
 
-  /* add to metric handler list */
-  for (i=0; i<4; i++) {
-    metric->_metric_addrtlvs[i].type = RFC5444_ADDRTLV_LINK_METRIC;
-    metric->_metric_addrtlvs[i].exttype = ext;
-
-    rfc5444_writer_register_addrtlvtype(&_protocol->writer,
-        &metric->_metric_addrtlvs[i], -1);
-  }
-
   /* initialize to_string method if empty */
   if (metric->to_string == NULL) {
     metric->to_string = _to_string;
   }
 
-  olsr_class_event(&_domain_class, domain, OLSR_OBJECT_CHANGED);
+  /* hook into tree */
+  if (avl_insert(&nhdp_domain_metrics, &metric->_node)) {
+    return -1;
+  }
 
-  return domain;
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->metric == &_no_metric) {
+      _apply_metric(domain, domain->metric_name);
+    }
+  }
+  return 0;
 }
 
 /**
  * Remove a metric handler from the nhdp metric core
- * @param h pointer to handler
+ * @param metric pointer to metric handler
  */
 void
-nhdp_domain_metric_remove(struct nhdp_domain *domain) {
-  int i;
-
-  /* unregister TLV handlers */
-  for (i=0; i<4; i++) {
-    rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
-        &domain->metric->_metric_addrtlvs[i]);
-  }
-
-  domain->metric = &_no_metric;
-}
-
-/**
- * Add a new metric handler to nhdp
- * @param h pointer to handler
- * @return 0 if successful, -1 if metric extension is already blocked
- */
-struct nhdp_domain *
-nhdp_domain_mpr_add(struct nhdp_domain_mpr *mpr, uint8_t ext) {
+nhdp_domain_metric_remove(struct nhdp_domain_metric *metric) {
   struct nhdp_domain *domain;
 
-  domain = _get_new_domain(ext);
-  if (domain == NULL) {
-    return NULL;
-  }
-  if (domain->mpr != &_no_mprs) {
-    OLSR_WARN(LOG_NHDP, "Error, mpr extension %u collision between '%s' and '%s'",
-        domain->ext, mpr->name, domain->mpr->name);
-    return NULL;
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->metric == metric) {
+      _remove_metric(domain);
+      break;
+    }
   }
 
-  /* link mpr */
-  domain->mpr = mpr;
+  avl_remove(&nhdp_domain_metrics, &metric->_node);
+}
 
-  /* add to metric handler list */
-  mpr->_mpr_addrtlv.type = RFC5444_ADDRTLV_MPR;
-  mpr->_mpr_addrtlv.exttype = ext;
+/**
+ * Add a new mpr handler to nhdp
+ * @param mpr pointer to mpr handler
+ * @return 0 if successful, -1 if metric is already registered
+ */
+int
+nhdp_domain_mpr_add(struct nhdp_domain_mpr *mpr) {
+  struct nhdp_domain *domain;
 
-  rfc5444_writer_register_addrtlvtype(&_protocol->writer,
-      &mpr->_mpr_addrtlv, RFC5444_MSGTYPE_HELLO);
+  /* initialize key */
+  mpr->_node.key = mpr->name;
 
-  return domain;
+  if (avl_insert(&nhdp_domain_mprs, &mpr->_node)) {
+    return -1;
+  }
+
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->mpr == &_no_mprs) {
+      _apply_mpr(domain, domain->mpr_name);
+    }
+  }
+  return 0;
 }
 
 /**
  * Remove a metric handler from the nhdp metric core
- * @param h pointer to handler
+ * @param mpr pointer to mpr handler
  */
 void
-nhdp_domain_mpr_remove(struct nhdp_domain *domain) {
-  /* unregister TLV handler */
-  rfc5444_writer_unregister_addrtlvtype(&_protocol->writer,
-      &domain->mpr->_mpr_addrtlv);
+nhdp_domain_mpr_remove(struct nhdp_domain_mpr *mpr) {
+  struct nhdp_domain *domain;
 
-  domain->mpr = &_no_mprs;
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    if (domain->mpr == mpr) {
+      _remove_mpr(domain);
+      break;
+    }
+  }
+
+  avl_remove(&nhdp_domain_mprs, &mpr->_node);
+}
+
+/**
+ * Adds a listener to the NHDP domain system
+ * @param listener pointer to NHDP domain listener
+ */
+void
+nhdp_domain_listener_add(struct nhdp_domain_listener *listener) {
+  list_add_tail(&nhdp_domain_listener_list, &listener->_node);
+}
+
+/**
+ * Removes a listener from the NHDP domain system
+ * @param listener pointer to NHDP domain listener
+ */
+void
+nhdp_domain_listener_remove(struct nhdp_domain_listener *listener) {
+  if (list_is_node_added(&listener->_node)) {
+    list_remove(&listener->_node);
+  }
 }
 
 /**
@@ -321,6 +362,8 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
     data->metric.in = domain->metric->incoming_link_start;
     data->metric.out = domain->metric->outgoing_link_start;
 
+    data->best_link = NULL;
+
     data->willingness = domain->mpr->willingness;
     data->local_is_mpr = domain->mpr->mprs_start;
     data->neigh_is_mpr = domain->mpr->mpr_start;
@@ -329,7 +372,7 @@ nhdp_domain_init_neighbor(struct nhdp_neighbor *neigh) {
 
 /**
  * Process an in linkmetric tlv for a nhdp link
- * @param h pointer to metric handler
+ * @param domain pointer to NHDP domain
  * @param lnk pointer to nhdp link
  * @param tlvvalue value of metric tlv
  */
@@ -350,7 +393,7 @@ nhdp_domain_process_metric_linktlv(struct nhdp_domain *domain,
 
 /**
  * Process an in linkmetric tlv for a nhdp twohop neighbor
- * @param h pointer to metric handler
+ * @param domain pointer to NHDP domain
  * @param l2hop pointer to nhdp twohop neighbor
  * @param tlvvalue value of metric tlv
  */
@@ -372,43 +415,59 @@ nhdp_domain_process_metric_2hoptlv(struct nhdp_domain *domain,
 }
 
 /**
- * Calculate the minimal metric cost for a neighbor
- * @param domain NHDP domain
- * @param neigh nhdp neighbor
+ * Neighborhood changed in terms of metrics or connectivity.
+ * This will trigger a MPR set recalculation.
  */
 void
-nhdp_domain_calculate_neighbor_metric(
-    struct nhdp_domain *domain,
-    struct nhdp_neighbor *neigh) {
-  struct nhdp_link *lnk;
-  struct nhdp_link_domaindata *linkdata;
-  struct nhdp_neighbor_domaindata *neighdata;
-  struct nhdp_metric oldmetric;
+nhdp_domain_neighborhood_changed(void) {
+  struct nhdp_domain_listener *listener;
+  struct nhdp_domain *domain;
+  struct nhdp_neighbor *neigh;
 
-  neighdata = nhdp_domain_get_neighbordata(domain, neigh);
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
 
-  /* copy old metric value */
-  memcpy(&oldmetric, &neighdata->metric, sizeof(oldmetric));
-
-  /* reset metric */
-  neighdata->metric.in = RFC5444_METRIC_INFINITE;
-  neighdata->metric.out = RFC5444_METRIC_INFINITE;
-
-  /* get best metric */
-  list_for_each_element(&neigh->_links, lnk, _neigh_node) {
-    linkdata = nhdp_domain_get_linkdata(domain, lnk);
-
-    if (linkdata->metric.out < neighdata->metric.out) {
-      neighdata->metric.out = linkdata->metric.out;
+    list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
+      _recalculate_neighbor_metric(domain, neigh);
     }
-    if (linkdata->metric.in < neighdata->metric.in) {
-      neighdata->metric.in = linkdata->metric.in;
+
+    if (domain->mpr->update_mpr != NULL) {
+      domain->mpr->update_mpr();
     }
   }
 
-  if (memcmp(&oldmetric, &neighdata->metric, sizeof(oldmetric)) != 0) {
-    /* mark metric as updated */
-    domain->metric_changed = true;
+  // TODO: flooding mpr ?
+
+  list_for_each_element(&nhdp_domain_listener_list, listener, _node) {
+    if (listener->update) {
+      listener->update(NULL);
+    }
+  }
+}
+
+/**
+ * One neighbor changed in terms of metrics or connectivity.
+ * This will trigger a MPR set recalculation.
+ * @param neigh neighbor where the changed happened
+ */
+void
+nhdp_domain_neighbor_changed(struct nhdp_neighbor *neigh) {
+  struct nhdp_domain_listener *listener;
+  struct nhdp_domain *domain;
+
+  list_for_each_element(&nhdp_domain_list, domain, _node) {
+    _recalculate_neighbor_metric(domain, neigh);
+
+    if (domain->mpr->update_mpr != NULL) {
+      domain->mpr->update_mpr();
+    }
+  }
+
+  // TODO: flooding mpr ?
+
+  list_for_each_element(&nhdp_domain_listener_list, listener, _node) {
+    if (listener->update) {
+      listener->update(neigh);
+    }
   }
 }
 
@@ -435,9 +494,8 @@ nhdp_domain_process_mpr_tlv(struct nhdp_domain *domain,
 /**
  * Process an in Willingness tlv and put values into
  * temporary storage in MPR handler object
- * @param domain
- * @param lnk
- * @param tlvvalue
+ * @param domain pointer to NHDP domain
+ * @param tlvvalue willingness value to parse
  */
 void
 nhdp_domain_process_willingness_tlv(struct nhdp_domain *domain,
@@ -503,20 +561,6 @@ nhdp_domain_get_mpr_tlvvalue(
 }
 
 /**
- * Update all MPR sets
- */
-void
-nhdp_domain_update_mprs(void) {
-  struct nhdp_domain *domain;
-
-  list_for_each_element(&nhdp_domain_list, domain, _node) {
-    if (domain->mpr->update_mpr) {
-      domain->mpr->update_mpr();
-    }
-  }
-}
-
-/**
  * Sets a new flodding MPR algorithm
  * @param mpr pointer to flooding MPR handler
  * @param ext TLV extension to transport flooding MPR settings
@@ -534,36 +578,246 @@ nhdp_domain_set_flooding_mpr(struct nhdp_domain_mpr *mpr, uint8_t ext) {
 }
 
 /**
- * @param ext domain TLV extension value
- * @return NHDP domain for this extension value, create a new one
- *   if necessary, NULL if out of memory or maximum domains number
- *   is reached
+ * Recalculate the 'best link/metric' values of a neighbor
+ * @param domain NHDP domain
+ * @param neigh NHDP neighbor
  */
-static struct nhdp_domain *
-_get_new_domain(uint8_t ext) {
+static void _recalculate_neighbor_metric(
+    struct nhdp_domain *domain,
+    struct nhdp_neighbor *neigh) {
+  struct nhdp_link *lnk;
+  struct nhdp_link_domaindata *linkdata;
+  struct nhdp_neighbor_domaindata *neighdata;
+  struct nhdp_metric oldmetric;
+
+  neighdata = nhdp_domain_get_neighbordata(domain, neigh);
+
+  /* copy old metric value */
+  memcpy(&oldmetric, &neighdata->metric, sizeof(oldmetric));
+
+  /* reset metric */
+  neighdata->metric.in = RFC5444_METRIC_INFINITE;
+  neighdata->metric.out = RFC5444_METRIC_INFINITE;
+
+  /* reset best link */
+  neighdata->best_link = NULL;
+
+  /* get best metric */
+  list_for_each_element(&neigh->_links, lnk, _neigh_node) {
+    linkdata = nhdp_domain_get_linkdata(domain, lnk);
+
+    if (linkdata->metric.out < neighdata->metric.out) {
+      neighdata->metric.out = linkdata->metric.out;
+      neighdata->best_link = lnk;
+    }
+    if (linkdata->metric.in < neighdata->metric.in) {
+      neighdata->metric.in = linkdata->metric.in;
+    }
+  }
+
+  if (neighdata->best_link != NULL) {
+    neighdata->best_link_ifindex =
+        nhdp_interface_get_coreif(neighdata->best_link->local_if)->data.index;
+  }
+
+  if (memcmp(&oldmetric, &neighdata->metric, sizeof(oldmetric)) != 0) {
+    /* mark metric as updated */
+    domain->metric_changed = true;
+  }
+}
+
+/**
+ * Add a new domain to the NHDP system
+ * @param ext TLV extension type used for new domain
+ * @return pointer to new domain, NULL, if out of memory or
+ *   maximum number of domains has been reached.
+ */
+struct nhdp_domain *
+nhdp_domain_add(uint8_t ext) {
   struct nhdp_domain *domain;
+  int i;
 
   domain = nhdp_domain_get_by_ext(ext);
-  if (domain == NULL) {
-    if (_domain_counter == NHDP_MAXIMUM_DOMAINS) {
-      OLSR_WARN(LOG_NHDP, "Maximum number of NHDP domains reached: %d",
-          NHDP_MAXIMUM_DOMAINS);
-      return NULL;
-    }
-
-    /* initialize new domain */
-    domain = calloc(1, sizeof(struct nhdp_domain));
-    domain->ext = ext;
-    domain->index = _domain_counter++;
-    domain->metric = &_no_metric;
-    domain->mpr = &_no_mprs;
-
-    list_add_tail(&nhdp_domain_list, &domain->_node);
-
-    olsr_class_event(&_domain_class, domain, OLSR_OBJECT_ADDED);
+  if (domain) {
+    return domain;
   }
+
+  if (_domain_counter == NHDP_MAXIMUM_DOMAINS) {
+    OONF_WARN(LOG_NHDP, "Maximum number of NHDP domains reached: %d",
+        NHDP_MAXIMUM_DOMAINS);
+    return NULL;
+  }
+
+  /* initialize new domain */
+  domain = oonf_class_malloc(&_domain_class);
+  if (domain == NULL) {
+    return NULL;
+  }
+
+  domain->ext = ext;
+  domain->index = _domain_counter++;
+  domain->metric = &_no_metric;
+  domain->mpr = &_no_mprs;
+
+  /* initialize metric TLVs */
+  for (i=0; i<4; i++) {
+    domain->_metric_addrtlvs[i].type = RFC5444_ADDRTLV_LINK_METRIC;
+    domain->_metric_addrtlvs[i].exttype = domain->ext;
+
+    rfc5444_writer_register_addrtlvtype(&_protocol->writer,
+        &domain->_metric_addrtlvs[i], -1);
+  }
+
+  /* initialize mpr tlv */
+  domain->_mpr_addrtlv.type = RFC5444_ADDRTLV_MPR;
+  domain->_mpr_addrtlv.exttype = domain->ext;
+
+  rfc5444_writer_register_addrtlvtype(&_protocol->writer,
+      &domain->_mpr_addrtlv, RFC5444_MSGTYPE_HELLO);
+
+  /* add to domain list */
+
+  list_add_tail(&nhdp_domain_list, &domain->_node);
+
+  oonf_class_event(&_domain_class, domain,OONF_OBJECT_ADDED);
   return domain;
 }
+
+/**
+ * Configure a NHDP domain to a metric and a MPR algorithm
+ * @param ext TLV extension type used for new domain
+ * @param metric_name name of the metric algorithm to be used,
+ *   might be CFG_DOMAIN_NO_METRIC (for hopcount metric)
+ *   or CFG_DOMAIN_ANY_METRIC (for a metric the NHDP core should
+ *   choose).
+ * @param mpr_name name of the MPR algorithm to be used,
+ *   might be CFG_DOMAIN_NO_MPR (every node is MPR)
+ *   or CFG_DOMAIN_ANY_MPR (for a MPR the NHDP core should
+ *   choose).
+ * @return pointer to configured domain, NULL, if out of memory or
+ *   maximum number of domains has been reached.
+ */
+struct nhdp_domain *
+nhdp_domain_configure(uint8_t ext, const char *metric_name, const char *mpr_name) {
+  struct nhdp_domain *domain;
+
+  domain = nhdp_domain_add(ext);
+  if (domain == NULL) {
+    return NULL;
+  }
+
+  _apply_metric(domain, metric_name);
+  _apply_mpr(domain, mpr_name);
+
+  oonf_class_event(&_domain_class, domain, OONF_OBJECT_CHANGED);
+
+  return domain;
+}
+
+/**
+ * Apply a new metric algorithm to a NHDP domain
+ * @param domain pointer to NHDP domain
+ * @param metric_name name of the metric algorithm to be used,
+ *   might be CFG_DOMAIN_NO_METRIC (for hopcount metric)
+ *   or CFG_DOMAIN_ANY_METRIC (for a metric the NHDP core should
+ *   choose).
+ */
+static void
+_apply_metric(struct nhdp_domain *domain, const char *metric_name) {
+  struct nhdp_domain_metric *metric;
+
+  /* check if we have to remove the old metric first */
+  if (strcasecmp(domain->metric_name, metric_name) != 0) {
+    if (domain->metric != &_no_metric) {
+      _remove_metric(domain);
+      strscpy(domain->metric_name, CFG_DOMAIN_NO_METRIC, sizeof(domain->metric_name));
+    }
+  }
+
+  /* Handle wildcard metric name first */
+  if (strcasecmp(metric_name, CFG_DOMAIN_ANY_METRIC) == 0
+      && !avl_is_empty(&nhdp_domain_metrics)) {
+    metric_name = avl_first_element(&nhdp_domain_metrics, metric, _node)->name;
+  }
+
+  /* copy new metric name */
+  strscpy(domain->metric_name, metric_name, sizeof(domain->metric_name));
+
+  /* look for metric implementation */
+  metric = avl_find_element(&nhdp_domain_metrics, metric_name, metric, _node);
+  if (metric == NULL) {
+    domain->metric = &_no_metric;
+    return;
+  }
+
+  /* link domain and metric */
+  domain->metric = metric;
+  metric->domain = domain;
+}
+
+/**
+ * Reset the metric of a NHDP domain to hopcount
+ * @param domain pointer to NHDP domain
+ */
+static void
+_remove_metric(struct nhdp_domain *domain) {
+  strscpy(domain->metric_name, CFG_DOMAIN_NO_METRIC, sizeof(domain->metric_name));
+  domain->metric->domain = NULL;
+  domain->metric = &_no_metric;
+}
+
+/**
+ * Apply a new MPR algorithm to a NHDP domain
+ * @param domain pointer to NHDP domain
+ * @param mpr_name name of the MPR algorithm to be used,
+ *   might be CFG_DOMAIN_NO_MPR (every node is MPR)
+ *   or CFG_DOMAIN_ANY_MPR (for a MPR the NHDP core should
+ *   choose).
+ */
+static void
+_apply_mpr(struct nhdp_domain *domain, const char *mpr_name) {
+  struct nhdp_domain_mpr *mpr;
+
+  /* check if we have to remove the old mpr first */
+  if (strcasecmp(domain->mpr_name, mpr_name) != 0) {
+    if (domain->mpr != &_no_mprs) {
+      _remove_mpr(domain);
+      strscpy(domain->mpr_name, CFG_DOMAIN_NO_MPR, sizeof(domain->mpr_name));
+    }
+  }
+
+  /* Handle wildcard mpr name first */
+  if (strcasecmp(mpr_name, CFG_DOMAIN_ANY_METRIC) == 0
+      && !avl_is_empty(&nhdp_domain_mprs)) {
+    mpr_name = avl_first_element(&nhdp_domain_mprs, mpr, _node)->name;
+  }
+
+  /* copy new metric name */
+  strscpy(domain->mpr_name, mpr_name, sizeof(domain->mpr_name));
+
+  /* look for mpr implementation */
+  mpr = avl_find_element(&nhdp_domain_mprs, mpr_name, mpr, _node);
+  if (mpr == NULL) {
+    domain->mpr = &_no_mprs;
+    return;
+  }
+
+  /* link domain and mpr */
+  domain->mpr = mpr;
+  mpr->domain = domain;
+}
+
+/**
+ * Reset the MPR of a NHDP domain to 'everyone is MPR'
+ * @param domain pointer to NHDP domain
+ */
+static void
+_remove_mpr(struct nhdp_domain *domain) {
+  strscpy(domain->mpr_name, CFG_DOMAIN_NO_MPR, sizeof(domain->mpr_name));
+  domain->mpr->domain = NULL;
+  domain->mpr = &_no_mprs;
+}
+
 /**
  * Default implementation to convert a metric value into text
  * @param buf pointer to metric output buffer

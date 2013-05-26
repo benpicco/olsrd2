@@ -2,4 +2,4 @@
 SET (source "hysteresis_olsrv1.c")
 
 # use generic plugin maker
-oonf_create_plugin("hysteresis_olsrv1" ${source} "" false)
+oonf_create_app_plugin("hysteresis_olsrv1" ${source} "" "")

@@ -39,32 +39,47 @@
  *
  */
 
-#ifndef OLSRV2_TC_H_
-#define OLSRV2_TC_H_
+#ifndef OONFV2_TC_H_
+#define OONFV2_TC_H_
 
 #include "common/avl.h"
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
-#include "core/olsr_timer.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp.h"
 
+#include "olsrv2/olsrv2_routing.h"
+
 enum olsrv2_target_type {
-  OLSRV2_NODE_TARGET,
-  OLSRV2_ADDRESS_TARGET,
-  OLSRV2_NETWORK_TARGET,
+  OONFV2_NODE_TARGET,
+  OONFV2_ADDRESS_TARGET,
+  OONFV2_NETWORK_TARGET,
 };
 
+/*
+ * represents a target that can be reached through a tc node.
+ *
+ * Might be another tc node, a neighbor address or an attached
+ * network.
+ */
 struct olsrv2_tc_target {
   /* address or prefix of this node of the topology graph */
   struct netaddr addr;
 
   /* type of target */
   enum olsrv2_target_type type;
+
+  /* internal data for dijkstra run */
+  struct olsrv2_dijkstra_node _dijkstra;
 };
 
+/*
+ * represents a tc node which might be connected to other
+ * nodes and endpoints.
+ */
 struct olsrv2_tc_node {
   /* substructure to define target for Dijkstra Algorithm */
   struct olsrv2_tc_target target;
@@ -76,7 +91,7 @@ struct olsrv2_tc_node {
   uint64_t interval_time;
 
   /* time until this node has to be removed */
-  struct olsr_timer_entry _validity_time;
+  struct oonf_timer_entry _validity_time;
 
   /* tree of olsrv2_tc_edges */
   struct avl_tree _edges;
@@ -88,6 +103,7 @@ struct olsrv2_tc_node {
   struct avl_node _originator_node;
 };
 
+/* represents an edge between two tc nodes */
 struct olsrv2_tc_edge {
   /* pointer to source of edge */
   struct olsrv2_tc_node *src;
@@ -114,7 +130,11 @@ struct olsrv2_tc_edge {
   struct avl_node _node;
 };
 
-struct olsrv2_tc_attached_endpoint {
+/*
+ * represents a connection from a tc node to
+ * an endpoint, either a neighbor address or an attached network
+ */
+struct olsrv2_tc_attachment {
   /* pointer to source of edge */
   struct olsrv2_tc_node *src;
 
@@ -137,6 +157,12 @@ struct olsrv2_tc_attached_endpoint {
   struct avl_node _endpoint_node;
 };
 
+/*
+ * reprensents an endpoint of the dijkstra graph, which
+ * does not spawn new edges of the graph.
+ *
+ * Might be a neighbor address or an attached network
+ */
 struct olsrv2_tc_endpoint {
   /* substructure to define target for Dijkstra Algorithm */
   struct olsrv2_tc_target target;
@@ -149,6 +175,7 @@ struct olsrv2_tc_endpoint {
 };
 
 EXPORT extern struct avl_tree olsrv2_tc_tree;
+EXPORT extern struct avl_tree olsrv2_tc_endpoint_tree;
 
 void olsrv2_tc_init(void);
 void olsrv2_tc_cleanup(void);
@@ -161,9 +188,30 @@ EXPORT struct olsrv2_tc_edge *olsrv2_tc_edge_add(
     struct olsrv2_tc_node *, struct netaddr *);
 EXPORT bool olsrv2_tc_edge_remove(struct olsrv2_tc_edge *);
 
-EXPORT struct olsrv2_tc_attached_endpoint *olsrv2_tc_endpoint_add(
+EXPORT struct olsrv2_tc_attachment *olsrv2_tc_endpoint_add(
     struct olsrv2_tc_node *, struct netaddr *, bool mesh);
 EXPORT void olsrv2_tc_endpoint_remove(
-    struct olsrv2_tc_attached_endpoint *);
+    struct olsrv2_tc_attachment *);
 
-#endif /* OLSRV2_TC_H_ */
+/**
+ * @param originator originator address of a tc node
+ * @return pointer to tc node, NULL if not found
+ */
+static INLINE struct olsrv2_tc_node *
+olsrv2_tc_node_get(struct netaddr *originator) {
+  struct olsrv2_tc_node *node;
+
+  return avl_find_element(&olsrv2_tc_tree, originator, node, _originator_node);
+}
+
+/**
+ * @param prefix network prefix of tc endpoint
+ * @return pointer to tc endpoint, NULL if not found
+ */
+static inline struct olsrv2_tc_endpoint *
+olsrv2_tc_endpoint_get(struct netaddr *prefix) {
+  struct olsrv2_tc_endpoint *end;
+
+  return avl_find_element(&olsrv2_tc_endpoint_tree, prefix, end, _node);
+}
+#endif /* OONFV2_TC_H_ */

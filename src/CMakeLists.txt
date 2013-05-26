@@ -2,8 +2,9 @@
 include (../cmake/prepare_app.cmake)
 
 # add main program
-set(OONF_SRCS olsr_main.c 
-              olsr_setup.c
+set(OONF_SRCS oonf_main.c 
+              oonf_setup.c
+              oonf_api_subsystems.c
               ${PROJECT_BINARY_DIR}/app_data.c
               
               nhdp/nhdp.c
@@ -18,6 +19,7 @@ set(OONF_SRCS olsr_main.c
               olsrv2/olsrv2_lan.c
               olsrv2/olsrv2_originator.c
               olsrv2/olsrv2_reader.c
+              olsrv2/olsrv2_routing.c
               olsrv2/olsrv2_tc.c
               olsrv2/olsrv2_writer.c
               )

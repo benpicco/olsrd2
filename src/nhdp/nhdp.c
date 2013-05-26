@@ -40,11 +40,12 @@
  */
 
 #include "common/common_types.h"
+#include "config/cfg_schema.h"
 #include "rfc5444/rfc5444_writer.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_subsystem.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_telnet.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_subsystem.h"
+#include "subsystems/oonf_rfc5444.h"
+#include "subsystems/oonf_telnet.h"
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
@@ -56,15 +57,29 @@
 /* definitions */
 #define _LOG_NHDP_NAME "nhdp"
 
+struct _domain_parameters {
+  char metric_name[NHDP_DOMAIN_METRIC_MAXLEN];
+  char mpr_name[NHDP_DOMAIN_MPR_MAXLEN];
+};
+
 /* prototypes */
-static enum olsr_telnet_result _cb_nhdp(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_neighbor(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_neighlink(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_iflink(struct olsr_telnet_data *con);
-static enum olsr_telnet_result _telnet_nhdp_interface(struct olsr_telnet_data *con);
+static int _init(void);
+static void _initiate_shutdown(void);
+static void _cleanup(void);
+
+static enum oonf_telnet_result _cb_nhdp(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_neighbor(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_neighlink(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_iflink(struct oonf_telnet_data *con);
+static enum oonf_telnet_result _telnet_nhdp_interface(struct oonf_telnet_data *con);
+
+static void _cb_cfg_domain_changed(void);
+static void _cb_cfg_interface_changed(void);
+static int _cb_validate_domain_section(const char *section_name,
+    struct cfg_named_section *, struct autobuf *);
 
 /* nhdp telnet commands */
-static struct olsr_telnet_command _cmds[] = {
+static struct oonf_telnet_command _cmds[] = {
     TELNET_CMD("nhdp", _cb_nhdp,
         "NHDP database information command\n"
         "\"nhdp iflink\": shows all nhdp links sorted by interfaces including interface and 2-hop neighbor addresses\n"
@@ -73,11 +88,60 @@ static struct olsr_telnet_command _cmds[] = {
         "\"nhdp interface\": shows all local nhdp interfaces including addresses\n"),
 };
 
-/* other global variables */
-OLSR_SUBSYSTEM_STATE(_nhdp_state);
+/* subsystem definition */
+static struct cfg_schema_entry _interface_entries[] = {
+  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
+      "Filter for ip interface addresses that should be included in HELLO messages"),
+  CFG_MAP_CLOCK_MIN(nhdp_interface, h_hold_time, "hello-validity", "20.0",
+    "Validity time for NHDP Hello Messages", 100),
+  CFG_MAP_CLOCK_MIN(nhdp_interface, refresh_interval, "hello-interval", "2.0",
+    "Time interval between two NHDP Hello Messages", 100),
+};
 
+static struct cfg_schema_section _interface_section = {
+  .type = CFG_INTERFACE_SECTION,
+  .mode = CFG_INTERFACE_SECTION_MODE,
+  .cb_delta_handler = _cb_cfg_interface_changed,
+  .entries = _interface_entries,
+  .entry_count = ARRAYSIZE(_interface_entries),
+};
+
+static struct cfg_schema_entry _domain_entries[] = {
+  CFG_MAP_STRING_ARRAY(_domain_parameters, metric_name, "metric", CFG_DOMAIN_ANY_METRIC,
+      "ID of the routing metric used for this domain. '"CFG_DOMAIN_NO_METRIC"'"
+      " means no metric (hopcount!), '"CFG_DOMAIN_ANY_METRIC"' means any metric"
+      " that is loaded (with fallback on '"CFG_DOMAIN_NO_METRIC"').",
+      NHDP_DOMAIN_METRIC_MAXLEN),
+  CFG_MAP_STRING_ARRAY(_domain_parameters, mpr_name,  "mpr", CFG_DOMAIN_ANY_MPR,
+      "ID of the mpr algorithm used for this domain. '"CFG_DOMAIN_NO_MPR"'"
+      " means no mpr algorithm(everyone is MPR), '"CFG_DOMAIN_ANY_MPR"' means"
+      "any metric that is loaded (with fallback on '"CFG_DOMAIN_NO_MPR"').",
+      NHDP_DOMAIN_MPR_MAXLEN),
+};
+
+static struct cfg_schema_section _domain_section = {
+  .type = CFG_NHDP_DOMAIN_SECTION,
+  .mode = CFG_SSMODE_NAMED_WITH_DEFAULT,
+  .def_name = CFG_NHDP_DEFAULT_DOMAIN,
+
+  .cb_delta_handler = _cb_cfg_domain_changed,
+  .cb_validate = _cb_validate_domain_section,
+
+  .entries = _domain_entries,
+  .entry_count = ARRAYSIZE(_domain_entries),
+  .next_section = &_interface_section,
+};
+
+struct oonf_subsystem nhdp_subsystem = {
+  .init = _init,
+  .cleanup = _cleanup,
+  .initiate_shutdown = _initiate_shutdown,
+  .cfg_section = &_domain_section,
+};
+
+/* other global variables */
 enum log_source LOG_NHDP = LOG_MAIN;
-static struct olsr_rfc5444_protocol *_protocol;
+static struct oonf_rfc5444_protocol *_protocol;
 
 /* NHDP originator address, might be undefined */
 static struct netaddr _originator_v4, _originator_v6;
@@ -86,23 +150,19 @@ static struct netaddr _originator_v4, _originator_v6;
  * Initialize NHDP subsystem
  * @return 0 if initialized, -1 if an error happened
  */
-int
-nhdp_init(void) {
+static int
+_init(void) {
   size_t i;
 
-  if (olsr_subsystem_is_initialized(&_nhdp_state)) {
-    return 0;
-  }
+  LOG_NHDP = oonf_log_register_source(_LOG_NHDP_NAME);
 
-  LOG_NHDP = olsr_log_register_source(_LOG_NHDP_NAME);
-
-  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
+  _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
     return -1;
   }
 
   if (nhdp_writer_init(_protocol)) {
-    olsr_rfc5444_remove_protocol(_protocol);
+    oonf_rfc5444_remove_protocol(_protocol);
     return -1;
   }
 
@@ -112,43 +172,47 @@ nhdp_init(void) {
   nhdp_domain_init(_protocol);
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
-    olsr_telnet_add(&_cmds[i]);
+    oonf_telnet_add(&_cmds[i]);
   }
-
-  olsr_subsystem_init(&_nhdp_state);
   return 0;
+}
+
+/**
+ * Begin shutdown by deactivating reader and writer
+ */
+static void
+_initiate_shutdown(void) {
+  nhdp_writer_cleanup();
+  nhdp_reader_cleanup();
 }
 
 /**
  * Cleanup NHDP subsystem
  */
-void
-nhdp_cleanup(void) {
+static void
+_cleanup(void) {
   size_t i;
-  if (olsr_subsystem_cleanup(&_nhdp_state)) {
-    return;
-  }
 
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
-    olsr_telnet_remove(&_cmds[i]);
+    oonf_telnet_remove(&_cmds[i]);
   }
 
   nhdp_domain_cleanup();
-  nhdp_writer_cleanup();
-  nhdp_reader_cleanup();
   nhdp_interfaces_cleanup();
   nhdp_db_cleanup();
 }
 
 /**
  * Sets the originator address used by NHDP to a new value.
- * @param NHDP originator.
+ * @param addr NHDP originator.
  */
 void
 nhdp_set_originator(const struct netaddr *addr) {
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
+#endif
 
-  OLSR_DEBUG(LOG_NHDP, "Set originator to %s", netaddr_to_string(&buf, addr));
+  OONF_DEBUG(LOG_NHDP, "Set originator to %s", netaddr_to_string(&buf, addr));
   if (netaddr_get_address_family(addr) == AF_INET) {
     memcpy(&_originator_v4, addr, sizeof(*addr));
   }
@@ -193,8 +257,9 @@ nhdp_get_originator(int af_type) {
  * @param con
  * @return
  */
-static enum olsr_telnet_result
-_cb_nhdp(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_cb_nhdp(struct oonf_telnet_data *con) {
+  /* TODO: move this command (or a similar one) to a plugin */
   const char *next;
 
   if ((next = str_hasnextword(con->parameter, "neighlink"))) {
@@ -222,8 +287,8 @@ _cb_nhdp(struct olsr_telnet_data *con) {
  * @param con
  * @return
  */
-static enum olsr_telnet_result
-_telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_neighbor(struct oonf_telnet_data *con) {
   struct nhdp_neighbor *neigh;
   struct nhdp_naddr *naddr;
   struct netaddr_str nbuf;
@@ -241,7 +306,7 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
       if (nhdp_db_neighbor_addr_is_lost(naddr)) {
         abuf_appendf(con->out, "\tLost address: %s (vtime=%s)\n",
             netaddr_to_string(&nbuf, &naddr->neigh_addr),
-            olsr_clock_toIntervalString(&tbuf, olsr_timer_get_due(&naddr->_lost_vtime)));
+            oonf_clock_toIntervalString(&tbuf, oonf_timer_get_due(&naddr->_lost_vtime)));
       }
     }
   }
@@ -249,8 +314,16 @@ _telnet_nhdp_neighbor(struct olsr_telnet_data *con) {
   return TELNET_RESULT_ACTIVE;
 }
 
+/**
+ * Print the content of a NHDP link to the telnet console
+ * @param con telnet data connection
+ * @param lnk NHDP link
+ * @param prefix text prefix for each line
+ * @param other_addr true if the IP addresses not associated
+ *   with this link (but with this neighbor) should be printed
+ */
 static void
-_print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
+_print_link(struct oonf_telnet_data *con, struct nhdp_link *lnk,
     const char *prefix, bool other_addr) {
   static const char *PENDING = "pending";
   static const char *HEARD = "heard";
@@ -285,11 +358,15 @@ _print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
       nhdp_db_link_is_ipv6_dualstack(lnk)  ? "     " : "Link:",
       status,
       nhdp_interface_get_name(lnk->local_if),
-      olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&lnk->vtime)),
-      olsr_clock_toIntervalString(&tbuf2, olsr_timer_get_due(&lnk->heard_time)),
-      olsr_clock_toIntervalString(&tbuf3, olsr_timer_get_due(&lnk->sym_time)),
+      oonf_clock_toIntervalString(&tbuf1, oonf_timer_get_due(&lnk->vtime)),
+      oonf_clock_toIntervalString(&tbuf2, oonf_timer_get_due(&lnk->heard_time)),
+      oonf_clock_toIntervalString(&tbuf3, oonf_timer_get_due(&lnk->sym_time)),
       lnk->dualstack_partner != NULL ? "dualstack " : "",
       nhdp_hysteresis_to_string(&hbuf, lnk));
+  if (netaddr_get_address_family(&lnk->neigh->originator) != AF_UNSPEC) {
+    abuf_appendf(con->out, "%s\tOriginator: %s\n", prefix,
+        netaddr_to_string(&nbuf, &lnk->neigh->originator));
+  }
 
   avl_for_each_element(&lnk->_addresses, laddr, _link_node) {
     abuf_appendf(con->out, "%s\tLink addresses: %s\n",
@@ -309,8 +386,13 @@ _print_link(struct olsr_telnet_data *con, struct nhdp_link *lnk,
   }
 }
 
+/**
+ * Print a NHDP neighbor to the telnet console
+ * @param con telnet data connection
+ * @param neigh NHDP neighbor
+ */
 static void
-_print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
+_print_neigh(struct oonf_telnet_data *con, struct nhdp_neighbor *neigh) {
   struct nhdp_naddr *naddr;
   struct nhdp_link *lnk;
   struct netaddr_str nbuf;
@@ -322,7 +404,7 @@ _print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
       neigh->dualstack_partner != NULL ? "dualstack" : "");
 
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-    abuf_appendf(con->out, "Metric '%s': in=%d, out=%d, MPR=%s, MPRS=%s, will=%d\n",
+    abuf_appendf(con->out, "\tMetric '%s': in=%d, out=%d, MPR=%s, MPRS=%s, will=%d\n",
         domain->metric->name,
         nhdp_domain_get_neighbordata(domain, neigh)->metric.in,
         nhdp_domain_get_neighbordata(domain, neigh)->metric.out,
@@ -349,11 +431,11 @@ _print_neigh(struct olsr_telnet_data *con, struct nhdp_neighbor *neigh) {
 }
 /**
  * Handle the "nhdp neighlink" command
- * @param con
- * @return
+ * @param con telnet data connection
+ * @return always TELNET_RESULT_ACTIVE
  */
-static enum olsr_telnet_result
-_telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_neighlink(struct oonf_telnet_data *con) {
   struct nhdp_neighbor *neigh;
 
   list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
@@ -369,11 +451,11 @@ _telnet_nhdp_neighlink(struct olsr_telnet_data *con) {
 
 /**
  * Handle the "nhdp iflink" command
- * @param con
- * @return
+ * @param con telnet data connection
+ * @return always TELNET_RESULT_ACTIVE
  */
-static enum olsr_telnet_result
-_telnet_nhdp_iflink(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_iflink(struct oonf_telnet_data *con) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
 
@@ -386,8 +468,8 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
 
     abuf_appendf(con->out, "Interface '%s': hello_interval=%s hello_vtime=%s\n",
         nhdp_interface_get_name(interf),
-        olsr_clock_toIntervalString(&tbuf1, interf->refresh_interval),
-        olsr_clock_toIntervalString(&tbuf2, interf->h_hold_time));
+        oonf_clock_toIntervalString(&tbuf1, interf->refresh_interval),
+        oonf_clock_toIntervalString(&tbuf2, interf->h_hold_time));
 
     avl_for_each_element(&interf->_if_addresses, addr, _if_node) {
       if (!addr->removed) {
@@ -404,11 +486,11 @@ _telnet_nhdp_iflink(struct olsr_telnet_data *con) {
 
 /**
  * Handle the "nhdp interface" telnet command
- * @param con
- * @return
+ * @param con telnet data connection
+ * @return always TELNET_RESULT_ACTIVE
  */
-static enum olsr_telnet_result
-_telnet_nhdp_interface(struct olsr_telnet_data *con) {
+static enum oonf_telnet_result
+_telnet_nhdp_interface(struct oonf_telnet_data *con) {
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr;
   struct fraction_str tbuf1, tbuf2;
@@ -418,8 +500,8 @@ _telnet_nhdp_interface(struct olsr_telnet_data *con) {
 
     abuf_appendf(con->out, "Interface '%s': hello_interval=%s hello_vtime=%s\n",
         nhdp_interface_get_name(interf),
-        olsr_clock_toIntervalString(&tbuf1, interf->refresh_interval),
-        olsr_clock_toIntervalString(&tbuf2, interf->h_hold_time));
+        oonf_clock_toIntervalString(&tbuf1, interf->refresh_interval),
+        oonf_clock_toIntervalString(&tbuf2, interf->h_hold_time));
 
     avl_for_each_element(&interf->_if_addresses, addr, _if_node) {
       if (!addr->removed) {
@@ -431,9 +513,98 @@ _telnet_nhdp_interface(struct olsr_telnet_data *con) {
       if (addr->removed) {
         abuf_appendf(con->out, "\tRemoved address: %s (vtime=%s)\n",
             netaddr_to_string(&nbuf, &addr->if_addr),
-            olsr_clock_toIntervalString(&tbuf1, olsr_timer_get_due(&addr->_vtime)));
+            oonf_clock_toIntervalString(&tbuf1, oonf_timer_get_due(&addr->_vtime)));
       }
     }
   }
   return TELNET_RESULT_ACTIVE;
+}
+
+/**
+ * Configuration of a NHDP domain changed
+ */
+static void
+_cb_cfg_domain_changed(void) {
+  struct _domain_parameters param;
+  int ext;
+
+  OONF_INFO(LOG_NHDP, "Received domain cfg change for name '%s': %s %s",
+      _domain_section.section_name,
+      _domain_section.pre != NULL ? "pre" : "-",
+      _domain_section.post != NULL ? "post" : "-");
+
+  ext = strtol(_domain_section.section_name, NULL, 10);
+
+  if (cfg_schema_tobin(&param, _domain_section.post,
+      _domain_entries, ARRAYSIZE(_domain_entries))) {
+    OONF_WARN(LOG_NHDP, "Cannot convert NHDP domain configuration.");
+    return;
+  }
+
+  nhdp_domain_configure(ext, param.metric_name, param.mpr_name);
+}
+
+/**
+ * Configuration has changed, handle the changes
+ */
+static void
+_cb_cfg_interface_changed(void) {
+  struct nhdp_interface *interf;
+
+  OONF_DEBUG(LOG_NHDP, "Configuration of NHDP interface %s changed",
+      _interface_section.section_name);
+
+  /* get interface */
+  interf = nhdp_interface_get(_interface_section.section_name);
+
+  if (_interface_section.post == NULL) {
+    /* section was removed */
+    if (interf != NULL) {
+      nhdp_interface_remove(interf);
+    }
+    return;
+  }
+
+  if (interf == NULL) {
+    interf = nhdp_interface_add(_interface_section.section_name);
+  }
+
+  if (cfg_schema_tobin(interf, _interface_section.post,
+      _interface_entries, ARRAYSIZE(_interface_entries))) {
+    OONF_WARN(LOG_NHDP, "Cannot convert NHDP configuration for interface.");
+    return;
+  }
+
+  /* apply new settings to interface */
+  nhdp_interface_apply_settings(interf);
+}
+
+/**
+ * Validate that the name of the domain section is valid
+ * @param section_name name of section including type
+ * @param named cfg named section
+ * @param out output buffer for errors
+ * @return -1 if invalid, 0 otherwise
+ */
+static int
+_cb_validate_domain_section(const char *section_name,
+    struct cfg_named_section *named, struct autobuf *out) {
+  char *error = NULL;
+  int ext;
+
+  ext = strtol(named->name, &error, 10);
+  if (error != NULL && *error != 0) {
+    /* illegal domain name */
+    abuf_appendf(out, "name of section '%s' must be a number between 0 and 255",
+        section_name);
+    return -1;
+  }
+
+  if (ext < 0 || ext > 255) {
+    /* name out of range */
+    abuf_appendf(out, "name of section '%s' must be a number between 0 and 255",
+        section_name);
+    return -1;
+  }
+  return 0;
 }

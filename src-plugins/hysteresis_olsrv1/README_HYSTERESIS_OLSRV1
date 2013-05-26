@@ -1,11 +1,13 @@
    PLUGIN USAGE
 ==================
-Hysteresis_lsrv1 plugin by Henning Rogge
+Hysteresis_olsrv1 plugin by Henning Rogge
 
 This plugin calculates a nhdp link hysteresis similar to the mechanism suggested in OLSRv1.
 
 It use an exponential averaging on incoming (and missing) HELLOs to calculate a link quality between 0 and 1 and
 two treshold values to convert the link quality into a binary value.
+
+Its mostly useded as a demonstrator of the hysteresis API of NHDP.
 
 
    PLUGIN CONFIGURATION

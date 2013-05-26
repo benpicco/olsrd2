@@ -42,35 +42,30 @@
 #include "common/common_types.h"
 #include "common/autobuf.h"
 
-#include "core/olsr_logging.h"
-#include "core/olsr_plugins.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_plugins.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_cfg.h"
+#include "subsystems/oonf_rfc5444.h"
 
 #include "nhdp/nhdp_interfaces.h"
 
+#include "nhdpcheck/nhdpcheck.h"
+
 /* prototypes */
-static int _cb_plugin_load(void);
-static int _cb_plugin_unload(void);
-static int _cb_plugin_enable(void);
-static int _cb_plugin_disable(void);
+static int _init(void);
+static void _cleanup(void);
 
 /* plugin declaration */
-OLSR_PLUGIN7 {
-  .descr = "OLSRD2 nhdpcheck plugin",
+struct oonf_subsystem olsrv2_nhdpcheck_subsystem = {
+  .name = OONF_PLUGIN_GET_NAME(),
+  .descr = "OONFD2 nhdpcheck plugin",
   .author = "Henning Rogge",
-
-  .load = _cb_plugin_load,
-  .unload = _cb_plugin_unload,
-  .enable = _cb_plugin_enable,
-  .disable = _cb_plugin_disable,
-
-  .can_disable = true,
-  .can_unload = true,
+  .init = _init,
+  .cleanup = _cleanup,
 };
+DECLARE_OONF_PLUGIN(olsrv2_nhdpcheck_subsystem);
 
 /* NHDP message TLV array index */
 enum {
@@ -119,37 +114,19 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_tlvs[] = {
 };
 
 /* nhdp multiplexer/protocol */
-static struct olsr_rfc5444_protocol *_protocol = NULL;
+static struct oonf_rfc5444_protocol *_protocol = NULL;
 
 static enum log_source LOG_NHDP_CHECK = LOG_MAIN;
 
-
 /**
- * Constructor of plugin
- * @return 0 if initialization was successful, -1 otherwise
- */
-static int
-_cb_plugin_load(void) {
-  LOG_NHDP_CHECK = olsr_log_register_source("nhdp_check");
-  return 0;
-}
-
-/**
- * Destructor of plugin
+ * Initialize plugin
  * @return always returns 0 (cannot fail)
  */
 static int
-_cb_plugin_unload(void) {
-  return 0;
-}
+_init(void) {
+  LOG_NHDP_CHECK = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
 
-/**
- * Enable plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_enable(void) {
-  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
+  _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
     return -1;
   }
@@ -165,19 +142,17 @@ _cb_plugin_enable(void) {
 }
 
 /**
- * Disable plugin
- * @return always returns 0 (cannot fail)
+ * Cleanup plugin
  */
-static int
-_cb_plugin_disable(void) {
+static void
+_cleanup(void) {
   rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_message_consumer);
   rfc5444_reader_remove_message_consumer(
       &_protocol->reader, &_nhdp_address_consumer);
 
-  olsr_rfc5444_remove_protocol(_protocol);
+  oonf_rfc5444_remove_protocol(_protocol);
   _protocol = NULL;
-  return 0;
 }
 
 /**
@@ -195,7 +170,7 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_context *context) {
 
   /* check address length */
   if (context->addr_len != 4 && context->addr_len != 16) {
-    OLSR_INFO(LOG_NHDP_CHECK,
+    OONF_INFO(LOG_NHDP_CHECK,
         "Dropped NHDP message with addrlen %d on interface %s",
         context->addr_len, nhdp_interface_get_name(interf));
     return RFC5444_DROP_MESSAGE;
@@ -203,14 +178,14 @@ _cb_message_start_callback(struct rfc5444_reader_tlvblock_context *context) {
 
   /* drop if message has hoplimit and its not 1 */
   if (context->has_hoplimit && context->hoplimit != 1) {
-    OLSR_INFO(LOG_NHDP_CHECK,
+    OONF_INFO(LOG_NHDP_CHECK,
             "Dropped NHDP message with hoplimit %d", context->hoplimit);
     return RFC5444_DROP_MESSAGE;
   }
 
   /* drop if message has hopcount and its not 0 */
   if (context->has_hopcount && context->hopcount != 0) {
-    OLSR_INFO(LOG_NHDP_CHECK,
+    OONF_INFO(LOG_NHDP_CHECK,
             "Dropped NHDP message with hopcount %d", context->hopcount);
     return RFC5444_DROP_MESSAGE;
   }
@@ -229,14 +204,14 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   /* drop message if it has no VTIME TLV or has more than one */
   if (_nhdp_message_tlvs[IDX_TLV_VTIME].tlv == NULL
       || _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->next_entry != NULL) {
-    OLSR_INFO(LOG_NHDP_CHECK,
+    OONF_INFO(LOG_NHDP_CHECK,
             "Dropped NHDP message with no or multiple VTIME TLVs");
     return RFC5444_DROP_MESSAGE;
   }
 
   /* check if VTIME TLV has length 1 */
   if (_nhdp_message_tlvs[IDX_TLV_VTIME].tlv->length != 1) {
-    OLSR_INFO(LOG_NHDP_CHECK,
+    OONF_INFO(LOG_NHDP_CHECK,
         "Dropped NHDP message with VTIME TLV length %d",
         _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->length);
     return RFC5444_DROP_MESSAGE;
@@ -245,12 +220,12 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv) {
     /* check if message has multiple ITIME TLVs */
     if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv->next_entry != NULL) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message with multiple ITIME TLVs");
       return RFC5444_DROP_MESSAGE;
     }
     if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv->length != 1) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message with ITIME TLV length %d",
           _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->length);
       return RFC5444_DROP_MESSAGE;
@@ -258,7 +233,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
     if (_nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0]
         > _nhdp_message_tlvs[IDX_TLV_VTIME].tlv->single_value[0]) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message because ITIME 0x%02x is larger"
           "than VTIME 0x%02x",
           _nhdp_message_tlvs[IDX_TLV_ITIME].tlv->single_value[0],
@@ -278,13 +253,16 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
 static enum rfc5444_result
 _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
-  struct netaddr_str buf;
   uint8_t value;
+
+#ifdef OONF_LOG_INFO
+  struct netaddr_str buf;
+#endif
 
   if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv != NULL) {
     /* check for duplicate LOCAL_IF TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv->next_entry != NULL) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had multiple LOCAL_IF TLVs",
           buf.buf);
       return RFC5444_DROP_MESSAGE;
@@ -292,7 +270,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
     /* check for bad length of LOCAL_IF TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv->length != 1) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had LOCAL_IF TLV length %d",
           buf.buf, _nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv->length);
       return RFC5444_DROP_MESSAGE;
@@ -302,7 +280,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     value = _nhdp_address_tlvs[IDX_ADDRTLV_LOCAL_IF].tlv->single_value[0];
     if (value != RFC5444_LOCALIF_THIS_IF
         && value != RFC5444_LOCALIF_OTHER_IF) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had LOCAL_IF TLV value %u",
           buf.buf, (uint32_t)value);
       return RFC5444_DROP_MESSAGE;
@@ -310,7 +288,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
     /* check if address had both LOCAL_IF and LINK_STATUS TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv != NULL) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had LOCAL_IF and LINK_STATUS TLV",
           buf.buf);
       return RFC5444_DROP_MESSAGE;
@@ -318,7 +296,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
     /* check if address had both LOCAL_IF and OTHER_NEIGH TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv != NULL) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had LOCAL_IF and OTHER_NEIGHB TLV",
           buf.buf);
       return RFC5444_DROP_MESSAGE;
@@ -328,7 +306,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv != NULL) {
     /* check for duplicate LINK_STATUS TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv->next_entry != NULL) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had multiple LINK_STATUS TLVs",
           buf.buf);
       return RFC5444_DROP_MESSAGE;
@@ -336,7 +314,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
     /* check for bad length of LINK_STATUS TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv->length != 1) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had LINK_STATUS TLV length %d",
           buf.buf, _nhdp_address_tlvs[IDX_ADDRTLV_LINK_STATUS].tlv->length);
       return RFC5444_DROP_MESSAGE;
@@ -347,7 +325,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     if (value != RFC5444_LINKSTATUS_LOST
         && value != RFC5444_LINKSTATUS_SYMMETRIC
         && value != RFC5444_LINKSTATUS_HEARD) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had LINK_STATUS TLV value %u",
           buf.buf, (uint32_t)value);
       return RFC5444_DROP_MESSAGE;
@@ -357,7 +335,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
   if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv != NULL) {
     /* check for duplicate OTHER_NEIGH TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv->next_entry != NULL) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had multiple OTHER_NEIGHB TLVs",
           buf.buf);
       return RFC5444_DROP_MESSAGE;
@@ -365,7 +343,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
 
     /* check for bad length of OTHER_NEIGH TLV */
     if (_nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv->length != 1) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had OTHER_NEIGH TLV length %d",
           buf.buf, _nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv->length);
       return RFC5444_DROP_MESSAGE;
@@ -375,7 +353,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     value = _nhdp_address_tlvs[IDX_ADDRTLV_OTHER_NEIGHB].tlv->single_value[0];
     if (value != RFC5444_OTHERNEIGHB_SYMMETRIC
         && value != RFC5444_OTHERNEIGHB_LOST) {
-      OLSR_INFO(LOG_NHDP_CHECK,
+      OONF_INFO(LOG_NHDP_CHECK,
           "Dropped NHDP message, address %s had OTHER_NEIGH TLV value %u",
           buf.buf, (uint32_t)value);
       return RFC5444_DROP_MESSAGE;

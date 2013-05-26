@@ -45,7 +45,17 @@
 #include "common/common_types.h"
 #include "common/netaddr.h"
 
-#define CFG_NHDP_SECTION "nhdp"
+#include "core/oonf_subsystem.h"
+
+#define CFG_NHDP_SECTION        "nhdp"
+
+#define CFG_NHDP_DOMAIN_SECTION "domain"
+#define CFG_NHDP_DEFAULT_DOMAIN "0"
+#define CFG_DOMAIN_NO_METRIC    "-"
+#define CFG_DOMAIN_ANY_METRIC   "*"
+#define CFG_DOMAIN_NO_MPR       "-"
+#define CFG_DOMAIN_ANY_MPR      "*"
+
 
 enum {
   /* default metric value */
@@ -56,7 +66,12 @@ enum {
 
   /* message tlv for transporting IPv6 originator in ipv4 messages */
   NHDP_MSGTLV_IPV6ORIGINATOR = 226,
+
+  /* message tlv for transporting mac address */
+  NHDP_MSGTLV_MAC = 227,
 };
+
+EXPORT struct oonf_subsystem nhdp_subsystem;
 
 EXPORT extern enum log_source LOG_NHDP;
 

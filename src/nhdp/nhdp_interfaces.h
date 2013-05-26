@@ -49,11 +49,11 @@ struct nhdp_interface_addr;
 #include "common/avl.h"
 #include "common/list.h"
 #include "common/netaddr.h"
-#include "core/olsr_interface.h"
-#include "core/olsr_netaddr_acl.h"
-#include "core/olsr_timer.h"
+#include "common/netaddr_acl.h"
 #include "rfc5444/rfc5444_iana.h"
-#include "tools/olsr_rfc5444.h"
+#include "subsystems/oonf_interface.h"
+#include "subsystems/oonf_rfc5444.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp_db.h"
 
@@ -65,7 +65,7 @@ struct nhdp_interface_addr;
  */
 struct nhdp_interface {
   /* listener for interface events */
-  struct olsr_rfc5444_interface_listener rfc5444_if;
+  struct oonf_rfc5444_interface_listener rfc5444_if;
 
   /* interval between two hellos sent through this interface */
   uint64_t refresh_interval;
@@ -77,17 +77,17 @@ struct nhdp_interface {
   uint64_t i_hold_time;
 
   /* ACL for incoming HELLO messages through this interface */
-  struct olsr_netaddr_acl ifaddr_filter;
+  struct netaddr_acl ifaddr_filter;
 
   /*
    * true if this interface has a neighbor that should be reached through
-   * IPv4/IPv6 for flooding.
+   * IPv4/IPv6 for flooding. This is set by the nhdp interface code.
    */
   bool use_ipv4_for_flooding;
   bool use_ipv6_for_flooding;
 
   /* timer for hello generation */
-  struct olsr_timer_entry _hello_timer;
+  struct oonf_timer_entry _hello_timer;
 
   /* member entry for global interface tree */
   struct avl_node _node;
@@ -122,7 +122,7 @@ struct nhdp_interface_addr {
   bool _to_be_removed;
 
   /* validity time until entry should be removed from database */
-  struct olsr_timer_entry _vtime;
+  struct oonf_timer_entry _vtime;
 
   /* member entry for interfaces tree of addresses */
   struct avl_node _if_node;
@@ -134,9 +134,12 @@ struct nhdp_interface_addr {
 EXPORT extern struct avl_tree nhdp_interface_tree;
 EXPORT extern struct avl_tree nhdp_ifaddr_tree;
 
-void nhdp_interfaces_init(struct olsr_rfc5444_protocol *);
+void nhdp_interfaces_init(struct oonf_rfc5444_protocol *);
 void nhdp_interfaces_cleanup(void);
 
+EXPORT struct nhdp_interface *nhdp_interface_add(const char *name);
+EXPORT void nhdp_interface_remove(struct nhdp_interface *interf);
+EXPORT void nhdp_interface_apply_settings(struct nhdp_interface *interf);
 EXPORT void nhdp_interface_update_status(struct nhdp_interface *);
 
 /**
@@ -245,6 +248,15 @@ nhdp_interface_link_get_by_originator(
     const struct nhdp_interface *interf, const struct netaddr *originator) {
   struct nhdp_link *lnk;
   return avl_find_element(&interf->_link_originators, originator, lnk, _originator_node);
+}
+
+/**
+ * @param nhdp_if pointer to nhdp interface
+ * @return pointer to corresponding oonf_interface
+ */
+static inline struct oonf_interface *
+nhdp_interface_get_coreif(struct nhdp_interface *nhdp_if) {
+  return oonf_rfc5444_get_core_interface(nhdp_if->rfc5444_if.interface);
 }
 
 #endif /* NHDP_INTERFACES_H_ */

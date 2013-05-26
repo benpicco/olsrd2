@@ -39,13 +39,16 @@
  *
  */
 
+#include "common/avl.h"
 #include "common/common_types.h"
+#include "common/list.h"
+#include "common/netaddr.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_writer.h"
-#include "core/olsr_class.h"
-#include "core/olsr_logging.h"
-#include "tools/olsr_rfc5444.h"
+#include "core/oonf_logging.h"
+#include "subsystems/oonf_class.h"
+#include "subsystems/oonf_rfc5444.h"
 
 #include "nhdp/nhdp_interfaces.h"
 #include "nhdp/nhdp_db.h"
@@ -98,7 +101,7 @@ static struct rfc5444_writer_tlvtype _olsrv2_addrtlvs[] = {
 /* handling of gateway TLVs (they are domain specific) */
 static struct rfc5444_writer_tlvtype _gateway_addrtlvs[NHDP_MAXIMUM_DOMAINS];
 
-static struct olsr_class_listener _domain_listener = {
+static struct oonf_class_extension _domain_listener = {
   .name = "olsrv2 writer",
   .class_name = NHDP_CLASS_DOMAIN,
 
@@ -107,20 +110,26 @@ static struct olsr_class_listener _domain_listener = {
 
 static int _send_msg_type;
 
-static struct olsr_rfc5444_protocol *_protocol;
+static struct oonf_rfc5444_protocol *_protocol;
 
-static enum log_source LOG_OLSRV2_W = LOG_MAIN;
+static enum log_source LOG_OONFV2_W = LOG_MAIN;
+static bool _cleanedup = false;
 
+/**
+ * initialize olsrv2 writer
+ * @param protocol rfc5444 protocol
+ * @return -1 if an error happened, 0 otherwise
+ */
 int
-olsrv2_writer_init(struct olsr_rfc5444_protocol *protocol) {
+olsrv2_writer_init(struct oonf_rfc5444_protocol *protocol) {
   _protocol = protocol;
 
-  LOG_OLSRV2_W = olsr_log_register_source("olsrv2_w");
+  LOG_OONFV2_W = oonf_log_register_source("olsrv2_w");
 
   _olsrv2_message = rfc5444_writer_register_message(
       &_protocol->writer, RFC5444_MSGTYPE_TC, true, 4);
   if (_olsrv2_message == NULL) {
-    OLSR_WARN(LOG_OLSRV2, "Could not register OLSRv2 TC message");
+    OONF_WARN(LOG_OLSRV2, "Could not register OLSRV2 TC message");
     return -1;
   }
 
@@ -131,20 +140,25 @@ olsrv2_writer_init(struct olsr_rfc5444_protocol *protocol) {
       &_protocol->writer, &_olsrv2_msgcontent_provider,
       _olsrv2_addrtlvs, ARRAYSIZE(_olsrv2_addrtlvs))) {
 
-    OLSR_WARN(LOG_OLSRV2, "Count not register OLSRv2 msg contentprovider");
+    OONF_WARN(LOG_OLSRV2, "Count not register OLSRV2 msg contentprovider");
     rfc5444_writer_unregister_message(&_protocol->writer, _olsrv2_message);
     return -1;
   }
 
-  olsr_class_listener_add(&_domain_listener);
+  oonf_class_extension_add(&_domain_listener);
   return 0;
 }
 
+/**
+ * Cleanup olsrv2 writer
+ */
 void
 olsrv2_writer_cleanup(void) {
   int i;
 
-  olsr_class_listener_remove(&_domain_listener);
+  _cleanedup = true;
+
+  oonf_class_extension_remove(&_domain_listener);
 
   /* unregister address tlvs */
   for (i=0; i<NHDP_MAXIMUM_DOMAINS; i++) {
@@ -160,21 +174,33 @@ olsrv2_writer_cleanup(void) {
   rfc5444_writer_unregister_message(&_protocol->writer, _olsrv2_message);
 }
 
+/**
+ * Send a new TC message over all relevant interfaces
+ */
 void
 olsrv2_writer_send_tc(void) {
+  if (_cleanedup) {
+    /* do not send more TCs during shutdown */
+    return;
+  }
+
   /* send IPv4 */
-  OLSR_INFO(LOG_OLSRV2_W, "Emit IPv4 TC message.");
+  OONF_INFO(LOG_OONFV2_W, "Emit IPv4 TC message.");
   _send_msg_type = AF_INET;
-  olsr_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
+  oonf_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
 
   /* send IPv6 */
-  OLSR_INFO(LOG_OLSRV2_W, "Emit IPv6 TC message.");
+  OONF_INFO(LOG_OONFV2_W, "Emit IPv6 TC message.");
   _send_msg_type = AF_INET6;
-  olsr_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
+  oonf_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
 
   _send_msg_type = AF_UNSPEC;
 }
 
+/**
+ * initialize the gateway tlvs for a nhdp domain
+ * @param ptr nhdp domain
+ */
 static void
 _cb_initialize_gatewaytlv(void *ptr) {
   struct nhdp_domain *domain = ptr;
@@ -186,6 +212,11 @@ _cb_initialize_gatewaytlv(void *ptr) {
       &_gateway_addrtlvs[domain->index], RFC5444_MSGTYPE_TC);
 }
 
+/**
+ * Callback for rfc5444 writer to add message header for tc
+ * @param writer
+ * @param message
+ */
 static void
 _cb_addMessageHeader(struct rfc5444_writer *writer,
     struct rfc5444_writer_message *message) {
@@ -200,9 +231,9 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
   rfc5444_writer_set_msg_hopcount(writer, message, 0);
   rfc5444_writer_set_msg_hoplimit(writer, message, 255);
   rfc5444_writer_set_msg_seqno(writer, message,
-      olsr_rfc5444_get_next_message_seqno(_protocol));
+      oonf_rfc5444_get_next_message_seqno(_protocol));
 
-  OLSR_DEBUG(LOG_OLSRV2_W, "Generate TC");
+  OONF_DEBUG(LOG_OONFV2_W, "Generate TC");
 }
 
 /**
@@ -215,12 +246,12 @@ _cb_addMessageHeader(struct rfc5444_writer *writer,
 static bool
 _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
     struct rfc5444_writer_target *rfc5444_target, void *ptr __attribute__((unused))) {
-  struct olsr_rfc5444_target *target;
+  struct oonf_rfc5444_target *target;
   struct nhdp_interface *interf;
   struct nhdp_link *lnk;
   int target_af_type;
 
-  target = container_of(rfc5444_target, struct olsr_rfc5444_target, rfc5444_target);
+  target = container_of(rfc5444_target, struct oonf_rfc5444_target, rfc5444_target);
 
   if (target == target->interface->multicast4) {
     target_af_type = AF_INET;
@@ -261,13 +292,13 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
     if (netaddr_get_address_family(&lnk->neigh->originator) == _send_msg_type
         && lnk->dualstack_partner == NULL) {
       /* link type is right and node is not dualstack */
-      OLSR_DEBUG(LOG_OLSRV2_W, "Found link with AF %s which is not dualstack",
+      OONF_DEBUG(LOG_OONFV2_W, "Found link with AF %s which is not dualstack",
           _send_msg_type == AF_INET ? "ipv4" : "ipv6");
       return true;
     }
     if (nhdp_db_link_is_ipv6_dualstack(lnk)) {
       /* prefer IPv6 for dualstack neighbors */
-      OLSR_DEBUG(LOG_OLSRV2_W, "Found link with AF ipv6 which is dualstack");
+      OONF_DEBUG(LOG_OONFV2_W, "Found link with AF ipv6 which is dualstack");
 
       return true;
     }
@@ -277,6 +308,10 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
   return false;
 }
 
+/**
+ * Callback for rfc5444 writer to add message tlvs to tc
+ * @param writer
+ */
 static void
 _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   uint8_t vtime_encoded, itime_encoded;
@@ -295,23 +330,26 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
       &itime_encoded, sizeof(itime_encoded));
 }
 
+/**
+ * Callback for rfc5444 writer to add addresses and addresstlvs to tc
+ * @param writer
+ */
 static void
 _cb_addAddresses(struct rfc5444_writer *writer) {
-  const struct olsr_netaddr_acl *routable_acl;
+  const struct netaddr_acl *routable_acl;
   struct rfc5444_writer_address *addr;
   struct nhdp_neighbor *neigh;
   struct nhdp_naddr *naddr;
-
   struct nhdp_neighbor_domaindata *neigh_domain;
   struct nhdp_domain *domain;
-
   struct olsrv2_lan_entry *lan;
   bool any_advertised;
   uint8_t nbr_addrtype_value;
-
   uint16_t metric_in, metric_out;
 
+#ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
+#endif
 
   routable_acl = olsrv2_get_routable();
 
@@ -328,7 +366,7 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
     if (!any_advertised) {
       /* neighbor is not advertised */
-      OLSR_DEBUG(LOG_OLSRV2_W, "Unadvertised neighbor");
+      OONF_DEBUG(LOG_OONFV2_W, "Unadvertised neighbor");
       continue;
     }
 
@@ -336,14 +374,14 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
     avl_for_each_element(&neigh->_neigh_addresses, naddr, _neigh_node) {
       if (netaddr_get_address_family(&naddr->neigh_addr) != _send_msg_type) {
         /* wrong address family */
-        OLSR_DEBUG(LOG_OLSRV2_W, "Wrong address type of neighbor %s",
+        OONF_DEBUG(LOG_OONFV2_W, "Wrong address type of neighbor %s",
             netaddr_to_string(&buf, &naddr->neigh_addr));
         continue;
       }
 
       nbr_addrtype_value = 0;
 
-      if (olsr_acl_check_accept(routable_acl, &naddr->neigh_addr)) {
+      if (netaddr_acl_check_accept(routable_acl, &naddr->neigh_addr)) {
         nbr_addrtype_value += RFC5444_NBR_ADDR_TYPE_ROUTABLE;
       }
       if (netaddr_cmp(&neigh->originator, &naddr->neigh_addr) == 0) {
@@ -352,23 +390,23 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
 
       if (nbr_addrtype_value == 0) {
         /* skip this address */
-        OLSR_DEBUG(LOG_OLSRV2_W, "Address %s is neither routable"
+        OONF_DEBUG(LOG_OONFV2_W, "Address %s is neither routable"
             " nor an originator", netaddr_to_string(&buf, &naddr->neigh_addr));
         continue;
       }
 
-      OLSR_DEBUG(LOG_OLSRV2_W, "Add address %s to TC",
+      OONF_DEBUG(LOG_OONFV2_W, "Add address %s to TC",
           netaddr_to_string(&buf, &naddr->neigh_addr));
       addr = rfc5444_writer_add_address(writer, _olsrv2_msgcontent_provider.creator,
           netaddr_get_binptr(&naddr->neigh_addr),
           netaddr_get_prefix_length(&naddr->neigh_addr), false);
       if (addr == NULL) {
-        OLSR_WARN(LOG_OLSRV2_W, "Out of memory error for olsrv2 address");
+        OONF_WARN(LOG_OONFV2_W, "Out of memory error for olsrv2 address");
         return;
       }
 
       /* add neighbor type TLV */
-      OLSR_DEBUG(LOG_OLSRV2_W, "Add NBRAddrType TLV with value %u", nbr_addrtype_value);
+      OONF_DEBUG(LOG_OONFV2_W, "Add NBRAddrType TLV with value %u", nbr_addrtype_value);
       rfc5444_writer_add_addrtlv(writer, addr, &_olsrv2_addrtlvs[IDX_ADDRTLV_NBR_ADDR_TYPE],
           &nbr_addrtype_value, sizeof(nbr_addrtype_value), false);
 
@@ -383,9 +421,10 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           /* just put in an empty metric so we don't need to start a second TLV */
           metric_in = 0;
 
-          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+          OONF_DEBUG(LOG_OONFV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+          metric_in = htons(metric_in);
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
         }
         else if (metric_in == metric_out) {
@@ -393,9 +432,10 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           metric_in |= RFC5444_LINKMETRIC_INCOMING_NEIGH;
           metric_in |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
 
-          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+          OONF_DEBUG(LOG_OONFV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+          metric_in = htons(metric_in);
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
         }
         else {
@@ -403,14 +443,16 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
           metric_in |= RFC5444_LINKMETRIC_INCOMING_NEIGH;
           metric_out |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
 
-          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+          OONF_DEBUG(LOG_OONFV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_in);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+          metric_in = htons(metric_in);
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
               &metric_in, sizeof(metric_in), true);
 
-          OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+          OONF_DEBUG(LOG_OONFV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
               domain->ext, metric_out);
-          rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[1],
+          metric_out = htons(metric_out);
+          rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[1],
               &metric_out, sizeof(metric_out), true);
         }
       }
@@ -424,36 +466,43 @@ _cb_addAddresses(struct rfc5444_writer *writer) {
       continue;
     }
 
-    OLSR_DEBUG(LOG_OLSRV2_W, "Add address %s to TC",
+    OONF_DEBUG(LOG_OONFV2_W, "Add address %s to TC",
         netaddr_to_string(&buf, &lan->prefix));
     addr = rfc5444_writer_add_address(writer, _olsrv2_msgcontent_provider.creator,
         netaddr_get_binptr(&lan->prefix),
         netaddr_get_prefix_length(&lan->prefix), false);
     if (addr == NULL) {
-      OLSR_WARN(LOG_OLSRV2_W, "Out of memory error for olsrv2 address");
+      OONF_WARN(LOG_OONFV2_W, "Out of memory error for olsrv2 address");
       return;
     }
 
     /* add Gateway TLV and Metric TLV */
     list_for_each_element(&nhdp_domain_list, domain, _node) {
-      metric_out = rfc5444_metric_encode(lan->outgoing_metric[domain->index]);
+      metric_out = rfc5444_metric_encode(lan->data[domain->index].outgoing_metric);
       metric_out |= RFC5444_LINKMETRIC_OUTGOING_NEIGH;
 
       /* add Metric TLV */
-      OLSR_DEBUG(LOG_OLSRV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
+      OONF_DEBUG(LOG_OONFV2_W, "Add Linkmetric (ext %u) TLV with value 0x%04x",
           domain->ext, metric_out);
-      rfc5444_writer_add_addrtlv(writer, addr, &domain->metric->_metric_addrtlvs[0],
+      rfc5444_writer_add_addrtlv(writer, addr, &domain->_metric_addrtlvs[0],
           &metric_out, sizeof(metric_out), false);
 
       /* add Gateway TLV */
-      OLSR_DEBUG(LOG_OLSRV2_W, "Add Gateway (ext %u) TLV with value 0x%04x",
+      OONF_DEBUG(LOG_OONFV2_W, "Add Gateway (ext %u) TLV with value 0x%04x",
           domain->ext, metric_in);
       rfc5444_writer_add_addrtlv(writer, addr, &_gateway_addrtlvs[domain->index],
-          &lan->distance[domain->index], 1, false);
+          &lan->data[domain->index]. distance, 1, false);
     }
   }
 }
 
+/**
+ * Callback triggered when tc is finished.
+ * @param writer
+ * @param start
+ * @param end
+ * @param complete
+ */
 static void
 _cb_finishMessageTLVs(struct rfc5444_writer *writer,
     struct rfc5444_writer_address *start __attribute__((unused)),

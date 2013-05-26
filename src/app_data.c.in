@@ -39,10 +39,10 @@
  *
  */
 
-#include "core/olsr_logging.h"
+#include "core/oonf_logging.h"
 #include "app_data.h"
 
-static struct olsr_appdata _appdata = {
+static struct oonf_appdata _appdata = {
   .app_name = "${OONF_APP}",
   .app_version = "${OONF_APP_VERSION}",
   .versionstring_trailer = "${OONF_VERSION_TRAILER}",
@@ -51,18 +51,14 @@ static struct olsr_appdata _appdata = {
 
   .default_config = "${OONF_DEFAULT_CONF}",
 
-  .git_commit = "${OONF_SRC_GIT}",
-  .git_change = "${OONF_SRC_CHANGE}",
-
-  .builddate = __DATE__" "__TIME__,
-  .buildsystem = "${CMAKE_SYSTEM}",
+  .git_commit = "${OONF_APP_GIT}",
 
   .sharedlibrary_prefix = "${CMAKE_SHARED_LIBRARY_PREFIX}${OONF_APP_LIBPREFIX}_",
   .sharedlibrary_postfix = "${CMAKE_SHARED_LIBRARY_SUFFIX}",
 };
 
 
-const struct olsr_appdata *
-olsr_appdata_get(void) {
+const struct oonf_appdata *
+oonf_appdata_get(void) {
   return &_appdata;
 }

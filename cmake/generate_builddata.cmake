@@ -1,39 +1,24 @@
 #!/bin/cmake
 
 # look for git executable 
+set (found_git false)
 find_program(found_git git)
 
-IF(${found_git} STREQUAL "found_git-NOTFOUND" OR NOT EXISTS ${GIT})
-    # git executable or repository (.git) is not available
-    SET(OONF_SRC_GIT "cannot read git repository")
-    SET(OONF_SRC_CHANGE "")
-ELSE()
-    # everything is fine, read commit and diff stat
-    execute_process(COMMAND git describe --long --tags 
-        OUTPUT_VARIABLE OONF_SRC_GIT OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND git diff --shortstat HEAD ./src ./src-plugins ./cmake 
-        OUTPUT_VARIABLE OONF_SRC_CHANGE OUTPUT_STRIP_TRAILING_WHITESPACE)
+SET(OONF_APP_GIT "cannot read git repository")
+
+IF(NOT ${found_git} STREQUAL "found_git-NOTFOUND")
+	# get git description WITH dirty flag
+	execute_process(COMMAND git describe --always --long --tags --dirty --match "v[0-9]*"
+		OUTPUT_VARIABLE OONF_APP_GIT OUTPUT_STRIP_TRAILING_WHITESPACE)
 ENDIF()
+
+# compare with version number
+STRING(REGEX MATCH "v${OONF_APP_VERSION}-" FOUND_VERSION ${OONF_APP_GIT})
+IF (NOT FOUND_VERSION)
+	message (FATAL_ERROR "App version '${OONF_APP_VERSION}'"
+		" is not present in git description '${OONF_APP_GIT}'."
+		" Please re-run 'cmake ..' to update build files")
+ENDIF (NOT FOUND_VERSION)
 
 # create builddata file
 configure_file (${SRC} ${DST})
-
-# replace spaces with string to convert into list
-string(REPLACE "\\ " ";" PLUGIN_LIST "${PLUGINS}")
-
-# create C file which would call the static plugin constructors 
-file(APPEND ${DST} "\n")
-
-FOREACH(plugin ${PLUGIN_LIST})
-    file(APPEND ${DST} "extern void hookup_plugin_${plugin}(void);\n")
-ENDFOREACH(plugin)
-
-file(APPEND ${DST} "\n")
-file(APPEND ${DST} "void\n")
-file(APPEND ${DST} "olsr_plugins_load_static(void) {\n")
-
-FOREACH(plugin ${PLUGIN_LIST})
-    file(APPEND ${DST} "  hookup_plugin_${plugin}();\n")
-ENDFOREACH(plugin)
-
-file(APPEND ${DST} "}\n")

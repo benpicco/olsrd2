@@ -47,45 +47,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
-#include <sys/socket.h>
-#include <net/if.h>
 
 #include "common/daemonize.h"
-#include "common/list.h"
 #include "config/cfg_cmd.h"
 #include "config/cfg_db.h"
 #include "config/cfg_schema.h"
-#include "core/os_clock.h"
-#include "core/os_net.h"
-#include "core/os_system.h"
-#include "core/os_syslog.h"
-#include "core/olsr_class.h"
-#include "core/olsr_clock.h"
-#include "core/olsr_interface.h"
-#include "core/olsr_libdata.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_packet_socket.h"
-#include "core/olsr_plugins.h"
-#include "core/olsr_socket.h"
-#include "core/olsr_stream_socket.h"
-#include "core/olsr_timer.h"
-#include "olsr_setup.h"
-#include "core/olsr_subsystem.h"
+#include "core/oonf_cfg.h"
+#include "core/oonf_libdata.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_logging_cfg.h"
+#include "core/oonf_plugins.h"
+#include "core/oonf_subsystem.h"
+#include "subsystems/oonf_clock.h"
+#include "subsystems/oonf_interface.h"
+#include "subsystems/oonf_socket.h"
 
-#include "tools/olsr_cfg.h"
-#include "tools/olsr_http.h"
-#include "tools/olsr_logging_cfg.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_telnet.h"
-
-#include "nhdp/nhdp.h"
 #include "app_data.h"
+#include "oonf_api_subsystems.h"
+#include "oonf_setup.h"
 
-#if OONF_NEED_ROUTING == true
-#include "core/os_routing.h"
-#endif
+/* prototypes */
+static bool _cb_stop_scheduler(void);
+static void quit_signal_handler(int);
+static void hup_signal_handler(int);
+static void setup_signalhandler(void);
+static int mainloop(int argc, char **argv);
+static void parse_early_commandline(int argc, char **argv);
+static int parse_commandline(int argc, char **argv, bool reload_only);
+static int display_schema(void);
 
-static bool _end_olsr_signal, _display_schema, _debug_early, _ignore_unknown;
+static bool _end_oonf_signal, _display_schema, _debug_early, _ignore_unknown;
 static char *_schema_name;
 
 enum argv_short_options {
@@ -94,7 +85,7 @@ enum argv_short_options {
   argv_option_ignore_unknown,
 };
 
-static struct option olsr_options[] = {
+static struct option oonf_options[] = {
 #if !defined(REMOVE_HELPTEXT)
   { "help",         no_argument,       0, 'h' },
 #endif
@@ -107,6 +98,7 @@ static struct option olsr_options[] = {
   { "get",             optional_argument, 0, 'g' },
   { "format",          required_argument, 0, 'f' },
   { "quit",            no_argument,       0, 'q' },
+  { "nodefault",       no_argument,       0, 'n' },
   { "schema",          optional_argument, 0, argv_option_schema },
   { "Xearlydebug",     no_argument,       0, argv_option_debug_early },
   { "Xignoreunknown",  no_argument,       0, argv_option_ignore_unknown },
@@ -119,8 +111,9 @@ static const char *help_text =
     "  -h, --help                             Display this help file\n"
     "  -v, --version                          Display the version string and the included static plugins\n"
     "  -p, --plugin=shared-library            Load a shared library as a plugin\n"
-    "      --quit                             Load plugins and validate configuration, then end\n"
+    "  -q, --quit                             Load plugins and validate configuration, then end\n"
     "      --schema                           Display all allowed section types of configuration\n"
+    "              =all                       Display all allowed entries in all sections\n"
     "              =section_type              Display all allowed entries of one configuration section\n"
     "              =section_type.key          Display help text for configuration entry\n"
     "  -l, --load=SOURCE                      Load configuration from a SOURCE\n"
@@ -139,21 +132,15 @@ static const char *help_text =
     "           =section_type[name].key       Show the value(s) of a key in a named section\n"
     "  -f, --format=FORMAT                    Set the format for loading/saving data\n"
     "                                         (use 'AUTO' for automatic detection of format)\n"
+    "  -n, --nodefault                        Do not load the default configuration file\n"
     "\n"
     "Expert/Experimental arguments\n"
     "  --Xearlydebug                          Activate debugging output before configuration could be parsed\n"
     "  --Xignoreunknown                       Ignore unknown command line arguments\n"
+    "\n"
+    "The remainder of the parameters which are no arguments are handled as interface names.\n"
 ;
 #endif
-
-/* prototype for local statics */
-static void quit_signal_handler(int);
-static void hup_signal_handler(int);
-static void setup_signalhandler(void);
-static int mainloop(int argc, char **argv);
-static void parse_early_commandline(int argc, char **argv);
-static int parse_commandline(int argc, char **argv, bool reload_only);
-static int display_schema(void);
 
 /**
  * Main program
@@ -162,50 +149,73 @@ int
 main(int argc, char **argv) {
   int return_code;
   int fork_pipe;
+  uint64_t next_interval;
+  size_t i;
+  size_t initialized;
+
+  struct oonf_subsystem **subsystems;
+  size_t subsystem_count;
 
   /* early initialization */
   return_code = 1;
   fork_pipe = -1;
+  initialized = 0;
+
   _schema_name = NULL;
   _display_schema = false;
   _debug_early = false;
   _ignore_unknown = false;
 
+  /* assemble list of subsystems first */
+  subsystem_count = get_used_api_subsystem_count()
+      + oonf_setup_get_subsystem_count();
+
+  subsystems = calloc(subsystem_count, sizeof(struct oonf_subsystem *));
+  if(!subsystems) {
+    fprintf(stderr, "Out of memory error for subsystem array\n");
+    return -1;
+  }
+
+  memcpy(&subsystems[0], used_api_subsystems,
+      sizeof(struct oonf_subsystem *) * get_used_api_subsystem_count());
+  memcpy(&subsystems[get_used_api_subsystem_count()],
+      oonf_setup_get_subsystems(),
+      sizeof(struct oonf_subsystem *) * oonf_setup_get_subsystem_count());
+
   srand(times(NULL));
 
   /* setup signal handler */
-  _end_olsr_signal = false;
+  _end_oonf_signal = false;
   setup_signalhandler();
 
   /* parse "early" command line arguments */
   parse_early_commandline(argc, argv);
 
   /* initialize logger */
-  if (olsr_log_init(olsr_appdata_get(), _debug_early ? LOG_SEVERITY_DEBUG : LOG_SEVERITY_WARN)) {
+  if (oonf_log_init(oonf_appdata_get(), _debug_early ? LOG_SEVERITY_DEBUG : LOG_SEVERITY_WARN)) {
     goto olsrd_cleanup;
   }
 
-  /* add configuration definition */
-  if (olsr_cfg_init(argc, argv)) {
+  /* prepare plugin initialization */
+  oonf_plugins_init();
+
+  /* initialize configuration system */
+  if (oonf_cfg_init(argc, argv)) {
     goto olsrd_cleanup;
   }
 
   /* add custom configuration definitions */
-  olsr_logcfg_init(olsr_setup_get_level1_logs(), olsr_setup_get_level1count());
+  oonf_logcfg_init();
 
-  /* prepare plugin initialization */
-  olsr_plugins_init();
-
-  /* load static plugins */
-  olsr_plugins_load_static();
-  if (olsr_plugins_init_static()) {
-    goto olsrd_cleanup;
+  /* add configuration options for subsystems */
+  for (i=0; i<subsystem_count; i++) {
+    oonf_subsystem_configure(oonf_cfg_get_schema(), subsystems[i]);
   }
 
   /* parse command line and read configuration files */
   return_code = parse_commandline(argc, argv, false);
   if (return_code != -1) {
-    /* end OLSRd now */
+    /* end OONFd now */
     goto olsrd_cleanup;
   }
 
@@ -213,86 +223,28 @@ main(int argc, char **argv) {
   return_code = 1;
 
   /* read global section early */
-  if (olsr_cfg_update_globalcfg(true)) {
-    OLSR_WARN(LOG_MAIN, "Cannot read global configuration section");
+  if (oonf_cfg_update_globalcfg(true)) {
+    OONF_WARN(LOG_MAIN, "Cannot read global configuration section");
     goto olsrd_cleanup;
   }
-
-  /* preload plugins to show their schemas */
-  if (olsr_cfg_loadplugins()) {
-    goto olsrd_cleanup;
-  }
-
-  /* check if we are root, otherwise stop */
-#if OONF_NEED_ROOT == true
-  if (geteuid() != 0) {
-    OLSR_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
-        olsr_appdata_get()->app_name);
-    goto olsrd_cleanup;
-  }
-#endif
 
   /* see if we need to fork */
-  if (config_global.fork) {
+  if (!_display_schema && config_global.fork) {
     /* fork into background */
     fork_pipe = daemonize_prepare();
     if (fork_pipe == -1) {
-      OLSR_WARN(LOG_MAIN, "Cannot fork into background");
+      OONF_WARN(LOG_MAIN, "Cannot fork into background");
       goto olsrd_cleanup;
     }
   }
 
   /* configure logger */
-  if (olsr_logcfg_apply(olsr_cfg_get_rawdb())) {
+  if (oonf_logcfg_apply(oonf_cfg_get_rawdb())) {
     goto olsrd_cleanup;
   }
 
-  /* initialize basic framework */
-  os_syslog_init();
-  olsr_class_init();
-  if (os_clock_init()) {
-    goto olsrd_cleanup;
-  }
-  if (olsr_clock_init()) {
-    goto olsrd_cleanup;
-  }
-  olsr_timer_init();
-  olsr_socket_init();
-  olsr_packet_init();
-  olsr_stream_init();
-
-  /* activate os-specific code */
-  if (os_system_init()) {
-    goto olsrd_cleanup;
-  }
-
-#if OONF_NEED_ROUTING == true
-  if (os_routing_init()) {
-    goto olsrd_cleanup;
-  }
-#endif
-
-  if (os_net_init()) {
-    goto olsrd_cleanup;
-  }
-
-  /* activate interface listening system */
-  olsr_interface_init();
-
-  /* activate rfc5444 scheduler */
-  if (olsr_rfc5444_init()) {
-    goto olsrd_cleanup;
-  }
-
-  /* activate duplicate handling code */
-  olsr_duplicate_set_init();
-
-  /* activate telnet and http */
-  olsr_telnet_init();
-  olsr_http_init();
-
-  /* activate custom additions to framework */
-  if (olsr_setup_init()) {
+  /* load plugins */
+  if (oonf_cfg_loadplugins()) {
     goto olsrd_cleanup;
   }
 
@@ -302,17 +254,40 @@ main(int argc, char **argv) {
     goto olsrd_cleanup;
   }
 
+  /* check if we are root, otherwise stop */
+#if OONF_NEED_ROOT == true
+  if (geteuid() != 0) {
+    OONF_WARN(LOG_MAIN, "You must be root(uid = 0) to run %s!\n",
+        oonf_appdata_get()->app_name);
+    goto olsrd_cleanup;
+  }
+#endif
+
+  /* initialize framework */
+  for (initialized=0; initialized<subsystem_count; initialized++) {
+    if (subsystems[initialized]->init != NULL) {
+      if (subsystems[initialized]->init()) {
+        OONF_WARN(LOG_MAIN, "Could not initialize '%s' submodule",
+            subsystems[initialized]->name);
+        goto olsrd_cleanup;
+      }
+    }
+  }
+
+  /* call initialization callbacks of dynamic plugins */
+  oonf_cfg_initplugins();
+
   /* apply configuration */
-  if (olsr_cfg_apply()) {
+  if (oonf_cfg_apply()) {
     goto olsrd_cleanup;
   }
 
-  if (!olsr_cfg_is_running()) {
+  if (!oonf_cfg_is_running()) {
     /*
      * mayor error during late initialization
      * or maybe the user decided otherwise and pressed CTRL-C
      */
-    return_code = _end_olsr_signal ? 0 : 1;
+    return_code = _end_oonf_signal ? 0 : 1;
     goto olsrd_cleanup;
   }
 
@@ -325,45 +300,49 @@ main(int argc, char **argv) {
   /* activate mainloop */
   return_code = mainloop(argc, argv);
 
+  /* tell framework shutdown is in progress */
+  for (i=0; i<subsystem_count; i++) {
+    if (subsystems[i]->initiate_shutdown != NULL) {
+      subsystems[i]->initiate_shutdown();
+    }
+  }
+
+  /* wait for 500 milliseconds and process socket events */
+  if (oonf_clock_update()) {
+    OONF_WARN(LOG_MAIN, "Clock update for shutdown failed");
+  }
+  next_interval = oonf_clock_get_absolute(500);
+  if (oonf_socket_handle(NULL, next_interval)) {
+    OONF_WARN(LOG_MAIN, "Grace period for shutdown failed.");
+  }
+
 olsrd_cleanup:
   /* free plugins */
-  olsr_plugins_cleanup();
+  oonf_cfg_unconfigure_plugins();
+  oonf_plugins_cleanup();
 
-  /* free custom framework additions */
-  olsr_setup_cleanup();
+  /* cleanup framework */
+  while (initialized-- > 0) {
+    if (subsystems[initialized]->cleanup != NULL) {
+      subsystems[initialized]->cleanup();
+    }
+  }
 
-  /* free framework resources */
-  olsr_http_cleanup();
-  olsr_telnet_cleanup();
-  olsr_duplicate_set_cleanup();
-  olsr_rfc5444_cleanup();
-  olsr_interface_cleanup();
-  os_net_cleanup();
-#if OONF_NEED_ROUTING
-  os_routing_cleanup();
-#endif
-  os_system_cleanup();
-  olsr_stream_cleanup();
-  olsr_packet_cleanup();
-  olsr_socket_cleanup();
-  olsr_timer_cleanup();
-  olsr_clock_cleanup();
-  os_clock_cleanup();
-  olsr_class_cleanup();
-  os_syslog_cleanup();
-  olsr_logcfg_cleanup();
+  /* free logging/config bridge resources */
+  oonf_logcfg_cleanup();
 
   /* free configuration resources */
-  olsr_cfg_cleanup();
+  oonf_cfg_cleanup();
 
   /* free logger resources */
-  olsr_log_cleanup();
+  oonf_log_cleanup();
 
   if (fork_pipe != -1) {
     /* tell main process that we had a problem */
     daemonize_finish(fork_pipe, return_code);
   }
 
+  free (subsystems);
   return return_code;
 }
 
@@ -373,7 +352,7 @@ olsrd_cleanup:
  */
 static void
 quit_signal_handler(int signo __attribute__ ((unused))) {
-  olsr_cfg_exit();
+  oonf_cfg_exit();
 }
 
 /**
@@ -382,7 +361,7 @@ quit_signal_handler(int signo __attribute__ ((unused))) {
  */
 static void
 hup_signal_handler(int signo __attribute__ ((unused))) {
-  olsr_cfg_trigger_reload();
+  oonf_cfg_trigger_reload();
 }
 
 /**
@@ -391,58 +370,62 @@ hup_signal_handler(int signo __attribute__ ((unused))) {
  */
 static int
 mainloop(int argc, char **argv) {
-  uint64_t next_interval;
   int exit_code = 0;
 
-  OLSR_INFO(LOG_MAIN, "Starting %s", olsr_appdata_get()->app_name);
+  OONF_INFO(LOG_MAIN, "Starting %s", oonf_appdata_get()->app_name);
 
   /* enter main loop */
-  while (olsr_cfg_is_running()) {
+  while (oonf_cfg_is_running()) {
     /*
      * Update the global timestamp. We are using a non-wallclock timer here
      * to avoid any undesired side effects if the system clock changes.
      */
-    if (olsr_clock_update()) {
+    if (oonf_clock_update()) {
       exit_code = 1;
       break;
     }
 
     /* Read incoming data and handle it immediately */
-    if (olsr_socket_handle(0)) {
+    if (oonf_socket_handle(_cb_stop_scheduler, 0)) {
       exit_code = 1;
       break;
     }
 
     /* reload configuration if triggered */
-    if (olsr_cfg_is_reload_set()) {
-      OLSR_INFO(LOG_MAIN, "Reloading configuration");
-      if (olsr_cfg_clear_rawdb()) {
+    if (oonf_cfg_is_reload_set()) {
+      OONF_INFO(LOG_MAIN, "Reloading configuration");
+      if (oonf_cfg_clear_rawdb()) {
         break;
       }
       if (parse_commandline(argc, argv, true) == -1) {
-        if (olsr_cfg_apply()) {
+        if (oonf_cfg_apply()) {
           break;
         }
       }
     }
 
     /* commit config if triggered */
-    if (olsr_cfg_is_commit_set()) {
-      OLSR_INFO(LOG_MAIN, "Commiting configuration");
-      if (olsr_cfg_apply()) {
+    if (oonf_cfg_is_commit_set()) {
+      OONF_INFO(LOG_MAIN, "Commiting configuration");
+      if (oonf_cfg_apply()) {
         break;
       }
     }
   }
 
-  /* wait for 500 milliseconds and process socket events */
-  next_interval = olsr_clock_get_absolute(500);
-  if (olsr_socket_handle(next_interval)) {
-    exit_code = 1;
-  }
-
-  OLSR_INFO(LOG_MAIN, "Ending %s", olsr_appdata_get()->app_name);
+  OONF_INFO(LOG_MAIN, "Ending %s", oonf_appdata_get()->app_name);
   return exit_code;
+}
+
+/**
+ * Callback for the scheduler that tells it when to return to the mainloop.
+ * @return true if scheduler should return to the mainloop now
+ */
+static bool
+_cb_stop_scheduler(void) {
+  return oonf_cfg_is_commit_set()
+      || oonf_cfg_is_reload_set()
+      || !oonf_cfg_is_running();
 }
 
 /**
@@ -479,7 +462,7 @@ parse_early_commandline(int argc, char **argv) {
   int opt, opt_idx;
 
   opterr = 0;
-  while (0 <= (opt = getopt_long(argc, argv, "-", olsr_options, &opt_idx))) {
+  while (0 <= (opt = getopt_long(argc, argv, "-", oonf_options, &opt_idx))) {
     switch (opt) {
       case argv_option_debug_early:
         _debug_early = true;
@@ -507,16 +490,17 @@ parse_early_commandline(int argc, char **argv) {
  */
 static int
 parse_commandline(int argc, char **argv, bool reload_only) {
+  struct oonf_subsystem *plugin;
   const char *parameters;
-  struct olsr_plugin *plugin, *plugin_it;
   struct autobuf log;
   struct cfg_db *db;
   int opt, opt_idx, return_code;
-  bool loaded_file;
+  bool loaded_file, nodefault;
 
   return_code = -1;
   loaded_file = false;
-  db = olsr_cfg_get_rawdb();
+  nodefault = false;
+  db = oonf_cfg_get_rawdb();
 
   /* reset getopt_long */
   opt_idx = -1;
@@ -524,25 +508,25 @@ parse_commandline(int argc, char **argv, bool reload_only) {
   opterr = _ignore_unknown ? 0 : -1;
 
   abuf_init(&log);
-  cfg_cmd_clear_state(olsr_cfg_get_instance());
+  cfg_cmd_clear_state(oonf_cfg_get_instance());
 
   if (reload_only) {
     /* only parameters that load and change configuration data */
-    parameters = "-p:l:s:r:f:";
+    parameters = "-p:l:s:r:f:n";
   }
   else {
-    parameters = "-hvp:ql:S:s:r:g::f:";
+    parameters = "-hvp:ql:S:s:r:g::f:n";
   }
 
   while (return_code == -1
-      && 0 <= (opt = getopt_long(argc, argv, parameters, olsr_options, &opt_idx))) {
+      && 0 <= (opt = getopt_long(argc, argv, parameters, oonf_options, &opt_idx))) {
     switch (opt) {
       case 'h':
 #if !defined(REMOVE_HELPTEXT)
         abuf_appendf(&log, "Usage: %s [OPTION]...\n%s%s%s", argv[0],
-            olsr_appdata_get()->help_prefix,
+            oonf_appdata_get()->help_prefix,
             help_text,
-            olsr_appdata_get()->help_suffix);
+            oonf_appdata_get()->help_suffix);
 #endif
         return_code = 0;
         break;
@@ -553,22 +537,24 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         break;
 
       case 'v':
-        olsr_log_printversion(&log);
-        OLSR_FOR_ALL_PLUGIN_ENTRIES(plugin, plugin_it) {
-          abuf_appendf(&log, " Static plugin: %s\n", plugin->name);
+        oonf_log_printversion(&log);
+        avl_for_each_element(&oonf_plugin_tree, plugin, _node) {
+          if (!oonf_subsystem_is_dynamic(plugin)) {
+            abuf_appendf(&log, "Static plugin: %s\n", plugin->name);
+          }
         }
         return_code = 0;
         break;
       case 'p':
-        if (olsr_plugins_load(optarg) == NULL) {
+        if (oonf_plugins_load(optarg) == NULL) {
           return_code = 1;
         }
         else {
-          cfg_db_add_entry(olsr_cfg_get_rawdb(), CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_PLUGIN, optarg);
+          cfg_db_add_entry(oonf_cfg_get_rawdb(), CFG_SECTION_GLOBAL, NULL, CFG_GLOBAL_PLUGIN, optarg);
         }
         break;
       case 'q':
-        olsr_cfg_exit();
+        oonf_cfg_exit();
         break;
 
       case argv_option_schema:
@@ -577,28 +563,28 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         break;
 
       case 'l':
-        if (cfg_cmd_handle_load(olsr_cfg_get_instance(), db, optarg, &log)) {
+        if (cfg_cmd_handle_load(oonf_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         loaded_file = true;
         break;
       case 'S':
-        if (cfg_cmd_handle_save(olsr_cfg_get_instance(), db, optarg, &log)) {
+        if (cfg_cmd_handle_save(oonf_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 's':
-        if (cfg_cmd_handle_set(olsr_cfg_get_instance(), db, optarg, &log)) {
+        if (cfg_cmd_handle_set(oonf_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 'r':
-        if (cfg_cmd_handle_remove(olsr_cfg_get_instance(), db, optarg, &log)) {
+        if (cfg_cmd_handle_remove(oonf_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         break;
       case 'g':
-        if (cfg_cmd_handle_get(olsr_cfg_get_instance(), db, optarg, &log)) {
+        if (cfg_cmd_handle_get(oonf_cfg_get_instance(), db, optarg, &log)) {
           return_code = 1;
         }
         else {
@@ -606,37 +592,44 @@ parse_commandline(int argc, char **argv, bool reload_only) {
         }
         break;
       case 'f':
-        if (cfg_cmd_handle_format(olsr_cfg_get_instance(), optarg)) {
+        if (cfg_cmd_handle_format(oonf_cfg_get_instance(), optarg)) {
+          return_code = 1;
+        }
+        break;
+      case 'n':
+        nodefault = true;
+        break;
+
+      case 1:
+        /* the rest are interface names */
+        if (cfg_db_add_namedsection(db, CFG_INTERFACE_SECTION, optarg) == NULL) {
+          abuf_appendf(&log, "Could not add named section for interface %s", optarg);
           return_code = 1;
         }
         break;
 
       default:
         if (!(reload_only ||_ignore_unknown)) {
+          abuf_appendf(&log, "Unknown parameter: '%c' (%d)\n", opt, opt);
           return_code = 1;
         }
         break;
     }
   }
 
-  if (return_code == -1 && !loaded_file) {
-    /* try to load default config file if no other loaded */
-    cfg_cmd_handle_load(olsr_cfg_get_instance(), db,
-        olsr_appdata_get()->default_config, NULL);
+  while (return_code == -1 && optind < argc) {
+    optind++;
   }
 
-#if 0
-  if (return_code == -1) {
-    /* validate configuration */
-    if (cfg_schema_validate(db, false, true, &log)) {
-      return_code = 1;
-    }
+  if (return_code == -1 && !loaded_file && !nodefault) {
+    /* try to load default config file if no other loaded */
+    cfg_cmd_handle_load(oonf_cfg_get_instance(), db,
+        oonf_appdata_get()->default_config, NULL);
   }
-#endif
 
   if (abuf_getlen(&log) > 0) {
     if (reload_only) {
-      OLSR_WARN(LOG_MAIN, "Cannot reload configuration.\n%s", abuf_getptr(&log));
+      OONF_WARN(LOG_MAIN, "Cannot reload configuration.\n%s", abuf_getptr(&log));
     }
     else {
       fputs(abuf_getptr(&log), return_code == 0 ? stdout : stderr);
@@ -661,9 +654,9 @@ display_schema(void) {
   return_code = 0;
 
   abuf_init(&log);
-  cfg_cmd_clear_state(olsr_cfg_get_instance());
+  cfg_cmd_clear_state(oonf_cfg_get_instance());
 
-  if (cfg_cmd_handle_schema(olsr_cfg_get_rawdb(), _schema_name, &log)) {
+  if (cfg_cmd_handle_schema(oonf_cfg_get_rawdb(), _schema_name, &log)) {
     return_code = -1;
   }
 

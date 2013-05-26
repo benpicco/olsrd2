@@ -43,22 +43,23 @@
 
 #include "common/common_types.h"
 #include "common/autobuf.h"
-
-#include "core/olsr_class.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_plugins.h"
-#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_cfg.h"
+#include "core/oonf_cfg.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_plugins.h"
+#include "subsystems/oonf_class.h"
+#include "subsystems/oonf_rfc5444.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
 
+#include "hysteresis_olsrv1/hysteresis_olsrv1.h"
+
 /* definitions and constants */
-#define CFG_HYSTERESIS_OLSRV1_SECTION "hysteresis_olsrv1"
+#define CFG_HYSTERESIS_OONFV1_SECTION "hysteresis_olsrv1"
 
 struct _config {
   int accept;
@@ -71,14 +72,12 @@ struct link_hysteresis_data {
   int32_t quality;
   bool pending, lost;
 
-  struct olsr_timer_entry interval_timer;
+  struct oonf_timer_entry interval_timer;
 };
 
 /* prototypes */
-static int _cb_plugin_load(void);
-static int _cb_plugin_unload(void);
-static int _cb_plugin_enable(void);
-static int _cb_plugin_disable(void);
+static int _init(void);
+static void _cleanup(void);
 
 static void _update_hysteresis(struct nhdp_link *,
     struct link_hysteresis_data *, bool);
@@ -98,27 +97,7 @@ static void _cb_cfg_changed(void);
 static int _cb_cfg_validate(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
 
-/* plugin declaration */
-OLSR_PLUGIN7 {
-  .descr = "OLSRD2 olsrV1 hysteresis plugin",
-  .author = "Henning Rogge",
-
-  .load = _cb_plugin_load,
-  .unload = _cb_plugin_unload,
-  .enable = _cb_plugin_enable,
-  .disable = _cb_plugin_disable,
-
-  .can_disable = true,
-  .can_unload = false,
-};
-
 /* configuration options */
-static struct cfg_schema_section _hysteresis_section = {
-  .type = CFG_HYSTERESIS_OLSRV1_SECTION,
-  .cb_delta_handler = _cb_cfg_changed,
-  .cb_validate = _cb_cfg_validate,
-};
-
 static struct cfg_schema_entry _hysteresis_entries[] = {
   CFG_MAP_FRACTIONAL_MINMAX(_config, accept, "accept", "0.7",
       "link quality to consider a link up", 3, 0, 1000),
@@ -128,24 +107,40 @@ static struct cfg_schema_entry _hysteresis_entries[] = {
       "exponential aging to control speed of link hysteresis", 3, 1, 1000),
 };
 
+static struct cfg_schema_section _hysteresis_section = {
+  .type = CFG_HYSTERESIS_OONFV1_SECTION,
+  .cb_delta_handler = _cb_cfg_changed,
+  .cb_validate = _cb_cfg_validate,
+  .entries = _hysteresis_entries,
+  .entry_count = ARRAYSIZE(_hysteresis_entries),
+};
+
 static struct _config _hysteresis_config;
 
+/* plugin declaration */
+struct oonf_subsystem olsrv2_hysteresis_olsrv1_subsystem = {
+  .name = OONF_PLUGIN_GET_NAME(),
+  .descr = "OONFD2 olsrv1-style hysteresis plugin",
+  .author = "Henning Rogge",
+
+  .cfg_section = &_hysteresis_section,
+
+  .init = _init,
+  .cleanup = _cleanup,
+};
+DECLARE_OONF_PLUGIN(olsrv2_hysteresis_olsrv1_subsystem);
+
 /* storage extension for nhdp_link */
-struct olsr_class_extension _link_extenstion = {
+struct oonf_class_extension _link_extenstion = {
   .name = "hysteresis_olsrv1",
   .class_name = NHDP_CLASS_LINK,
   .size = sizeof(struct link_hysteresis_data),
-};
-
-struct olsr_class_listener _link_listener = {
-  .name = "hysteresis listener",
-  .class_name = NHDP_CLASS_LINK,
   .cb_add = _cb_link_added,
   .cb_remove = _cb_link_removed,
 };
 
 /* timer class to measure interval between Hellos */
-struct olsr_timer_info _hello_timer_info = {
+struct oonf_timer_info _hello_timer_info = {
   .name = "Hello interval timeout for hysteresis",
   .callback = _cb_timer_hello_lost,
 };
@@ -160,34 +155,12 @@ struct nhdp_hysteresis_handler _hysteresis_handler = {
 };
 
 /**
- * Constructor of plugin
- * @return 0 if initialization was successful, -1 otherwise
+ * Initialize plugin
+ * @return -1 if an error happened, 0 otherwise
  */
 static int
-_cb_plugin_load(void) {
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_hysteresis_section,
-      _hysteresis_entries, ARRAYSIZE(_hysteresis_entries));
-
-  return 0;
-}
-
-/**
- * Destructor of plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_unload(void) {
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_hysteresis_section);
-  return 0;
-}
-
-/**
- * Enable plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_enable(void) {
-  if (olsr_class_is_extension_registered(&_link_extenstion)) {
+_init(void) {
+  if (oonf_class_is_extension_registered(&_link_extenstion)) {
     struct nhdp_link *lnk;
 
     /* add all custom extensions for link */
@@ -195,11 +168,7 @@ _cb_plugin_enable(void) {
       _cb_link_added(lnk);
     }
   }
-  else if (olsr_class_extend(&_link_extenstion)) {
-    return -1;
-  }
-
-  if (olsr_class_listener_add(&_link_listener)) {
+  else if (oonf_class_extension_add(&_link_extenstion)) {
     return -1;
   }
 
@@ -208,11 +177,10 @@ _cb_plugin_enable(void) {
 }
 
 /**
- * Disable plugin
- * @return always returns 0 (cannot fail)
+ * Cleanup plugin
  */
-static int
-_cb_plugin_disable(void) {
+static void
+_cleanup(void) {
   struct nhdp_link *lnk;
 
   /* remove all custom extensions for link */
@@ -221,8 +189,7 @@ _cb_plugin_disable(void) {
   }
 
   nhdp_hysteresis_set_handler(NULL);
-  olsr_class_listener_remove(&_link_listener);
-  return 0;
+  oonf_class_extension_remove(&_link_extenstion);
 }
 
 /**
@@ -263,7 +230,7 @@ _update_hysteresis(struct nhdp_link *lnk,
 static void
 _cb_link_added(void *ptr) {
   struct link_hysteresis_data *data;
-  data = olsr_class_get_extension(&_link_extenstion, ptr);
+  data = oonf_class_get_extension(&_link_extenstion, ptr);
 
   memset(data, 0, sizeof(*data));
   data->pending = true;
@@ -279,9 +246,9 @@ _cb_link_added(void *ptr) {
 static void
 _cb_link_removed(void *ptr) {
   struct link_hysteresis_data *data;
-  data = olsr_class_get_extension(&_link_extenstion, ptr);
+  data = oonf_class_get_extension(&_link_extenstion, ptr);
 
-  olsr_timer_stop(&data->interval_timer);
+  oonf_timer_stop(&data->interval_timer);
 }
 
 /**
@@ -297,7 +264,7 @@ _cb_update_hysteresis(struct nhdp_link *lnk,
     struct rfc5444_reader_tlvblock_context *context __attribute__((unused))) {
   struct link_hysteresis_data *data;
 
-  data = olsr_class_get_extension(&_link_extenstion, lnk);
+  data = oonf_class_get_extension(&_link_extenstion, lnk);
 
   /* update hysteresis because of received hello */
   _update_hysteresis(lnk, data, false);
@@ -309,7 +276,7 @@ _cb_update_hysteresis(struct nhdp_link *lnk,
   if (data->interval == 0) {
     data->interval = lnk->vtime_value;
   }
-  olsr_timer_set(&data->interval_timer, (data->interval * 3) / 2);
+  oonf_timer_set(&data->interval_timer, (data->interval * 3) / 2);
 }
 
 /**
@@ -321,7 +288,7 @@ static bool
 _cb_is_pending(struct nhdp_link *lnk) {
   struct link_hysteresis_data *data;
 
-  data = olsr_class_get_extension(&_link_extenstion, lnk);
+  data = oonf_class_get_extension(&_link_extenstion, lnk);
   return data->pending;
 }
 
@@ -334,7 +301,7 @@ static bool
 _cb_is_lost(struct nhdp_link *lnk) {
   struct link_hysteresis_data *data;
 
-  data = olsr_class_get_extension(&_link_extenstion, lnk);
+  data = oonf_class_get_extension(&_link_extenstion, lnk);
   return data->lost;
 }
 
@@ -350,7 +317,7 @@ _cb_to_string(struct nhdp_hysteresis_str *buf, struct nhdp_link *lnk) {
   struct fraction_str fbuf;
   struct link_hysteresis_data *data;
 
-  data = olsr_class_get_extension(&_link_extenstion, lnk);
+  data = oonf_class_get_extension(&_link_extenstion, lnk);
 
   snprintf(buf->buf, sizeof(*buf), "quality=%s", cfg_fraction_to_string(&fbuf, data->quality, 3));
 
@@ -365,13 +332,13 @@ static void
 _cb_timer_hello_lost(void *ptr) {
   struct link_hysteresis_data *data;
 
-  data = olsr_class_get_extension(&_link_extenstion, ptr);
+  data = oonf_class_get_extension(&_link_extenstion, ptr);
 
   /* update hysteresis because of lost Hello */
   _update_hysteresis(ptr, data, true);
 
   /* reactivate timer */
-  olsr_timer_set(&data->interval_timer, data->interval);
+  oonf_timer_set(&data->interval_timer, data->interval);
 }
 
 /**

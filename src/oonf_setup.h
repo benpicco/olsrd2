@@ -39,12 +39,13 @@
  *
  */
 
-#ifndef OLSR_SETUP_H_
-#define OLSR_SETUP_H_
+#ifndef OONF_SETUP_H_
+#define OONF_SETUP_H_
 
-int olsr_setup_init(void) __attribute__((warn_unused_result));
-void olsr_setup_cleanup(void);
-size_t olsr_setup_get_level1count(void);
-enum log_source *olsr_setup_get_level1_logs(void);
+#include "core/oonf_subsystem.h"
+#include "core/oonf_logging.h"
 
-#endif /* OLSR_SETUP_H_ */
+struct oonf_subsystem **oonf_setup_get_subsystems(void);
+size_t oonf_setup_get_subsystem_count(void);
+
+#endif /* OONF_SETUP_H_ */

@@ -43,27 +43,29 @@
 
 #include "common/common_types.h"
 #include "common/autobuf.h"
-
-#include "core/olsr_class.h"
-#include "core/olsr_logging.h"
-#include "core/olsr_plugins.h"
-#include "core/olsr_timer.h"
 #include "rfc5444/rfc5444_iana.h"
 #include "rfc5444/rfc5444.h"
 #include "rfc5444/rfc5444_reader.h"
-#include "tools/olsr_rfc5444.h"
-#include "tools/olsr_cfg.h"
+
+#include "core/oonf_cfg.h"
+#include "core/oonf_logging.h"
+#include "core/oonf_plugins.h"
+#include "subsystems/oonf_class.h"
+#include "subsystems/oonf_rfc5444.h"
+#include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp.h"
 #include "nhdp/nhdp_domain.h"
 #include "nhdp/nhdp_interfaces.h"
 
-/* definitions and constants */
-#define CFG_ETXFF_SECTION "ff_etx"
+#include "ff_etx/ff_etx.h"
 
-#define ETXFF_LINKCOST_MINIMUM 0x1000
-#define ETXFF_LINKCOST_START   NHDP_METRIC_DEFAULT
-#define ETXFF_LINKCOST_MAXIMUM NHDP_METRIC_DEFAULT
+/* definitions and constants */
+enum {
+  ETXFF_LINKCOST_MINIMUM = 0x1000,
+  ETXFF_LINKCOST_START   = NHDP_METRIC_DEFAULT,
+  ETXFF_LINKCOST_MAXIMUM = NHDP_METRIC_DEFAULT,
+};
 
 /* Configuration settings of ETXFF Metric */
 struct _config {
@@ -101,7 +103,7 @@ struct link_etxff_data {
   uint16_t last_seq_nr;
 
   /* timer for measuring lost hellos when no further packets are received */
-  struct olsr_timer_entry hello_lost_timer;
+  struct oonf_timer_entry hello_lost_timer;
 
   /* last known hello interval */
   uint64_t hello_interval;
@@ -111,10 +113,8 @@ struct link_etxff_data {
 };
 
 /* prototypes */
-static int _cb_plugin_load(void);
-static int _cb_plugin_unload(void);
-static int _cb_plugin_enable(void);
-static int _cb_plugin_disable(void);
+static int _init(void);
+static void _cleanup(void);
 
 static void _cb_link_added(void *);
 static void _cb_link_changed(void *);
@@ -134,26 +134,6 @@ static int _cb_cfg_validate(const char *section_name,
 static void _cb_cfg_changed(void);
 
 /* plugin declaration */
-OLSR_PLUGIN7 {
-  .descr = "OLSRD2 Funkfeuer ETX plugin",
-  .author = "Henning Rogge",
-
-  .load = _cb_plugin_load,
-  .unload = _cb_plugin_unload,
-  .enable = _cb_plugin_enable,
-  .disable = _cb_plugin_disable,
-
-  .can_disable = false,
-  .can_unload = false,
-};
-
-/* configuration options */
-static struct cfg_schema_section _etxff_section = {
-  .type = CFG_ETXFF_SECTION,
-  .cb_validate = _cb_cfg_validate,
-  .cb_delta_handler = _cb_cfg_changed,
-};
-
 static struct cfg_schema_entry _etxff_entries[] = {
   CFG_MAP_CLOCK_MIN(_config, interval, "interval", "1.0",
       "Time interval between recalculations of metric", 100),
@@ -167,10 +147,30 @@ static struct cfg_schema_entry _etxff_entries[] = {
       1, 65535),
 };
 
+static struct cfg_schema_section _etxff_section = {
+  .type = OONF_PLUGIN_GET_NAME(),
+  .cb_validate = _cb_cfg_validate,
+  .cb_delta_handler = _cb_cfg_changed,
+  .entries = _etxff_entries,
+  .entry_count = ARRAYSIZE(_etxff_entries),
+};
+
 static struct _config _etxff_config = { 0,0,0 };
 
+struct oonf_subsystem olsrv2_ffetx_subsystem = {
+  .name = OONF_PLUGIN_GET_NAME(),
+  .descr = "OONFD2 Funkfeuer ETX plugin",
+  .author = "Henning Rogge",
+
+  .cfg_section = &_etxff_section,
+
+  .init = _init,
+  .cleanup = _cleanup,
+};
+DECLARE_OONF_PLUGIN(olsrv2_ffetx_subsystem);
+
 /* RFC5444 packet listener */
-struct olsr_rfc5444_protocol *_protocol;
+struct oonf_rfc5444_protocol *_protocol;
 
 struct rfc5444_reader_tlvblock_consumer _packet_consumer = {
   .order = RFC5444_LQ_PARSER_PRIORITY,
@@ -179,40 +179,36 @@ struct rfc5444_reader_tlvblock_consumer _packet_consumer = {
 };
 
 /* storage extension and listeners */
-struct olsr_class_extension _link_extenstion = {
+struct oonf_class_extension _link_extenstion = {
   .name = "etxff linkmetric",
   .class_name = NHDP_CLASS_LINK,
   .size = sizeof(struct link_etxff_data),
-};
 
-struct olsr_class_listener _link_listener = {
-  .name = "etxff link listener",
-  .class_name = NHDP_CLASS_LINK,
   .cb_add = _cb_link_added,
   .cb_change = _cb_link_changed,
   .cb_remove = _cb_link_removed,
 };
 
 /* timer for sampling in RFC5444 packets */
-struct olsr_timer_info _sampling_timer_info = {
+struct oonf_timer_info _sampling_timer_info = {
   .name = "Sampling timer for ETXFF-metric",
   .callback = _cb_etx_sampling,
   .periodic = true,
 };
 
-struct olsr_timer_entry _sampling_timer = {
+struct oonf_timer_entry _sampling_timer = {
   .info = &_sampling_timer_info,
 };
 
 /* timer class to measure interval between Hellos */
-struct olsr_timer_info _hello_lost_info = {
+struct oonf_timer_info _hello_lost_info = {
   .name = "Hello lost timer for ETXFF-metric",
   .callback = _cb_hello_lost,
 };
 
 /* nhdp metric handler */
 struct nhdp_domain_metric _etxff_handler = {
-  .name = "ETXFF metric handler",
+  .name = OONF_PLUGIN_GET_NAME(),
 
   .metric_minimum = ETXFF_LINKCOST_MINIMUM,
   .metric_maximum = ETXFF_LINKCOST_MAXIMUM,
@@ -222,79 +218,52 @@ struct nhdp_domain_metric _etxff_handler = {
   .to_string = _to_string,
 };
 
-struct nhdp_domain *_domain;
+static enum log_source LOG_FF_ETX;
 
 /**
- * Constructor of plugin
- * @return 0 if initialization was successful, -1 otherwise
+ * Initialize plugin
+ * @return -1 if an error happened, 0 otherwise
  */
 static int
-_cb_plugin_load(void) {
-  cfg_schema_add_section(olsr_cfg_get_schema(), &_etxff_section,
-      _etxff_entries, ARRAYSIZE(_etxff_entries));
+_init(void) {
+  LOG_FF_ETX = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
 
-  return 0;
-}
-
-/**
- * Destructor of plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_unload(void) {
-  cfg_schema_remove_section(olsr_cfg_get_schema(), &_etxff_section);
-  return 0;
-}
-
-/**
- * Enable plugin
- * @return always returns 0 (cannot fail)
- */
-static int
-_cb_plugin_enable(void) {
-
-  if (olsr_class_listener_add(&_link_listener)) {
+  if (nhdp_domain_metric_add(&_etxff_handler)) {
     return -1;
   }
 
-  _domain = nhdp_domain_metric_add(&_etxff_handler, 0);
-  if (!_domain) {
-    olsr_class_listener_remove(&_link_listener);
-    return -1;
-  }
+  oonf_timer_add(&_sampling_timer_info);
+  oonf_timer_add(&_hello_lost_info);
 
-  olsr_timer_add(&_sampling_timer_info);
-  olsr_timer_add(&_hello_lost_info);
+  _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
 
-  _protocol = olsr_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
-
-  olsr_rfc5444_add_protocol_pktseqno(_protocol);
+  oonf_rfc5444_add_protocol_pktseqno(_protocol);
   rfc5444_reader_add_packet_consumer(&_protocol->reader, &_packet_consumer, NULL, 0);
   return 0;
 }
 
 /**
- * Disable plugin
- * @return always returns 0 (cannot fail)
+ * Cleanup plugin
  */
-static int
-_cb_plugin_disable(void) {
+static void
+_cleanup(void) {
   struct nhdp_link *lnk;
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
     _cb_link_removed(lnk);
   }
 
   rfc5444_reader_remove_packet_consumer(&_protocol->reader, &_packet_consumer);
-  olsr_rfc5444_remove_protocol_pktseqno(_protocol);
-  olsr_rfc5444_remove_protocol(_protocol);
+  oonf_rfc5444_remove_protocol_pktseqno(_protocol);
+  oonf_rfc5444_remove_protocol(_protocol);
 
-  nhdp_domain_metric_remove(_domain);
+  nhdp_domain_metric_remove(&_etxff_handler);
 
-  olsr_class_listener_remove(&_link_listener);
+  oonf_class_extension_remove(&_link_extenstion);
 
-  olsr_timer_remove(&_sampling_timer_info);
-  olsr_timer_remove(&_hello_lost_info);
-  return 0;
+  oonf_timer_stop(&_sampling_timer);
+
+  oonf_timer_remove(&_sampling_timer_info);
+  oonf_timer_remove(&_hello_lost_info);
 }
 
 /**
@@ -308,7 +277,7 @@ _cb_link_added(void *ptr) {
   int i;
 
   lnk = ptr;
-  data = olsr_class_get_extension(&_link_extenstion, lnk);
+  data = oonf_class_get_extension(&_link_extenstion, lnk);
 
   memset(data, 0, sizeof(*data));
   data->window_size= _etxff_config.start_window;
@@ -333,7 +302,7 @@ _cb_link_changed(void *ptr) {
   struct nhdp_link *lnk;
 
   lnk = ptr;
-  data = olsr_class_get_extension(&_link_extenstion, lnk);
+  data = oonf_class_get_extension(&_link_extenstion, lnk);
 
   if (lnk->itime_value > 0) {
     data->hello_interval = lnk->itime_value;
@@ -342,7 +311,7 @@ _cb_link_changed(void *ptr) {
     data->hello_interval = lnk->vtime_value;
   }
 
-  olsr_timer_set(&data->hello_lost_timer, (data->hello_interval * 3) / 2);
+  oonf_timer_set(&data->hello_lost_timer, (data->hello_interval * 3) / 2);
 
   data->missed_hellos = 0;
 }
@@ -355,9 +324,9 @@ static void
 _cb_link_removed(void *ptr) {
   struct link_etxff_data *data;
 
-  data = olsr_class_get_extension(&_link_extenstion, ptr);
+  data = oonf_class_get_extension(&_link_extenstion, ptr);
 
-  olsr_timer_stop(&data->hello_lost_timer);
+  oonf_timer_stop(&data->hello_lost_timer);
 }
 
 /**
@@ -368,19 +337,25 @@ static void
 _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct link_etxff_data *ldata;
   struct nhdp_link_domaindata *domaindata;
-  struct nhdp_neighbor *neigh;
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
   int i;
+
+#ifdef OONF_LOG_DEBUG_INFO
   struct nhdp_laddr *laddr;
-
   struct netaddr_str buf;
+#endif
 
-  OLSR_DEBUG(LOG_PLUGINS, "Calculate ETX from sampled data");
+  OONF_DEBUG(LOG_FF_ETX, "Calculate ETX from sampled data");
+
+  if (!_etxff_handler.domain) {
+    /* metric not used */
+    return;
+  }
 
   list_for_each_element(&nhdp_link_list, lnk, _global_node) {
-    ldata = olsr_class_get_extension(&_link_extenstion, lnk);
+    ldata = oonf_class_get_extension(&_link_extenstion, lnk);
 
     if (ldata->activePtr == -1) {
       /* still no data for this link */
@@ -425,10 +400,10 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    domaindata = nhdp_domain_get_linkdata(_domain, lnk);
+    domaindata = nhdp_domain_get_linkdata(_etxff_handler.domain, lnk);
     domaindata->metric.in = (uint32_t)metric;
 
-    OLSR_DEBUG(LOG_PLUGINS, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
+    OONF_DEBUG(LOG_FF_ETX, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),
         nhdp_interface_get_name(lnk->local_if),
         received, total, metric, ldata->window_size);
@@ -443,9 +418,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
   }
 
   /* update neighbor metrics */
-  list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
-    nhdp_domain_calculate_neighbor_metric(_domain, neigh);
-  }
+  nhdp_domain_neighborhood_changed();
 }
 
 /**
@@ -458,14 +431,14 @@ _cb_hello_lost(void *ptr) {
   struct nhdp_link *lnk;
 
   lnk = ptr;
-  ldata = olsr_class_get_extension(&_link_extenstion, lnk);
+  ldata = oonf_class_get_extension(&_link_extenstion, lnk);
 
   if (ldata->activePtr != -1) {
     ldata->missed_hellos++;
 
-    olsr_timer_set(&ldata->hello_lost_timer, ldata->hello_interval);
+    oonf_timer_set(&ldata->hello_lost_timer, ldata->hello_interval);
 
-    OLSR_DEBUG(LOG_PLUGINS, "Missed Hello: %d", ldata->missed_hellos);
+    OONF_DEBUG(LOG_FF_ETX, "Missed Hello: %d", ldata->missed_hellos);
   }
 }
 
@@ -492,7 +465,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_context *context) {
   if (!context->has_pktseqno) {
     struct netaddr_str buf;
 
-    OLSR_WARN(LOG_PLUGINS, "Neighbor %s does not send packet sequence numbers, cannot collect etxff data!",
+    OONF_WARN(LOG_FF_ETX, "Neighbor %s does not send packet sequence numbers, cannot collect etxff data!",
         netaddr_socket_to_string(&buf, _protocol->input_socket));
     return RFC5444_OKAY;
   }
@@ -512,7 +485,7 @@ _cb_process_packet(struct rfc5444_reader_tlvblock_context *context) {
 
   /* get link and its etx data */
   lnk = laddr->link;
-  ldata = olsr_class_get_extension(&_link_extenstion, lnk);
+  ldata = oonf_class_get_extension(&_link_extenstion, lnk);
 
   if (ldata->activePtr == -1) {
     ldata->activePtr = 0;
@@ -570,8 +543,8 @@ _cb_cfg_changed(void) {
 
   if (cfg_schema_tobin(&_etxff_config, _etxff_section.post,
       _etxff_entries, ARRAYSIZE(_etxff_entries))) {
-    OLSR_WARN(LOG_PLUGINS, "Cannot convert configuration for %s",
-        OLSR_PLUGIN7_GET_NAME());
+    OONF_WARN(LOG_FF_ETX, "Cannot convert configuration for %s",
+        OONF_PLUGIN_GET_NAME());
     return;
   }
 
@@ -579,13 +552,13 @@ _cb_cfg_changed(void) {
     _link_extenstion.size +=
         sizeof(struct link_etxff_bucket) * _etxff_config.window;
 
-    if (olsr_class_extend(&_link_extenstion)) {
+    if (oonf_class_extension_add(&_link_extenstion)) {
       return;
     }
   }
 
   /* start/change sampling timer */
-  olsr_timer_set(&_sampling_timer, _etxff_config.interval);
+  oonf_timer_set(&_sampling_timer, _etxff_config.interval);
 }
 
 /**
