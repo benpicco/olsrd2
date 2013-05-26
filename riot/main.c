@@ -39,6 +39,8 @@
 
 #include "core/os_routing.h"
 
+static enum log_source _level_1_sources[] = { LOG_ALL };
+
 /**
  * Mainloop of olsrd
  * @return exit code for olsrd
@@ -77,6 +79,9 @@ static int mainloop() {
 void main() {
 
   /* initialize basic framework */
+puts("olsr_logcfg_init");
+  olsr_logcfg_init(_level_1_sources, ARRAYSIZE(_level_1_sources));
+
 puts("os_syslog_init");
   os_syslog_init();
 puts("olsr_class_init");
