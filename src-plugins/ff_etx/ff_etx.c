@@ -218,7 +218,7 @@ struct nhdp_domain_metric _etxff_handler = {
   .to_string = _to_string,
 };
 
-static enum log_source LOG_FF_ETX;
+static enum oonf_log_source LOG_FF_ETX;
 
 /**
  * Initialize plugin

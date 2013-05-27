@@ -95,7 +95,7 @@ static struct rfc5444_writer_tlvtype _nhdp_addrtlvs[] = {
 
 static struct oonf_rfc5444_protocol *_protocol;
 
-static enum log_source LOG_NHDP_W = LOG_MAIN;
+static enum oonf_log_source LOG_NHDP_W = LOG_MAIN;
 static bool _cleanedup = false;
 
 /**

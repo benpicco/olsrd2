@@ -116,7 +116,7 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_tlvs[] = {
 /* nhdp multiplexer/protocol */
 static struct oonf_rfc5444_protocol *_protocol = NULL;
 
-static enum log_source LOG_NHDP_CHECK = LOG_MAIN;
+static enum oonf_log_source LOG_NHDP_CHECK = LOG_MAIN;
 
 /**
  * Initialize plugin

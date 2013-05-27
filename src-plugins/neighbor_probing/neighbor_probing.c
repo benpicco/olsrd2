@@ -125,7 +125,7 @@ DECLARE_OONF_PLUGIN(olsrv2_neighbor_probing_subsystem);
 
 struct _config _probe_config;
 
-enum log_source LOG_PROBING = LOG_MAIN;
+enum oonf_log_source LOG_PROBING = LOG_MAIN;
 
 /* storage extension and listeners */
 static struct oonf_class_extension _link_extenstion = {

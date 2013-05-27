@@ -123,7 +123,7 @@ static struct rfc5444_reader_tlvblock_consumer_entry _olsrv2_address_tlvs[] = {
 /* nhdp multiplexer/protocol */
 static struct oonf_rfc5444_protocol *_protocol = NULL;
 
-static enum log_source LOG_OONFV2_R = LOG_MAIN;
+static enum oonf_log_source LOG_OONFV2_R = LOG_MAIN;
 
 static struct _olsrv2_data _current;
 

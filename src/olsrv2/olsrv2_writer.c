@@ -108,7 +108,7 @@ static int _send_msg_type;
 
 static struct oonf_rfc5444_protocol *_protocol;
 
-static enum log_source LOG_OONFV2_W = LOG_MAIN;
+static enum oonf_log_source LOG_OONFV2_W = LOG_MAIN;
 static bool _cleanedup = false;
 
 /**

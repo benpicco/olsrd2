@@ -73,7 +73,7 @@ enum {
 
 EXPORT struct oonf_subsystem nhdp_subsystem;
 
-EXPORT extern enum log_source LOG_NHDP;
+EXPORT extern enum oonf_log_source LOG_NHDP;
 
 int nhdp_init(void)  __attribute__((warn_unused_result));
 void nhdp_cleanup(void);

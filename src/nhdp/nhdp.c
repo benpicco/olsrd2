@@ -140,7 +140,7 @@ struct oonf_subsystem nhdp_subsystem = {
 };
 
 /* other global variables */
-enum log_source LOG_NHDP = LOG_MAIN;
+enum oonf_log_source LOG_NHDP = LOG_MAIN;
 static struct oonf_rfc5444_protocol *_protocol;
 
 /* NHDP originator address, might be undefined */

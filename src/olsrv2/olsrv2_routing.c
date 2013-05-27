@@ -105,7 +105,7 @@ struct avl_tree olsrv2_routing_tree[NHDP_MAXIMUM_DOMAINS];
 static struct avl_tree _dijkstra_working_tree;
 static struct list_entity _kernel_queue;
 
-static enum log_source LOG_OONFV2_ROUTING = LOG_MAIN;
+static enum oonf_log_source LOG_OONFV2_ROUTING = LOG_MAIN;
 static bool _initiate_shutdown = false;
 
 /**

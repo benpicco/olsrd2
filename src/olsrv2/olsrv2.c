@@ -193,7 +193,7 @@ struct oonf_interface_listener _if_listener = {
 };
 
 /* global variables */
-enum log_source LOG_OLSRV2 = LOG_MAIN;
+enum oonf_log_source LOG_OLSRV2 = LOG_MAIN;
 static struct oonf_rfc5444_protocol *_protocol;
 
 static uint16_t _ansn;

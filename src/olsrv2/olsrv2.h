@@ -58,7 +58,7 @@
 #define CFG_VALIDATE_LAN(p_name, p_def, p_help, args...)         _CFG_VALIDATE(p_name, p_def, p_help, .cb_validate = olsrv2_validate_lan, ##args )
 
 EXPORT struct oonf_subsystem olsrv2_subsystem;
-EXPORT extern enum log_source LOG_OLSRV2;
+EXPORT extern enum oonf_log_source LOG_OLSRV2;
 
 EXPORT uint64_t olsrv2_get_tc_interval(void);
 EXPORT uint64_t olsrv2_get_tc_validity(void);
