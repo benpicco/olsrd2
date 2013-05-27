@@ -239,7 +239,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   struct nhdp_domain *domain;
   struct oonf_rfc5444_target *target;
   struct nhdp_interface *interf;
-  const struct netaddr *v6_originator;
+  const struct netaddr *v4_originator;
   struct oonf_interface_data *ifdata;
 
   target = oonf_rfc5444_get_target_from_writer(writer);
@@ -278,13 +278,13 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   }
 
   /* get v6 originator (might be unspecified) */
-  v6_originator = nhdp_get_originator(AF_INET6);
+  v4_originator = nhdp_get_originator(AF_INET);
 
-  /* add V6 originator to V4 message if available and interface is dualstack */
-  if (_nhdp_message->addr_len == 4 && v6_originator != NULL
-      && netaddr_get_address_family(v6_originator) == AF_INET6) {
-    rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV6ORIGINATOR, 0,
-        netaddr_get_binptr(v6_originator), netaddr_get_binlength(v6_originator));
+  /* add V4 originator to V6 message if available and interface is dualstack */
+  if (_nhdp_message->addr_len == 16 && v4_originator != NULL
+      && netaddr_get_address_family(v4_originator) == AF_INET) {
+    rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV4ORIGINATOR, 0,
+        netaddr_get_binptr(v4_originator), netaddr_get_binlength(v4_originator));
   }
 
   /* add mac address of local interface */
