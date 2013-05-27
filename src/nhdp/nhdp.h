@@ -71,9 +71,11 @@ enum {
   NHDP_MSGTLV_MAC = 227,
 };
 
+#define LOG_NHDP nhdp_subsystem.logging
 EXPORT struct oonf_subsystem nhdp_subsystem;
 
-EXPORT extern enum oonf_log_source LOG_NHDP;
+EXPORT extern enum oonf_log_source LOG_NHDP_R;
+EXPORT extern enum oonf_log_source LOG_NHDP_W;
 
 int nhdp_init(void)  __attribute__((warn_unused_result));
 void nhdp_cleanup(void);

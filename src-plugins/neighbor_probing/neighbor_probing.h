@@ -53,6 +53,7 @@ enum {
   RFC5444_MSGTLV_PROBING = 128,
 };
 
+#define LOG_PROBING olsrv2_neighbor_probing_subsystem.logging
 EXPORT extern struct oonf_subsystem olsrv2_neighbor_probing_subsystem;
 
 #endif /* NEIGHBOR_PROBING_H_ */

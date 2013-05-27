@@ -95,7 +95,6 @@ static struct rfc5444_writer_tlvtype _nhdp_addrtlvs[] = {
 
 static struct oonf_rfc5444_protocol *_protocol;
 
-static enum oonf_log_source LOG_NHDP_W = LOG_MAIN;
 static bool _cleanedup = false;
 
 /**
@@ -104,8 +103,6 @@ static bool _cleanedup = false;
 int
 nhdp_writer_init(struct oonf_rfc5444_protocol *p) {
   _protocol = p;
-
-  LOG_NHDP_W = oonf_log_register_source("nhdp_w");
 
   _nhdp_message = rfc5444_writer_register_message(
       &_protocol->writer, RFC5444_MSGTYPE_HELLO, true, 4);

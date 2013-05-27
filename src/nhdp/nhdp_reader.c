@@ -160,8 +160,6 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass2_tlvs[] 
 /* nhdp multiplexer/protocol */
 static struct oonf_rfc5444_protocol *_protocol = NULL;
 
-static enum oonf_log_source LOG_NHDP_R = LOG_MAIN;
-
 /* temporary variables for message parsing */
 static struct {
   struct nhdp_interface *localif;
@@ -187,8 +185,6 @@ static struct {
 void
 nhdp_reader_init(struct oonf_rfc5444_protocol *p) {
   _protocol = p;
-
-  LOG_NHDP_R = oonf_log_register_source("nhdp_r");
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_message_pass1_consumer,

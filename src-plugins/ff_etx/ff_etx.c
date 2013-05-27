@@ -218,16 +218,12 @@ struct nhdp_domain_metric _etxff_handler = {
   .to_string = _to_string,
 };
 
-static enum oonf_log_source LOG_FF_ETX;
-
 /**
  * Initialize plugin
  * @return -1 if an error happened, 0 otherwise
  */
 static int
 _init(void) {
-  LOG_FF_ETX = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
-
   if (nhdp_domain_metric_add(&_etxff_handler)) {
     return -1;
   }

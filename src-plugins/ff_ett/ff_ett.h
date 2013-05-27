@@ -45,6 +45,7 @@
 #include "common/common_types.h"
 #include "core/oonf_subsystem.h"
 
+#define LOG_FF_ETT olsrv2_ffetx_subsystem.logging
 EXPORT extern struct oonf_subsystem olsrv2_ffetx_subsystem;
 
 #endif /* FF_ETX_H_ */

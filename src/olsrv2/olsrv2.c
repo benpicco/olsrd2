@@ -64,7 +64,7 @@
 #include "olsrv2/olsrv2_writer.h"
 
 /* definitions */
-#define _LOG_OLSRV2_NAME "olsrv2"
+#define OLSRV2_NAME "olsrv2"
 #define _LOCAL_ATTACHED_NETWORK_KEY "lan"
 
 struct _config {
@@ -87,6 +87,7 @@ struct _lan_data {
 };
 
 /* prototypes */
+static void _early_cfg_init(void);
 static int _init(void);
 static void _initiate_shutdown(void);
 static void _cleanup(void);
@@ -168,6 +169,8 @@ static struct cfg_schema_section _olsrv2_section = {
 };
 
 struct oonf_subsystem olsrv2_subsystem = {
+  .name = OLSRV2_NAME,
+  .early_cfg_init = _early_cfg_init,
   .init = _init,
   .cleanup = _cleanup,
   .initiate_shutdown = _initiate_shutdown,
@@ -193,10 +196,22 @@ struct oonf_interface_listener _if_listener = {
 };
 
 /* global variables */
-enum oonf_log_source LOG_OLSRV2 = LOG_MAIN;
 static struct oonf_rfc5444_protocol *_protocol;
 
 static uint16_t _ansn;
+
+/* Additional logging sources */
+enum oonf_log_source LOG_OLSRV2_R;
+enum oonf_log_source LOG_OLSRV2_W;
+
+/**
+ * Initialize additional logging sources for NHDP
+ */
+static void
+_early_cfg_init(void) {
+  LOG_OLSRV2_R = oonf_log_register_source(OLSRV2_NAME "_r");
+  LOG_OLSRV2_W = oonf_log_register_source(OLSRV2_NAME "_w");
+}
 
 /**
  * Initialize OLSRV2 subsystem
@@ -205,8 +220,6 @@ static uint16_t _ansn;
 static int
 _init(void) {
   size_t i;
-
-  LOG_OLSRV2 = oonf_log_register_source(_LOG_OLSRV2_NAME);
 
   _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
