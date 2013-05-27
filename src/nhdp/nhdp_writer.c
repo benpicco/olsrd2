@@ -145,8 +145,9 @@ nhdp_writer_cleanup(void) {
  * @param interf NHDP interface
  */
 void
-nhdp_writer_send_hello(struct nhdp_interface *interf) {
+nhdp_writer_send_hello(struct nhdp_interface *ninterf) {
   enum rfc5444_result result;
+  struct oonf_interface *interf;
   struct netaddr_str buf;
 
   if (_cleanedup) {
@@ -154,21 +155,27 @@ nhdp_writer_send_hello(struct nhdp_interface *interf) {
     return;
   }
 
-  OONF_DEBUG(LOG_NHDP, "Sending Hello to interface %s",
-      nhdp_interface_get_name(interf));
+  interf = nhdp_interface_get_coreif(ninterf);
+  if (interf->data.loopback) {
+    /* no NHDP on loopback interface */
+    return;
+  }
+
+  OONF_DEBUG(LOG_NHDP_W, "Sending Hello to interface %s",
+      nhdp_interface_get_name(ninterf));
 
   /* send IPv4 (if socket is active) */
-  result = oonf_rfc5444_send_if(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
+  result = oonf_rfc5444_send_if(ninterf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
   if (result < 0) {
-    OONF_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
+    OONF_WARN(LOG_NHDP_W, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &ninterf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
   }
 
   /* send IPV6 (if socket is active) */
-  result = oonf_rfc5444_send_if(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
+  result = oonf_rfc5444_send_if(ninterf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
   if (result < 0) {
-    OONF_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
+    OONF_WARN(LOG_NHDP_W, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &ninterf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
   }
 }
 

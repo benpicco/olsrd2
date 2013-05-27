@@ -275,10 +275,18 @@ nhdp_db_neighbor_join(struct nhdp_neighbor *dst, struct nhdp_neighbor *src) {
       avl_insert(&dst->_link_addresses, &laddr->_neigh_node);
     }
 
+    /* move interface based originator */
+    if (netaddr_get_address_family(&src->originator) != AF_UNSPEC) {
+      avl_remove(&lnk->local_if->_link_originators, &lnk->_originator_node);
+    }
+    lnk->_originator_node.key = &dst->originator;
+    if (netaddr_get_address_family(&dst->originator) != AF_UNSPEC) {
+      avl_insert(&lnk->local_if->_link_originators, &lnk->_originator_node);
+    }
+
     /* move link to new neighbor */
     list_remove(&lnk->_neigh_node);
     list_add_tail(&dst->_links, &lnk->_neigh_node);
-
     lnk->neigh = dst;
   }
 

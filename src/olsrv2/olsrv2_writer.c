@@ -240,11 +240,18 @@ static bool
 _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
     struct rfc5444_writer_target *rfc5444_target, void *ptr __attribute__((unused))) {
   struct oonf_rfc5444_target *target;
-  struct nhdp_interface *interf;
+  struct oonf_interface *interf;
+  struct nhdp_interface *ninterf;
   struct nhdp_link *lnk;
   int target_af_type;
 
   target = container_of(rfc5444_target, struct oonf_rfc5444_target, rfc5444_target);
+
+  interf = oonf_rfc5444_get_core_interface(target->interface);
+  if (interf->data.loopback) {
+    /* no TCs on loopback */
+    return false;
+  }
 
   if (target == target->interface->multicast4) {
     target_af_type = AF_INET;
@@ -256,14 +263,13 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
     /* do not use unicast targets with this selector */
     return false;
   }
-
-  interf = nhdp_interface_get(target->interface->name);
-  if (interf == NULL) {
+  ninterf = nhdp_interface_get(target->interface->name);
+  if (ninterf == NULL) {
     /* unknown interface */
     return false;
   }
 
-  if (list_is_empty(&interf->_links)) {
+  if (list_is_empty(&ninterf->_links)) {
     /* no neighbor */
     return false;
   }
@@ -273,7 +279,7 @@ _cb_tc_interface_selector(struct rfc5444_writer *writer __attribute__((unused)),
    * symmetric and needs a message of the specified address type
    * on this target type
    */
-  list_for_each_element(&interf->_links, lnk, _if_node) {
+  list_for_each_element(&ninterf->_links, lnk, _if_node) {
     if (lnk->status != NHDP_LINK_SYMMETRIC) {
       /* link is not symmetric */
       continue;

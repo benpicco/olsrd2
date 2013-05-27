@@ -60,8 +60,7 @@
 #include "nhdp/nhdp_writer.h"
 
 /* Prototypes of local functions */
-static struct nhdp_interface_addr *_addr_add(
-    struct nhdp_interface *, struct netaddr *addr);
+static void _addr_add(struct nhdp_interface *, struct netaddr *addr);
 static void _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime);
 static void _cb_remove_addr(void *ptr);
 
@@ -268,14 +267,19 @@ nhdp_interface_apply_settings(struct nhdp_interface *interf) {
  * Add a nhdp interface address to an interface
  * @param interf pointer to nhdp interface
  * @param if_addr address to add to interface
- * @return pointer to ndhp interface address, NULL if out of memory
  */
-static struct nhdp_interface_addr *
+void
 _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
   struct nhdp_interface_addr *if_addr;
 #ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
+
+  if (netaddr_is_in_subnet(&NETADDR_IPV4_LOOPBACK_NET, addr)
+      || netaddr_cmp(addr, &NETADDR_IPV6_LOOPBACK) == 0) {
+    /* ignore localhost address */
+    return;
+  }
 
   OONF_DEBUG(LOG_NHDP, "Add address %s in NHDP_interface_address tree",
       netaddr_to_string(&buf, addr));
@@ -285,7 +289,7 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
     if_addr = oonf_class_malloc(&_addr_info);
     if (if_addr == NULL) {
       OONF_WARN(LOG_NHDP, "No memory left for NHDP interface address");
-      return NULL;
+      return;
     }
 
     memcpy(&if_addr->if_addr, addr, sizeof(*addr));
@@ -309,7 +313,7 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
   else {
     if_addr->_to_be_removed = false;
   }
-  return if_addr;
+  return;
 }
 
 /**
