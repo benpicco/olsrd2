@@ -125,8 +125,6 @@ DECLARE_OONF_PLUGIN(olsrv2_neighbor_probing_subsystem);
 
 struct _config _probe_config;
 
-enum log_source LOG_PROBING = LOG_MAIN;
-
 /* storage extension and listeners */
 static struct oonf_class_extension _link_extenstion = {
   .name = "probing linkmetric",
@@ -161,8 +159,6 @@ struct rfc5444_writer_content_provider _probing_msg_provider = {
  */
 static int
 _init(void) {
-  LOG_PROBING = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
-
   if (oonf_class_extension_add(&_link_extenstion)) {
     return -1;
   }

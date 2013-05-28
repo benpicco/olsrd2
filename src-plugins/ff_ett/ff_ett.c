@@ -230,16 +230,12 @@ static struct nhdp_domain_metric _ettff_handler = {
   .to_string = _to_string,
 };
 
-static enum log_source LOG_FF_ETT;
-
 /**
  * Initialize plugin
  * @return -1 if an error happened, 0 otherwise
  */
 static int
 _init(void) {
-  LOG_FF_ETT = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
-
   if (nhdp_domain_metric_add(&_ettff_handler)) {
     return -1;
   }
@@ -408,7 +404,6 @@ _get_linkspeed(struct nhdp_link *lnk) {
 static void
 _cb_ett_sampling(void *ptr __attribute__((unused))) {
   struct link_ettff_data *ldata;
-  struct nhdp_link_domaindata *domaindata;
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
@@ -478,8 +473,7 @@ _cb_ett_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    domaindata = nhdp_domain_get_linkdata(_ettff_handler.domain, lnk);
-    domaindata->metric.in = (uint32_t)metric;
+    nhdp_domain_set_incoming_metric(_ettff_handler.domain, lnk, metric);
 
     OONF_DEBUG(LOG_FF_ETT, "New sampling rate for link %s (%s):"
         " %d/%d = %" PRIu64 " (w=%d, speed=%"PRIu64 ")\n",

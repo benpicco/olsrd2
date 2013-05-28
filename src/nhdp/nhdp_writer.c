@@ -99,7 +99,6 @@ static struct rfc5444_writer_tlvtype _nhdp_addrtlvs[] = {
 
 static struct oonf_rfc5444_protocol *_protocol;
 
-static enum log_source LOG_NHDP_W = LOG_MAIN;
 static bool _cleanedup = false;
 
 /**
@@ -108,8 +107,6 @@ static bool _cleanedup = false;
 int
 nhdp_writer_init(struct oonf_rfc5444_protocol *p) {
   _protocol = p;
-
-  LOG_NHDP_W = oonf_log_register_source("nhdp_w");
 
   _nhdp_message = rfc5444_writer_register_message(
       &_protocol->writer, RFC5444_MSGTYPE_HELLO, true, 4);
@@ -152,8 +149,9 @@ nhdp_writer_cleanup(void) {
  * @param interf NHDP interface
  */
 void
-nhdp_writer_send_hello(struct nhdp_interface *interf) {
+nhdp_writer_send_hello(struct nhdp_interface *ninterf) {
   enum rfc5444_result result;
+  struct oonf_interface *interf;
   struct netaddr_str buf;
 
   if (_cleanedup) {
@@ -161,21 +159,27 @@ nhdp_writer_send_hello(struct nhdp_interface *interf) {
     return;
   }
 
-  OONF_DEBUG(LOG_NHDP, "Sending Hello to interface %s",
-      nhdp_interface_get_name(interf));
+  interf = nhdp_interface_get_coreif(ninterf);
+  if (interf->data.loopback) {
+    /* no NHDP on loopback interface */
+    return;
+  }
+
+  OONF_DEBUG(LOG_NHDP_W, "Sending Hello to interface %s",
+      nhdp_interface_get_name(ninterf));
 
   /* send IPv4 (if socket is active) */
-  result = oonf_rfc5444_send_if(interf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
+  result = oonf_rfc5444_send_if(ninterf->rfc5444_if.interface->multicast4, RFC5444_MSGTYPE_HELLO);
   if (result < 0) {
-    OONF_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
+    OONF_WARN(LOG_NHDP_W, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &ninterf->rfc5444_if.interface->multicast4->dst), rfc5444_strerror(result), result);
   }
 
   /* send IPV6 (if socket is active) */
-  result = oonf_rfc5444_send_if(interf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
+  result = oonf_rfc5444_send_if(ninterf->rfc5444_if.interface->multicast6, RFC5444_MSGTYPE_HELLO);
   if (result < 0) {
-    OONF_WARN(LOG_NHDP, "Could not send NHDP message to %s: %s (%d)",
-        netaddr_to_string(&buf, &interf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
+    OONF_WARN(LOG_NHDP_W, "Could not send NHDP message to %s: %s (%d)",
+        netaddr_to_string(&buf, &ninterf->rfc5444_if.interface->multicast6->dst), rfc5444_strerror(result), result);
   }
 }
 
@@ -239,7 +243,7 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   struct nhdp_domain *domain;
   struct oonf_rfc5444_target *target;
   struct nhdp_interface *interf;
-  const struct netaddr *v6_originator;
+  const struct netaddr *v4_originator;
   struct oonf_interface_data *ifdata;
 
   target = oonf_rfc5444_get_target_from_writer(writer);
@@ -278,13 +282,13 @@ _cb_addMessageTLVs(struct rfc5444_writer *writer) {
   }
 
   /* get v6 originator (might be unspecified) */
-  v6_originator = nhdp_get_originator(AF_INET6);
+  v4_originator = nhdp_get_originator(AF_INET);
 
-  /* add V6 originator to V4 message if available and interface is dualstack */
-  if (_nhdp_message->addr_len == 4 && v6_originator != NULL
-      && netaddr_get_address_family(v6_originator) == AF_INET6) {
-    rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV6ORIGINATOR, 0,
-        netaddr_get_binptr(v6_originator), netaddr_get_binlength(v6_originator));
+  /* add V4 originator to V6 message if available and interface is dualstack */
+  if (_nhdp_message->addr_len == 16 && v4_originator != NULL
+      && netaddr_get_address_family(v4_originator) == AF_INET) {
+    rfc5444_writer_add_messagetlv(writer, NHDP_MSGTLV_IPV4ORIGINATOR, 0,
+        netaddr_get_binptr(v4_originator), netaddr_get_binlength(v4_originator));
   }
 
   /* add mac address of local interface */

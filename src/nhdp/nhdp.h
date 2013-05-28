@@ -64,16 +64,18 @@ enum {
   /* maximum number of metric domains */
   NHDP_MAXIMUM_DOMAINS = 4,
 
-  /* message tlv for transporting IPv6 originator in ipv4 messages */
-  NHDP_MSGTLV_IPV6ORIGINATOR = 226,
+  /* message tlv for transporting IPv4 originator in ipv6 messages */
+  NHDP_MSGTLV_IPV4ORIGINATOR = 226,
 
   /* message tlv for transporting mac address */
   NHDP_MSGTLV_MAC = 227,
 };
 
+#define LOG_NHDP nhdp_subsystem.logging
 EXPORT struct oonf_subsystem nhdp_subsystem;
 
-EXPORT extern enum log_source LOG_NHDP;
+EXPORT extern enum oonf_log_source LOG_NHDP_R;
+EXPORT extern enum oonf_log_source LOG_NHDP_W;
 
 int nhdp_init(void)  __attribute__((warn_unused_result));
 void nhdp_cleanup(void);

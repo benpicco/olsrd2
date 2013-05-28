@@ -64,7 +64,7 @@ enum {
   IDX_TLV_ITIME,
   IDX_TLV_VTIME,
   IDX_TLV_WILLINGNESS,
-  IDX_TLV_IPV6ORIG,
+  IDX_TLV_IPV4ORIG,
   IDX_TLV_MAC,
 };
 
@@ -116,8 +116,8 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_message_tlvs[] = {
       .mandatory = true, .min_length = 1, .match_length = true },
   [IDX_TLV_WILLINGNESS] = { .type = RFC5444_MSGTLV_MPR_WILLING, .type_ext = 0, .match_type_ext = true,
     .min_length = 1, .match_length = true },
-  [IDX_TLV_IPV6ORIG] = { .type = NHDP_MSGTLV_IPV6ORIGINATOR, .type_ext = 0, .match_type_ext = true,
-      .min_length = 16, .match_length = true },
+  [IDX_TLV_IPV4ORIG] = { .type = NHDP_MSGTLV_IPV4ORIGINATOR, .type_ext = 0, .match_type_ext = true,
+      .min_length = 4, .match_length = true },
   [IDX_TLV_MAC] = { .type = NHDP_MSGTLV_MAC, .type_ext = 0, .match_type_ext = true,
       .min_length = 6, .match_length = true },
 };
@@ -164,8 +164,6 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_pass2_tlvs[] 
 /* nhdp multiplexer/protocol */
 static struct oonf_rfc5444_protocol *_protocol = NULL;
 
-static enum log_source LOG_NHDP_R = LOG_MAIN;
-
 /* temporary variables for message parsing */
 static struct {
   struct nhdp_interface *localif;
@@ -173,7 +171,7 @@ static struct {
 
   struct nhdp_link *link;
 
-  struct netaddr originator_v6;
+  struct netaddr originator_v4;
   struct netaddr mac;
 
   bool naddr_conflict, laddr_conflict;
@@ -191,8 +189,6 @@ static struct {
 void
 nhdp_reader_init(struct oonf_rfc5444_protocol *p) {
   _protocol = p;
-
-  LOG_NHDP_R = oonf_log_register_source("nhdp_r");
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_nhdp_message_pass1_consumer,
@@ -411,16 +407,16 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
     tlv = tlv->next_entry;
   }
 
-  /* extract v6 originator in dualstack messages */
-  if (_nhdp_message_tlvs[IDX_TLV_IPV6ORIG].tlv) {
-    if (netaddr_from_binary(&_current.originator_v6,
-        _nhdp_message_tlvs[IDX_TLV_IPV6ORIG].tlv->single_value, 16, AF_INET6)) {
+  /* extract v4 originator in dualstack messages */
+  if (_nhdp_message_tlvs[IDX_TLV_IPV4ORIG].tlv) {
+    if (netaddr_from_binary(&_current.originator_v4,
+        _nhdp_message_tlvs[IDX_TLV_IPV4ORIG].tlv->single_value, 4, AF_INET)) {
       /* error, could not parse address */
       return RFC5444_DROP_MESSAGE;
     }
 
     OONF_DEBUG(LOG_NHDP_R, "Got originator: %s",
-        netaddr_to_string(&buf, &_current.originator_v6));
+        netaddr_to_string(&buf, &_current.originator_v4));
   }
 
   /* extract mac address if present */
@@ -630,22 +626,22 @@ _cb_addresstlvs_pass1_end(struct rfc5444_reader_tlvblock_context *context, bool 
   nhdp_hysteresis_update(_current.link, context);
 
   /* handle dualstack information */
-  if (netaddr_get_address_family(&_current.originator_v6) != AF_UNSPEC) {
+  if (netaddr_get_address_family(&_current.originator_v4) != AF_UNSPEC) {
     struct nhdp_neighbor *neigh2;
     struct nhdp_link *lnk2;
 
-    neigh2 = nhdp_db_neighbor_get_by_originator(&_current.originator_v6);
+    neigh2 = nhdp_db_neighbor_get_by_originator(&_current.originator_v4);
     if (neigh2) {
       nhdp_db_neighbor_connect_dualstack(_current.neighbor, neigh2);
     }
 
-    lnk2 = nhdp_interface_link_get_by_originator(_current.localif, &_current.originator_v6);
+    lnk2 = nhdp_interface_link_get_by_originator(_current.localif, &_current.originator_v4);
     if (lnk2) {
       nhdp_db_link_connect_dualstack(_current.link, lnk2);
     }
   }
   else if (netaddr_get_address_family(&context->orig_addr) == AF_INET
-      && netaddr_get_address_family(&_current.originator_v6) == AF_UNSPEC) {
+      && netaddr_get_address_family(&_current.originator_v4) == AF_UNSPEC) {
     nhdp_db_neigbor_disconnect_dualstack(_current.neighbor);
     nhdp_db_link_disconnect_dualstack(_current.link);
   }

@@ -182,8 +182,6 @@ main(int argc, char **argv) {
       oonf_setup_get_subsystems(),
       sizeof(struct oonf_subsystem *) * oonf_setup_get_subsystem_count());
 
-  srand(times(NULL));
-
   /* setup signal handler */
   _end_oonf_signal = false;
   setup_signalhandler();

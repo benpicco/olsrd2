@@ -218,16 +218,12 @@ struct nhdp_domain_metric _etxff_handler = {
   .to_string = _to_string,
 };
 
-static enum log_source LOG_FF_ETX;
-
 /**
  * Initialize plugin
  * @return -1 if an error happened, 0 otherwise
  */
 static int
 _init(void) {
-  LOG_FF_ETX = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
-
   if (nhdp_domain_metric_add(&_etxff_handler)) {
     return -1;
   }
@@ -336,7 +332,6 @@ _cb_link_removed(void *ptr) {
 static void
 _cb_etx_sampling(void *ptr __attribute__((unused))) {
   struct link_etxff_data *ldata;
-  struct nhdp_link_domaindata *domaindata;
   struct nhdp_link *lnk;
   uint32_t total, received;
   uint64_t metric;
@@ -400,8 +395,7 @@ _cb_etx_sampling(void *ptr __attribute__((unused))) {
     metric = rfc5444_metric_encode(metric);
     metric = rfc5444_metric_decode(metric);
 
-    domaindata = nhdp_domain_get_linkdata(_etxff_handler.domain, lnk);
-    domaindata->metric.in = (uint32_t)metric;
+    nhdp_domain_set_incoming_metric(_etxff_handler.domain, lnk, metric);
 
     OONF_DEBUG(LOG_FF_ETX, "New sampling rate for link %s (%s): %d/%d = %" PRIu64 " (w=%d)\n",
         netaddr_to_string(&buf, &avl_first_element(&lnk->_addresses, laddr, _link_node)->link_addr),

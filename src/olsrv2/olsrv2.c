@@ -45,11 +45,12 @@
 #include "common/common_types.h"
 #include "common/list.h"
 #include "common/netaddr.h"
+#include "common/netaddr_acl.h"
 #include "config/cfg_schema.h"
 #include "rfc5444/rfc5444.h"
 #include "core/oonf_logging.h"
-#include "common/netaddr_acl.h"
 #include "core/oonf_subsystem.h"
+#include "core/os_core.h"
 #include "subsystems/oonf_rfc5444.h"
 #include "subsystems/oonf_telnet.h"
 #include "subsystems/oonf_timer.h"
@@ -64,7 +65,7 @@
 #include "olsrv2/olsrv2_writer.h"
 
 /* definitions */
-#define _LOG_OLSRV2_NAME "olsrv2"
+#define OLSRV2_NAME "olsrv2"
 #define _LOCAL_ATTACHED_NETWORK_KEY "lan"
 
 struct _config {
@@ -87,6 +88,7 @@ struct _lan_data {
 };
 
 /* prototypes */
+static void _early_cfg_init(void);
 static int _init(void);
 static void _initiate_shutdown(void);
 static void _cleanup(void);
@@ -168,6 +170,8 @@ static struct cfg_schema_section _olsrv2_section = {
 };
 
 struct oonf_subsystem olsrv2_subsystem = {
+  .name = OLSRV2_NAME,
+  .early_cfg_init = _early_cfg_init,
   .init = _init,
   .cleanup = _cleanup,
   .initiate_shutdown = _initiate_shutdown,
@@ -193,10 +197,22 @@ struct oonf_interface_listener _if_listener = {
 };
 
 /* global variables */
-enum log_source LOG_OLSRV2 = LOG_MAIN;
 static struct oonf_rfc5444_protocol *_protocol;
 
 static uint16_t _ansn;
+
+/* Additional logging sources */
+enum oonf_log_source LOG_OLSRV2_R;
+enum oonf_log_source LOG_OLSRV2_W;
+
+/**
+ * Initialize additional logging sources for NHDP
+ */
+static void
+_early_cfg_init(void) {
+  LOG_OLSRV2_R = oonf_log_register_source(OLSRV2_NAME "_r");
+  LOG_OLSRV2_W = oonf_log_register_source(OLSRV2_NAME "_w");
+}
 
 /**
  * Initialize OLSRV2 subsystem
@@ -205,8 +221,6 @@ static uint16_t _ansn;
 static int
 _init(void) {
   size_t i;
-
-  LOG_OLSRV2 = oonf_log_register_source(_LOG_OLSRV2_NAME);
 
   _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
@@ -235,7 +249,7 @@ _init(void) {
     oonf_telnet_add(&_cmds[i]);
   }
 
-  _ansn = rand() & 0xffff;
+  _ansn = os_core_random() & 0xffff;
   return 0;
 }
 
@@ -679,15 +693,17 @@ _cb_topology(struct oonf_telnet_data *con) {
   struct fraction_str tbuf;
 
   avl_for_each_element(&olsrv2_tc_tree, node, _originator_node) {
-    abuf_appendf(con->out, "Node originator %s: vtime=%s\n",
+    abuf_appendf(con->out, "Node originator %s: vtime=%s ansn=%u\n",
         netaddr_to_string(&nbuf, &node->target.addr),
         oonf_clock_toIntervalString(&tbuf,
-            oonf_timer_get_due(&node->_validity_time)));
+            oonf_timer_get_due(&node->_validity_time)),
+        node->ansn);
 
     avl_for_each_element(&node->_edges, edge, _node) {
-      abuf_appendf(con->out, "\tlink to %s%s:\n",
+      abuf_appendf(con->out, "\tlink to %s%s: (ansn=%u)\n",
           netaddr_to_string(&nbuf, &edge->dst->target.addr),
-          edge->virtual ? " (virtual)" : "");
+          edge->virtual ? " (virtual)" : "",
+          edge->ansn);
 
       list_for_each_element(&nhdp_domain_list, domain, _node) {
         abuf_appendf(con->out, "\t\tmetric '%s': %d\n",
@@ -696,14 +712,14 @@ _cb_topology(struct oonf_telnet_data *con) {
     }
 
     avl_for_each_element(&node->_endpoints, end, _src_node) {
-      abuf_appendf(con->out, "\tlink to endpoint %s:\n",
-          netaddr_to_string(&nbuf, &end->dst->target.addr));
+      abuf_appendf(con->out, "\tlink to endpoint %s: (ansn=%u)\n",
+          netaddr_to_string(&nbuf, &end->dst->target.addr),
+          end->ansn);
 
         list_for_each_element(&nhdp_domain_list, domain, _node) {
           abuf_appendf(con->out, "\t\tmetric '%s': %d\n",
               domain->metric->name, end->cost[domain->index]);
         }
-
     }
   }
 

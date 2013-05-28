@@ -55,7 +55,7 @@
 #include "nhdp/nhdp.h"
 
 /* definitions */
-#define _LOG_NHDP_NAME "nhdp"
+#define NHDP_NAME "nhdp"
 
 struct _domain_parameters {
   char metric_name[NHDP_DOMAIN_METRIC_MAXLEN];
@@ -63,6 +63,7 @@ struct _domain_parameters {
 };
 
 /* prototypes */
+static void _early_cfg_init(void);
 static int _init(void);
 static void _initiate_shutdown(void);
 static void _cleanup(void);
@@ -90,7 +91,8 @@ static struct oonf_telnet_command _cmds[] = {
 
 /* subsystem definition */
 static struct cfg_schema_entry _interface_entries[] = {
-  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
+  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter",
+      "-127.0.0.0/8\0-::1\0" ACL_DEFAULT_ACCEPT,
       "Filter for ip interface addresses that should be included in HELLO messages"),
   CFG_MAP_CLOCK_MIN(nhdp_interface, h_hold_time, "hello-validity", "20.0",
     "Validity time for NHDP Hello Messages", 100),
@@ -133,6 +135,8 @@ static struct cfg_schema_section _domain_section = {
 };
 
 struct oonf_subsystem nhdp_subsystem = {
+  .name = NHDP_NAME,
+  .early_cfg_init = _early_cfg_init,
   .init = _init,
   .cleanup = _cleanup,
   .initiate_shutdown = _initiate_shutdown,
@@ -140,11 +144,23 @@ struct oonf_subsystem nhdp_subsystem = {
 };
 
 /* other global variables */
-enum log_source LOG_NHDP = LOG_MAIN;
 static struct oonf_rfc5444_protocol *_protocol;
 
 /* NHDP originator address, might be undefined */
 static struct netaddr _originator_v4, _originator_v6;
+
+/* Additional logging sources */
+enum oonf_log_source LOG_NHDP_R;
+enum oonf_log_source LOG_NHDP_W;
+
+/**
+ * Initialize additional logging sources for NHDP
+ */
+static void
+_early_cfg_init(void) {
+  LOG_NHDP_R = oonf_log_register_source(NHDP_NAME "_r");
+  LOG_NHDP_W = oonf_log_register_source(NHDP_NAME "_w");
+}
 
 /**
  * Initialize NHDP subsystem
@@ -153,8 +169,6 @@ static struct netaddr _originator_v4, _originator_v6;
 static int
 _init(void) {
   size_t i;
-
-  LOG_NHDP = oonf_log_register_source(_LOG_NHDP_NAME);
 
   _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {

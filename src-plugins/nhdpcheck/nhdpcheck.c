@@ -116,16 +116,12 @@ static struct rfc5444_reader_tlvblock_consumer_entry _nhdp_address_tlvs[] = {
 /* nhdp multiplexer/protocol */
 static struct oonf_rfc5444_protocol *_protocol = NULL;
 
-static enum log_source LOG_NHDP_CHECK = LOG_MAIN;
-
 /**
  * Initialize plugin
  * @return always returns 0 (cannot fail)
  */
 static int
 _init(void) {
-  LOG_NHDP_CHECK = oonf_log_register_source(OONF_PLUGIN_GET_NAME());
-
   _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
     return -1;

@@ -60,8 +60,7 @@
 #include "nhdp/nhdp_writer.h"
 
 /* Prototypes of local functions */
-static struct nhdp_interface_addr *_addr_add(
-    struct nhdp_interface *, struct netaddr *addr);
+static void _addr_add(struct nhdp_interface *, struct netaddr *addr);
 static void _addr_remove(struct nhdp_interface_addr *addr, uint64_t vtime);
 static void _cb_remove_addr(void *ptr);
 
@@ -268,24 +267,22 @@ nhdp_interface_apply_settings(struct nhdp_interface *interf) {
  * Add a nhdp interface address to an interface
  * @param interf pointer to nhdp interface
  * @param if_addr address to add to interface
- * @return pointer to ndhp interface address, NULL if out of memory
  */
-static struct nhdp_interface_addr *
+void
 _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
   struct nhdp_interface_addr *if_addr;
 #ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
-
-  OONF_DEBUG(LOG_NHDP, "Add address %s in NHDP_interface_address tree",
-      netaddr_to_string(&buf, addr));
+  OONF_DEBUG(LOG_NHDP, "Add address %s in NHDP interface %s",
+      netaddr_to_string(&buf, addr), nhdp_interface_get_name(interf));
 
   if_addr = avl_find_element(&interf->_if_addresses, addr, if_addr, _if_node);
   if (if_addr == NULL) {
     if_addr = oonf_class_malloc(&_addr_info);
     if (if_addr == NULL) {
       OONF_WARN(LOG_NHDP, "No memory left for NHDP interface address");
-      return NULL;
+      return;
     }
 
     memcpy(&if_addr->if_addr, addr, sizeof(*addr));
@@ -307,9 +304,11 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
     oonf_class_event(&_addr_info, if_addr, OONF_OBJECT_ADDED);
   }
   else {
+    oonf_timer_stop(&if_addr->_vtime);
     if_addr->_to_be_removed = false;
+    if_addr->removed = false;
   }
-  return if_addr;
+  return;
 }
 
 /**
@@ -393,9 +392,11 @@ _cb_interface_event(struct oonf_rfc5444_interface_listener *ifl,
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr, *addr_it;
   struct oonf_interface *oonf_interf;
-  struct netaddr ip;
   bool ipv4, ipv6;
   size_t i;
+#ifdef OONF_LOG_DEBUG_INFO
+  struct netaddr_str nbuf;
+#endif
 
   OONF_DEBUG(LOG_NHDP, "NHDP Interface change event: %s", ifl->interface->name);
 
@@ -412,21 +413,12 @@ _cb_interface_event(struct oonf_rfc5444_interface_listener *ifl,
   ipv6 = oonf_rfc5444_is_target_active(interf->rfc5444_if.interface->multicast6);
 
   if (oonf_interf->data.up) {
-    /* handle local socket main addresses */
-    if (ipv4) {
-      OONF_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv4", ifl->interface->name);
-        netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
-      _addr_add(interf, &ip);
-    }
-    if (ipv6) {
-      OONF_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv6", ifl->interface->name);
-      netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v6.local_socket);
-      _addr_add(interf, &ip);
-    }
-
     /* get all socket addresses that are matching the filter */
     for (i = 0; i<oonf_interf->data.addrcount; i++) {
       struct netaddr *ifaddr = &oonf_interf->data.addresses[i];
+
+      OONF_DEBUG(LOG_NHDP, "Found interface address %s",
+          netaddr_to_string(&nbuf, ifaddr));
 
       if (netaddr_get_address_family(ifaddr) == AF_INET && !ipv4) {
         /* ignore IPv4 addresses if ipv4 socket is not up*/

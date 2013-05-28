@@ -127,8 +127,6 @@ static struct rfc5444_reader_tlvblock_consumer_entry _olsrv2_address_tlvs[] = {
 /* nhdp multiplexer/protocol */
 static struct oonf_rfc5444_protocol *_protocol = NULL;
 
-static enum log_source LOG_OONFV2_R = LOG_MAIN;
-
 static struct _olsrv2_data _current;
 
 /**
@@ -137,8 +135,6 @@ static struct _olsrv2_data _current;
 void
 olsrv2_reader_init(struct oonf_rfc5444_protocol *p) {
   _protocol = p;
-
-  LOG_OONFV2_R = oonf_log_register_source("olsrv2_r");
 
   rfc5444_reader_add_message_consumer(
       &_protocol->reader, &_olsrv2_message_consumer,
@@ -173,21 +169,21 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   struct netaddr_str buf;
 #endif
 
-  OONF_DEBUG(LOG_OONFV2_R, "Received TC from %s",
+  OONF_DEBUG(LOG_OLSRV2_R, "Received TC from %s",
       netaddr_to_string(&buf, _protocol->input_address));
 
   if (!context->has_origaddr || !context->has_hopcount
       || !context->has_hoplimit || !context->has_seqno) {
-    OONF_DEBUG(LOG_OONFV2_R, "Missing message flag");
+    OONF_DEBUG(LOG_OLSRV2_R, "Missing message flag");
     return RFC5444_DROP_MESSAGE;
   }
 
   if (olsrv2_originator_is_local(&context->orig_addr)) {
-    OONF_DEBUG(LOG_OONFV2_R, "We are hearing ourself");
+    OONF_DEBUG(LOG_OLSRV2_R, "We are hearing ourself");
     return RFC5444_DROP_MESSAGE;
   }
 
-  OONF_DEBUG(LOG_OONFV2_R, "Originator: %s   Seqno: %u",
+  OONF_DEBUG(LOG_OLSRV2_R, "Originator: %s   Seqno: %u",
       netaddr_to_string(&buf, &context->orig_addr), context->seqno);
 
   /* clear session data */
@@ -197,7 +193,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   tmp = _olsrv2_message_tlvs[IDX_TLV_CONT_SEQ_NUM].type_ext;
   if (tmp != RFC5444_CONT_SEQ_NUM_COMPLETE
       && tmp != RFC5444_CONT_SEQ_NUM_INCOMPLETE) {
-    OONF_DEBUG(LOG_OONFV2_R, "Illegal extension of CONT_SEQ_NUM TLV: %u",
+    OONF_DEBUG(LOG_OLSRV2_R, "Illegal extension of CONT_SEQ_NUM TLV: %u",
         tmp);
     return RFC5444_DROP_MESSAGE;
   }
@@ -234,7 +230,7 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
 
   /* test if we already processed the message */
   if (!olsrv2_mpr_shall_process(context, _current.vtime)) {
-    OONF_DEBUG(LOG_OONFV2_R, "Processing set says 'do not process'");
+    OONF_DEBUG(LOG_OLSRV2_R, "Processing set says 'do not process'");
     return RFC5444_DROP_MESSAGE;
   }
 
@@ -242,13 +238,13 @@ _cb_messagetlvs(struct rfc5444_reader_tlvblock_context *context) {
   _current.node = olsrv2_tc_node_add(
       &context->orig_addr, _current.vtime, ansn);
   if (_current.node == NULL) {
-    OONF_DEBUG(LOG_OONFV2_R, "Cannot create node");
+    OONF_DEBUG(LOG_OLSRV2_R, "Cannot create node");
     return RFC5444_DROP_MESSAGE;
   }
 
   /* check if the topology information is recent enough */
   if (rfc5444_seqno_is_smaller(ansn, _current.node->ansn)) {
-    OONF_DEBUG(LOG_OONFV2_R, "ANSN %u is smaller than last stored ANSN %u",
+    OONF_DEBUG(LOG_OLSRV2_R, "ANSN %u is smaller than last stored ANSN %u",
         ansn, _current.node->ansn);
     return RFC5444_DROP_MESSAGE;
   }
@@ -301,7 +297,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     memcpy(&metric_value, tlv->single_value, 2);
     metric_value = ntohs(metric_value);
 
-    OONF_DEBUG(LOG_OONFV2_R, "Metric %d: %04x",
+    OONF_DEBUG(LOG_OLSRV2_R, "Metric %d: %04x",
         domain->index, metric_value);
 
     if (metric_value & RFC5444_LINKMETRIC_INCOMING_NEIGH) {
@@ -328,7 +324,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
         || tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE_ORIG) {
       edge = olsrv2_tc_edge_add(_current.node, &context->addr);
       if (edge) {
-        OONF_DEBUG(LOG_OONFV2_R, "Originator %s: ansn=%u metric=%d/%d",
+        OONF_DEBUG(LOG_OLSRV2_R, "Originator %s: ansn=%u metric=%d/%d",
             netaddr_to_string(&buf, &context->addr),
             _current.node->ansn,
             cost_out[domain->index], cost_in[domain->index]);
@@ -345,7 +341,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     if (tlv->single_value[0] == RFC5444_NBR_ADDR_TYPE_ROUTABLE) {
       end = olsrv2_tc_endpoint_add(_current.node, &context->addr, true);
       if (end) {
-        OONF_DEBUG(LOG_OONFV2_R, "Routable %s: ansn=%u metric=%u",
+        OONF_DEBUG(LOG_OLSRV2_R, "Routable %s: ansn=%u metric=%u",
             netaddr_to_string(&buf, &context->addr),
             _current.node->ansn,
             cost_out[domain->index]);
@@ -366,7 +362,7 @@ _cb_addresstlvs(struct rfc5444_reader_tlvblock_context *context __attribute__((u
     /* parse attached network */
     end = olsrv2_tc_endpoint_add(_current.node, &context->addr, false);
     if (end) {
-      OONF_DEBUG(LOG_OONFV2_R, "Attached %s: ansn=%u metric=%u dist=%u",
+      OONF_DEBUG(LOG_OLSRV2_R, "Attached %s: ansn=%u metric=%u dist=%u",
           netaddr_to_string(&buf, &context->addr),
           _current.node->ansn,
           cost_out[domain->index],

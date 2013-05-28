@@ -45,6 +45,7 @@
 #include "common/common_types.h"
 #include "core/oonf_subsystem.h"
 
+#define LOG_NHDP_CHECK olsrv2_nhdpcheck_subsystem.logging
 EXPORT extern struct oonf_subsystem olsrv2_nhdpcheck_subsystem;
 
 #endif /* NHDPCHECK_H_ */
