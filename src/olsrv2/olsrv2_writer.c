@@ -66,6 +66,7 @@ enum {
 };
 
 /* Prototypes */
+static void _send_tc(int af_type);
 static bool _cb_tc_interface_selector(struct rfc5444_writer *,
     struct rfc5444_writer_target *rfc5444_target, void *ptr);
 
@@ -177,17 +178,25 @@ olsrv2_writer_send_tc(void) {
     return;
   }
 
-  /* send IPv4 */
-  OONF_INFO(LOG_OLSRV2_W, "Emit IPv4 TC message.");
-  _send_msg_type = AF_INET;
-  oonf_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
+  _send_tc(AF_INET);
+  _send_tc(AF_INET6);
+}
 
-  /* send IPv6 */
-  OONF_INFO(LOG_OLSRV2_W, "Emit IPv6 TC message.");
-  _send_msg_type = AF_INET6;
-  oonf_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
+/**
+ * Send a TC for a specified address family if the originator is set
+ * @param af_type address family type
+ */
+static void
+_send_tc(int af_type) {
+  const struct netaddr *originator;
 
-  _send_msg_type = AF_UNSPEC;
+  originator = olsrv2_originator_get(af_type);
+  if (netaddr_get_address_family(originator) == af_type) {
+    _send_msg_type = af_type;
+    OONF_INFO(LOG_OLSRV2_W, "Emit IPv%d TC message.", af_type == AF_INET ? 4 : 6);
+    oonf_rfc5444_send_all(_protocol, RFC5444_MSGTYPE_TC, _cb_tc_interface_selector);
+    _send_msg_type = AF_UNSPEC;
+  }
 }
 
 /**
