@@ -45,11 +45,12 @@
 #include "common/common_types.h"
 #include "common/list.h"
 #include "common/netaddr.h"
+#include "common/netaddr_acl.h"
 #include "config/cfg_schema.h"
 #include "rfc5444/rfc5444.h"
 #include "core/oonf_logging.h"
-#include "common/netaddr_acl.h"
 #include "core/oonf_subsystem.h"
+#include "core/os_core.h"
 #include "subsystems/oonf_rfc5444.h"
 #include "subsystems/oonf_telnet.h"
 #include "subsystems/oonf_timer.h"
@@ -248,7 +249,7 @@ _init(void) {
     oonf_telnet_add(&_cmds[i]);
   }
 
-  _ansn = rand() & 0xffff;
+  _ansn = os_core_random() & 0xffff;
   return 0;
 }
 
