@@ -91,7 +91,8 @@ static struct oonf_telnet_command _cmds[] = {
 
 /* subsystem definition */
 static struct cfg_schema_entry _interface_entries[] = {
-  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter", ACL_DEFAULT_REJECT,
+  CFG_MAP_ACL_V46(nhdp_interface, ifaddr_filter, "ifaddr_filter",
+      "-127.0.0.0/8\0-::1\0" ACL_DEFAULT_ACCEPT,
       "Filter for ip interface addresses that should be included in HELLO messages"),
   CFG_MAP_CLOCK_MIN(nhdp_interface, h_hold_time, "hello-validity", "20.0",
     "Validity time for NHDP Hello Messages", 100),

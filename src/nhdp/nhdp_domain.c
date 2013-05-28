@@ -425,9 +425,9 @@ nhdp_domain_neighborhood_changed(void) {
   struct nhdp_neighbor *neigh;
 
   list_for_each_element(&nhdp_domain_list, domain, _node) {
-
     list_for_each_element(&nhdp_neigh_list, neigh, _global_node) {
       _recalculate_neighbor_metric(domain, neigh);
+      domain->metric_changed = true;
     }
 
     if (domain->mpr->update_mpr != NULL) {

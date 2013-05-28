@@ -692,15 +692,17 @@ _cb_topology(struct oonf_telnet_data *con) {
   struct fraction_str tbuf;
 
   avl_for_each_element(&olsrv2_tc_tree, node, _originator_node) {
-    abuf_appendf(con->out, "Node originator %s: vtime=%s\n",
+    abuf_appendf(con->out, "Node originator %s: vtime=%s ansn=%u\n",
         netaddr_to_string(&nbuf, &node->target.addr),
         oonf_clock_toIntervalString(&tbuf,
-            oonf_timer_get_due(&node->_validity_time)));
+            oonf_timer_get_due(&node->_validity_time)),
+        node->ansn);
 
     avl_for_each_element(&node->_edges, edge, _node) {
-      abuf_appendf(con->out, "\tlink to %s%s:\n",
+      abuf_appendf(con->out, "\tlink to %s%s: (ansn=%u)\n",
           netaddr_to_string(&nbuf, &edge->dst->target.addr),
-          edge->virtual ? " (virtual)" : "");
+          edge->virtual ? " (virtual)" : "",
+          edge->ansn);
 
       list_for_each_element(&nhdp_domain_list, domain, _node) {
         abuf_appendf(con->out, "\t\tmetric '%s': %d\n",
@@ -709,14 +711,14 @@ _cb_topology(struct oonf_telnet_data *con) {
     }
 
     avl_for_each_element(&node->_endpoints, end, _src_node) {
-      abuf_appendf(con->out, "\tlink to endpoint %s:\n",
-          netaddr_to_string(&nbuf, &end->dst->target.addr));
+      abuf_appendf(con->out, "\tlink to endpoint %s: (ansn=%u)\n",
+          netaddr_to_string(&nbuf, &end->dst->target.addr),
+          end->ansn);
 
         list_for_each_element(&nhdp_domain_list, domain, _node) {
           abuf_appendf(con->out, "\t\tmetric '%s': %d\n",
               domain->metric->name, end->cost[domain->index]);
         }
-
     }
   }
 

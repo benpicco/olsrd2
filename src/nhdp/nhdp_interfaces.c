@@ -274,15 +274,8 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
 #ifdef OONF_LOG_DEBUG_INFO
   struct netaddr_str buf;
 #endif
-
-  if (netaddr_is_in_subnet(&NETADDR_IPV4_LOOPBACK_NET, addr)
-      || netaddr_cmp(addr, &NETADDR_IPV6_LOOPBACK) == 0) {
-    /* ignore localhost address */
-    return;
-  }
-
-  OONF_DEBUG(LOG_NHDP, "Add address %s in NHDP_interface_address tree",
-      netaddr_to_string(&buf, addr));
+  OONF_DEBUG(LOG_NHDP, "Add address %s in NHDP interface %s",
+      netaddr_to_string(&buf, addr), nhdp_interface_get_name(interf));
 
   if_addr = avl_find_element(&interf->_if_addresses, addr, if_addr, _if_node);
   if (if_addr == NULL) {
@@ -311,7 +304,9 @@ _addr_add(struct nhdp_interface *interf, struct netaddr *addr) {
     oonf_class_event(&_addr_info, if_addr, OONF_OBJECT_ADDED);
   }
   else {
+    oonf_timer_stop(&if_addr->_vtime);
     if_addr->_to_be_removed = false;
+    if_addr->removed = false;
   }
   return;
 }
@@ -397,9 +392,11 @@ _cb_interface_event(struct oonf_rfc5444_interface_listener *ifl,
   struct nhdp_interface *interf;
   struct nhdp_interface_addr *addr, *addr_it;
   struct oonf_interface *oonf_interf;
-  struct netaddr ip;
   bool ipv4, ipv6;
   size_t i;
+#ifdef OONF_LOG_DEBUG_INFO
+  struct netaddr_str nbuf;
+#endif
 
   OONF_DEBUG(LOG_NHDP, "NHDP Interface change event: %s", ifl->interface->name);
 
@@ -416,21 +413,12 @@ _cb_interface_event(struct oonf_rfc5444_interface_listener *ifl,
   ipv6 = oonf_rfc5444_is_target_active(interf->rfc5444_if.interface->multicast6);
 
   if (oonf_interf->data.up) {
-    /* handle local socket main addresses */
-    if (ipv4) {
-      OONF_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv4", ifl->interface->name);
-        netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v4.local_socket);
-      _addr_add(interf, &ip);
-    }
-    if (ipv6) {
-      OONF_DEBUG(LOG_NHDP, "NHDP Interface %s is ipv6", ifl->interface->name);
-      netaddr_from_socket(&ip, &interf->rfc5444_if.interface->_socket.socket_v6.local_socket);
-      _addr_add(interf, &ip);
-    }
-
     /* get all socket addresses that are matching the filter */
     for (i = 0; i<oonf_interf->data.addrcount; i++) {
       struct netaddr *ifaddr = &oonf_interf->data.addresses[i];
+
+      OONF_DEBUG(LOG_NHDP, "Found interface address %s",
+          netaddr_to_string(&nbuf, ifaddr));
 
       if (netaddr_get_address_family(ifaddr) == AF_INET && !ipv4) {
         /* ignore IPv4 addresses if ipv4 socket is not up*/
@@ -444,6 +432,9 @@ _cb_interface_event(struct oonf_rfc5444_interface_listener *ifl,
       /* check if IP address fits to ACL */
       if (netaddr_acl_check_accept(&interf->ifaddr_filter, ifaddr)) {
         _addr_add(interf, ifaddr);
+      }
+      else {
+        OONF_DEBUG(LOG_NHDP, "Not accepted");
       }
     }
   }
