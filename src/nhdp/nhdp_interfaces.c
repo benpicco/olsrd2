@@ -433,9 +433,6 @@ _cb_interface_event(struct oonf_rfc5444_interface_listener *ifl,
       if (netaddr_acl_check_accept(&interf->ifaddr_filter, ifaddr)) {
         _addr_add(interf, ifaddr);
       }
-      else {
-        OONF_DEBUG(LOG_NHDP, "Not accepted");
-      }
     }
   }
 
