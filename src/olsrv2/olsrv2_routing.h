@@ -112,13 +112,13 @@ struct olsrv2_routing_domain {
   bool use_srcip_in_routes;
 
   /* protocol number for routes */
-  uint8_t protocol;
+  int protocol;
 
   /* routing table number for routes */
-  uint8_t table;
+  int table;
 
   /* metric value that should be used for routes */
-  uint8_t distance;
+  int distance;
 };
 
 EXPORT extern struct avl_tree olsrv2_routing_tree[NHDP_MAXIMUM_DOMAINS];
