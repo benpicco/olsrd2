@@ -48,8 +48,7 @@
 #include "core/oonf_logging.h"
 #include "core/oonf_plugins.h"
 #include "core/oonf_subsystem.h"
-#include "core/os_clock.h"
-#include "core/os_syslog.h"
+#include "core/os_core.h"
 #include "subsystems/oonf_class.h"
 #include "subsystems/oonf_clock.h"
 #include "subsystems/oonf_interface.h"
@@ -59,6 +58,7 @@
 #include "subsystems/oonf_socket.h"
 #include "subsystems/oonf_stream_socket.h"
 #include "subsystems/oonf_timer.h"
+#include "subsystems/os_clock.h"
 #include "subsystems/os_net.h"
 #include "subsystems/os_routing.h"
 #include "subsystems/os_system.h"
@@ -69,7 +69,7 @@
 #include "oonf_api_subsystems.h"
 
 struct oonf_subsystem *used_api_subsystems[] = {
-  &oonf_os_syslog_subsystem,
+  &oonf_os_core_subsystem,
   &oonf_class_subsystem,
   &oonf_os_clock_subsystem,
   &oonf_clock_subsystem,
