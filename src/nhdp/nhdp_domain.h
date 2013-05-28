@@ -206,6 +206,9 @@ EXPORT uint8_t nhdp_domain_get_willingness_tlvvalue(
 EXPORT uint8_t nhdp_domain_get_mpr_tlvvalue(
     struct nhdp_domain *, struct nhdp_link *);
 
+EXPORT void nhdp_domain_set_incoming_metric(
+    struct nhdp_domain *domain, struct nhdp_link *lnk, uint32_t metric_in);
+
 /**
  * @param domain NHDP domain
  * @param lnk NHDP link

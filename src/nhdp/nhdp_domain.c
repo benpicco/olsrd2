@@ -578,11 +578,28 @@ nhdp_domain_set_flooding_mpr(struct nhdp_domain_mpr *mpr, uint8_t ext) {
 }
 
 /**
+ * Sets the incoming metric of a link. This is the only function external
+ * code should use to commit the calculated metric values to the nhdp db.
+ * @param domain NHDP domain
+ * @param lnk NHDP link
+ * @param metric_in incoming metric value for NHDP link
+ */
+void
+nhdp_domain_set_incoming_metric(struct nhdp_domain *domain,
+    struct nhdp_link *lnk, uint32_t metric_in) {
+  struct nhdp_link_domaindata *domaindata;
+
+  domaindata = nhdp_domain_get_linkdata(domain, lnk);
+  domaindata->metric.in = metric_in;
+}
+
+/**
  * Recalculate the 'best link/metric' values of a neighbor
  * @param domain NHDP domain
  * @param neigh NHDP neighbor
  */
-static void _recalculate_neighbor_metric(
+static void
+_recalculate_neighbor_metric(
     struct nhdp_domain *domain,
     struct nhdp_neighbor *neigh) {
   struct nhdp_link *lnk;
