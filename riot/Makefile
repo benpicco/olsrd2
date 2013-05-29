@@ -74,6 +74,7 @@ USEMODULE += oonf_os_riot
 USEMODULE += oonf_os_generic
 USEMODULE += oonf_subsystems
 USEMODULE += oonf_subsystems_os_generic
+USEMODULE += oonf_subsystems_os_riot
 USEMODULE += cunit
 USEMODULE += olsr_nhdp
 USEMODULE += olsr_olsrv2

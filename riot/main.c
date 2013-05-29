@@ -60,10 +60,9 @@
 #include "subsystems/oonf_interface.h"
 #include "subsystems/oonf_socket.h"
 
+#include "app_data.h"
 #include "oonf_api_subsystems.h"
 #include "oonf_setup.h"
-
-#include "app_data.h"
 
 /* prototypes */
 static bool _cb_stop_scheduler(void);
@@ -116,8 +115,6 @@ main(int argc, char **argv) {
   memcpy(&subsystems[get_used_api_subsystem_count()],
       oonf_setup_get_subsystems(),
       sizeof(struct oonf_subsystem *) * oonf_setup_get_subsystem_count());
-
-  srand(times(NULL));
 
   /* initialize logger */
   if (oonf_log_init(oonf_appdata_get(), LOG_SEVERITY_DEBUG)) {
