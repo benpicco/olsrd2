@@ -137,6 +137,11 @@ main(int argc, char **argv) {
     oonf_subsystem_configure(oonf_cfg_get_schema(), subsystems[i]);
   }
 
+  /* add interface */
+  if (cfg_db_add_namedsection(oonf_cfg_get_rawdb(), CFG_INTERFACE_SECTION, "if0") == NULL) {
+	OONF_WARN(LOG_MAIN, "Cannot add interface");
+  };
+
   /* prepare for an error during initialization */
   return_code = 1;
 
