@@ -142,6 +142,10 @@ main(int argc, char **argv) {
 	OONF_WARN(LOG_MAIN, "Cannot add interface");
   };
 
+  if (cfg_cmd_handle_set(oonf_cfg_get_instance(), oonf_cfg_get_rawdb(), "log.debug=all", NULL)) {
+	OONF_WARN(LOG_MAIN, "Cannot set log level to debug");
+  }
+
   /* prepare for an error during initialization */
   return_code = 1;
 
