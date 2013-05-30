@@ -52,7 +52,9 @@
 #include "core/oonf_subsystem.h"
 #include "core/os_core.h"
 #include "subsystems/oonf_rfc5444.h"
+#ifdef USE_TELNET
 #include "subsystems/oonf_telnet.h"
+#endif
 #include "subsystems/oonf_timer.h"
 
 #include "nhdp/nhdp_interfaces.h"
@@ -103,6 +105,7 @@ static void _cb_if_event(struct oonf_interface_listener *);
 static void _cb_cfg_olsrv2_changed(void);
 static void _cb_cfg_domain_changed(void);
 
+#ifdef USE_TELNET
 /* prototypes */
 static enum oonf_telnet_result _cb_topology(struct oonf_telnet_data *con);
 
@@ -111,6 +114,7 @@ static struct oonf_telnet_command _cmds[] = {
     TELNET_CMD("olsrv2", _cb_topology,
         "OLSRV2 database information command\n"),
 };
+#endif
 
 /* subsystem definition */
 static struct cfg_schema_entry _rt_domain_entries[] = {
@@ -245,10 +249,11 @@ _init(void) {
   /* initialize timer */
   oonf_timer_add(&_tc_timer_class);
 
+#ifdef USE_TELNET
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     oonf_telnet_add(&_cmds[i]);
   }
-
+#endif
   _ansn = os_core_random() & 0xffff;
   return 0;
 }
@@ -270,10 +275,12 @@ static void
 _cleanup(void) {
   size_t i;
 
+#ifdef USE_TELNET
   /* release telnet commands */
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     oonf_telnet_remove(&_cmds[i]);
   }
+#endif
 
   /* remove interface listener */
   oonf_interface_remove_listener(&_if_listener);
@@ -677,6 +684,7 @@ _cb_generate_tc(void *ptr __attribute__((unused))) {
   olsrv2_writer_send_tc();
 }
 
+#ifdef USE_TELNET
 /**
  * Telnet command to output topology
  * @param con
@@ -725,6 +733,7 @@ _cb_topology(struct oonf_telnet_data *con) {
 
   return TELNET_RESULT_ACTIVE;
 }
+#endif
 
 /**
  * Check if current originators are still valid and

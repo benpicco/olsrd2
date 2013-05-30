@@ -45,7 +45,9 @@
 #include "core/oonf_logging.h"
 #include "core/oonf_subsystem.h"
 #include "subsystems/oonf_rfc5444.h"
+#ifdef USE_TELNET
 #include "subsystems/oonf_telnet.h"
+#endif
 
 #include "nhdp/nhdp_hysteresis.h"
 #include "nhdp/nhdp_interfaces.h"
@@ -68,17 +70,20 @@ static int _init(void);
 static void _initiate_shutdown(void);
 static void _cleanup(void);
 
+#ifdef USE_TELNET
 static enum oonf_telnet_result _cb_nhdp(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _telnet_nhdp_neighbor(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _telnet_nhdp_neighlink(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _telnet_nhdp_iflink(struct oonf_telnet_data *con);
 static enum oonf_telnet_result _telnet_nhdp_interface(struct oonf_telnet_data *con);
+#endif
 
 static void _cb_cfg_domain_changed(void);
 static void _cb_cfg_interface_changed(void);
 static int _cb_validate_domain_section(const char *section_name,
     struct cfg_named_section *, struct autobuf *);
 
+#ifdef USE_TELNET
 /* nhdp telnet commands */
 static struct oonf_telnet_command _cmds[] = {
     TELNET_CMD("nhdp", _cb_nhdp,
@@ -88,6 +93,7 @@ static struct oonf_telnet_command _cmds[] = {
         "\"nhdp neighbor\": shows all nhdp neighbors including addresses\n"
         "\"nhdp interface\": shows all local nhdp interfaces including addresses\n"),
 };
+#endif
 
 /* subsystem definition */
 static struct cfg_schema_entry _interface_entries[] = {
@@ -185,9 +191,11 @@ _init(void) {
   nhdp_interfaces_init(_protocol);
   nhdp_domain_init(_protocol);
 
+#ifdef USE_TELNET
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     oonf_telnet_add(&_cmds[i]);
   }
+#endif
   return 0;
 }
 
@@ -207,9 +215,11 @@ static void
 _cleanup(void) {
   size_t i;
 
+#ifdef USE_TELNET
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     oonf_telnet_remove(&_cmds[i]);
   }
+#endif
 
   nhdp_domain_cleanup();
   nhdp_interfaces_cleanup();
@@ -266,6 +276,7 @@ nhdp_get_originator(int af_type) {
   return NULL;
 }
 
+#ifdef USE_TELNET
 /**
  * Callback triggered when the nhdp telnet command is called
  * @param con
@@ -533,6 +544,7 @@ _telnet_nhdp_interface(struct oonf_telnet_data *con) {
   }
   return TELNET_RESULT_ACTIVE;
 }
+#endif
 
 /**
  * Configuration of a NHDP domain changed
