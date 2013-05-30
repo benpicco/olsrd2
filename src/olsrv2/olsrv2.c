@@ -273,9 +273,9 @@ _initiate_shutdown(void) {
  */
 static void
 _cleanup(void) {
+#ifdef USE_TELNET
   size_t i;
 
-#ifdef USE_TELNET
   /* release telnet commands */
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     oonf_telnet_remove(&_cmds[i]);

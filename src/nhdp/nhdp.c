@@ -174,7 +174,9 @@ _early_cfg_init(void) {
  */
 static int
 _init(void) {
+#ifdef USE_TELNET
   size_t i;
+#endif
 
   _protocol = oonf_rfc5444_add_protocol(RFC5444_PROTOCOL, true);
   if (_protocol == NULL) {
@@ -213,9 +215,9 @@ _initiate_shutdown(void) {
  */
 static void
 _cleanup(void) {
+#ifdef USE_TELNET
   size_t i;
 
-#ifdef USE_TELNET
   for (i=0; i<ARRAYSIZE(_cmds); i++) {
     oonf_telnet_remove(&_cmds[i]);
   }
