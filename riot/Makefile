@@ -87,6 +87,7 @@ USEMODULE += cc110x_spi
 USEMODULE += gpioint
 USEMODULE += uart0
 USEMODULE += vtimer
+USEMODULE += hwtimer
 USEMODULE += rtc
 USEMODULE += posix
 USEMODULE += regex

@@ -64,9 +64,12 @@
 #include "oonf_api_subsystems.h"
 #include "oonf_setup.h"
 
+#include "vtimer.h"
+#include "hwtimer.h"
+
 /* prototypes */
 static bool _cb_stop_scheduler(void);
-static int mainloop(int argc, char **argv);
+static int mainloop(void);
 static int display_schema(void);
 
 static bool _end_oonf_signal, _display_schema, _debug_early, _ignore_unknown;
@@ -82,7 +85,7 @@ enum argv_short_options {
  * Main program
  */
 int
-main(int argc, char **argv) {
+main() {
   uint64_t next_interval;
   size_t i;
   size_t initialized;
@@ -91,13 +94,17 @@ main(int argc, char **argv) {
   struct oonf_subsystem **subsystems;
   size_t subsystem_count;
 
+	printf("initializing timer…\n");
+	hwtimer_init();
+	vtimer_init();
+
   /* early initialization */
   return_code = 1;
   initialized = 0;
 
   _schema_name = NULL;
   _display_schema = false;
-  _debug_early = false;
+  _debug_early = true;
   _ignore_unknown = false;
 
   /* assemble list of subsystems first */
@@ -145,6 +152,8 @@ main(int argc, char **argv) {
   if (cfg_cmd_handle_set(oonf_cfg_get_instance(), oonf_cfg_get_rawdb(), "log.debug=all", NULL)) {
 	OONF_WARN(LOG_MAIN, "Cannot set log level to debug");
   }
+
+  OONF_DEBUG(LOG_MAIN, "log level set to DEBUG=all");
 
   /* prepare for an error during initialization */
   return_code = 1;
@@ -200,7 +209,7 @@ main(int argc, char **argv) {
   }
 
   /* activate mainloop */
-  return_code = mainloop(argc, argv);
+  return_code = mainloop();
 
   /* tell framework shutdown is in progress */
   for (i=0; i<subsystem_count; i++) {
@@ -248,7 +257,7 @@ olsrd_cleanup:
  * @return exit code for olsrd
  */
 static int
-mainloop(int argc, char **argv) {
+mainloop(void) {
   int exit_code = 0;
 
   OONF_INFO(LOG_MAIN, "Starting %s", oonf_appdata_get()->app_name);
