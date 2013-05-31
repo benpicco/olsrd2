@@ -147,7 +147,7 @@ main() {
   /* add interface */
   if (cfg_db_add_namedsection(oonf_cfg_get_rawdb(), CFG_INTERFACE_SECTION, "if0") == NULL) {
 	OONF_WARN(LOG_MAIN, "Cannot add interface");
-  };
+  }
 
   if (cfg_cmd_handle_set(oonf_cfg_get_instance(), oonf_cfg_get_rawdb(), "log.debug=all", NULL)) {
 	OONF_WARN(LOG_MAIN, "Cannot set log level to debug");
