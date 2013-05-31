@@ -132,7 +132,7 @@ main() {
   oonf_plugins_init();
 
   /* initialize configuration system */
-  if (oonf_cfg_init(argc, argv)) {
+  if (oonf_cfg_init()) {
     goto olsrd_cleanup;
   }
 
