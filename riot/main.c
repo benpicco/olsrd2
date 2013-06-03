@@ -69,7 +69,7 @@
 
 /* prototypes */
 static bool _cb_stop_scheduler(void);
-static int mainloop(void);
+static int mainloop(int argc, char **argv);
 static int display_schema(void);
 
 static bool _end_oonf_signal, _display_schema, _debug_early, _ignore_unknown;
@@ -85,7 +85,7 @@ enum argv_short_options {
  * Main program
  */
 int
-main() {
+main(int argc, char **argv) {
   uint64_t next_interval;
   size_t i;
   size_t initialized;
@@ -132,7 +132,7 @@ main() {
   oonf_plugins_init();
 
   /* initialize configuration system */
-  if (oonf_cfg_init()) {
+  if (oonf_cfg_init(argc, argv)) {
     goto olsrd_cleanup;
   }
 
@@ -209,7 +209,7 @@ main() {
   }
 
   /* activate mainloop */
-  return_code = mainloop();
+  return_code = mainloop(argc, argv);
 
   /* tell framework shutdown is in progress */
   for (i=0; i<subsystem_count; i++) {
@@ -257,7 +257,7 @@ olsrd_cleanup:
  * @return exit code for olsrd
  */
 static int
-mainloop(void) {
+mainloop(int argc, char **argv) {
   int exit_code = 0;
 
   OONF_INFO(LOG_MAIN, "Starting %s", oonf_appdata_get()->app_name);
