@@ -67,6 +67,8 @@
 #include "vtimer.h"
 #include "hwtimer.h"
 
+#include "compat_misc.h"
+
 /* prototypes */
 static bool _cb_stop_scheduler(void);
 static int mainloop(int argc, char **argv);
@@ -111,7 +113,7 @@ main(int argc, char **argv) {
   subsystem_count = get_used_api_subsystem_count()
       + oonf_setup_get_subsystem_count();
 
-  subsystems = calloc(subsystem_count, sizeof(struct oonf_subsystem *));
+  subsystems = my_calloc(subsystem_count, sizeof(struct oonf_subsystem *));
   if(!subsystems) {
     fprintf(stderr, "Out of memory error for subsystem array\n");
     return -1;
