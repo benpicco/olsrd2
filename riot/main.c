@@ -64,10 +64,20 @@
 #include "oonf_api_subsystems.h"
 #include "oonf_setup.h"
 
-#include "vtimer.h"
-#include "hwtimer.h"
-
 #include "compat_misc.h"
+
+#include "vtimer.h"
+#include "board.h"
+#include <thread.h>
+
+char blink_stack[MINIMUM_STACK_SIZE];
+
+void blink_thread(void) {
+	while (1) {
+		LED_GREEN_TOGGLE;
+		vtimer_usleep(500000);
+	}
+}
 
 /* prototypes */
 static bool _cb_stop_scheduler(void);
@@ -96,10 +106,6 @@ main(int argc, char **argv) {
   struct oonf_subsystem **subsystems;
   size_t subsystem_count;
 
-	printf("initializing timer…\n");
-	hwtimer_init();
-	vtimer_init();
-
   /* early initialization */
   return_code = 1;
   initialized = 0;
@@ -108,6 +114,8 @@ main(int argc, char **argv) {
   _display_schema = false;
   _debug_early = true;
   _ignore_unknown = false;
+
+  (void) thread_create(blink_stack, sizeof blink_stack, PRIORITY_MAIN-1, CREATE_STACKTEST, blink_thread, "blink");
 
   /* assemble list of subsystems first */
   subsystem_count = get_used_api_subsystem_count()

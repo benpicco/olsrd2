@@ -92,6 +92,8 @@ USEMODULE += rtc
 USEMODULE += posix
 USEMODULE += regex
 USEMODULE += compat_misc
+USEMODULE += auto_init
+USEMODULE += ps
 
 # mandatory include! 
 include $(RIOTBASE)/Makefile.modules 
@@ -113,7 +115,7 @@ export CFLAGS
 BASELIBS += $(RIOTBOARD)/$(BOARD)/bin/$(BOARD)_base.a
 BASELIBS += bin/project.a
 
-INCLUDES = -I. -I$(RIOTBOARD)/$(BOARD)/include -I$(RIOTBASE)/core/include -I$(RIOTBASE)/cpu/$(CPU)/include -I$(RIOTBASE)/cpu/arm_common/include -I$(RIOTBASE) -I$(RIOTBASE)/sys -I$(RIOTBASE)/sys/include -I$(OONFBASE)/src-api -I../src
+INCLUDES = -I. -I$(RIOTBOARD)/$(BOARD)/include -I$(RIOTBASE)/core/include -I$(RIOTBASE)/cpu/$(CPU)/include -I$(RIOTBASE)/cpu/arm_common/include -I$(RIOTBASE) -I$(RIOTBASE)/sys -I$(RIOTBASE)/sys/include -I$(OONFBASE)/src-api -I../src -I$(RIOTBOARD)/msba2-common/include
 
 export INCLUDES
 
